@@ -555,7 +555,26 @@ class JarvisConversationService : Service() {
         try {
             tts = TextToSpeech(applicationContext) { status ->
                 if (status == TextToSpeech.SUCCESS) {
-                    tts?.language = Locale.US
+                    val targetLocale = when (preferences.language.lowercase(Locale.ROOT)) {
+                        "hindi", "hinglish" -> Locale("hi", "IN")
+                        "bengali" -> Locale("bn", "IN")
+                        "marathi" -> Locale("mr", "IN")
+                        "gujarati" -> Locale("gu", "IN")
+                        "tamil" -> Locale("ta", "IN")
+                        "telugu" -> Locale("te", "IN")
+                        "kannada" -> Locale("kn", "IN")
+                        "malayalam" -> Locale("ml", "IN")
+                        "punjabi" -> Locale("pa", "IN")
+                        "odia" -> Locale("or", "IN")
+                        "urdu" -> Locale("ur", "PK")
+                        else -> Locale.US
+                    }
+                    val isAvailable = tts?.isLanguageAvailable(targetLocale)
+                    if (isAvailable != null && isAvailable >= TextToSpeech.LANG_AVAILABLE) {
+                        tts?.language = targetLocale
+                    } else {
+                        tts?.language = Locale.US
+                    }
                     tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {
                             Log.d("JarvisService", "TTS onStart: $utteranceId")
@@ -585,7 +604,9 @@ class JarvisConversationService : Service() {
     }
 
     private fun handleTtsDone(utteranceId: String?) {
-        // Robotic system announcements disabled; all speech is handled via natural Gemini Live neural audio.
+        if (_conversationState.value == ConversationState.SPEAKING && (audioPlayer == null || !audioPlayer!!.isPlaying())) {
+            setConversationState(ConversationState.IDLE)
+        }
     }
 
     private fun ensureMicrophoneForegroundService() {
@@ -2948,7 +2969,9 @@ class JarvisConversationService : Service() {
     private fun exitStandbyListening() {
         _isStandby.value = false
         try {
+            voskSpeechService?.cancel()
             voskSpeechService?.stop()
+            voskSpeechService?.shutdown()
         } catch (e: Exception) {
             Log.e("JarvisService", "Error stopping Vosk SpeechService: ${e.message}")
         }

@@ -26,6 +26,9 @@
 -keep class com.jarvis.assistant.security.DeveloperInfo { *; }
 -keep class com.jarvis.assistant.security.AppIdentityVerifier { *; }
 
+# Keep AccessibilityService implementation and lifecycle methods
+-keep class com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService { *; }
+
 # Obfuscate everything else aggressively
 -optimizationpasses 5
 -allowaccessmodification

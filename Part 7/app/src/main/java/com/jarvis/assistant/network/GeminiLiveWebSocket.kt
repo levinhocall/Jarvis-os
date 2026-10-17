@@ -214,6 +214,8 @@ class GeminiLiveWebSocket(
                 put("system_instruction", JSONObject().apply {
                     put("parts", JSONArray().put(JSONObject().put("text", effectivePrompt)))
                 })
+                put("input_audio_transcription", JSONObject())
+                put("output_audio_transcription", JSONObject())
                 put("generation_config", JSONObject().apply {
                     put("response_modalities", JSONArray().put("AUDIO"))
                     put("speech_config", JSONObject().apply {

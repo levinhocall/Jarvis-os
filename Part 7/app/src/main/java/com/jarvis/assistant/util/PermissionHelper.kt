@@ -82,12 +82,38 @@ object PermissionHelper {
 
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
         if (JarvisAccessibilityService.isRunning()) return true
-        val serviceName = "${context.packageName}/${JarvisAccessibilityService::class.java.canonicalName}"
+
+        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager
+        if (am != null) {
+            val enabledServices = am.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            val isEnabled = enabledServices.any {
+                it.resolveInfo?.serviceInfo?.packageName == context.packageName &&
+                (it.resolveInfo?.serviceInfo?.name == JarvisAccessibilityService::class.java.name ||
+                 it.id.startsWith("${context.packageName}/"))
+            }
+            if (isEnabled) return true
+        }
+
         val enabledServices = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ) ?: return false
-        return enabledServices.contains(serviceName)
+
+        val expectedComponent = android.content.ComponentName(context, JarvisAccessibilityService::class.java)
+        val fullFlattened = expectedComponent.flattenToString()
+        val shortFlattened = expectedComponent.flattenToShortString()
+
+        val colonSplitter = android.text.TextUtils.SimpleStringSplitter(':')
+        colonSplitter.setString(enabledServices)
+        while (colonSplitter.hasNext()) {
+            val componentStr = colonSplitter.next()
+            if (componentStr.equals(fullFlattened, ignoreCase = true) ||
+                componentStr.equals(shortFlattened, ignoreCase = true) ||
+                (componentStr.contains(context.packageName) && componentStr.contains("JarvisAccessibilityService"))) {
+                return true
+            }
+        }
+        return false
     }
 
     fun openAccessibilitySettings(context: Context) {
@@ -96,8 +122,13 @@ object PermissionHelper {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-        } catch (e: Exception) {
-            // fallback
+        } catch (_: Exception) {
+            try {
+                val fallback = Intent(Settings.ACTION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(fallback)
+            } catch (_: Exception) {}
         }
     }
 

@@ -49,17 +49,28 @@ class AudioRecorder(
         val bufferSize = maxOf(minBufferSize * 4, 32000)
 
         return try {
-            val record = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                SAMPLE_RATE,
-                CHANNEL_CONFIG,
-                AUDIO_FORMAT,
-                bufferSize
-            )
+            var record: AudioRecord? = null
+            var initAttempts = 0
+            while (initAttempts < 3) {
+                initAttempts++
+                val candidate = AudioRecord(
+                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    SAMPLE_RATE,
+                    CHANNEL_CONFIG,
+                    AUDIO_FORMAT,
+                    bufferSize
+                )
+                if (candidate.state == AudioRecord.STATE_INITIALIZED) {
+                    record = candidate
+                    break
+                }
+                candidate.release()
+                Log.w(TAG, "AudioRecord initialization attempt $initAttempts failed, retrying in 120ms...")
+                try { Thread.sleep(120) } catch (_: Exception) {}
+            }
 
-            if (record.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e(TAG, "AudioRecord initialization failed")
-                record.release()
+            if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
+                Log.e(TAG, "AudioRecord initialization failed after retries")
                 return false
             }
 

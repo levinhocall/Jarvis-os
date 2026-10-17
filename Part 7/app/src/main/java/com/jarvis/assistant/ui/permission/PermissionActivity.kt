@@ -93,6 +93,13 @@ class PermissionActivity : AppCompatActivity() {
         }
 
         binding.btnGrantAccessibility.setOnClickListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !PermissionHelper.isAccessibilityServiceEnabled(this)) {
+                android.widget.Toast.makeText(
+                    this,
+                    "If setting is restricted, enable via App Info -> 3 dots -> 'Allow restricted settings'",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
             PermissionHelper.openAccessibilitySettings(this)
         }
 

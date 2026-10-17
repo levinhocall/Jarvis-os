@@ -204,6 +204,19 @@ class JarvisAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        try {
+            val info = serviceInfo ?: android.accessibilityservice.AccessibilityServiceInfo()
+            info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK
+            info.feedbackType = android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC
+            info.notificationTimeout = 100
+            info.flags = info.flags or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            serviceInfo = info
+        } catch (e: Exception) {
+            Log.w(TAG, "Error applying dynamic AccessibilityServiceInfo: ${e.message}")
+        }
         Log.i(TAG, "JarvisAccessibilityService connected and active")
         ensureJarvisServiceActive()
     }
@@ -1413,14 +1426,11 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     fun getActiveRootNode(): AccessibilityNodeInfo? {
-        // Prefer Android's active-window root. If unavailable, only accept a window
-        // that Android explicitly marks focused/active; never guess with an arbitrary
-        // application window because dialogs, keyboards, and split-screen can reorder it.
         val active = rootInActiveWindow
         if (active != null) return active
 
-        // 2. Fallback to focused application window
         try {
+            // 2. Fallback to focused application window
             val focusedAppWin = windows.firstOrNull {
                 it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isFocused
             }
@@ -1431,6 +1441,14 @@ class JarvisAccessibilityService : AccessibilityService() {
                 it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive
             }
             if (activeAppWin?.root != null) return activeAppWin.root
+
+            // 4. Fallback to any focused window (e.g. dialog, system alert, bottom sheet)
+            val anyFocused = windows.firstOrNull { it.isFocused }
+            if (anyFocused?.root != null) return anyFocused.root
+
+            // 5. Fallback to any active window
+            val anyActive = windows.firstOrNull { it.isActive }
+            if (anyActive?.root != null) return anyActive.root
 
             return null
         } catch (e: Exception) {
