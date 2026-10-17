@@ -1612,6 +1612,28 @@ class JarvisConversationService : Service() {
                         withTimeout(automationToolTimeoutMs()) {
                             val app = application as? JarvisApp ?: return@withTimeout
 
+                // Typed allow-list: unknown tools and malformed arguments are rejected before any handler runs.
+                val argMap = HashMap<String, Any?>()
+                args.keys().forEach { key ->
+                    val raw = args.opt(key)
+                    argMap[key] = when {
+                        raw == null || raw == JSONObject.NULL -> null
+                        raw is org.json.JSONArray -> List(raw.length()) { index -> raw.opt(index) }
+                        else -> raw
+                    }
+                }
+                val toolValidation = com.jarvis.assistant.automation.tools.ToolPolicy.validate(name, argMap)
+                if (toolValidation is com.jarvis.assistant.automation.tools.ToolPolicy.Validation.Invalid) {
+                    Log.w("JarvisService", "Tool call '$name' rejected (${toolValidation.code}): ${toolValidation.message}")
+                    liveWebSocket?.sendToolResponse(callId, name, JSONObject().apply {
+                        put("success", false)
+                        put("outcome", toolValidation.outcome.name)
+                        put("error_code", toolValidation.code)
+                        put("message", toolValidation.message)
+                    })
+                    return@withTimeout
+                }
+
                 hasExecutedCommandInCurrentTurn = true
                 lastCommandExecutionTime = System.currentTimeMillis()
                 suppressAudioUntilTurnComplete = false
@@ -1679,7 +1701,7 @@ class JarvisConversationService : Service() {
                     }
                 }
 
-                Log.i("JarvisService", "Handling native toolCall: $name with args: $args")
+                Log.i("JarvisService", "Handling native toolCall: $name (${com.jarvis.assistant.security.LogRedactor.describeArgs(argMap)})")
                 val result = JSONObject()
 
                 when (name) {
@@ -1951,9 +1973,13 @@ class JarvisConversationService : Service() {
                         val recipient = args.optString("recipient_name", "").trim()
                         val message = args.optString("message", "").trim()
                         val appNumber = if (args.has("app_number")) args.optInt("app_number", 1) else null
-                        val confirmed = args.optBoolean("confirmed", true)
+                        // The model-supplied "confirmed" argument is ignored; only the user's spoken reply approves.
+                        val approval = com.jarvis.assistant.automation.tools.ToolApprovalGate.evaluate(
+                            "send_whatsapp_message", listOf(recipient, message), currentTurnUserText.toString()
+                        )
+                        val confirmed = approval == com.jarvis.assistant.automation.tools.ApprovalLedger.Verdict.APPROVED
                         audioPlayer?.flush()
-                        val waResult = com.jarvis.assistant.util.WhatsAppMessenger.sendMessage(this@JarvisConversationService, recipient, message, appNumber, confirmed)
+                        val waResult =com.jarvis.assistant.util.WhatsAppMessenger.sendMessage(this@JarvisConversationService, recipient, message, appNumber, confirmed)
                         when (waResult) {
                             is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.Success -> {
                                 result.put("success", true) // WhatsApp opened and the send action was queued.
@@ -1963,7 +1989,9 @@ class JarvisConversationService : Service() {
                             is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.RequiresConfirmation -> {
                                 result.put("success", false)
                                 result.put("requires_confirmation", true)
-                                result.put("message", "Please confirm sending the WhatsApp message to ${waResult.contactName}.")
+                                result.put("message", com.jarvis.assistant.automation.tools.ToolApprovalGate.instruction(
+                                    approval, "sending the WhatsApp message to ${waResult.contactName}"
+                                ))
                             }
                             is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.MultipleAppsFound -> {
                                 result.put("success", false)
@@ -1992,12 +2020,18 @@ class JarvisConversationService : Service() {
                         val recipient = args.optString("recipient_name", "").trim()
                         val callType = args.optString("call_type", "voice").trim()
                         val appNumber = if (args.has("app_number")) args.optInt("app_number", 1) else null
-                        val confirmed = args.optBoolean("confirmed", true)
+                        // The model-supplied "confirmed" argument is ignored; only the user's spoken reply approves.
+                        val approval = com.jarvis.assistant.automation.tools.ToolApprovalGate.evaluate(
+                            "whatsapp_call", listOf(recipient, callType), currentTurnUserText.toString()
+                        )
+                        val confirmed = approval == com.jarvis.assistant.automation.tools.ApprovalLedger.Verdict.APPROVED
                         audioPlayer?.flush()
                         val callResult = com.jarvis.assistant.util.WhatsAppMessenger.placeCall(this@JarvisConversationService, recipient, callType, appNumber, confirmed)
                         val (ok, msg) = when (callResult) {
                             is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.Success -> Pair(true, "Calling ${callResult.contactName} on WhatsApp.")
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.RequiresConfirmation -> Pair(true, "Please confirm WhatsApp call to ${callResult.contactName}.")
+                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.RequiresConfirmation -> Pair(false, com.jarvis.assistant.automation.tools.ToolApprovalGate.instruction(
+                                approval, "placing the WhatsApp call to ${callResult.contactName}"
+                            ))
                             is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MultipleAppsFound -> Pair(false, "Multiple WhatsApp apps found. Please specify WhatsApp 1 or 2.")
                             is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.ContactNotFound -> Pair(false, "Could not find contact ${callResult.name}.")
                             is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MultipleContactsFound -> Pair(false, "Multiple contacts found for ${callResult.name}.")
@@ -2010,9 +2044,17 @@ class JarvisConversationService : Service() {
 
                     "call_contact" -> {
                         val contact = args.optString("contact_name", "").trim()
-                        audioPlayer?.flush()
-                        val callResult = com.jarvis.assistant.util.ContactCaller.callContact(this@JarvisConversationService, contact)
+                        // A phone call can cost money and is hard to undo: it needs the user's own spoken approval.
+                        val approval = com.jarvis.assistant.automation.tools.ToolApprovalGate.evaluate(
+                            "call_contact", listOf(contact), currentTurnUserText.toString()
+                        )
+                        val callResult: com.jarvis.assistant.util.ContactCaller.CallResult? =
+                            if (approval == com.jarvis.assistant.automation.tools.ApprovalLedger.Verdict.APPROVED) {
+                                audioPlayer?.flush()
+                                com.jarvis.assistant.util.ContactCaller.callContact(this@JarvisConversationService, contact)
+                            } else null
                         val (ok, msg) = when (callResult) {
+                            null -> Pair(false, com.jarvis.assistant.automation.tools.ToolApprovalGate.instruction(approval, "calling $contact"))
                             is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> Pair(true, "Calling ${callResult.contact.name}.")
                             is com.jarvis.assistant.util.ContactCaller.CallResult.NoMatch -> Pair(false, "Could not find contact $contact.")
                             is com.jarvis.assistant.util.ContactCaller.CallResult.MultipleMatches -> Pair(false, "Multiple contacts found for $contact.")
@@ -2022,6 +2064,9 @@ class JarvisConversationService : Service() {
                         }
                         result.put("success", ok)
                         result.put("message", msg)
+                        if (callResult == null) {
+                            result.put("requires_confirmation", approval != com.jarvis.assistant.automation.tools.ApprovalLedger.Verdict.DENIED)
+                        }
                     }
 
                     "set_volume" -> {
