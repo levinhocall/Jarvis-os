@@ -77,13 +77,13 @@ object YouTubeApiClient {
                         }
                     } else {
                         val errorBody = response.body?.string() ?: "(no body)"
-                        android.util.Log.w("YouTubeApiClient", "API search failed (HTTP ${response.code}), falling back to direct search. Error: $errorBody")
+                        android.util.Log.w("YouTubeApiClient", "API search failed (HTTP ${response.code}), falling back to direct search. Error: ${com.jarvis.assistant.security.LogRedactor.redact(errorBody)}")
                     }
                 } finally {
                     response.close()
                 }
             } catch (e: Exception) {
-                android.util.Log.w("YouTubeApiClient", "API request exception: ${e.message}, falling back to direct search")
+                android.util.Log.w("YouTubeApiClient", "API request exception: ${com.jarvis.assistant.security.LogRedactor.redact(e.message)}, falling back to direct search")
             }
         }
 

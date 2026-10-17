@@ -281,6 +281,7 @@ Example 6: "Turn on Do Not Disturb"
 3. WhatsApp Assistant Tools:
    - `send_whatsapp_message(recipient_name=..., message=...)`: Quick shortcut for sending text messages on WhatsApp.
    - `whatsapp_call(recipient_name=..., call_type=...)`: Initiates WhatsApp voice or video calls.
+   - Messaging and calling tools (send_whatsapp_message, whatsapp_call, call_contact) always need the user's spoken confirmation. The app verifies the reply itself. When a result says confirmation is required, ask the user, wait for their answer, then repeat the call with identical arguments. Never say a message was sent or a call was placed until the tool result confirms it.
    - For ANYTHING else on WhatsApp (sending images, videos, documents, live location, status updates, voice messages, stickers, etc.): Use the autonomous screen control tools (open_app â†’ navigate â†’ click â†’ etc.)!
 4. Phone & System Tools:
    - `call_contact(contact_name=...)`: Standard phone call to a saved contact.

@@ -162,7 +162,7 @@ class YouTubeAutomationManager(
                 }
             }
         } catch (e: Exception) {
-            Pair(false, "Validation error: ${e.message}")
+            Pair(false, "Validation error: ${com.jarvis.assistant.security.LogRedactor.redact(e.message)}")
         }
     }
 }

@@ -118,8 +118,11 @@ class ApiConnectionActivity : AppCompatActivity() {
             val startTime = System.currentTimeMillis()
             val result = withContext(Dispatchers.IO) {
                 try {
-                    val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
-                    val request = Request.Builder().url(url).build()
+                    // Key goes in a header, not the URL, so it cannot leak through URLs in logs or error text.
+                    val request = Request.Builder()
+                        .url("https://generativelanguage.googleapis.com/v1beta/models")
+                        .header("x-goog-api-key", apiKey)
+                        .build()
                     testHttpClient.newCall(request).execute().use { response ->
                         val duration = System.currentTimeMillis() - startTime
                         if (response.isSuccessful) {
