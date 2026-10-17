@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🤖 JARVIS Voice Assistant - Complete Tutorial Playlist (Parts 1 to 7)
 
 [![License: Custom](https://img.shields.io/badge/License-Tech_GPTx_Attribution-blue.svg)](LICENSE)
@@ -79,3 +80,6 @@ Playlist/
 
 Happy coding! Build your own JARVIS! 🎙️⚡  
 *Follow & Subscribe to **Tech GPTx** for more AI & Android tutorials!*
+=======
+# Jarvis-os
+>>>>>>> 092fa1f73c1a12b18b31becbb5b99e5a0f25e3d6
