@@ -159,7 +159,7 @@ class GeminiLiveWebSocket(
                     val code = response?.code ?: 0
                     val responseBody = try { response?.body?.string() } catch (_: Exception) { null }
                     val errorMsg = t.message ?: "WebSocket connection failure"
-                    Log.e(TAG, "WebSocket failure: code=$code, errorMsg=$errorMsg, body=$responseBody", t)
+                    Log.e(TAG, "WebSocket failure: code=$code, type=${t.javaClass.simpleName}, errorMsg=${com.jarvis.assistant.security.LogRedactor.redact(errorMsg)}, body=${com.jarvis.assistant.security.LogRedactor.redact(responseBody)}")
                     isConnected.set(false)
                     isSetupComplete.set(false)
                     stopTimers()
@@ -380,7 +380,7 @@ class GeminiLiveWebSocket(
                                     })
                                     put("confirmed", JSONObject().apply {
                                         put("type", "BOOLEAN")
-                                        put("description", "True if user already confirmed sending.")
+                                        put("description", "Ignored. The app itself verifies the user's spoken confirmation. If the result says confirmation is required, ask the user, wait for their reply, then call again with identical arguments.")
                                     })
                                 })
                                 put("required", JSONArray().apply { put("recipient_name"); put("message") })
@@ -408,7 +408,7 @@ class GeminiLiveWebSocket(
                                     })
                                     put("confirmed", JSONObject().apply {
                                         put("type", "BOOLEAN")
-                                        put("description", "True if user already confirmed calling.")
+                                        put("description", "Ignored. The app itself verifies the user's spoken confirmation. If the result says confirmation is required, ask the user, wait for their reply, then call again with identical arguments.")
                                     })
                                 })
                                 put("required", JSONArray().apply { put("recipient_name"); put("call_type") })
