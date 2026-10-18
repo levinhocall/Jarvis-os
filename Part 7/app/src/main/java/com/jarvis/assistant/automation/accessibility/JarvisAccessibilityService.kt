@@ -1487,32 +1487,22 @@ class JarvisAccessibilityService : AccessibilityService() {
         return clickAt(cx, cy)
     }
 
-    fun performSmartScroll(direction: String, distance: String = "small"): Boolean {
+    fun performSmartScroll(direction: String, distance: String = "medium"): Boolean {
         val dm = resources.displayMetrics
         val width = dm.widthPixels.toFloat()
         val height = dm.heightPixels.toFloat()
 
-        // Calculate delta based on distance:
-        // "small" = gentle line-by-line scroll (~18% of screen height, moving 1-2 rows at a time with 0 fling)
-        // "medium" = ~30% of screen height
-        // "large" = ~45% of screen height
-        val deltaY = when (distance.lowercase()) {
-            "small" -> height * 0.18f
-            "large" -> height * 0.45f
-            else -> height * 0.28f
-        }
-        val durationMs = when (distance.lowercase()) {
-            "small" -> 600L  // Slow, controlled drag with ZERO fling momentum
-            "large" -> 400L
-            else -> 550L
-        }
+        // Strict Safe-Zone Coordinates:
+        // X-axis: strictly width * 0.50f (centered to prevent triggering system edge-back gestures)
+        // Y-axis: strictly between height * 0.68f and height * 0.32f (avoids status/URL bars and bottom nav bars)
+        val startX = width * 0.50f
+        val endX = width * 0.50f
+        val durationMs = 350L
 
-        val (startX, startY, endX, endY) = when (direction.lowercase()) {
-            "down" -> listOf(width * 0.5f, height * 0.58f, width * 0.5f, height * 0.58f - deltaY)
-            "up" -> listOf(width * 0.5f, height * 0.42f, width * 0.5f, height * 0.42f + deltaY)
-            "left" -> listOf(width * 0.75f, height * 0.5f, width * 0.25f, height * 0.5f)
-            "right" -> listOf(width * 0.25f, height * 0.5f, width * 0.75f, height * 0.5f)
-            else -> listOf(width * 0.5f, height * 0.58f, width * 0.5f, height * 0.58f - deltaY)
+        val (startY, endY) = when (direction.lowercase()) {
+            "up" -> Pair(height * 0.32f, height * 0.68f)
+            "down" -> Pair(height * 0.68f, height * 0.32f)
+            else -> Pair(height * 0.68f, height * 0.32f)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -1525,11 +1515,65 @@ class JarvisAccessibilityService : AccessibilityService() {
                     .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
                     .build()
                 val dispatched = dispatchGesture(gesture, null, null)
-                Log.i(TAG, "Dispatched scroll $direction gesture (distance=$distance, deltaY=$deltaY, duration=${durationMs}ms): $dispatched")
+                Log.i(TAG, "Dispatched safe-zone scroll $direction gesture: $dispatched")
+                try { Thread.sleep(500) } catch (_: Exception) {}
                 return dispatched
             } catch (e: Exception) {
                 Log.e(TAG, "Scroll gesture failed: ${e.message}")
             }
+        }
+        return false
+    }
+
+    /**
+     * DOM / Accessibility Node Tree Grounding:
+     * Traverses node tree to find an element fuzzy-matching targetQuery in text or contentDescription.
+     * Clicks the node directly, or its clickable parent, or dispatches an 80ms center tap.
+     */
+    fun clickNodeBySemanticMatch(targetQuery: String): Boolean {
+        if (targetQuery.isBlank()) return false
+        val cleanQuery = targetQuery.trim().lowercase(Locale.ROOT)
+        val root = getActiveRootNode() ?: return false
+
+        val matchingNodes = mutableListOf<AccessibilityNodeInfo>()
+        fun search(node: AccessibilityNodeInfo) {
+            val text = node.text?.toString()?.lowercase(Locale.ROOT).orEmpty()
+            val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT).orEmpty()
+            if (text.contains(cleanQuery) || desc.contains(cleanQuery) ||
+                cleanQuery.split(" ").all { it.length > 2 && (text.contains(it) || desc.contains(it)) }
+            ) {
+                matchingNodes.add(node)
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                search(child)
+            }
+        }
+        search(root)
+
+        val target = matchingNodes.firstOrNull() ?: return false
+
+        // 1. Try native ACTION_CLICK on target or nearest clickable parent
+        var curr: AccessibilityNodeInfo? = target
+        while (curr != null) {
+            if (curr.isClickable) {
+                val clicked = curr.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (clicked) {
+                    Log.i(TAG, "clickNodeBySemanticMatch: clicked node via ACTION_CLICK for '$targetQuery'")
+                    return true
+                }
+            }
+            curr = curr.parent
+        }
+
+        // 2. Fallback to physical 80ms center tap gesture
+        val bounds = Rect()
+        target.getBoundsInScreen(bounds)
+        if (bounds.width() > 0 && bounds.height() > 0) {
+            val cx = bounds.centerX().toFloat()
+            val cy = bounds.centerY().toFloat()
+            Log.i(TAG, "clickNodeBySemanticMatch: dispatching center tap at ($cx, $cy) for '$targetQuery'")
+            return clickAt(cx, cy)
         }
         return false
     }

@@ -151,7 +151,7 @@ class HomeFragment : Fragment() {
 
                     // Sync State
                     val state = pendingOrbState ?: when (viewModel.conversationState.value) {
-                        ConversationState.LISTENING -> "listening"
+                        ConversationState.LISTENING, ConversationState.INTERRUPTED -> "listening"
                         ConversationState.SPEAKING -> "speaking"
                         ConversationState.THINKING -> "thinking"
                         ConversationState.IDLE -> "idle"
@@ -384,7 +384,7 @@ class HomeFragment : Fragment() {
                         } else {
                             binding.tvHoldHint.visibility = View.VISIBLE
                             when (status.state) {
-                                ConversationState.LISTENING -> {
+                                ConversationState.LISTENING, ConversationState.INTERRUPTED -> {
                                     setOrbState("listening")
                                     binding.tvListeningStatus.text = "MIC ON • LISTENING..."
                                     binding.tvListeningStatus.setTextColor(Color.parseColor("#10B981"))

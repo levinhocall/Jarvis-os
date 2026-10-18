@@ -36,10 +36,8 @@ class AudioPlayer(
         // Guarantees zero buffer underruns across network jitter and prevents deadlock.
         val bufferSize = maxOf(minBufferSize * 8, 96000)
 
-        // USAGE_MEDIA maps to STREAM_MUSIC, ensuring audio plays strictly through the
-        // phone's LOUDSPEAKER (or connected headphones), NEVER the call earpiece speaker.
         val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
 
@@ -58,6 +56,23 @@ class AudioPlayer(
             .build()
 
         audioTrack = track
+    }
+
+    val audioSessionId: Int
+        get() = audioTrack?.audioSessionId ?: 0
+
+    fun pause() {
+        synchronized(trackLock) {
+            try {
+                audioTrack?.let {
+                    if (it.state == AudioTrack.STATE_INITIALIZED && it.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                        it.pause()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error pausing AudioTrack: ${e.message}")
+            }
+        }
     }
 
     private val isTurnComplete = AtomicBoolean(false)

@@ -26,7 +26,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 class PhoneControlManager(
-    private val context: Context,
+    val context: Context,
     private val contactResolver: ContactResolver? = null
 ) {
 

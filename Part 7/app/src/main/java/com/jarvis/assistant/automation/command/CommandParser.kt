@@ -65,7 +65,93 @@ object CommandParser {
             return ParsedCommandResult(JarvisCommand.DisambiguationChoice(clean), 0.95f, "DISAMBIGUATION")
         }
 
-        val prefix = "^(?:please\\s+|can you\\s+|could you\\s+|just\\s+)?"
+        // 2b. Instant Stop / Pause / Kill-Switch
+        if (clean.matches(Regex("^(?:hey\\s+jarvis\\s+|ok\\s+jarvis\\s+)?(ruko|ruk\\s+jao|bas|bas\\s+karo|stop|wait|pause|hold\\s+on|thamba|aagu|nako)$"))) {
+            return ParsedCommandResult(JarvisCommand.StopOrPause, 1.0f, "STOP_OR_PAUSE")
+        }
+
+        val prefix = "^(?:please\\s+|can you\\s+|could you\\s+|just\\s+|ek\\s+kaam\\s+karo\\s+)?"
+
+        // 2c. Safe Screen Scroll Gestures (Hinglish natural phrasing)
+        // Note: Users say "screen upar lo" / "upar karo" to move content up to reveal lower items (= Scroll Down)
+        if (clean.matches(Regex("$prefix(?:screen\\s+)?(?:upar\\s+lo|upar\\s+karo|upar\\s+kijiye|scroll\\s+down|down\\s+karo|neeche\\s+scroll|scroll\\s+karo|aur\\s+dikhao|aur\\s+neeche|thoda\\s+down(?:\\s+karo)?|thoda\\s+scroll(?:\\s+karo)?|swip\\s+karo|swipe\\s+karo)(?:\\s+screen)?$")) ||
+            clean.matches(Regex("^scroll\\s+karo\\s+screen(?:\\s+ko)?$")) ||
+            clean.matches(Regex("^screen\\s+ko\\s+upar\\s+lo$"))
+        ) {
+            return ParsedCommandResult(JarvisCommand.ScrollScreen("down", "medium"), 0.98f, "SCROLL_DOWN")
+        }
+
+        if (clean.matches(Regex("$prefix(?:screen\\s+)?(?:neeche\\s+lo|neeche\\s+karo|scroll\\s+up|upar\\s+scroll|wapas\\s+upar|upar\\s+dikhao|thoda\\s+upar)(?:\\s+screen)?$")) ||
+            clean.matches(Regex("^screen\\s+ko\\s+neeche\\s+lo$"))
+        ) {
+            return ParsedCommandResult(JarvisCommand.ScrollScreen("up", "medium"), 0.98f, "SCROLL_UP")
+        }
+
+        // 2d. Explicit Navigation Guards (Strictly isolated from generic fallbacks)
+        if (clean.matches(Regex("$prefix(?:go\\s+back|back|back\\s+karo|peeche\\s+jao|peeche\\s+lo|wapas\\s+jao|wapas\\s+aao|again\\s+swipe\\s+kar\\s+back\\s+karo)$"))) {
+            return ParsedCommandResult(JarvisCommand.NavigateBack, 0.98f, "NAVIGATE_BACK")
+        }
+        if (clean.matches(Regex("$prefix(?:go\\s+home|home\\s+screen|home\\s+jao|home\\s+chalo|home\\s+pe\\s+aao)$"))) {
+            return ParsedCommandResult(JarvisCommand.NavigateHome, 0.98f, "NAVIGATE_HOME")
+        }
+
+        // 2d-1. Multi-Action Voice Protocols (Tony Stark Mode)
+        if (clean.contains("coding protocol") || clean.contains("business protocol") ||
+            clean.contains("wholesale mode") || clean.contains("lockdown protocol") || clean.contains("unlock protocol")) {
+            return ParsedCommandResult(JarvisCommand.ExecuteProtocol(clean), 0.99f, "EXECUTE_PROTOCOL")
+        }
+
+        // 2d-2. Proactive Status Report / Briefing
+        if (clean.matches(Regex("$prefix(?:status\\s+report|morning\\s+briefing|briefing\\s+do|report\\s+batao|kya\\s+haal\\s+hai|system\\s+status)$"))) {
+            return ParsedCommandResult(JarvisCommand.ProactiveStatusReport, 0.98f, "STATUS_REPORT")
+        }
+
+        // 2d-3. Zero-Touch WhatsApp Reader & Silent Reply
+        if (clean.matches(Regex("$prefix(?:unread\\s+messages?(?:\\s+batao)?|kiska\\s+message\\s+aaya\\s+hai|whatsapp\\s+messages?(?:\\s+batao)?)$"))) {
+            return ParsedCommandResult(JarvisCommand.ReadUnreadWhatsApp, 0.98f, "READ_UNREAD_WHATSAPP")
+        }
+        val waReplyRegex = Regex("$prefix(.+?)\\s+ko\\s+reply\\s+(?:bhejo|karo|do)\\s+(.+)$")
+        val waReplyMatch = waReplyRegex.find(clean)
+        if (waReplyMatch != null) {
+            val contact = waReplyMatch.groupValues[1].trim()
+            val msg = waReplyMatch.groupValues[2].trim()
+            return ParsedCommandResult(JarvisCommand.SendSilentWhatsAppReply(contact, msg), 0.98f, "SILENT_WHATSAPP_REPLY")
+        }
+
+        // 2d-4. Tactical Screen Scanner
+        if (clean.matches(Regex("$prefix(?:scan\\s+this\\s+screen|is\\s+page\\s+ko\\s+analyze\\s+karo|compare\\s+prices(?:\\s+on\\s+screen)?|screen\\s+scan\\s+karo|page\\s+analyze\\s+karo)$"))) {
+            return ParsedCommandResult(JarvisCommand.ScanScreenTactical, 0.98f, "TACTICAL_SCANNER")
+        }
+
+        // 2d-5. Drop My Needle / PC Bridge
+        if (clean.matches(Regex("$prefix(?:send\\s+(?:this\\s+)?to\\s+(?:my\\s+)?pc|yeh\\s+link\\s+(?:save|share)\\s+karo|share\\s+to\\s+pc)$"))) {
+            return ParsedCommandResult(JarvisCommand.ShareToPC("PC"), 0.98f, "SHARE_TO_PC")
+        }
+
+        // 2d-6. Recall Core Memory Query
+        if (clean.startsWith("recall ") || clean.contains("maine kaunsa") || clean.contains("maine kaunsi")) {
+            return ParsedCommandResult(JarvisCommand.RecallFact(clean), 0.98f, "RECALL_FACT")
+        }
+
+        // 2e. Contextual E-Commerce & Product Search (Flipkart / Google / Web)
+        val ecomRegex = Regex("$prefix(?:(?:open\\s+karo|kholo|jao|me\\s+jao|pe\\s+dekho|search\\s+karo|dekho)\\s+)?(flipkart|google|amazon)(?:\\s+(?:pe|me|mein|par))?\\s*(?:na\\s+)?(.+)$")
+        val ecomMatch = ecomRegex.find(clean)
+        if (ecomMatch != null) {
+            val platform = ecomMatch.groupValues[1]
+            val rawQuery = ecomMatch.groupValues[2].trim()
+            if (rawQuery.isNotBlank() && !rawQuery.matches(Regex("^(open|chalu|chalao|kholo)$"))) {
+                val resolved = com.jarvis.assistant.data.memory.ConversationContextMemory.resolveContextualQuery(rawQuery)
+                return ParsedCommandResult(JarvisCommand.ContextualSearch(resolved, platform), 0.96f, "CONTEXTUAL_SEARCH")
+            }
+        }
+
+        // 2f. Conversational Modifiers (e.g. "Yeh wala nahi, ice cream wala", "500 liter wala")
+        if (clean.matches(Regex(".*(?:yeh\\s+wala\\s+nahi|ye\\s+nahi|wala\\s+chahiye|wala\\s+dekho|500\\s+liter|ice\\s+cream).*")) &&
+            com.jarvis.assistant.data.memory.ConversationContextMemory.hasContext()
+        ) {
+            val resolved = com.jarvis.assistant.data.memory.ConversationContextMemory.resolveContextualQuery(clean)
+            return ParsedCommandResult(JarvisCommand.ContextualSearch(resolved, com.jarvis.assistant.data.memory.ConversationContextMemory.targetPlatform), 0.94f, "CONTEXTUAL_FOLLOWUP")
+        }
 
         // 3. Flashlight / Torch Commands (Strict Anchoring & Natural Variations across Indian languages)
         val flashWords = "(?:flash\\s*light|flash\\s*lite|flashlight|flash|torch|light|batti)"

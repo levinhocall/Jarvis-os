@@ -77,6 +77,100 @@ class CommandExecutor(
             is JarvisCommand.RecallFavoriteSong -> memoryManager.getFavoriteSongResponse()
             is JarvisCommand.RecallRoutine -> memoryManager.getRoutineResponse()
             is JarvisCommand.GoToBackground -> "Going to background."
+
+            // Navigation & Gestures
+            is JarvisCommand.ScrollScreen -> {
+                val scrolled = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                    ?.performSmartScroll(command.direction, command.distance) ?: false
+                if (scrolled) "Scrolled ${command.direction}." else "Unable to scroll."
+            }
+            is JarvisCommand.NavigateBack -> {
+                val backed = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                    ?.performSystemGesture("back") ?: false
+                if (backed) "Going back." else "Unable to go back."
+            }
+            is JarvisCommand.NavigateHome -> {
+                val homed = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                    ?.performSystemGesture("home") ?: false
+                if (homed) "Returning home." else "Unable to return home."
+            }
+            is JarvisCommand.StopOrPause -> {
+                com.jarvis.assistant.automation.agent.AgentTaskEngine.requestCancellation()
+                "Stopped."
+            }
+            is JarvisCommand.ContextualSearch -> {
+                val ctx = phoneManager.context
+                val query = command.query
+                val platform = command.platform?.lowercase() ?: "google"
+                if (platform == "flipkart") {
+                    val clicked = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                        ?.clickNodeBySemanticMatch("Flipkart") ?: false
+                    if (!clicked) {
+                        try {
+                            val url = "https://www.flipkart.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            ctx.startActivity(intent)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error opening Flipkart search: ${e.message}")
+                        }
+                    }
+                    "Searching $query on Flipkart."
+                } else {
+                    try {
+                        val url = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        ctx.startActivity(intent)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error opening Google search: ${e.message}")
+                    }
+                    "Searching $query on Google."
+                }
+            }
+            is JarvisCommand.ClickElementByText -> {
+                val clicked = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                    ?.clickNodeBySemanticMatch(command.targetText) ?: false
+                if (clicked) "Clicked ${command.targetText}." else "Could not find ${command.targetText} on screen."
+            }
+            is JarvisCommand.ExecuteProtocol -> {
+                com.jarvis.assistant.automation.protocol.ProtocolManager.executeProtocol(
+                    command.rawText,
+                    phoneManager.context,
+                    phoneManager
+                ).spokenAnnouncement
+            }
+            is JarvisCommand.ProactiveStatusReport -> {
+                com.jarvis.assistant.automation.briefing.ProactiveBriefingManager.generateBriefing(phoneManager.context)
+            }
+            is JarvisCommand.ReadUnreadWhatsApp -> {
+                com.jarvis.assistant.automation.notification.JarvisNotificationListenerService.getUnreadWhatsAppSummary()
+            }
+            is JarvisCommand.SendSilentWhatsAppReply -> {
+                val sent = com.jarvis.assistant.automation.notification.JarvisNotificationListenerService.sendSilentReply(
+                    command.contact,
+                    command.message,
+                    phoneManager.context
+                )
+                if (sent) "WhatsApp reply sent to ${command.contact}." else "Could not send silent reply to ${command.contact}."
+            }
+            is JarvisCommand.ScanScreenTactical -> {
+                kotlinx.coroutines.runBlocking {
+                    com.jarvis.assistant.vision.TacticalScannerManager.scanCurrentScreen(phoneManager.context).summary
+                }
+            }
+            is JarvisCommand.ShareToPC -> {
+                kotlinx.coroutines.runBlocking {
+                    com.jarvis.assistant.automation.bridge.CrossDeviceBridge.shareCurrentContent(phoneManager.context, command.targetDevice).message
+                }
+            }
+            is JarvisCommand.RecallFact -> {
+                kotlinx.coroutines.runBlocking {
+                    com.jarvis.assistant.data.memory.RecallCoreManager.queryRecall(phoneManager.context, command.query)
+                }
+            }
         }
     }
 }
