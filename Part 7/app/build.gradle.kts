@@ -74,9 +74,11 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     lint {
-        // AndroidX Lifecycle 2.8.6's NullSafeMutableLiveData detector crashes under this project's Kotlin 2.0 UAST.
-        // Keep all other lint checks enabled while that upstream detector is incompatible.
         disable += "NullSafeMutableLiveData"
     }
 }

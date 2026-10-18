@@ -110,14 +110,32 @@ object ProtocolManager {
             }
 
             clean.contains("unlock protocol") -> {
-                Log.i(TAG, "Disengaging Lockdown Protocol")
-                isLockdownActive = false
-                pm.muteVolume(false)
-                pm.setVolumePercent(60)
-                ProtocolExecutionResult(
-                    handled = true,
-                    spokenAnnouncement = "Welcome back, Nazib Sir. Systems unlocked and online."
+                val isAuthorized = com.jarvis.assistant.security.SecurityGuardManager.isActionPermitted(
+                    com.jarvis.assistant.security.SecurityAction.UNLOCK_LOCKDOWN,
+                    rawText,
+                    context
                 )
+
+                if (isAuthorized || !isLockdownActive) {
+                    Log.i(TAG, "Disengaging Lockdown Protocol")
+                    isLockdownActive = false
+                    pm.muteVolume(false)
+                    pm.setVolumePercent(60)
+                    ProtocolExecutionResult(
+                        handled = true,
+                        spokenAnnouncement = "Welcome back, Nazib Sir. Systems unlocked and online."
+                    )
+                } else {
+                    Log.w(TAG, "Unauthorized unlock attempt rejected")
+                    com.jarvis.assistant.security.SecurityGuardManager.logIntruderAlert(
+                        context,
+                        "Unauthorized attempt to unlock lockdown: '$rawText'"
+                    )
+                    ProtocolExecutionResult(
+                        handled = true,
+                        spokenAnnouncement = "Security authorization failed. Lockdown protocol remains active, intruder logged."
+                    )
+                }
             }
 
             else -> ProtocolExecutionResult(false, "")

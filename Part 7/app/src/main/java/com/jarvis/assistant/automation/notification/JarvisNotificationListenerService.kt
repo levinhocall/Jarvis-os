@@ -135,6 +135,19 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         recentNotifications[sbn.key] = cached
         notificationOrder.add(sbn.key)
 
+        // Process financial/UPI transactions into Expense Ledger
+        com.jarvis.assistant.automation.ledger.ExpenseLedgerTracker.processNotification(
+            packageName = pkg,
+            title = title,
+            text = text,
+            context = applicationContext
+        )
+
+        // Proactive Headset Whisper for incoming WhatsApp messages
+        if (pkg == "com.whatsapp" && title.isNotBlank() && text.isNotBlank()) {
+            com.jarvis.assistant.audio.HeadsetWhisperManager.whisperNotification(title, text, applicationContext)
+        }
+
         // Evict older entries
         while (notificationOrder.size > MAX_CACHE_SIZE) {
             val oldest = notificationOrder.poll() ?: break

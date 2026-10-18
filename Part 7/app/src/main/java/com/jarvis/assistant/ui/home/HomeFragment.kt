@@ -89,13 +89,29 @@ class HomeFragment : Fragment() {
 
         setupOrbWebView()
 
-        // Action Buttons
         binding.btnScreenShareQuick.setOnClickListener {
-            (activity as? MainActivity)?.toggleScreenShare()
+            val isSharing = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value
+            if (isSharing) {
+                (activity as? MainActivity)?.toggleScreenShare()
+            } else {
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Tactical Vision & Screen")
+                    .setItems(arrayOf("Tactical Screen Scan (OCR/Prices)", "Live Screen Share with Jarvis")) { _, which ->
+                        if (which == 0) {
+                            lifecycleScope.launch {
+                                val scan = com.jarvis.assistant.vision.TacticalScannerManager.scanCurrentScreen(requireContext())
+                                com.google.android.material.snackbar.Snackbar.make(binding.root, scan.summary, com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()
+                            }
+                        } else {
+                            (activity as? MainActivity)?.toggleScreenShare()
+                        }
+                    }
+                    .show()
+            }
         }
 
         binding.btnSavedMemories.setOnClickListener {
-            startActivity(Intent(requireContext(), MemoryActivity::class.java))
+            com.jarvis.assistant.ui.memory.RecallCoreBottomSheet.show(parentFragmentManager)
         }
 
         binding.btnConversationLanguageQuick.setOnClickListener {

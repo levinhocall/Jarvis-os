@@ -41,4 +41,8 @@ sealed class JarvisCommand {
     object ScanScreenTactical : JarvisCommand()
     data class ShareToPC(val targetDevice: String = "PC") : JarvisCommand()
     data class RecallFact(val query: String) : JarvisCommand()
+    data class CameraVisionScan(val prompt: String = "Analyze key details, bill totals, or product info.") : JarvisCommand()
+    data class SecurityAuthorize(val passphrase: String) : JarvisCommand()
+    object QueryExpenseLedger : JarvisCommand()
+    data class CallScreeningAction(val action: String, val message: String? = null) : JarvisCommand()
 }

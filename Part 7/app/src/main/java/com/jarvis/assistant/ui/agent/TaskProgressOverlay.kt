@@ -80,6 +80,19 @@ class TaskProgressOverlay(private val context: Context) {
         }
         visibility = View.VISIBLE
     }
+    private val statusPill = TextView(context).apply {
+        textSize = 10f
+        setTextColor(Color.WHITE)
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        setPadding(dp(8), dp(4), dp(8), dp(4))
+        background = GradientDrawable().apply {
+            setColor(Color.argb(215, 18, 19, 28))
+            cornerRadius = dp(12).toFloat()
+            setStroke(dp(1), Color.argb(140, 168, 85, 247))
+        }
+        elevation = dp(10).toFloat()
+        visibility = View.GONE
+    }
     private val params = WindowManager.LayoutParams(
         minOf(dp(236), context.resources.displayMetrics.widthPixels - dp(16)),
         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -114,9 +127,11 @@ class TaskProgressOverlay(private val context: Context) {
         pill.addView(progressText, matchWrap())
         root.addView(pill, FrameLayout.LayoutParams(-1, -2))
         root.addView(avatar, FrameLayout.LayoutParams(dp(88), dp(88), Gravity.CENTER))
+        root.addView(statusPill, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(2) })
         pill.isClickable = true
         pill.setOnTouchListener { _, event -> handleOverlayTouch(event) }
         avatar.setOnTouchListener { _, event -> handleOverlayTouch(event) }
+        activeInstance = this
     }
 
     fun update(snapshot: AgentTaskSnapshot?, showIdleAvatar: Boolean = false): Boolean {
@@ -171,6 +186,7 @@ class TaskProgressOverlay(private val context: Context) {
             try { windowManager.removeView(root) } catch (_: Exception) {}
             attached = false
         }
+        if (activeInstance === this) activeInstance = null
     }
 
     private fun render(snapshot: AgentTaskSnapshot) {
@@ -261,6 +277,15 @@ class TaskProgressOverlay(private val context: Context) {
                     return true
                 }
                 lastTapAt = now
+
+                // Instant hardware kill-switch on single-tap during speaking or automation
+                val convState = com.jarvis.assistant.background.JarvisConversationService.conversationState.value
+                val isExecuting = com.jarvis.assistant.automation.agent.AgentTaskEngine.current() != null
+                if (convState == com.jarvis.assistant.data.model.ConversationState.SPEAKING || isExecuting) {
+                    com.jarvis.assistant.background.JarvisConversationService.interruptPlayback()
+                    showStatusPill("🛑 Interrupted")
+                    return true
+                }
                 return false
             }
             MotionEvent.ACTION_CANCEL -> {
@@ -311,6 +336,32 @@ class TaskProgressOverlay(private val context: Context) {
         if (bold) typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
 
+    fun showStatusPill(text: String) {
+        root.post {
+            statusPill.text = text
+            statusPill.alpha = 1f
+            statusPill.visibility = View.VISIBLE
+            statusPill.animate()
+                .alpha(0f)
+                .setDuration(400L)
+                .setStartDelay(2500L)
+                .withEndAction {
+                    statusPill.visibility = View.GONE
+                }
+                .start()
+        }
+    }
+
     private fun matchWrap() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     private fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
+
+    companion object {
+        @Volatile
+        var activeInstance: TaskProgressOverlay? = null
+            private set
+
+        fun updateStatus(text: String) {
+            activeInstance?.showStatusPill(text)
+        }
+    }
 }

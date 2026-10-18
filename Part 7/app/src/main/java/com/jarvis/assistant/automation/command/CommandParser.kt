@@ -133,6 +133,27 @@ object CommandParser {
             return ParsedCommandResult(JarvisCommand.RecallFact(clean), 0.98f, "RECALL_FACT")
         }
 
+        // 2d-7. Optical Camera Vision Diagnosis & Bill Totaling
+        if (clean.matches(Regex("$prefix(?:camera\\s+(?:se\\s+)?(?:dekho|scan\\s+karo|analyze\\s+karo)|scan\\s+(?:this\\s+)?bill|is\\s+bill\\s+ko\\s+scan\\s+karo|yeh\\s+kya\\s+hai|look\\s+at\\s+this|take\\s+a\\s+look|diagnose\\s+this)$"))) {
+            return ParsedCommandResult(JarvisCommand.CameraVisionScan(), 0.98f, "CAMERA_VISION_SCAN")
+        }
+
+        // 2d-8. Security Guard Biometric / Passphrase Authorization
+        if (clean.startsWith("authorize nazib") || clean.startsWith("authorization nazib") ||
+            clean.matches(Regex("$prefix(?:authorize\\s+me|security\\s+authorization|enter\\s+security\\s+pin)\\s*(.+)?$"))) {
+            return ParsedCommandResult(JarvisCommand.SecurityAuthorize(clean), 0.99f, "SECURITY_AUTHORIZE")
+        }
+
+        // 2d-9. Expense & Order Ledger Query ("Jarvis, aaj ka hisab batao")
+        if (clean.matches(Regex("$prefix(?:aaj\\s+ka\\s+hisa+b(?:\\s+batao)?|kharcha\\s+batao|today's\\s+expenses?|total\\s+expenses?(?:\\s+today)?|aaj\\s+kitna\\s+kharcha\\s+hua|ledger\\s+summary)$"))) {
+            return ParsedCommandResult(JarvisCommand.QueryExpenseLedger, 0.98f, "QUERY_EXPENSE_LEDGER")
+        }
+
+        // 2d-10. Smart Call Screening Quick-Reject Action
+        if (clean.matches(Regex("$prefix(?:busy\\s+hoon\\s+message\\s+(?:daal\\s+do|bhej\\s+do|karo)|reject\\s+call(?:\\s+and\\s+send\\s+message)?|call\\s+reject\\s+karo|cut\\s+the\\s+call)$"))) {
+            return ParsedCommandResult(JarvisCommand.CallScreeningAction("REJECT_WITH_SMS"), 0.98f, "CALL_SCREENING_REJECT")
+        }
+
         // 2e. Contextual E-Commerce & Product Search (Flipkart / Google / Web)
         val ecomRegex = Regex("$prefix(?:(?:open\\s+karo|kholo|jao|me\\s+jao|pe\\s+dekho|search\\s+karo|dekho)\\s+)?(flipkart|google|amazon)(?:\\s+(?:pe|me|mein|par))?\\s*(?:na\\s+)?(.+)$")
         val ecomMatch = ecomRegex.find(clean)

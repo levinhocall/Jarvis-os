@@ -171,6 +171,29 @@ class CommandExecutor(
                     com.jarvis.assistant.data.memory.RecallCoreManager.queryRecall(phoneManager.context, command.query)
                 }
             }
+            is JarvisCommand.CameraVisionScan -> {
+                kotlinx.coroutines.runBlocking {
+                    com.jarvis.assistant.vision.CameraVisionAnalyzer.analyzeSnapshot(phoneManager.context, command.prompt).summary
+                }
+            }
+            is JarvisCommand.SecurityAuthorize -> {
+                val auth = com.jarvis.assistant.security.SecurityGuardManager.verifyPassphrase(command.passphrase, phoneManager.context)
+                if (auth) {
+                    "Voice authorization accepted. Elevated security access granted for 60 seconds, Nazib Sir."
+                } else {
+                    "Security authorization failed. Access denied, Sir."
+                }
+            }
+            is JarvisCommand.QueryExpenseLedger -> {
+                com.jarvis.assistant.automation.ledger.ExpenseLedgerTracker.getTodayLedgerSummary(phoneManager.context)
+            }
+            is JarvisCommand.CallScreeningAction -> {
+                val handled = com.jarvis.assistant.automation.phone.CallScreeningReceiver.rejectCallAndSendMessage(
+                    phoneManager.context,
+                    command.message
+                )
+                if (handled) "Call rejected and auto-reply message sent, Sir." else "Call silenced, Sir."
+            }
         }
     }
 }
