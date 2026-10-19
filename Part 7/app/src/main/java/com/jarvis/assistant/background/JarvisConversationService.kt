@@ -174,11 +174,12 @@ class JarvisConversationService : Service() {
             }
         }
 
-        fun isBargeInSpeechDetected(recognizedText: String, assistantSpokenText: String): Boolean {
+        fun isBargeInSpeechDetected(recognizedText: String, assistantSpokenText: String, isLoudspeaker: Boolean = false): Boolean {
             return com.jarvis.assistant.audio.VoiceInterruptionCoordinator.evaluateBargeIn(
                 recognizedText = recognizedText,
                 assistantSpokenText = assistantSpokenText,
-                currentState = null
+                currentState = null,
+                isLoudspeaker = isLoudspeaker
             )
         }
 
@@ -559,8 +560,8 @@ class JarvisConversationService : Service() {
 
     fun extractVoskText(json: String?): String = Companion.extractVoskText(json)
 
-    fun isBargeInSpeechDetected(recognizedText: String, assistantSpokenText: String): Boolean =
-        Companion.isBargeInSpeechDetected(recognizedText, assistantSpokenText)
+    fun isBargeInSpeechDetected(recognizedText: String, assistantSpokenText: String, isLoudspeaker: Boolean = false): Boolean =
+        Companion.isBargeInSpeechDetected(recognizedText, assistantSpokenText, isLoudspeaker)
 
     private fun getOrInitHotwordRecognizer(): Recognizer? {
         if (hotwordRecognizer == null) {
@@ -971,7 +972,7 @@ class JarvisConversationService : Service() {
                                 autonomousLoopJob?.cancel()
                                 autonomousLoopJob = null
                                 if (_conversationState.value != ConversationState.SPEAKING && _conversationState.value != ConversationState.THINKING) {
-                                    setConversationState(ConversationState.IDLE)
+                                    setConversationState(ConversationState.LISTENING)
                                 }
                                 if (isPendingWakeGreeting) {
                                     isPendingWakeGreeting = false
@@ -1119,6 +1120,13 @@ class JarvisConversationService : Service() {
                             val hasHeadset = headsetAudioRouter?.isHeadsetConnected() == true
                             Log.w("JarvisService", "onInterrupted received from server (hasHeadset=$hasHeadset, state=${_conversationState.value})")
                             val userTurnInProgress = hasSpeechInCurrentUtterance || currentTurnUserText.isNotBlank()
+
+                            // If playing through phone loudspeaker and NO user speech was detected locally,
+                            // this server VAD trigger was caused by speaker acoustic feedback leakage. Suppress it.
+                            if (!hasHeadset && _conversationState.value == ConversationState.SPEAKING && !userTurnInProgress) {
+                                Log.w("JarvisService", "Suppressed false server-VAD interruption caused by loudspeaker echo while speaking")
+                                return
+                            }
                             val isOwnAutoResumeInterrupt = autoResumeAwaitingResponse &&
                                 !userTurnInProgress
                             if (isOwnAutoResumeInterrupt) {
@@ -1471,6 +1479,7 @@ class JarvisConversationService : Service() {
 
                 // Assistant is speaking / AudioTrack or TTS is actively playing:
                 val isSpeakerActive = (audioPlayer?.isPlaying() == true) || (tts?.isSpeaking == true) ||
+                        com.jarvis.assistant.audio.VoiceSynthesisRouter.isSpeaking() ||
                         (_conversationState.value == ConversationState.SPEAKING)
 
                 if (isSpeakerActive) {
@@ -1484,7 +1493,7 @@ class JarvisConversationService : Service() {
                         val detectedText = extractVoskText(rawJson)
                         val assistantText = synchronized(currentTurnAssistantText) { currentTurnAssistantText.toString() }
 
-                        if (isBargeInSpeechDetected(detectedText, assistantText)) {
+                        if (isBargeInSpeechDetected(detectedText, assistantText, isLoudspeaker = !hasHeadset)) {
                             Log.i("JarvisService", "Instant barge-in detected via Vosk: '$detectedText' (isFinal=$isFinal)")
                             triggerHardBargeIn("vosk_recognizer")
                             rec.reset()
@@ -1522,25 +1531,10 @@ class JarvisConversationService : Service() {
                     } else {
                         // Loudspeaker Mode: Track rolling acoustic leakage floor dynamically
                         rollingAcousticLeakageFloor = (rollingAcousticLeakageFloor * 0.94f + amplitude * 0.06f).coerceIn(0.02f, 0.20f)
-                        val dynamicThreshold = maxOf(0.18f, rollingAcousticLeakageFloor + 0.07f)
-
-                        if (amplitude > dynamicThreshold) {
-                            consecutiveVoicedFrames++
-                            if (consecutiveVoicedFrames >= 3) { // ~60ms confirmation window
-                                Log.i("JarvisService", "Loudspeaker barge-in confirmed via energy: amp=$amplitude, floor=$rollingAcousticLeakageFloor")
-                                triggerHardBargeIn("loudspeaker_energy_gate")
-                                synchronized(currentUtteranceAudioStream) {
-                                    currentUtteranceAudioStream.reset()
-                                    currentUtteranceAudioStream.write(chunk)
-                                }
-                                isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
-                                consecutiveVoicedFrames = 0
-                                liveWebSocket?.sendAudioChunk(chunk)
-                                return@AudioRecorder
-                            }
-                        } else {
-                            consecutiveVoicedFrames = (consecutiveVoicedFrames - 1).coerceAtLeast(0)
-                        }
+                        consecutiveVoicedFrames = (consecutiveVoicedFrames - 1).coerceAtLeast(0)
+                        // In loudspeaker mode, raw acoustic energy cannot distinguish the assistant's own speaker output
+                        // from user speech. Loudspeaker barge-in is exclusively governed by Vosk Hotwords & Phonetic evaluation above,
+                        // completely eliminating false self-interruptions mid-sentence!
                     }
 
                     // Drop playback audio chunk from reaching server while speaking and not yet interrupted
@@ -1555,8 +1549,8 @@ class JarvisConversationService : Service() {
                     }
                     liveWebSocket?.sendAudioChunk(chunk)
                 } else {
-                    // Connection still warming up: buffer up to 60 chunks (~1.2s of audio) so early speech is never lost
-                    if (preConnectAudioQueue.size < 60) {
+                    // Connection still warming up: buffer up to 250 chunks (~5.0s of audio) so early speech is never lost
+                    if (preConnectAudioQueue.size < 250) {
                         preConnectAudioQueue.offer(chunk.copyOf())
                     }
                 }
@@ -2745,6 +2739,21 @@ class JarvisConversationService : Service() {
         }
 
         val app = application as? JarvisApp ?: return
+
+        // 0. Instant Offline Reflex Execution (<100ms hardware & status readout):
+        val reflexResult = com.jarvis.assistant.automation.reflex.OfflineReflexExecutor.tryExecuteReflex(
+            rawText = cleanSpeech,
+            context = this,
+            phoneControlManager = app.phoneControlManager
+        )
+        if (reflexResult.handled) {
+            hasExecutedCommandInCurrentTurn = true
+            lastHandledCommandText = cleanSpeech
+            Log.i("JarvisService", "Executed offline reflex '${reflexResult.actionName}' (<100ms): ${reflexResult.spokenResponse}")
+            com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(reflexResult.spokenResponse)
+            return
+        }
+
         val isAwaitingConfirm = app.whatsAppAssistant.hasPendingDraft() || pendingGenericCommand != null
         val isAwaitingDisambig = app.whatsAppAssistant.isAwaitingDisambiguation()
 
@@ -3386,7 +3395,34 @@ class JarvisConversationService : Service() {
         hasSpeechInCurrentUtterance = false
         hasSignalledUtteranceEnd = false
         serviceScope.launch { _wakeEvents.emit(Unit) }
-        beginActiveConversation(wakeTriggered = true)
+
+        // INSTANT ZERO-LATENCY WAKE RESPONSE (<150ms):
+        // Respond immediately via local TTS so the user receives instant voice feedback
+        // without waiting 5 seconds for cloud WebSocket handshake!
+        val app = application as? JarvisApp
+        val userName = app?.preferences?.userName?.ifBlank { "Sir" } ?: "Sir"
+        val lang = app?.preferences?.language.orEmpty()
+        val wakeGreeting = when {
+            lang.contains("Hindi", ignoreCase = true) || lang.contains("Hinglish", ignoreCase = true) ->
+                "हाँजी $userName, बोलिए?"
+            lang.contains("Telugu", ignoreCase = true) ->
+                "చెప్పండి $userName?"
+            lang.contains("Tamil", ignoreCase = true) ->
+                "சொல்லுங்க $userName?"
+            lang.contains("Marathi", ignoreCase = true) ->
+                "बोला $userName?"
+            else ->
+                "Yes, $userName?"
+        }
+        com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(wakeGreeting) {
+            // Once local wake greeting finishes, clear acoustic echo so none leaks into user question stream
+            synchronized(currentUtteranceAudioStream) {
+                currentUtteranceAudioStream.reset()
+            }
+            preConnectAudioQueue.clear()
+        }
+
+        beginActiveConversation(wakeTriggered = false)
     }
 
     private fun vibrateBriefly() {

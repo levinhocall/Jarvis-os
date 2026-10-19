@@ -35,9 +35,11 @@ class GeminiLiveWebSocket(
         // Shared OkHttpClient across all sessions — reuses connection pool, DNS cache, and TLS sessions
         private val sharedClient = OkHttpClient.Builder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
-            .connectTimeout(5, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(0, TimeUnit.MILLISECONDS)
             .retryOnConnectionFailure(true)
-            .pingInterval(60, TimeUnit.SECONDS)
+            .pingInterval(30, TimeUnit.SECONDS)
             .build()
     }
 

@@ -40,7 +40,8 @@ object VoiceInterruptionCoordinator {
     fun evaluateBargeIn(
         recognizedText: String,
         assistantSpokenText: String,
-        currentState: ConversationState? = null
+        currentState: ConversationState? = null,
+        isLoudspeaker: Boolean = false
     ): Boolean {
         if (currentState != null && currentState != ConversationState.SPEAKING && currentState != ConversationState.THINKING) {
             return false
@@ -52,19 +53,35 @@ object VoiceInterruptionCoordinator {
         val tokens = clean.split(Regex("[\\s,]+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return false
 
-        // 1. Explicit Instant Hotwords (Always trigger)
+        // 1. Explicit Instant Hotwords (Always trigger on headset and loudspeaker)
         if (tokens.any { INSTANT_HOTWORDS.contains(it) }) {
             Log.d(TAG, "Instant hotword detected: $clean")
             return true
         }
 
-        // 2. Compound Hotword Phrases
+        // 2. Compound Hotword Phrases (Always trigger on headset and loudspeaker)
         if (COMPOUND_HOTWORDS.any { clean.contains(it) }) {
             Log.d(TAG, "Compound phrase detected: $clean")
             return true
         }
 
-        // 3. Natural User Speech (>= 2 tokens or single token >= 4 letters)
+        // In loudspeaker mode (!hasHeadset), Vosk with an English acoustic model frequently hallucinates
+        // short random English tokens (e.g. "tell", "what", "play") when picking up the assistant's own
+        // Hindi/Hinglish speech from the phone speaker. To completely prevent mid-speech cutoffs,
+        // loudspeaker barge-in requires explicit hotwords ("stop", "ruko", "bas", etc.) or 3+ words.
+        if (isLoudspeaker) {
+            if (tokens.size >= 3) {
+                val assistantClean = assistantSpokenText.lowercase(Locale.ROOT)
+                val isExactEcho = tokens.all { assistantClean.contains(it) }
+                if (!isExactEcho) {
+                    Log.d(TAG, "Natural speech barge-in on loudspeaker: $clean")
+                    return true
+                }
+            }
+            return false
+        }
+
+        // 3. Natural User Speech on Headset (>= 2 tokens or single token >= 4 letters)
         // Guard against assistant's own loudspeaker audio self-echo
         if (tokens.size >= 2 || (tokens.size == 1 && tokens[0].length >= 4 && tokens[0] != "[unk]")) {
             val assistantClean = assistantSpokenText.lowercase(Locale.ROOT)

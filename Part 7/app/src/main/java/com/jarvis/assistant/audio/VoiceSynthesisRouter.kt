@@ -83,6 +83,14 @@ object VoiceSynthesisRouter {
         tts.speak(normalized, TextToSpeech.QUEUE_FLUSH, null, "utterance_${System.currentTimeMillis()}")
     }
 
+    fun isSpeaking(): Boolean {
+        return try {
+            localTts?.isSpeaking == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun stop() {
         try {
             localTts?.stop()

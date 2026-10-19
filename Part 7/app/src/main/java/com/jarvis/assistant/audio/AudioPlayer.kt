@@ -133,11 +133,11 @@ class AudioPlayer(
                     } else {
                         silenceCounter++
                         // Clean turn completion:
-                        // 1. If Gemini signaled turnComplete: wait 8 cycles (~160ms) of empty queue
-                        //    so the hardware AudioTrack buffer has rendered out to the speaker cleanly.
-                        // 2. If Gemini is still generating (turnComplete not yet received): wait 40 cycles (~800ms)
-                        //    to tolerate normal chunk gaps without stalling the mic.
-                        val shouldFinish = (isTurnComplete.get() && silenceCounter >= 8) || (silenceCounter >= 40)
+                        // 1. If Gemini signaled turnComplete: wait 25 cycles (~500ms) of empty queue
+                        //    so the hardware AudioTrack buffer has rendered out to the physical speaker completely.
+                        // 2. If Gemini is still generating (turnComplete not yet received): wait 150 cycles (~3000ms)
+                        //    to tolerate normal chunk gaps and mobile network jitter without prematurely cutting off speech.
+                        val shouldFinish = (isTurnComplete.get() && silenceCounter >= 25) || (silenceCounter >= 150)
 
                         if (shouldFinish && isPlayingState.get()) {
                             isPlayingState.set(false)
@@ -243,8 +243,9 @@ class AudioPlayer(
 
         track?.let { t ->
             if (t.state == AudioTrack.STATE_INITIALIZED) {
+                // AudioTrack.WRITE_BLOCKING guarantees zero dropped PCM chunks on the dedicated audio thread
                 val written = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    t.write(chunk, 0, chunk.size, AudioTrack.WRITE_NON_BLOCKING)
+                    t.write(chunk, 0, chunk.size, AudioTrack.WRITE_BLOCKING)
                 } else {
                     t.write(chunk, 0, chunk.size)
                 }
