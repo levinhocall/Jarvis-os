@@ -86,6 +86,7 @@ class JarvisApp : Application() {
         )
 
         VoskModelManager.init(this, CoroutineScope(Dispatchers.Default))
+        com.jarvis.assistant.audio.HeadsetWhisperManager.init(this, appScope)
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             private var startedActivities = 0

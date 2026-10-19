@@ -1030,7 +1030,10 @@ class JarvisAccessibilityService : AccessibilityService() {
     private fun longPressAt(x: Float, y: Float) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
-                val path = Path().apply { moveTo(x, y) }
+                val path = Path().apply {
+                    moveTo(x, y)
+                    lineTo(x, y)
+                }
                 val gesture = GestureDescription.Builder()
                     .addStroke(GestureDescription.StrokeDescription(path, 0, 700))
                     .build()
@@ -1078,7 +1081,10 @@ class JarvisAccessibilityService : AccessibilityService() {
     fun clickAt(x: Float, y: Float): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
-                val path = Path().apply { moveTo(x, y) }
+                val path = Path().apply {
+                    moveTo(x, y)
+                    lineTo(x, y)
+                }
                 val gesture = GestureDescription.Builder()
                     .addStroke(GestureDescription.StrokeDescription(path, 0, 50))
                     .build()
@@ -1494,15 +1500,20 @@ class JarvisAccessibilityService : AccessibilityService() {
 
         // Strict Safe-Zone Coordinates:
         // X-axis: strictly width * 0.50f (centered to prevent triggering system edge-back gestures)
-        // Y-axis: strictly between height * 0.68f and height * 0.32f (avoids status/URL bars and bottom nav bars)
         val startX = width * 0.50f
         val endX = width * 0.50f
         val durationMs = 350L
 
+        val delta = when (distance.lowercase()) {
+            "short" -> height * 0.18f
+            "long" -> height * 0.50f
+            else -> height * 0.36f // medium
+        }
+        val midY = height * 0.50f
+
         val (startY, endY) = when (direction.lowercase()) {
-            "up" -> Pair(height * 0.32f, height * 0.68f)
-            "down" -> Pair(height * 0.68f, height * 0.32f)
-            else -> Pair(height * 0.68f, height * 0.32f)
+            "up" -> Pair(midY - delta / 2f, midY + delta / 2f)
+            else -> Pair(midY + delta / 2f, midY - delta / 2f)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -1515,8 +1526,7 @@ class JarvisAccessibilityService : AccessibilityService() {
                     .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
                     .build()
                 val dispatched = dispatchGesture(gesture, null, null)
-                Log.i(TAG, "Dispatched safe-zone scroll $direction gesture: $dispatched")
-                try { Thread.sleep(500) } catch (_: Exception) {}
+                Log.i(TAG, "Dispatched safe-zone scroll $direction ($distance) gesture: $dispatched")
                 return dispatched
             } catch (e: Exception) {
                 Log.e(TAG, "Scroll gesture failed: ${e.message}")

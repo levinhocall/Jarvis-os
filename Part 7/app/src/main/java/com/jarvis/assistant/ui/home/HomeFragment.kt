@@ -201,7 +201,7 @@ class HomeFragment : Fragment() {
         pendingOrbState = state
         if (!isPageLoaded) return
         activity?.runOnUiThread {
-            binding.orbWebView.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$state');", null)
+            _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$state');", null)
         }
     }
 
@@ -211,7 +211,7 @@ class HomeFragment : Fragment() {
         if (!isPageLoaded) return
         activity?.runOnUiThread {
             if (themeKey == "custom" && !customHex.isNullOrBlank()) {
-                binding.orbWebView.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setBackground('$customHex');", null)
+                _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setBackground('$customHex');", null)
             } else {
                 val mapped = when (themeKey) {
                     "dark" -> "dark"
@@ -219,7 +219,7 @@ class HomeFragment : Fragment() {
                     "sunset" -> "sunset"
                     else -> "light"
                 }
-                binding.orbWebView.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setTheme('$mapped');", null)
+                _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setTheme('$mapped');", null)
             }
         }
     }
@@ -230,7 +230,7 @@ class HomeFragment : Fragment() {
         if (now - lastAudioPushTime < 33L) return // ~30 calls per second throttle
         lastAudioPushTime = now
         activity?.runOnUiThread {
-            binding.orbWebView.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setExternalAudio($amp, $bass, $high);", null)
+            _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setExternalAudio($amp, $bass, $high);", null)
         }
     }
 
@@ -306,7 +306,7 @@ class HomeFragment : Fragment() {
 
     private fun updateHomeHeaderAndVoiceStatus() {
         if (_binding == null) return
-        val userName = preferences.userName.ifBlank { "Rehaan" }
+        val userName = preferences.userName.ifBlank { "NAZIB" }
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         val timeGreeting = when (hour) {
             in 4..11 -> "Good morning"
@@ -623,6 +623,18 @@ class HomeFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        isPageLoaded = false
+        _binding?.orbWebView?.apply {
+            try {
+                stopLoading()
+                loadUrl("about:blank")
+                clearHistory()
+                (parent as? ViewGroup)?.removeView(this)
+                destroy()
+            } catch (_: Exception) {}
+        }
+        taskFallbackPanel = null
+        taskFallbackText = null
         _binding = null
     }
 }

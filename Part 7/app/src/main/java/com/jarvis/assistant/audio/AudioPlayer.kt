@@ -3,6 +3,7 @@ package com.jarvis.assistant.audio
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.os.Build
 import android.util.Log
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -156,7 +157,13 @@ class AudioPlayer(
         }
     }
 
-    fun enqueueAudio(pcmData: ByteArray) {
+    val activeEpoch = java.util.concurrent.atomic.AtomicLong(0L)
+
+    fun enqueueAudio(pcmData: ByteArray, epoch: Long? = null) {
+        if (epoch != null && epoch != activeEpoch.get()) {
+            // Drop late streaming audio chunks from an interrupted turn
+            return
+        }
         if (pcmData.size >= 16) {
             val validLen = pcmData.size and 1.inv()
             val aligned = if (validLen == pcmData.size) pcmData else pcmData.copyOf(validLen)
@@ -165,9 +172,10 @@ class AudioPlayer(
     }
 
     /**
-     * Instantly flushes audio playback upon interruption.
+     * Instantly flushes audio playback upon interruption and advances generation epoch.
      */
-    fun flush() {
+    fun flush(newEpoch: Long = activeEpoch.incrementAndGet()) {
+        activeEpoch.set(newEpoch)
         audioQueue.clear()
         isTurnComplete.set(true)
         synchronized(trackLock) {
@@ -214,9 +222,15 @@ class AudioPlayer(
     }
 
     private fun writeToTrack(chunk: ByteArray) {
+        var track: AudioTrack?
         synchronized(trackLock) {
-            var track = audioTrack
-            if (track == null || track.state != AudioTrack.STATE_INITIALIZED) {
+            track = audioTrack
+            if (track != null && track?.state != AudioTrack.STATE_INITIALIZED) {
+                try { track?.release() } catch (_: Exception) {}
+                audioTrack = null
+                track = null
+            }
+            if (track == null) {
                 initAudioTrack()
                 track = audioTrack
             }
@@ -224,20 +238,21 @@ class AudioPlayer(
                 if (t.state == AudioTrack.STATE_INITIALIZED && t.playState != AudioTrack.PLAYSTATE_PLAYING) {
                     try { t.play() } catch (_: Exception) {}
                 }
-                val written = t.write(chunk, 0, chunk.size)
+            }
+        }
+
+        track?.let { t ->
+            if (t.state == AudioTrack.STATE_INITIALIZED) {
+                val written = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    t.write(chunk, 0, chunk.size, AudioTrack.WRITE_NON_BLOCKING)
+                } else {
+                    t.write(chunk, 0, chunk.size)
+                }
                 if (written < 0) {
                     Log.w(TAG, "AudioTrack write failed ($written). Reinitializing AudioTrack...")
-                    try { t.release() } catch (_: Exception) {}
-                    initAudioTrack()
-                    audioTrack?.let { reloaded ->
-                        try {
-                            if (reloaded.state == AudioTrack.STATE_INITIALIZED) {
-                                reloaded.play()
-                                reloaded.write(chunk, 0, chunk.size)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error playing recreated track: ${e.message}")
-                        }
+                    synchronized(trackLock) {
+                        try { t.release() } catch (_: Exception) {}
+                        initAudioTrack()
                     }
                 }
             }

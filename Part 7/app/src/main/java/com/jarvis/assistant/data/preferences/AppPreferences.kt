@@ -171,13 +171,17 @@ class AppPreferences(context: Context) {
     }
 
     var apiKey: String
-        get() = secureApiPrefs?.getString(KEY_API_KEY, "")?.trim() ?: ""
+        get() = secureApiPrefs?.getString(KEY_API_KEY, "")?.trim() ?: prefs.getString(KEY_API_KEY, "")?.trim() ?: ""
         set(value) {
-            val secure = checkNotNull(secureApiPrefs) { "Secure API-key storage is unavailable on this device." }
             val clean = value.trim()
-            val saved = if (clean.isEmpty()) secure.edit().remove(KEY_API_KEY).commit()
-            else secure.edit().putString(KEY_API_KEY, clean).commit()
-            check(saved) { "Could not save API key to encrypted storage." }
+            val secure = secureApiPrefs
+            if (secure != null) {
+                if (clean.isEmpty()) secure.edit().remove(KEY_API_KEY).apply()
+                else secure.edit().putString(KEY_API_KEY, clean).apply()
+            } else {
+                if (clean.isEmpty()) prefs.edit().remove(KEY_API_KEY).apply()
+                else prefs.edit().putString(KEY_API_KEY, clean).apply()
+            }
         }
 
     val canStoreApiKeySecurely: Boolean get() = secureApiPrefs != null
@@ -186,7 +190,7 @@ class AppPreferences(context: Context) {
         val legacyKey = prefs.getString(KEY_API_KEY, null)?.trim().orEmpty()
         if (legacyKey.isEmpty()) return
         val secure = secureApiPrefs ?: run {
-            prefs.edit().remove(KEY_API_KEY).commit()
+            Log.w(TAG, "Secure storage unavailable; retaining key in standard preferences.")
             return
         }
         try {
@@ -194,7 +198,7 @@ class AppPreferences(context: Context) {
             if (existing.isNullOrEmpty()) {
                 check(secure.edit().putString(KEY_API_KEY, legacyKey).commit())
             }
-            if (!secure.getString(KEY_API_KEY, null).isNullOrEmpty()) prefs.edit().remove(KEY_API_KEY).commit()
+            if (!secure.getString(KEY_API_KEY, null).isNullOrEmpty()) prefs.edit().remove(KEY_API_KEY).apply()
         } catch (e: Exception) {
             Log.e(TAG, "Legacy API-key migration to encrypted storage failed", e)
         }
@@ -235,10 +239,10 @@ class AppPreferences(context: Context) {
     var userName: String
         get() {
             val name = prefs.getString(KEY_USER_NAME, "") ?: ""
-            return if (name.isBlank() || name == "Salaam") "TechGPT X" else name
+            return if (name.isBlank() || name == "Salaam" || name == "TechGPT X" || name == "Rehaan") "NAZIB" else name
         }
         set(value) {
-            prefs.edit().putString(KEY_USER_NAME, value.trim()).commit()
+            prefs.edit().putString(KEY_USER_NAME, value.trim()).apply()
         }
 
     var appTheme: String
@@ -290,37 +294,37 @@ class AppPreferences(context: Context) {
     var userBirthday: String
         get() = prefs.getString(KEY_USER_BIRTHDAY, "") ?: ""
         set(value) {
-            prefs.edit().putString(KEY_USER_BIRTHDAY, value.trim()).commit()
+            prefs.edit().putString(KEY_USER_BIRTHDAY, value.trim()).apply()
         }
 
     var userLocation: String
         get() = prefs.getString(KEY_USER_LOCATION, "") ?: ""
         set(value) {
-            prefs.edit().putString(KEY_USER_LOCATION, value.trim()).commit()
+            prefs.edit().putString(KEY_USER_LOCATION, value.trim()).apply()
         }
 
     var userAge: String
         get() = prefs.getString(KEY_USER_AGE, "") ?: ""
         set(value) {
-            prefs.edit().putString(KEY_USER_AGE, value.trim()).commit()
+            prefs.edit().putString(KEY_USER_AGE, value.trim()).apply()
         }
 
     var dailyRoutine: String
         get() = prefs.getString(KEY_DAILY_ROUTINE, "") ?: ""
         set(value) {
-            prefs.edit().putString(KEY_DAILY_ROUTINE, value.trim()).commit()
+            prefs.edit().putString(KEY_DAILY_ROUTINE, value.trim()).apply()
         }
 
     var favoriteSong: String
         get() = prefs.getString(KEY_FAVORITE_SONG, "") ?: ""
         set(value) {
-            prefs.edit().putString(KEY_FAVORITE_SONG, value.trim()).commit()
+            prefs.edit().putString(KEY_FAVORITE_SONG, value.trim()).apply()
         }
 
     var favoriteApp: String
         get() = prefs.getString(KEY_FAVORITE_APP, "") ?: ""
         set(value) {
-            prefs.edit().putString(KEY_FAVORITE_APP, value.trim()).commit()
+            prefs.edit().putString(KEY_FAVORITE_APP, value.trim()).apply()
         }
 
     var isMicMuted: Boolean
@@ -391,7 +395,7 @@ class AppPreferences(context: Context) {
             // Find most played song
             val topSong = counts.maxByOrNull { it.value }?.key
             if (!topSong.isNullOrBlank()) {
-                favoriteSong = cleanSong
+                favoriteSong = topSong
             }
         }
         return favoriteSong

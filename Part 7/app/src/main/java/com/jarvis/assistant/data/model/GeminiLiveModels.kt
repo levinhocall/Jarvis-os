@@ -55,7 +55,8 @@ object GeminiConstants {
     const val PERSONALITY_ASSISTANT = "Jarvis Pro"
     const val PERSONALITY_GIRLFRIEND = "Girlfriend Mode"
     const val PERSONALITY_BOYFRIEND = "Boyfriend Mode"
-    const val PERSONALITY_TECHGPT_X = "TechGPT X Mode"
+    const val PERSONALITY_NAZIB = "NAZIB Mode"
+    const val PERSONALITY_TECHGPT_X = PERSONALITY_NAZIB
     const val PERSONALITY_COMPANION = "Companion Mode"
     const val PERSONALITY_PROFESSIONAL = "Professional Mode"
     const val PERSONALITY_FOCUS = "Focus Mode"
@@ -64,7 +65,7 @@ object GeminiConstants {
         PERSONALITY_ASSISTANT,
         PERSONALITY_GIRLFRIEND,
         PERSONALITY_BOYFRIEND,
-        PERSONALITY_TECHGPT_X,
+        PERSONALITY_NAZIB,
         PERSONALITY_COMPANION,
         PERSONALITY_FOCUS,
         PERSONALITY_PROFESSIONAL

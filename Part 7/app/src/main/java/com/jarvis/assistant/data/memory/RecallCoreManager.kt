@@ -18,7 +18,10 @@ object RecallCoreManager {
         extraDetails: String = ""
     ): String = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? JarvisApp ?: return@withContext "Memory unavailable"
-        val raw = "Product: $productName | Price: $price | Platform: $platform ${if (extraDetails.isNotBlank()) "| $extraDetails" else ""}"
+        val user = app.preferences.userName.ifBlank { "Sir" }
+        val raw = EpisodicVectorMemory.sanitizeForStorage(
+            "Product: $productName | Price: $price | Platform: $platform ${if (extraDetails.isNotBlank()) "| $extraDetails" else ""}"
+        )
         
         app.memoryRepository.saveMemory(
             rawText = raw,
@@ -27,7 +30,7 @@ object RecallCoreManager {
             value = "$price ($platform)"
         )
         Log.i(TAG, "Logged to Recall Core: $raw")
-        "Saved $productName at $price on $platform to Recall Core, Nazib Sir."
+        "Saved $productName at $price on $platform to Recall Core, $user."
     }
 
     suspend fun queryRecall(
@@ -35,17 +38,25 @@ object RecallCoreManager {
         query: String
     ): String = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? JarvisApp ?: return@withContext "Memory unavailable"
+        val user = app.preferences.userName.ifBlank { "Sir" }
         val cleanQuery = query.lowercase(Locale.ROOT)
-            .replace(Regex("(?i)^(maine|kya|kaunsa|kaunsi|recall|jarvis|dekha tha|batao|search kiya tha|kya tha)\\s*"), "")
+            .replace(Regex("(?i)\\b(hey jarvis|jarvis|please|maine|kya|kaunsa|kaunsi|recall|dekha tha|batao|search kiya tha|kya tha)\\b"), "")
+            .replace(Regex("\\s+"), " ")
             .trim()
+
+        val vectorMatches = EpisodicVectorMemory.queryVectorRecall(context, if (cleanQuery.isBlank()) query else cleanQuery)
+        if (vectorMatches.isNotEmpty()) {
+            val top = vectorMatches.first()
+            return@withContext "Recall Core record: ${top.record.text}, $user."
+        }
 
         val results = app.memoryRepository.searchMemories(if (cleanQuery.isBlank()) query else cleanQuery)
         if (results.isEmpty()) {
-            return@withContext "Recall Core mein '$cleanQuery' ke regarding koi saved record nahi mila, Nazib Sir."
+            return@withContext "Recall Core mein '$cleanQuery' ke regarding koi saved record nahi mila, $user."
         }
 
         val best = results.first()
-        "Recall Core record: ${best.rawText}, Sir."
+        "Recall Core record: ${best.rawText}, $user."
     }
 
     suspend fun saveFact(
@@ -53,6 +64,7 @@ object RecallCoreManager {
         fact: String
     ): String = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? JarvisApp ?: return@withContext "Memory unavailable"
+        val user = app.preferences.userName.ifBlank { "Sir" }
         val clean = fact
             .replace(Regex("(?i)^(hey jarvis|jarvis|please)?\\s*(yaad rakhna ki|yaad rakhna|remember that|remember to|remember)\\s*"), "")
             .trim()
@@ -61,12 +73,13 @@ object RecallCoreManager {
             return@withContext "Sir, mujhe samajh nahi aaya kya yaad rakhna hai."
         }
 
+        val sanitized = EpisodicVectorMemory.sanitizeForStorage(clean)
         app.memoryRepository.saveMemory(
-            rawText = clean,
+            rawText = sanitized,
             category = MemoryEntity.CATEGORY_NOTES,
-            key = clean.take(30),
-            value = clean
+            key = sanitized.take(30),
+            value = sanitized
         )
-        "Recall Core updated: '$clean' yaad rakh liya hai, Nazib Sir."
+        "Recall Core updated: '$sanitized' yaad rakh liya hai, $user."
     }
 }

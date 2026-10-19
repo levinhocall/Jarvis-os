@@ -95,6 +95,18 @@ object CommandParser {
             return ParsedCommandResult(JarvisCommand.NavigateHome, 0.98f, "NAVIGATE_HOME")
         }
 
+        // 2c-1. UI Click Element by Text (e.g. "click submit", "tap cart", "login pe click karo")
+        val clickRegex = Regex("$prefix(?:click|tap|press)\\s+(?:on\\s+)?(.+)$", RegexOption.IGNORE_CASE)
+        val clickHinglish = Regex("^(.+?)\\s+pe\\s+(?:click|tap|press)\\s*(?:karo|kardo|kijiye)?$", RegexOption.IGNORE_CASE)
+        val clickMatch = clickRegex.find(clean) ?: clickHinglish.find(clean)
+        if (clickMatch != null && !clean.contains("photo") && !clean.contains("picture") && !clean.contains("selfie")) {
+            val target = clickMatch.groupValues[1].trim()
+            val nonTargets = setOf("here", "screen", "button", "karo", "kardo", "it")
+            if (target.isNotBlank() && target.length >= 2 && target !in nonTargets) {
+                return ParsedCommandResult(JarvisCommand.ClickElementByText(target), 0.96f, "CLICK_ELEMENT_BY_TEXT")
+            }
+        }
+
         // 2d-1. Multi-Action Voice Protocols (Tony Stark Mode)
         if (clean.contains("coding protocol") || clean.contains("business protocol") ||
             clean.contains("wholesale mode") || clean.contains("lockdown protocol") || clean.contains("unlock protocol")) {

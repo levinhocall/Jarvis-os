@@ -157,24 +157,16 @@ class CommandExecutor(
                 if (sent) "WhatsApp reply sent to ${command.contact}." else "Could not send silent reply to ${command.contact}."
             }
             is JarvisCommand.ScanScreenTactical -> {
-                kotlinx.coroutines.runBlocking {
-                    com.jarvis.assistant.vision.TacticalScannerManager.scanCurrentScreen(phoneManager.context).summary
-                }
+                com.jarvis.assistant.vision.TacticalScannerManager.scanCurrentScreen(phoneManager.context).summary
             }
             is JarvisCommand.ShareToPC -> {
-                kotlinx.coroutines.runBlocking {
-                    com.jarvis.assistant.automation.bridge.CrossDeviceBridge.shareCurrentContent(phoneManager.context, command.targetDevice).message
-                }
+                com.jarvis.assistant.automation.bridge.CrossDeviceBridge.shareCurrentContent(phoneManager.context, command.targetDevice).message
             }
             is JarvisCommand.RecallFact -> {
-                kotlinx.coroutines.runBlocking {
-                    com.jarvis.assistant.data.memory.RecallCoreManager.queryRecall(phoneManager.context, command.query)
-                }
+                com.jarvis.assistant.data.memory.RecallCoreManager.queryRecall(phoneManager.context, command.query)
             }
             is JarvisCommand.CameraVisionScan -> {
-                kotlinx.coroutines.runBlocking {
-                    com.jarvis.assistant.vision.CameraVisionAnalyzer.analyzeSnapshot(phoneManager.context, command.prompt).summary
-                }
+                com.jarvis.assistant.vision.CameraVisionAnalyzer.analyzeSnapshot(phoneManager.context, command.prompt).summary
             }
             is JarvisCommand.SecurityAuthorize -> {
                 val auth = com.jarvis.assistant.security.SecurityGuardManager.verifyPassphrase(command.passphrase, phoneManager.context)

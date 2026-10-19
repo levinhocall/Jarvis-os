@@ -177,6 +177,7 @@ class TaskProgressOverlay(private val context: Context) {
         }
         if (currentEdge != preferences.taskOverlayEdge) applyEdge(preferences.taskOverlayEdge)
         if (snapshot == null) renderIdle() else render(snapshot)
+        activeInstance = this
         applyMode()
         return true
     }
@@ -186,6 +187,15 @@ class TaskProgressOverlay(private val context: Context) {
             try { windowManager.removeView(root) } catch (_: Exception) {}
             attached = false
         }
+    }
+
+    fun destroy() {
+        remove()
+        try {
+            avatar.stopLoading()
+            avatar.loadUrl("about:blank")
+            avatar.destroy()
+        } catch (_: Exception) {}
         if (activeInstance === this) activeInstance = null
     }
 
@@ -281,7 +291,9 @@ class TaskProgressOverlay(private val context: Context) {
                 // Instant hardware kill-switch on single-tap during speaking or automation
                 val convState = com.jarvis.assistant.background.JarvisConversationService.conversationState.value
                 val isExecuting = com.jarvis.assistant.automation.agent.AgentTaskEngine.current() != null
-                if (convState == com.jarvis.assistant.data.model.ConversationState.SPEAKING || isExecuting) {
+                val isSpeaking = (convState == com.jarvis.assistant.data.model.ConversationState.SPEAKING) ||
+                        com.jarvis.assistant.background.JarvisConversationService.isPlaybackActive()
+                if (isSpeaking || isExecuting) {
                     com.jarvis.assistant.background.JarvisConversationService.interruptPlayback()
                     showStatusPill("🛑 Interrupted")
                     return true

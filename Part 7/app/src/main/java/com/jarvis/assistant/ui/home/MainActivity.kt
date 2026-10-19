@@ -352,9 +352,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun handleMicOrOrbClick() {
+        val isSpeaking = (JarvisConversationService.conversationState.value == ConversationState.SPEAKING) ||
+                JarvisConversationService.isPlaybackActive()
+
         if (!JarvisConversationService.isSessionOn.value) {
             checkPermissionsAndStart()
-        } else if (JarvisConversationService.conversationState.value == ConversationState.SPEAKING) {
+        } else if (isSpeaking) {
             JarvisConversationService.interruptPlayback()
         } else {
             viewModel.toggleMicMute()

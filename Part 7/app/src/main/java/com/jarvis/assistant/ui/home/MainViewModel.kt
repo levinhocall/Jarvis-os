@@ -70,7 +70,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _personalityName = MutableStateFlow(preferences.personality)
     val personalityName: StateFlow<String> = _personalityName.asStateFlow()
 
-    private val _eventFlow = MutableSharedFlow<String>()
+    private val _eventFlow = MutableSharedFlow<String>(extraBufferCapacity = 64)
     val eventFlow: SharedFlow<String> = _eventFlow.asSharedFlow()
 
     private var timeClockJob: Job? = null
@@ -103,11 +103,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun observeServiceEvents() {
         viewModelScope.launch {
-            JarvisConversationService.events.collect { message -> _eventFlow.emit(message) }
+            JarvisConversationService.events.collect { message -> _eventFlow.tryEmit(message) }
         }
         viewModelScope.launch {
             JarvisConversationService.wakeEvents.collect {
-                _eventFlow.emit("Wake word detected")
+                _eventFlow.tryEmit("Wake word detected")
             }
         }
     }

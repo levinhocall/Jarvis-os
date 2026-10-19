@@ -152,6 +152,36 @@ class JarvisConversationService : Service() {
             }
         }
 
+        fun isPlaybackActive(): Boolean {
+            return activeInstance?.isPlaybackActive() == true
+        }
+
+        fun extractVoskText(json: String?): String {
+            if (json.isNullOrBlank()) return ""
+            val match = Regex("\"(?:partial|text)\"\\s*:\\s*\"([^\"]*)\"").find(json)
+            if (match != null) {
+                return match.groupValues[1].trim()
+            }
+            return try {
+                val obj = JSONObject(json)
+                when {
+                    obj.has("partial") -> obj.optString("partial", "").trim()
+                    obj.has("text") -> obj.optString("text", "").trim()
+                    else -> ""
+                }
+            } catch (_: Throwable) {
+                ""
+            }
+        }
+
+        fun isBargeInSpeechDetected(recognizedText: String, assistantSpokenText: String): Boolean {
+            return com.jarvis.assistant.audio.VoiceInterruptionCoordinator.evaluateBargeIn(
+                recognizedText = recognizedText,
+                assistantSpokenText = assistantSpokenText,
+                currentState = null
+            )
+        }
+
         fun restartSession() {
             activeInstance?.let { service ->
                 if (_isSessionOn.value) {
@@ -251,6 +281,9 @@ class JarvisConversationService : Service() {
     private var isPendingBackgroundTransition = false
     @Volatile
     private var suppressAudioUntilTurnComplete = false
+    private val activePlaybackGeneration = java.util.concurrent.atomic.AtomicLong(0L)
+    @Volatile
+    private var rollingAcousticLeakageFloor = 0.05f
     @Volatile
     private var isExecutingTool = false
     private val currentUtteranceAudioStream = java.io.ByteArrayOutputStream()
@@ -467,39 +500,83 @@ class JarvisConversationService : Service() {
         com.jarvis.assistant.automation.agent.SerializedActionExecutor.cancelAllPendingActions()
     }
 
-    fun triggerVoiceBargeIn(source: String) {
-        val wasSpeaking = _conversationState.value == ConversationState.SPEAKING || (audioPlayer?.isPlaying() == true) || (tts?.isSpeaking == true)
-        Log.i("JarvisService", "triggerVoiceBargeIn invoked from source='$source' (wasSpeaking=$wasSpeaking)")
+    fun triggerHardBargeIn(source: String) {
+        val wasSpeaking = _conversationState.value == ConversationState.SPEAKING ||
+                (audioPlayer?.isPlaying() == true) ||
+                (tts?.isSpeaking == true)
+        Log.i("JarvisService", "triggerHardBargeIn invoked from source='$source' (wasSpeaking=$wasSpeaking)")
 
-        // 1. Instantly pause and flush AudioPlayer so speaker audio stops with <10ms latency
-        audioPlayer?.pause()
-        audioPlayer?.flush()
-        try { tts?.stop() } catch (_: Exception) {}
+        com.jarvis.assistant.audio.VoiceInterruptionCoordinator.requestBargeIn(source) { newEpoch ->
+            // 1. Advance generation counter and suppress late streaming audio chunks
+            activePlaybackGeneration.set(newEpoch)
+            suppressAudioUntilTurnComplete = true
 
-        // 2. Set INTERRUPTED state
-        setConversationState(ConversationState.INTERRUPTED)
+            // 2. Instantly pause and flush AudioPlayer with new epoch so speaker audio stops with <10ms latency
+            audioPlayer?.pause()
+            audioPlayer?.flush(newEpoch)
+            lastPlaybackEndTime = 0L
+            try { tts?.stop() } catch (_: Exception) {}
+            try { com.jarvis.assistant.audio.VoiceSynthesisRouter.stop() } catch (_: Exception) {}
 
-        // 3. Cancel active automation tools and coroutines
+            // 3. Set INTERRUPTED state
+            setConversationState(ConversationState.INTERRUPTED)
+        }
+
+        // 4. Cancel active automation tools and coroutines
+        thinkingTimeoutJob?.cancel()
+        thinkingTimeoutJob = null
+        isAutonomousContinuationTurn = false
+        synchronized(autonomousAudioLock) {
+            autonomousAudioBuffer.clear()
+            autonomousAudioBufferBytes = 0
+        }
         cancelAllActiveTools()
 
-        // 4. Clear assistant output
+        // 5. Clear assistant output
         synchronized(currentTurnAssistantText) {
             currentTurnAssistantText.clear()
         }
         _liveAssistantResponse.value = ""
 
-        // 5. Instantly bring state to LISTENING for seamless conversation turnaround
+        // 6. Reset utterance state and immediately transition to LISTENING
+        hasSpeechInCurrentUtterance = false
+        hasSignalledUtteranceEnd = false
+        consecutiveVoicedFrames = 0
+        totalVoicedFramesInCurrentUtterance = 0
         setConversationState(ConversationState.LISTENING)
         updateNotification()
     }
 
-    private fun containsBargeInHotword(json: String?): Boolean {
-        if (json.isNullOrBlank()) return false
-        val lower = json.lowercase(Locale.ROOT)
-        val hotwords = listOf("stop", "ruko", "bas", "wait", "suno", "hold on", "cancel")
-        return hotwords.any { hotword ->
-            lower.contains("\"$hotword\"") || lower.contains(" $hotword ") || lower.contains("\"$hotword ") || lower.contains(" $hotword\"")
+    fun triggerVoiceBargeIn(source: String) {
+        triggerHardBargeIn(source)
+    }
+
+    fun isPlaybackActive(): Boolean {
+        return (_conversationState.value == ConversationState.SPEAKING) ||
+                (audioPlayer?.isPlaying() == true) ||
+                (tts?.isSpeaking == true)
+    }
+
+    fun extractVoskText(json: String?): String = Companion.extractVoskText(json)
+
+    fun isBargeInSpeechDetected(recognizedText: String, assistantSpokenText: String): Boolean =
+        Companion.isBargeInSpeechDetected(recognizedText, assistantSpokenText)
+
+    private fun getOrInitHotwordRecognizer(): Recognizer? {
+        if (hotwordRecognizer == null) {
+            val vModel = com.jarvis.assistant.audio.VoskModelManager.model
+            if (vModel != null) {
+                try {
+                    val grammar = "[\"stop\", \"ruko\", \"ruk\", \"bas\", \"wait\", \"suno\", \"chup\", \"cancel\", \"hold\", \"pause\", \"jarvis\", \"shutup\", \"listen\", \"no\", \"nahi\", \"arre\", \"what\", \"play\", \"search\", \"open\", \"tell\", \"why\", \"how\", \"who\", \"[unk]\"]"
+                    hotwordRecognizer?.let { try { it.close() } catch (_: Exception) {} }
+                    hotwordRecognizer = Recognizer(vModel, 16000.0f, grammar)
+                    Log.i("JarvisService", "On-demand local barge-in hotword Recognizer initialized")
+                } catch (e: Exception) {
+                    Log.w("JarvisService", "Could not initialize on-demand hotword recognizer: ${e.message}")
+                }
+            }
         }
+        return hotwordRecognizer
     }
 
     // Pending tool call queue: tool calls are queued when owner voice verification hasn't completed yet
@@ -826,7 +903,7 @@ class JarvisConversationService : Service() {
         val vModel = com.jarvis.assistant.audio.VoskModelManager.model
         if (vModel != null) {
             try {
-                val grammar = "[\"stop\", \"ruko\", \"bas\", \"wait\", \"suno\", \"hold on\", \"cancel\", \"[unk]\"]"
+                val grammar = "[\"stop\", \"ruko\", \"ruk\", \"bas\", \"wait\", \"suno\", \"chup\", \"cancel\", \"hold\", \"pause\", \"jarvis\", \"shutup\", \"listen\", \"no\", \"nahi\", \"arre\", \"what\", \"play\", \"search\", \"open\", \"tell\", \"why\", \"how\", \"who\", \"[unk]\"]"
                 hotwordRecognizer = Recognizer(vModel, 16000.0f, grammar)
                 Log.i("JarvisService", "Local barge-in hotword Recognizer initialized")
             } catch (e: Exception) {
@@ -1060,26 +1137,11 @@ class JarvisConversationService : Service() {
                                     autoResumeAwaitingResponse = false
                                 }
                             }
-                            thinkingTimeoutJob?.cancel()
-                            thinkingTimeoutJob = null
-                            suppressAudioUntilTurnComplete = false
-                            setConversationState(ConversationState.INTERRUPTED)
-                            audioPlayer?.pause()
-                            audioPlayer?.flush()
-                            try { tts?.stop() } catch (_: Exception) {}
-                            currentTurnAssistantText.clear()
-                            _liveAssistantResponse.value = ""
-                            setConversationState(ConversationState.LISTENING)
+                            triggerHardBargeIn("server_vad")
                             if (!userTurnInProgress) {
                                 currentTurnUserText.clear()
                                 _liveUserTranscript.value = ""
                             }
-                            hasSpeechInCurrentUtterance = false
-                            hasSignalledUtteranceEnd = false
-                            consecutiveVoicedFrames = 0
-                            totalVoicedFramesInCurrentUtterance = 0
-                            synchronized(currentUtteranceAudioStream) { currentUtteranceAudioStream.reset() }
-                            isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
                             if (_conversationState.value != ConversationState.SPEAKING) {
                                 setConversationState(if (userTurnInProgress) ConversationState.LISTENING else ConversationState.IDLE)
                             }
@@ -1413,66 +1475,75 @@ class JarvisConversationService : Service() {
 
                 if (isSpeakerActive) {
                     val hasHeadset = headsetAudioRouter?.isHeadsetConnected() == true
-                    val speakerAmp = _audioLevel.value
-                    // Dual-Gate Barge-In Filter:
-                    // Gate 2 (Instant Local Hotword Kill-Switch):
-                    val rec = hotwordRecognizer
+
+                    // 1. Vosk Speech & Hotword Recognition Gate:
+                    val rec = getOrInitHotwordRecognizer()
                     if (rec != null) {
-                        if (rec.acceptWaveForm(chunk, chunk.size)) {
-                            val res = rec.result
-                            if (containsBargeInHotword(res)) {
-                                Log.i("JarvisService", "Instant local hotword barge-in detected in final result: $res")
-                                triggerVoiceBargeIn("local_hotword")
-                                synchronized(currentUtteranceAudioStream) {
-                                    currentUtteranceAudioStream.reset()
-                                    currentUtteranceAudioStream.write(chunk)
-                                }
-                                isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
-                                consecutiveVoicedFrames = 0
-                                return@AudioRecorder
-                            }
-                        } else {
-                            val partial = rec.partialResult
-                            if (containsBargeInHotword(partial)) {
-                                Log.i("JarvisService", "Instant local hotword barge-in detected in partial: $partial")
-                                triggerVoiceBargeIn("local_hotword")
-                                rec.reset()
-                                synchronized(currentUtteranceAudioStream) {
-                                    currentUtteranceAudioStream.reset()
-                                    currentUtteranceAudioStream.write(chunk)
-                                }
-                                isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
-                                consecutiveVoicedFrames = 0
-                                return@AudioRecorder
-                            }
-                        }
-                    }
+                        val isFinal = rec.acceptWaveForm(chunk, chunk.size)
+                        val rawJson = if (isFinal) rec.result else rec.partialResult
+                        val detectedText = extractVoskText(rawJson)
+                        val assistantText = synchronized(currentTurnAssistantText) { currentTurnAssistantText.toString() }
 
-                    // Gate 1: Dynamic RMS Energy Ratio
-                    // Headset uses low 0.18f threshold.
-                    // Loudspeaker dynamically tracks speaker playback reference energy (+6dB above leakage)
-                    // with a 3-frame (~60ms) confirmation window to reject ambient speaker echoes.
-                    val dynamicBargeThreshold = if (hasHeadset) 0.18f else maxOf(0.26f, speakerAmp * 1.30f + 0.08f)
-
-                    if (amplitude > dynamicBargeThreshold) {
-                        consecutiveVoicedFrames++
-                        if (consecutiveVoicedFrames >= 3) {
-                            Log.i("JarvisService", "Voice barge-in confirmed! (hasHeadset=$hasHeadset, micAmp=$amplitude, speakerAmp=$speakerAmp)")
-                            triggerVoiceBargeIn("barge_in_energy_gate")
+                        if (isBargeInSpeechDetected(detectedText, assistantText)) {
+                            Log.i("JarvisService", "Instant barge-in detected via Vosk: '$detectedText' (isFinal=$isFinal)")
+                            triggerHardBargeIn("vosk_recognizer")
+                            rec.reset()
                             synchronized(currentUtteranceAudioStream) {
                                 currentUtteranceAudioStream.reset()
                                 currentUtteranceAudioStream.write(chunk)
                             }
                             isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
+                            consecutiveVoicedFrames = 0
+                            liveWebSocket?.sendAudioChunk(chunk)
+                            return@AudioRecorder
                         }
-                    } else {
-                        consecutiveVoicedFrames = 0
                     }
 
-                    // Forward audio chunk once state switches to listening
-                    if (_conversationState.value != ConversationState.SPEAKING) {
-                        liveWebSocket?.sendAudioChunk(chunk)
+                    // 2. Adaptive Acoustic Energy Gate:
+                    if (hasHeadset) {
+                        // Headset: Direct mic with zero loudspeaker loopback
+                        if (amplitude > 0.14f) {
+                            consecutiveVoicedFrames++
+                            if (consecutiveVoicedFrames >= 2) {
+                                Log.i("JarvisService", "Headset barge-in confirmed via energy: amp=$amplitude")
+                                triggerHardBargeIn("headset_energy")
+                                synchronized(currentUtteranceAudioStream) {
+                                    currentUtteranceAudioStream.reset()
+                                    currentUtteranceAudioStream.write(chunk)
+                                }
+                                isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
+                                consecutiveVoicedFrames = 0
+                                liveWebSocket?.sendAudioChunk(chunk)
+                                return@AudioRecorder
+                            }
+                        } else {
+                            consecutiveVoicedFrames = 0
+                        }
+                    } else {
+                        // Loudspeaker Mode: Track rolling acoustic leakage floor dynamically
+                        rollingAcousticLeakageFloor = (rollingAcousticLeakageFloor * 0.94f + amplitude * 0.06f).coerceIn(0.02f, 0.20f)
+                        val dynamicThreshold = maxOf(0.18f, rollingAcousticLeakageFloor + 0.07f)
+
+                        if (amplitude > dynamicThreshold) {
+                            consecutiveVoicedFrames++
+                            if (consecutiveVoicedFrames >= 3) { // ~60ms confirmation window
+                                Log.i("JarvisService", "Loudspeaker barge-in confirmed via energy: amp=$amplitude, floor=$rollingAcousticLeakageFloor")
+                                triggerHardBargeIn("loudspeaker_energy_gate")
+                                synchronized(currentUtteranceAudioStream) {
+                                    currentUtteranceAudioStream.reset()
+                                    currentUtteranceAudioStream.write(chunk)
+                                }
+                                isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
+                                consecutiveVoicedFrames = 0
+                                liveWebSocket?.sendAudioChunk(chunk)
+                                return@AudioRecorder
+                            }
+                        } else {
+                            consecutiveVoicedFrames = (consecutiveVoicedFrames - 1).coerceAtLeast(0)
+                        }
                     }
+
+                    // Drop playback audio chunk from reaching server while speaking and not yet interrupted
                     return@AudioRecorder
                 }
 
@@ -2667,6 +2738,12 @@ class JarvisConversationService : Service() {
 
         Log.d("JarvisService", "checkAndExecuteCommand: '$cleanSpeech'")
 
+        if (com.jarvis.assistant.audio.HeadsetWhisperManager.handleSpokenReply(cleanSpeech, this)) {
+            hasExecutedCommandInCurrentTurn = true
+            lastHandledCommandText = cleanSpeech
+            return
+        }
+
         val app = application as? JarvisApp ?: return
         val isAwaitingConfirm = app.whatsAppAssistant.hasPendingDraft() || pendingGenericCommand != null
         val isAwaitingDisambig = app.whatsAppAssistant.isAwaitingDisambiguation()
@@ -3372,7 +3449,7 @@ class JarvisConversationService : Service() {
     override fun onDestroy() {
         taskProgressOverlayJob?.cancel()
         taskProgressOverlayJob = null
-        taskProgressOverlay?.remove()
+        taskProgressOverlay?.destroy()
         taskProgressOverlay = null
         stopActiveConversation()
         exitStandbyListening()

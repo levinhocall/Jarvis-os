@@ -77,7 +77,11 @@ class HeadsetAudioRouter(private val context: Context) {
                     addAction("android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED")
                     addAction("android.bluetooth.adapter.action.STATE_CHANGED")
                 }
-                context.registerReceiver(headsetReceiver, filter)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.registerReceiver(headsetReceiver, filter, Context.RECEIVER_EXPORTED)
+                } else {
+                    context.registerReceiver(headsetReceiver, filter)
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audioDeviceCallback != null) {
                     audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
@@ -144,11 +148,18 @@ class HeadsetAudioRouter(private val context: Context) {
                 }
                 audioManager.isSpeakerphoneOn = false
             } else {
-                // No Headset Connected: Ensure STRICT routing to LOUDSPEAKER
-                Log.i(TAG, "No external headset connected. Routing strictly to LOUDSPEAKER (main speaker).")
+                // No Headset Connected: Ensure STRICT routing to LOUDSPEAKER while maintaining MODE_IN_COMMUNICATION for hardware AEC
+                Log.i(TAG, "No external headset connected. Routing strictly to LOUDSPEAKER (main speaker) with AEC active.")
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    audioManager.clearCommunicationDevice()
+                    val available = audioManager.availableCommunicationDevices
+                    val speakerDevice = available.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    if (speakerDevice != null) {
+                        val setOk = audioManager.setCommunicationDevice(speakerDevice)
+                        Log.i(TAG, "setCommunicationDevice: ${speakerDevice.productName} -> success=$setOk")
+                    } else {
+                        audioManager.clearCommunicationDevice()
+                    }
                 }
 
                 if (isScoStarted) {
@@ -159,8 +170,8 @@ class HeadsetAudioRouter(private val context: Context) {
                     isScoStarted = false
                 }
 
-                // Return to MODE_NORMAL so all media audio plays through the main loudspeaker
-                audioManager.mode = AudioManager.MODE_NORMAL
+                // Preserve MODE_IN_COMMUNICATION so hardware AcousticEchoCanceler remains active
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
                 audioManager.isSpeakerphoneOn = true
             }
         } catch (e: Exception) {
@@ -197,9 +208,9 @@ class HeadsetAudioRouter(private val context: Context) {
             }
 
             audioManager.mode = AudioManager.MODE_NORMAL
-            audioManager.isSpeakerphoneOn = true
+            audioManager.isSpeakerphoneOn = false
             cachedIsHeadsetConnected = false
-            Log.i(TAG, "HeadsetAudioRouter stopped, audio mode reset to NORMAL (speakerphone active).")
+            Log.i(TAG, "HeadsetAudioRouter stopped, audio mode reset to NORMAL (speakerphone off).")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping HeadsetAudioRouter: ${e.message}", e)
         }

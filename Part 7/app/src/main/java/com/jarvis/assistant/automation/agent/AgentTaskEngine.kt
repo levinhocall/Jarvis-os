@@ -76,6 +76,9 @@ object AgentTaskEngine {
         val current = active
         if (current != null && current.status !in setOf(State.COMPLETED, State.FAILED, State.CANCELLED)) {
             if (goal.isBlank() || current.normalizedGoal == normalize(goal)) return current
+            current.cancellationRequested = true
+            current.status = State.CANCELLED
+            _controlRevision.value += 1
         }
         val actionGeneration = SerializedActionExecutor.startNewTask()
         val normalized = normalize(goal)
@@ -137,8 +140,8 @@ object AgentTaskEngine {
             if (root == null) return false
             val freshSignature = ScreenSignatureCalculator.computeSignature(root)
             observe(freshSignature, root.packageName?.toString(), "Fresh accessibility observation after resume")
-            resumeObservationRequired = false
             if (expectedBeforePause != null && !freshSignature.isEquivalentTo(expectedBeforePause)) {
+                resumeObservationRequired = true
                 context.lastAction = action
                 context.lastActionResult = "Action rejected because the UI changed while paused; target must be resolved again from the fresh screen"
                 context.lastActionVerified = false
@@ -147,6 +150,7 @@ object AgentTaskEngine {
                 publish(context)
                 return false
             }
+            resumeObservationRequired = false
         }
         context?.let { if (it.status !in setOf(State.COMPLETED, State.FAILED, State.CANCELLED)) it.status = State.ACTING }
         val executed = SerializedActionExecutor.execute(
@@ -269,7 +273,7 @@ object AgentTaskEngine {
         return true
     }
 
-    fun isCancelled(): Boolean = active?.cancellationRequested == true
+    fun isCancelled(): Boolean = active == null || active?.cancellationRequested == true
 
     fun pauseTask(): Boolean {
         val context = active ?: return false
@@ -311,11 +315,12 @@ object AgentTaskEngine {
     }
 
     suspend fun awaitIfRunnable(): Boolean {
+        val current = active ?: return false
         while (_isPaused.value && !isCancelled()) {
             val observedRevision = _controlRevision.value
             _controlRevision.first { it != observedRevision }
         }
-        return !isCancelled()
+        return !isCancelled() && active?.taskId == current.taskId
     }
 
     /** One engine-owned, non-recursive loop for an app-side deterministic workflow. */
