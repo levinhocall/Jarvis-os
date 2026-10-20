@@ -345,6 +345,7 @@ class JarvisConversationService : Service() {
     private val VAD_NOISE_MULTIPLIER = 2.0f
     private val VAD_START_FRAMES = 5
     private val VAD_MIN_UTTERANCE_FRAMES = 10
+    private val adaptiveVad = com.jarvis.assistant.audio.AdaptiveVadEngine()
     // Loop guard: once tripped, ALL automation tools are refused until the user speaks again.
     @Volatile
     private var autonomousHardStop = false
@@ -544,6 +545,7 @@ class JarvisConversationService : Service() {
         // 6. Reset utterance state and immediately transition to LISTENING
         hasSpeechInCurrentUtterance = false
         hasSignalledUtteranceEnd = false
+        adaptiveVad.reset()
         consecutiveVoicedFrames = 0
         totalVoicedFramesInCurrentUtterance = 0
         setConversationState(ConversationState.LISTENING)
@@ -608,6 +610,7 @@ class JarvisConversationService : Service() {
         createChannel()
         initTts()
         com.jarvis.assistant.audio.VoiceSynthesisRouter.init(applicationContext)
+        com.jarvis.assistant.audio.PocketDetectionManager.start(this)
         com.jarvis.assistant.automation.offline.OfflineIntelligenceRouter.init(applicationContext)
         headsetAudioRouter = com.jarvis.assistant.audio.HeadsetAudioRouter(applicationContext)
         taskProgressOverlay = com.jarvis.assistant.ui.agent.TaskProgressOverlay(this)
@@ -904,6 +907,7 @@ class JarvisConversationService : Service() {
         pendingToolCalls.clear()
         hasSpeechInCurrentUtterance = false
         hasSignalledUtteranceEnd = false
+        adaptiveVad.reset()
         currentTurnAssistantText.clear()
         currentTurnUserText.clear()
         startInactivityTimer()
@@ -1652,8 +1656,9 @@ class JarvisConversationService : Service() {
                     // Gradual decrement instead of instant reset: one quiet 20ms frame won't kill voiced speech tracking
                     if (consecutiveVoicedFrames > 0) consecutiveVoicedFrames--
                     val silentDuration = now - lastUserSpeechDetectedTime
+                    val adaptiveSilenceTimeout = adaptiveVad.computeAdaptiveSilenceTimeout()
 
-                    if (hasSpeechInCurrentUtterance && silentDuration < 450) {
+                    if (hasSpeechInCurrentUtterance && silentDuration < adaptiveSilenceTimeout) {
                         // Keep buffering inter-word pauses so Vosk receives natural continuous audio
                         synchronized(currentUtteranceAudioStream) {
                             if (currentUtteranceAudioStream.size() < 480000) {
@@ -1666,8 +1671,8 @@ class JarvisConversationService : Service() {
                         _audioLevel.value = amplitude
                         _audioFrequency.value = frequencyData
 
-                        // Conversational pause reached (~450ms — safe for natural Hinglish speech with inter-word pauses)
-                        if (silentDuration > 450) {
+                        // Conversational pause reached dynamically (200ms - 350ms based on utterance length)
+                        if (silentDuration > adaptiveSilenceTimeout) {
                             if (preferences.isOwnerVoiceEnabled && preferences.hasOwnerVoiceProfile()) {
                                 val isLeaseActive = (now - lastOwnerVerifiedTimestamp) < 120_000L
                                 if (isLeaseActive) {
@@ -3071,6 +3076,7 @@ class JarvisConversationService : Service() {
         _liveAssistantResponse.value = ""
         hasSpeechInCurrentUtterance = false
         hasSignalledUtteranceEnd = false
+        adaptiveVad.reset()
         consecutiveVoicedFrames = 0
         totalVoicedFramesInCurrentUtterance = 0
         hasExecutedCommandInCurrentTurn = false
@@ -3097,6 +3103,8 @@ class JarvisConversationService : Service() {
         preConnectAudioQueue.clear()
         hasSpeechInCurrentUtterance = false
         hasSignalledUtteranceEnd = false
+        adaptiveVad.reset()
+        adaptiveVad.reset()
 
         audioRecorder?.stop()
         audioRecorder = null
@@ -3151,6 +3159,7 @@ class JarvisConversationService : Service() {
         currentTurnUserText.clear()
         hasSpeechInCurrentUtterance = false
         hasSignalledUtteranceEnd = false
+        adaptiveVad.reset()
         _isStandby.value = true
         standbyActivatedTime = System.currentTimeMillis()
         updateNotification()
@@ -3267,6 +3276,10 @@ class JarvisConversationService : Service() {
     private fun checkVoskHypothesis(hypothesisJson: String?) {
         if (hypothesisJson.isNullOrBlank() || !_isStandby.value) return
         if (isPhoneCallActive()) return
+        if (com.jarvis.assistant.audio.PocketDetectionManager.isDeviceInPocket()) {
+            Log.d("JarvisService", "WAKE REJECTED: Device is inside pocket/bag or facing down")
+            return
+        }
 
         // 1. Standby cooldown: ignore microphone input for 800ms after entering standby
         // to prevent ambient chimes or trailing speech from falsely re-triggering wake.
@@ -3424,6 +3437,7 @@ class JarvisConversationService : Service() {
         currentTurnUserText.clear()
         hasSpeechInCurrentUtterance = false
         hasSignalledUtteranceEnd = false
+        adaptiveVad.reset()
         serviceScope.launch { _wakeEvents.emit(Unit) }
 
         // INSTANT ZERO-LATENCY WAKE RESPONSE (<150ms):
@@ -3531,6 +3545,7 @@ class JarvisConversationService : Service() {
             voskSpeechService?.stop()
         } catch (_: Exception) {}
         voskSpeechService = null
+        com.jarvis.assistant.audio.PocketDetectionManager.stop()
         releaseWakeLock()
         serviceScope.cancel()
         if (activeInstance === this) activeInstance = null

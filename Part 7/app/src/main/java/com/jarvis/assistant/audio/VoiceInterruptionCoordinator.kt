@@ -27,11 +27,28 @@ object VoiceInterruptionCoordinator {
         "cancel", "hold", "pause", "shutup", "quiet"
     )
 
-    // Compound hotword phrases
+    // Compound hotword phrases (Hindi, English, Hinglish)
     private val COMPOUND_HOTWORDS = listOf(
         "hold on", "bas karo", "ruk jao", "chup karo",
-        "ek minute", "arre suno", "wait a minute", "shut up"
+        "ek minute", "arre suno", "wait a minute", "shut up",
+        "ek second", "bas bas", "chup ho jao", "nahi chahiye",
+        "rehne do", "arey ruko", "wait wait", "ruk ruk",
+        "suno na", "pause karo", "ruko ruko", "chup kar", "chup raho"
     )
+
+    /**
+     * Calculates the estimated external acoustic energy by subtracting
+     * loudspeaker acoustic feedback coupling from raw microphone amplitude.
+     */
+    fun calculateEffectiveMicAmplitude(
+        rawMicAmplitude: Float,
+        speakerPlaybackAmplitude: Float,
+        couplingFactor: Float = 0.55f
+    ): Float {
+        if (speakerPlaybackAmplitude <= 0.01f) return rawMicAmplitude
+        val estimatedLeakage = speakerPlaybackAmplitude * couplingFactor
+        return (rawMicAmplitude - estimatedLeakage).coerceAtLeast(0f)
+    }
 
     /**
      * Evaluates incoming recognized speech against active playback text.
