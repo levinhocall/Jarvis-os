@@ -129,8 +129,10 @@ class WhatsAppAssistant(
 
         return try {
             val encodedMessage = URLEncoder.encode(message, "UTF-8")
+            val hasExplicitCountryCode = phone?.trim()?.startsWith("+") == true
             val rawDigits = phone?.replace(Regex("[^0-9]"), "") ?: ""
             val cleanPhone = when {
+                hasExplicitCountryCode -> rawDigits
                 rawDigits.length == 10 -> "91$rawDigits"
                 rawDigits.length == 11 && rawDigits.startsWith("0") -> "91${rawDigits.substring(1)}"
                 else -> rawDigits

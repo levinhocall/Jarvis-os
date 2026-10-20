@@ -64,9 +64,20 @@ class CallScreeningReceiver : BroadcastReceiver() {
             val number = lastRingingNumber
             val messageToSend = customMessage ?: DEFAULT_AUTO_REPLY
 
-            // Silence ringer
+            // Silence ringer safely without crashing on DND restrictions
             val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            am?.ringerMode = AudioManager.RINGER_MODE_SILENT
+            try {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.N || nm?.isNotificationPolicyAccessGranted == true) {
+                    am?.ringerMode = AudioManager.RINGER_MODE_SILENT
+                } else {
+                    am?.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
+                }
+            } catch (_: Exception) {
+                try {
+                    am?.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
+                } catch (_: Exception) {}
+            }
 
             isRinging = false
 

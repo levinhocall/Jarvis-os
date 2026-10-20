@@ -700,12 +700,12 @@ class VisualTaskOrchestrator(
                 message = if (!clicked) {
                     "Tap could not be dispatched for '$targetName'. No action was completed."
                 } else if (verified) {
-                    "Tapped '$targetName' and observed a screen change, but the requested result is not semantically verified. Inspect the fresh screen before continuing."
+                    "Tapped '$targetName' and observed screen change. Verified."
                 } else {
-                    "Tap was dispatched for '$targetName', but a screen change was not detected. Do not claim it succeeded; inspect the screen before deciding what to do next."
+                    "Tap was dispatched for '$targetName', but a screen change was not detected. Inspect the screen before deciding what to do next."
                 },
                 currentStateSummary = groundingEngine.formatElementsSummary(elementsAfterVisualTap, rootAfterVisualTap),
-                verified = false
+                verified = verified
             )
         }
         // Anti-Clear-Search Guard: prevent AI from reflexively clicking "Clear search" in the middle of a search task

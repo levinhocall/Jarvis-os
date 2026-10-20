@@ -38,11 +38,11 @@ class HandsFreeActivity : AppCompatActivity() {
         }
 
         binding.btnToggleAccessibility.setOnClickListener {
-            PermissionHelper.openAccessibilitySettings(this)
+            PermissionHelper.requestAccessibilityWithRestrictedGuidance(this)
         }
 
         binding.btnOpenAccessibilitySettings.setOnClickListener {
-            PermissionHelper.openAccessibilitySettings(this)
+            PermissionHelper.requestAccessibilityWithRestrictedGuidance(this)
         }
 
         binding.btnOpenAllPermissions.setOnClickListener {

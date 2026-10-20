@@ -132,10 +132,37 @@ object PermissionHelper {
         }
     }
 
+    fun requestAccessibilityWithRestrictedGuidance(activity: android.app.Activity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !isAccessibilityServiceEnabled(activity)) {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+                .setTitle("Enable JARVIS Accessibility")
+                .setMessage(
+                    "On Android 13/14/15, sideloaded apps require one-time security authorization:\n\n" +
+                    "1. Tap 'OPEN APP INFO' below.\n" +
+                    "2. Tap the 3 dots (⋮) in the top-right corner.\n" +
+                    "3. Select 'Allow restricted settings' (confirm with PIN/fingerprint).\n" +
+                    "4. Then tap 'OPEN ACCESSIBILITY' to toggle JARVIS ON."
+                )
+                .setPositiveButton("Open App Info") { _, _ ->
+                    openAppSettings(activity)
+                }
+                .setNeutralButton("Open Accessibility") { _, _ ->
+                    openAccessibilitySettings(activity)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else {
+            openAccessibilitySettings(activity)
+        }
+    }
+
     fun hasAllRequiredPermissions(context: Context): Boolean {
         return hasRecordAudioPermission(context) &&
-               hasNotificationPermission(context) &&
-               hasBatteryOptimizationPermission(context)
+               hasNotificationPermission(context)
+    }
+
+    fun hasOptimalBackgroundPerformance(context: Context): Boolean {
+        return hasBatteryOptimizationPermission(context)
     }
 
     fun requestBatteryOptimization(context: Context) {

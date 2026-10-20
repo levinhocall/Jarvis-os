@@ -731,9 +731,14 @@ class JarvisConversationService : Service() {
 
     private fun ensureMicrophoneForegroundService() {
         val notification = buildNotification()
+        val hasMicPerm = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
         var combinedTypes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            val base = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            if (hasMicPerm) {
+                base or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            } else {
+                base
+            }
         } else {
             0
         }
@@ -749,11 +754,9 @@ class JarvisConversationService : Service() {
             } catch (e: Exception) {
                 Log.w("JarvisService", "startForeground with combined types failed: ${e.message}")
                 try {
-                    startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-                } catch (_: Exception) {
-                    try {
-                        startForeground(NOTIFICATION_ID, notification)
-                    } catch (_: Exception) {}
+                    startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                } catch (fallbackEx: Exception) {
+                    Log.w("JarvisService", "startForeground fallback failed: ${fallbackEx.message}")
                 }
             }
         } else {
@@ -794,12 +797,12 @@ class JarvisConversationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        ensureMicrophoneForegroundService()
         if (!com.jarvis.assistant.security.AppIdentityVerifier.isTrustedRelease(this)) {
             Log.e("JarvisService", "Blocked service start: release signing certificate did not match the configured pin")
             stopSelf(startId)
             return START_NOT_STICKY
         }
-        ensureMicrophoneForegroundService()
         acquireWakeLock()
 
         when (intent?.action) {

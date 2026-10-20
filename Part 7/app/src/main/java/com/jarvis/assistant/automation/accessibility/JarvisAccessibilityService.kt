@@ -71,6 +71,8 @@ class JarvisAccessibilityService : AccessibilityService() {
         @Volatile
         var latestExtractedOtp: ExtractedOtp? = null
 
+        private val screenshotExecutor = Executors.newSingleThreadExecutor()
+
         fun getRecentOtp(): String? {
             val otp = latestExtractedOtp ?: return null
             if (System.currentTimeMillis() - otp.timestamp < 120_000L) { // valid for 2 minutes
@@ -143,7 +145,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             try {
                 takeScreenshot(
                     Display.DEFAULT_DISPLAY,
-                    Executors.newSingleThreadExecutor(),
+                    screenshotExecutor,
                     object : AccessibilityService.TakeScreenshotCallback {
                         override fun onSuccess(screenshotResult: AccessibilityService.ScreenshotResult) {
                             try {
@@ -205,15 +207,13 @@ class JarvisAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         try {
-            val info = serviceInfo ?: android.accessibilityservice.AccessibilityServiceInfo()
-            info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK
-            info.feedbackType = android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC
-            info.notificationTimeout = 100
-            info.flags = info.flags or
-                android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
-                android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
-            serviceInfo = info
+            serviceInfo?.let { info ->
+                info.flags = info.flags or
+                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+                serviceInfo = info
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Error applying dynamic AccessibilityServiceInfo: ${e.message}")
         }
@@ -225,14 +225,17 @@ class JarvisAccessibilityService : AccessibilityService() {
         try {
             if (!com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value &&
                 !com.jarvis.assistant.background.JarvisConversationService.isStandby.value) {
-                val intent = Intent(this, com.jarvis.assistant.background.JarvisConversationService::class.java).apply {
-                    action = com.jarvis.assistant.background.JarvisConversationService.ACTION_ENTER_STANDBY
+                if (com.jarvis.assistant.JarvisApp.isAppForeground.value ||
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                    val intent = Intent(this, com.jarvis.assistant.background.JarvisConversationService::class.java).apply {
+                        action = com.jarvis.assistant.background.JarvisConversationService.ACTION_ENTER_STANDBY
+                    }
+                    androidx.core.content.ContextCompat.startForegroundService(this, intent)
+                    Log.i(TAG, "JarvisAccessibilityService ensured JarvisConversationService is running in standby")
                 }
-                androidx.core.content.ContextCompat.startForegroundService(this, intent)
-                Log.i(TAG, "JarvisAccessibilityService ensured JarvisConversationService is running in standby")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start JarvisConversationService from accessibility service: ${e.message}")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Could not start JarvisConversationService from accessibility service: ${t.message}")
         }
     }
 
@@ -326,6 +329,11 @@ class JarvisAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         if (instance === this) instance = null
         super.onDestroy()
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        if (instance === this) instance = null
+        return super.onUnbind(intent)
     }
 
     // -------------------------------------------------------------
@@ -1032,7 +1040,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             try {
                 val path = Path().apply {
                     moveTo(x, y)
-                    lineTo(x, y)
+                    lineTo(x + 1f, y + 1f)
                 }
                 val gesture = GestureDescription.Builder()
                     .addStroke(GestureDescription.StrokeDescription(path, 0, 700))
@@ -1083,10 +1091,10 @@ class JarvisAccessibilityService : AccessibilityService() {
             try {
                 val path = Path().apply {
                     moveTo(x, y)
-                    lineTo(x, y)
+                    lineTo(x + 1f, y + 1f)
                 }
                 val gesture = GestureDescription.Builder()
-                    .addStroke(GestureDescription.StrokeDescription(path, 0, 50))
+                    .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
                     .build()
                 return dispatchGesture(gesture, null, null)
             } catch (e: Exception) {
@@ -1431,35 +1439,37 @@ class JarvisAccessibilityService : AccessibilityService() {
         return false
     }
 
-    fun getActiveRootNode(): AccessibilityNodeInfo? {
+    fun getActiveRootNode(excludeJarvisOverlay: Boolean = true): AccessibilityNodeInfo? {
         val active = rootInActiveWindow
-        if (active != null) return active
+        if (active != null) {
+            if (!excludeJarvisOverlay || active.packageName != packageName) {
+                return active
+            }
+        }
 
         try {
-            // 2. Fallback to focused application window
-            val focusedAppWin = windows.firstOrNull {
-                it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isFocused
-            }
-            if (focusedAppWin?.root != null) return focusedAppWin.root
+            val appWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
 
-            // 3. Fallback to active application window
-            val activeAppWin = windows.firstOrNull {
-                it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive
+            val targetWin = if (excludeJarvisOverlay) {
+                appWindows.firstOrNull { it.root?.packageName != packageName && (it.isFocused || it.isActive) }
+                    ?: appWindows.firstOrNull { it.root?.packageName != packageName }
+                    ?: appWindows.firstOrNull { it.isFocused || it.isActive }
+                    ?: appWindows.firstOrNull()
+            } else {
+                appWindows.firstOrNull { it.isFocused || it.isActive } ?: appWindows.firstOrNull()
             }
-            if (activeAppWin?.root != null) return activeAppWin.root
+            if (targetWin?.root != null) return targetWin.root
 
-            // 4. Fallback to any focused window (e.g. dialog, system alert, bottom sheet)
-            val anyFocused = windows.firstOrNull { it.isFocused }
+            val anyFocused = windows.firstOrNull { it.isFocused && (!excludeJarvisOverlay || it.root?.packageName != packageName) }
             if (anyFocused?.root != null) return anyFocused.root
 
-            // 5. Fallback to any active window
-            val anyActive = windows.firstOrNull { it.isActive }
+            val anyActive = windows.firstOrNull { it.isActive && (!excludeJarvisOverlay || it.root?.packageName != packageName) }
             if (anyActive?.root != null) return anyActive.root
 
-            return null
+            return active
         } catch (e: Exception) {
             Log.w(TAG, "Error resolving active root node across windows: ${e.message}")
-            return null
+            return active
         }
     }
 
