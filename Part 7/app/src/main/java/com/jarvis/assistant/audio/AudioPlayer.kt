@@ -33,12 +33,12 @@ class AudioPlayer(
 
     private fun initAudioTrack() {
         val minBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
-        // 96,000 bytes = 2 full seconds of 24kHz 16-bit mono PCM headroom.
-        // Guarantees zero buffer underruns across network jitter and prevents deadlock.
-        val bufferSize = maxOf(minBufferSize * 8, 96000)
+        // 19,200 bytes = 400ms of 24kHz 16-bit mono PCM headroom.
+        // Provides instant playback start while comfortably absorbing thread and network jitter.
+        val bufferSize = maxOf(minBufferSize * 4, 19200)
 
         val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
 
@@ -115,6 +115,7 @@ class AudioPlayer(
                                 }
                             }
 
+                            VoiceFlightRecorder.recordFirstAudioFrame()
                             writeToTrack(firstChunk)
                             val amplitude = AudioUtils.calculateRmsNormalized(firstChunk, firstChunk.size)
                             onPlaybackAmplitude(amplitude)
@@ -133,14 +134,15 @@ class AudioPlayer(
                     } else {
                         silenceCounter++
                         // Clean turn completion:
-                        // 1. If Gemini signaled turnComplete: wait 25 cycles (~500ms) of empty queue
+                        // 1. If Gemini signaled turnComplete: wait 15 cycles (~300ms) of empty queue
                         //    so the hardware AudioTrack buffer has rendered out to the physical speaker completely.
-                        // 2. If Gemini is still generating (turnComplete not yet received): wait 150 cycles (~3000ms)
-                        //    to tolerate normal chunk gaps and mobile network jitter without prematurely cutting off speech.
-                        val shouldFinish = (isTurnComplete.get() && silenceCounter >= 25) || (silenceCounter >= 150)
+                        // 2. If Gemini is still generating (turnComplete not yet received): wait 50 cycles (~1000ms)
+                        //    to tolerate normal chunk gaps without stalling the mic for seconds.
+                        val shouldFinish = (isTurnComplete.get() && silenceCounter >= 15) || (silenceCounter >= 50)
 
                         if (shouldFinish && isPlayingState.get()) {
                             isPlayingState.set(false)
+                            VoiceFlightRecorder.recordPlaybackComplete()
                             onPlaybackStateChanged(false)
                             onPlaybackAmplitude(0f)
                         }
@@ -251,6 +253,7 @@ class AudioPlayer(
                 }
                 if (written < 0) {
                     Log.w(TAG, "AudioTrack write failed ($written). Reinitializing AudioTrack...")
+                    VoiceFlightRecorder.recordUnderrun()
                     synchronized(trackLock) {
                         try { t.release() } catch (_: Exception) {}
                         initAudioTrack()

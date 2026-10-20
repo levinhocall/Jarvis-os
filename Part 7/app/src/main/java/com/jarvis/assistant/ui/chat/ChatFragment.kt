@@ -24,6 +24,26 @@ class ChatFragment : Fragment() {
     private val binding get() = _binding!!
     private val viewModel: MainViewModel get() = (requireActivity() as MainActivity).viewModel
 
+    private var pendingAttachment: com.jarvis.assistant.data.files.ProcessedAttachment? = null
+
+    private val filePickerLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                val processed = com.jarvis.assistant.data.files.FileIntelligenceEngine.processFile(requireContext(), uri)
+                pendingAttachment = processed
+                val notice = if (processed.hasPromptInjection) {
+                    "Attached '${processed.fileName}' (untrusted instructions sanitized)"
+                } else {
+                    "Attached: ${processed.fileName} (${processed.sizeBytes / 1024} KB)"
+                }
+                Toast.makeText(requireContext(), notice, Toast.LENGTH_LONG).show()
+                binding.etMessageInput.hint = "📎 ${processed.fileName.take(15)}..."
+            }
+        }
+    }
+
     private val chatAdapter = JarvisChatAdapter(
         onEditUserMessage = { text ->
             binding.etMessageInput.setText(text)
@@ -83,7 +103,11 @@ class ChatFragment : Fragment() {
         }
 
         binding.btnAttach.setOnClickListener {
-            Toast.makeText(requireContext(), "Attachment options", Toast.LENGTH_SHORT).show()
+            try {
+                filePickerLauncher.launch("*/*")
+            } catch (e: Exception) {
+                Toast.makeText(requireContext(), "Could not open file picker: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
 
         observeChatTurns()
@@ -91,13 +115,22 @@ class ChatFragment : Fragment() {
 
     private fun sendMessage() {
         val text = binding.etMessageInput.text?.toString()?.trim() ?: ""
-        if (text.isBlank()) return
+        if (text.isBlank() && pendingAttachment == null) return
 
         if (!JarvisConversationService.isServiceRunning()) {
             (activity as? MainActivity)?.handleMicOrOrbClick()
         }
 
-        JarvisConversationService.sendTextMessage(text)
+        val fullMessage = if (pendingAttachment != null) {
+            val att = pendingAttachment!!
+            pendingAttachment = null
+            binding.etMessageInput.hint = "Ask Jarvis anything..."
+            "[FILE: ${att.fileName}]\n${att.summary}\n\n$text".trim()
+        } else {
+            text
+        }
+
+        JarvisConversationService.sendTextMessage(fullMessage)
         binding.etMessageInput.text?.clear()
     }
 

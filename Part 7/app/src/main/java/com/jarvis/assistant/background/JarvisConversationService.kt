@@ -35,6 +35,7 @@ import org.vosk.android.RecognitionListener as VoskRecognitionListener
 import org.vosk.android.SpeechService
 import com.jarvis.assistant.audio.AudioPlayer
 import com.jarvis.assistant.audio.AudioRecorder
+import com.jarvis.assistant.audio.VoiceFlightRecorder
 import com.jarvis.assistant.data.model.ConversationState
 import com.jarvis.assistant.network.GeminiLiveWebSocket
 import com.jarvis.assistant.ui.home.MainActivity
@@ -506,6 +507,7 @@ class JarvisConversationService : Service() {
                 (audioPlayer?.isPlaying() == true) ||
                 (tts?.isSpeaking == true)
         Log.i("JarvisService", "triggerHardBargeIn invoked from source='$source' (wasSpeaking=$wasSpeaking)")
+        VoiceFlightRecorder.recordBargeIn(source)
 
         com.jarvis.assistant.audio.VoiceInterruptionCoordinator.requestBargeIn(source) { newEpoch ->
             // 1. Advance generation counter and suppress late streaming audio chunks
@@ -605,6 +607,8 @@ class JarvisConversationService : Service() {
         activeInstance = this
         createChannel()
         initTts()
+        com.jarvis.assistant.audio.VoiceSynthesisRouter.init(applicationContext)
+        com.jarvis.assistant.automation.offline.OfflineIntelligenceRouter.init(applicationContext)
         headsetAudioRouter = com.jarvis.assistant.audio.HeadsetAudioRouter(applicationContext)
         taskProgressOverlay = com.jarvis.assistant.ui.agent.TaskProgressOverlay(this)
         taskProgressOverlayJob = serviceScope.launch(Dispatchers.Main.immediate) {
@@ -666,6 +670,11 @@ class JarvisConversationService : Service() {
         try {
             tts = TextToSpeech(applicationContext) { status ->
                 if (status == TextToSpeech.SUCCESS) {
+                    val attributes = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                    tts?.setAudioAttributes(attributes)
                     val targetLocale = when (preferences.language.lowercase(Locale.ROOT)) {
                         "hindi", "hinglish" -> Locale("hi", "IN")
                         "bengali" -> Locale("bn", "IN")
@@ -850,6 +859,7 @@ class JarvisConversationService : Service() {
         }
         exitStandbyListening()
         isPendingWakeGreeting = wakeTriggered
+        com.jarvis.assistant.audio.VoiceFlightRecorder.startSession(if (wakeTriggered) "wake_word" else "manual_trigger")
 
         val app = application as JarvisApp
         val preferences = app.preferences
@@ -896,10 +906,6 @@ class JarvisConversationService : Service() {
         setConversationState(ConversationState.IDLE)
         updateNotification()
         headsetAudioRouter?.start()
-
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-        audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
-        Log.i("JarvisService", "Hardware DSP: AudioManager mode set to MODE_IN_COMMUNICATION")
 
         val vModel = com.jarvis.assistant.audio.VoskModelManager.model
         if (vModel != null) {
@@ -984,11 +990,16 @@ class JarvisConversationService : Service() {
                         }
 
                         private var audioChunksReceivedInTurn = 0
+                        private var hasRecordedFirstTokenInTurn = false
 
                         override fun onAudioDataReceived(pcmData: ByteArray) {
                             thinkingTimeoutJob?.cancel()
                             thinkingTimeoutJob = null
                             lastResponseTimedOut = false
+                            if (!hasRecordedFirstTokenInTurn) {
+                                hasRecordedFirstTokenInTurn = true
+                                VoiceFlightRecorder.recordFirstTokenReceived()
+                            }
                             if (suppressAudioUntilTurnComplete) {
                                 Log.w("JarvisService", "onAudioDataReceived: Audio suppressed (suppressAudioUntilTurnComplete=true)")
                                 return
@@ -1024,6 +1035,10 @@ class JarvisConversationService : Service() {
                             thinkingTimeoutJob?.cancel()
                             thinkingTimeoutJob = null
                             lastResponseTimedOut = false
+                            if (!hasRecordedFirstTokenInTurn) {
+                                hasRecordedFirstTokenInTurn = true
+                                VoiceFlightRecorder.recordFirstTokenReceived()
+                            }
                             synchronized(currentTurnAssistantText) {
                                 val chunkToAppend = if (currentTurnAssistantText.isNotEmpty() && currentTurnAssistantText.last() == ' ') {
                                     textChunk.trimStart()
@@ -1182,6 +1197,7 @@ class JarvisConversationService : Service() {
                             }
                             audioPlayer?.notifyTurnComplete()
                             audioChunksReceivedInTurn = 0
+                            hasRecordedFirstTokenInTurn = false
                             suppressAudioUntilTurnComplete = false
                             hasSpeechInCurrentUtterance = false
                             hasSignalledUtteranceEnd = false
@@ -1397,6 +1413,7 @@ class JarvisConversationService : Service() {
 
                         override fun onError(message: String, isFatal: Boolean, errorCode: String?) {
                             Log.e("JarvisService", "GeminiLive onError: fatal=$isFatal, code=$errorCode, msg=$message")
+                            VoiceFlightRecorder.recordError(errorCode ?: if (isFatal) "FATAL_ERROR" else "WARNING", message)
                             updateNotification()
                             serviceScope.launch { _events.emit(message) }
                             when (errorCode) {
@@ -1715,6 +1732,8 @@ class JarvisConversationService : Service() {
                                             }
                                         }
                                     }
+                                    VoiceFlightRecorder.recordSpeechEnd()
+                                    VoiceFlightRecorder.recordAiRequestSent()
                                     setConversationState(ConversationState.THINKING)
                                     thinkingTimeoutJob?.cancel()
                                     thinkingTimeoutJob = serviceScope.launch {
@@ -3088,6 +3107,8 @@ class JarvisConversationService : Service() {
         setConversationState(ConversationState.IDLE)
         _connectionStatus.value = "READY"
         _audioLevel.value = 0f
+        VoiceFlightRecorder.endSession("stopped")
+        abandonAudioDuckFocus()
         headsetAudioRouter?.stop()
 
         try {
@@ -3349,7 +3370,7 @@ class JarvisConversationService : Service() {
     private fun requestAudioDuckFocus() {
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val res = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val focusReq = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(
                         AudioAttributes.Builder()
@@ -3364,8 +3385,10 @@ class JarvisConversationService : Service() {
                 @Suppress("DEPRECATION")
                 audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             }
+            VoiceFlightRecorder.recordFocusEvent("REQUEST_DUCK", if (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) "GRANTED" else "FAILED($res)")
         } catch (e: Exception) {
             Log.w("JarvisService", "Failed to request audio duck focus: ${e.message}")
+            VoiceFlightRecorder.recordFocusEvent("REQUEST_DUCK", "EXCEPTION_${e.javaClass.simpleName}")
         }
     }
 
@@ -3381,11 +3404,13 @@ class JarvisConversationService : Service() {
                 @Suppress("DEPRECATION")
                 audioManager.abandonAudioFocus(null)
             }
+            VoiceFlightRecorder.recordFocusEvent("ABANDON", "COMPLETED")
         } catch (_: Exception) {}
     }
 
     private fun onWakeWordDetected() {
         if (!_isStandby.value) return
+        VoiceFlightRecorder.recordWakeDetected()
         requestAudioDuckFocus()
         vibrateBriefly()
         com.jarvis.assistant.audio.JarvisSoundEffects.playWakeSound()
@@ -3414,13 +3439,8 @@ class JarvisConversationService : Service() {
             else ->
                 "Yes, $userName?"
         }
-        com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(wakeGreeting) {
-            // Once local wake greeting finishes, clear acoustic echo so none leaks into user question stream
-            synchronized(currentUtteranceAudioStream) {
-                currentUtteranceAudioStream.reset()
-            }
-            preConnectAudioQueue.clear()
-        }
+        com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(wakeGreeting)
+        VoiceFlightRecorder.recordWakeAckSpoken()
 
         beginActiveConversation(wakeTriggered = false)
     }

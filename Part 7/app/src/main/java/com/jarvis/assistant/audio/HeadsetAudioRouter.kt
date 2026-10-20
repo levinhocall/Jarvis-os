@@ -128,6 +128,11 @@ class HeadsetAudioRouter(private val context: Context) {
      */
     fun routeToOptimalAudio() {
         try {
+            if (audioManager.mode == AudioManager.MODE_IN_CALL) {
+                Log.d(TAG, "Phone call is active; not overriding system call audio mode.")
+                return
+            }
+
             val targetHeadset = findConnectedHeadset()
             cachedIsHeadsetConnected = (targetHeadset != null)
 
@@ -147,19 +152,14 @@ class HeadsetAudioRouter(private val context: Context) {
                     }
                 }
                 audioManager.isSpeakerphoneOn = false
+                VoiceFlightRecorder.recordAudioRoute(route = targetHeadset.productName.toString(), mode = "MODE_IN_COMMUNICATION")
             } else {
-                // No Headset Connected: Ensure STRICT routing to LOUDSPEAKER while maintaining MODE_IN_COMMUNICATION for hardware AEC
-                Log.i(TAG, "No external headset connected. Routing strictly to LOUDSPEAKER (main speaker) with AEC active.")
+                // No Headset Connected: Ensure STRICT routing to the device's main LOUDSPEAKER in MODE_NORMAL.
+                // Never leave in MODE_IN_COMMUNICATION on loudspeaker as that forces the phone earpiece!
+                Log.i(TAG, "No external headset connected. Routing strictly to LOUDSPEAKER (media/normal mode).")
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val available = audioManager.availableCommunicationDevices
-                    val speakerDevice = available.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                    if (speakerDevice != null) {
-                        val setOk = audioManager.setCommunicationDevice(speakerDevice)
-                        Log.i(TAG, "setCommunicationDevice: ${speakerDevice.productName} -> success=$setOk")
-                    } else {
-                        audioManager.clearCommunicationDevice()
-                    }
+                    audioManager.clearCommunicationDevice()
                 }
 
                 if (isScoStarted) {
@@ -170,9 +170,10 @@ class HeadsetAudioRouter(private val context: Context) {
                     isScoStarted = false
                 }
 
-                // Preserve MODE_IN_COMMUNICATION so hardware AcousticEchoCanceler remains active
-                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                audioManager.isSpeakerphoneOn = true
+                // Normal mode guarantees all media/speech playback routes directly to the main loudspeaker
+                audioManager.mode = AudioManager.MODE_NORMAL
+                audioManager.isSpeakerphoneOn = false
+                VoiceFlightRecorder.recordAudioRoute(route = "BUILTIN_LOUDSPEAKER", mode = "MODE_NORMAL")
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed in routeToOptimalAudio: ${e.message}")

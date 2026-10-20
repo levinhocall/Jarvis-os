@@ -187,7 +187,15 @@ class SettingsFragment : Fragment() {
                 .setTitle("JARVIS App Identity")
                 .setMessage(com.jarvis.assistant.security.AppIdentityVerifier.report(requireContext()))
                 .setPositiveButton("Close", null)
+                .setNeutralButton("Audio Diagnostics") { _, _ ->
+                    showVoiceDiagnosticsDialog()
+                }
                 .show()
+        }
+
+        binding.rowAppIdentity.setOnLongClickListener {
+            showVoiceDiagnosticsDialog()
+            true
         }
 
         // Social Media Community Buttons
@@ -206,6 +214,24 @@ class SettingsFragment : Fragment() {
         binding.tvFooterCredit.setOnClickListener {
             openUrl("https://t.me/+sYana61LvHdmZmE1")
         }
+
+        binding.tvFooterCredit.setOnLongClickListener {
+            showVoiceDiagnosticsDialog()
+            true
+        }
+    }
+
+    private fun showVoiceDiagnosticsDialog() {
+        val summary = com.jarvis.assistant.audio.VoiceFlightRecorder.getDiagnosticSummary(requireContext())
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Voice Engine Diagnostics")
+            .setMessage(summary)
+            .setPositiveButton("Close", null)
+            .setNeutralButton("Clear Logs") { _, _ ->
+                com.jarvis.assistant.audio.VoiceFlightRecorder.clearHistory()
+                Toast.makeText(requireContext(), "Flight Recorder cleared", Toast.LENGTH_SHORT).show()
+            }
+            .show()
     }
 
     private fun showLanguageDialog() {

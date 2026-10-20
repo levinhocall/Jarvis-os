@@ -1,6 +1,7 @@
 package com.jarvis.assistant.audio
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -16,7 +17,9 @@ object VoiceSynthesisRouter {
     const val CINEMATIC_RATE = 1.08f
 
     private var localTts: TextToSpeech? = null
+    @Volatile
     private var isInitialized = false
+    private var pendingSpeech: Pair<String, (() -> Unit)?>? = null
 
     fun init(context: Context) {
         if (localTts != null) return
@@ -25,12 +28,22 @@ object VoiceSynthesisRouter {
                 isInitialized = true
                 configureVoiceProfile()
                 Log.i(TAG, "Cinematic Voice Profile configured (Pitch=$CINEMATIC_PITCH, Rate=$CINEMATIC_RATE)")
+                val queued = pendingSpeech
+                if (queued != null) {
+                    pendingSpeech = null
+                    speak(queued.first, queued.second)
+                }
             }
         }
     }
 
     private fun configureVoiceProfile() {
+        val attributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
         localTts?.apply {
+            setAudioAttributes(attributes)
             setPitch(CINEMATIC_PITCH)
             setSpeechRate(CINEMATIC_RATE)
             language = Locale("hi", "IN").takeIf { isLanguageAvailable(it) >= TextToSpeech.LANG_AVAILABLE } ?: Locale.US
@@ -71,7 +84,12 @@ object VoiceSynthesisRouter {
      * Speaks text using the Cinematic Voice Profile with normalized phonetics.
      */
     fun speak(text: String, onDone: (() -> Unit)? = null) {
-        val tts = localTts ?: return
+        val tts = localTts
+        if (tts == null || !isInitialized) {
+            Log.w(TAG, "TTS not ready yet; queuing utterance: '$text'")
+            pendingSpeech = Pair(text, onDone)
+            return
+        }
         val normalized = normalizeForSpeech(text)
 
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
