@@ -51,7 +51,7 @@ class AudioRecorder(
         return try {
             var record: AudioRecord? = null
             var initAttempts = 0
-            while (initAttempts < 3) {
+            while (initAttempts < 5) {
                 initAttempts++
                 val candidate = AudioRecord(
                     MediaRecorder.AudioSource.VOICE_COMMUNICATION,
@@ -65,8 +65,8 @@ class AudioRecorder(
                     break
                 }
                 candidate.release()
-                Log.w(TAG, "AudioRecord initialization attempt $initAttempts failed, retrying in 120ms...")
-                try { Thread.sleep(120) } catch (_: Exception) {}
+                Log.w(TAG, "AudioRecord initialization attempt $initAttempts failed, retrying in 150ms...")
+                try { Thread.sleep(150) } catch (_: Exception) {}
             }
 
             if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {

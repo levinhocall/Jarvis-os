@@ -25,18 +25,28 @@ object YouTubeApiClient {
     private val networkExecutor = java.util.concurrent.Executors.newCachedThreadPool()
 
     /**
+     * Coroutine-based asynchronous YouTube top video search.
+     * Runs safely on [Dispatchers.IO] without blocking callers.
+     */
+    suspend fun searchTopVideoAsync(apiKey: String, query: String): VideoResult? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            searchTopVideoInternal(apiKey, query)
+        }
+
+    /**
      * Returns the top search result for [query].
      * Tries the official YouTube Data API first if [apiKey] is provided.
      * If the API key is absent, invalid, or exhausted by daily quota (HTTP 429),
      * automatically falls back to direct search parsing which requires 0 quota.
-     * Safe to call from ANY thread (automatically dispatches to background executor if on main thread).
+     * Safe to call from ANY thread (uses bounded timeout on main thread to avoid ANR).
      */
     fun searchTopVideo(apiKey: String, query: String): VideoResult? {
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
             return try {
-                networkExecutor.submit<VideoResult?> { searchTopVideoInternal(apiKey, query) }.get(8, TimeUnit.SECONDS)
+                // Limit main thread wait to 2500ms to stay well below the 5000ms Android ANR threshold
+                networkExecutor.submit<VideoResult?> { searchTopVideoInternal(apiKey, query) }.get(2500, TimeUnit.MILLISECONDS)
             } catch (e: Exception) {
-                android.util.Log.e("YouTubeApiClient", "Background worker searchTopVideo failed: ${e.message}")
+                android.util.Log.e("YouTubeApiClient", "Background worker searchTopVideo failed or timed out: ${e.message}")
                 null
             }
         }
@@ -99,9 +109,9 @@ object YouTubeApiClient {
     fun searchTopVideoDirect(query: String): VideoResult? {
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
             return try {
-                networkExecutor.submit<VideoResult?> { searchTopVideoDirectInternal(query) }.get(8, TimeUnit.SECONDS)
+                networkExecutor.submit<VideoResult?> { searchTopVideoDirectInternal(query) }.get(2500, TimeUnit.MILLISECONDS)
             } catch (e: Exception) {
-                android.util.Log.e("YouTubeApiClient", "Background worker searchTopVideoDirect failed: ${e.message}")
+                android.util.Log.e("YouTubeApiClient", "Background worker searchTopVideoDirect failed or timed out: ${e.message}")
                 null
             }
         }

@@ -670,7 +670,7 @@ class VisualTaskOrchestrator(
                     @Suppress("DEPRECATION")
                     wm?.defaultDisplay?.getRealMetrics(realDm) ?: run {
                         realDm.widthPixels = dm.widthPixels
-                        realDm.heightPixels = 2408
+                        realDm.heightPixels = dm.heightPixels
                     }
                     val exactArrowX = realDm.widthPixels * 0.9333f // Exactly 1008 on 1080p
                     val exactArrowY = realDm.heightPixels * 0.9440f // Exactly 2273 on 2408p

@@ -40,8 +40,9 @@ class JarvisAccessibilityService : AccessibilityService() {
         var instance: JarvisAccessibilityService? = null
             private set
 
-        fun isRunning(): Boolean = instance != null
+        fun isRunning(): Boolean = instance != null && AccessibilityHealthModel.isOperational()
         fun isEnabled(): Boolean = instance != null
+        fun healthState(): AccessibilityState = AccessibilityHealthModel.state.value
 
         fun triggerWhatsAppSend(targetText: String? = null) {
             instance?.armWhatsAppSend(targetText)
@@ -206,6 +207,7 @@ class JarvisAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
         try {
             serviceInfo?.let { info ->
                 info.flags = info.flags or
@@ -216,6 +218,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Error applying dynamic AccessibilityServiceInfo: ${e.message}")
+            AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED, "ServiceInfo config failed: ${e.message}")
         }
         Log.i(TAG, "JarvisAccessibilityService connected and active")
         ensureJarvisServiceActive()
@@ -324,15 +327,18 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         Log.w(TAG, "JarvisAccessibilityService interrupted")
+        AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED, "Service interrupted by system")
     }
 
     override fun onDestroy() {
         if (instance === this) instance = null
+        AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service destroyed")
         super.onDestroy()
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         if (instance === this) instance = null
+        AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
         return super.onUnbind(intent)
     }
 
@@ -1035,6 +1041,35 @@ class JarvisAccessibilityService : AccessibilityService() {
         return false
     }
 
+    private fun createGestureCallback(actionName: String): GestureResultCallback {
+        return object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                Log.d(TAG, "Gesture completed: $actionName")
+                if (AccessibilityHealthModel.state.value == AccessibilityState.DEGRADED) {
+                    AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
+                }
+            }
+
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                Log.w(TAG, "Gesture cancelled by system: $actionName")
+                AccessibilityHealthModel.updateState(
+                    AccessibilityState.DEGRADED,
+                    "Gesture '$actionName' cancelled by system"
+                )
+            }
+        }
+    }
+
+    private fun safeDelay(ms: Long) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            try {
+                Thread.sleep(ms.coerceAtMost(50L))
+            } catch (_: Exception) {}
+        } else {
+            try { Thread.sleep(ms) } catch (_: Exception) {}
+        }
+    }
+
     private fun longPressAt(x: Float, y: Float) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
@@ -1045,9 +1080,17 @@ class JarvisAccessibilityService : AccessibilityService() {
                 val gesture = GestureDescription.Builder()
                     .addStroke(GestureDescription.StrokeDescription(path, 0, 700))
                     .build()
-                dispatchGesture(gesture, null, null)
+                val callback = createGestureCallback("longPressAt($x, $y)")
+                val dispatched = dispatchGesture(gesture, callback, null)
+                if (!dispatched) {
+                    AccessibilityHealthModel.updateState(
+                        AccessibilityState.DEGRADED,
+                        "Long-press dispatch rejected at ($x, $y)"
+                    )
+                }
             } catch (e: Exception) {
                 Log.d(TAG, "Long-press gesture failed: ${e.message}")
+                AccessibilityHealthModel.updateState(AccessibilityState.ERROR, e.message)
             }
         }
     }
@@ -1096,9 +1139,19 @@ class JarvisAccessibilityService : AccessibilityService() {
                 val gesture = GestureDescription.Builder()
                     .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
                     .build()
-                return dispatchGesture(gesture, null, null)
+                val callback = createGestureCallback("clickAt($x, $y)")
+                val dispatched = dispatchGesture(gesture, callback, null)
+                if (!dispatched) {
+                    Log.w(TAG, "dispatchGesture returned false for clickAt($x, $y)")
+                    AccessibilityHealthModel.updateState(
+                        AccessibilityState.DEGRADED,
+                        "Gesture dispatch rejected at ($x, $y)"
+                    )
+                }
+                return dispatched
             } catch (e: Exception) {
                 Log.d(TAG, "Gesture click at ($x, $y) failed: ${e.message}")
+                AccessibilityHealthModel.updateState(AccessibilityState.ERROR, e.message)
             }
         }
         return false
@@ -1535,11 +1588,19 @@ class JarvisAccessibilityService : AccessibilityService() {
                 val gesture = GestureDescription.Builder()
                     .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
                     .build()
-                val dispatched = dispatchGesture(gesture, null, null)
+                val callback = createGestureCallback("scroll $direction ($distance)")
+                val dispatched = dispatchGesture(gesture, callback, null)
+                if (!dispatched) {
+                    AccessibilityHealthModel.updateState(
+                        AccessibilityState.DEGRADED,
+                        "Scroll dispatch rejected"
+                    )
+                }
                 Log.i(TAG, "Dispatched safe-zone scroll $direction ($distance) gesture: $dispatched")
                 return dispatched
             } catch (e: Exception) {
                 Log.e(TAG, "Scroll gesture failed: ${e.message}")
+                AccessibilityHealthModel.updateState(AccessibilityState.ERROR, e.message)
             }
         }
         return false
@@ -1644,7 +1705,7 @@ class JarvisAccessibilityService : AccessibilityService() {
 
         if (targetRect != null && targetRect.width() > 0 && targetRect.height() > 0) {
             if (!performClickAtRect(targetRect)) return false
-            Thread.sleep(100)
+            safeDelay(100)
         }
 
         val appRoot = getAppRootNode() ?: getActiveRootNode() ?: return false
@@ -1705,7 +1766,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             }
 
             if (setAccepted) {
-                Thread.sleep(180)
+                safeDelay(180)
                 target = currentTarget()
                 lastTypeVerified = textEqualsExpected(target)
                 if (!lastTypeVerified) {
@@ -1721,7 +1782,7 @@ class JarvisAccessibilityService : AccessibilityService() {
                 val currentText = fresh.text?.toString().orEmpty()
                 if (currentText.isNotBlank()) {
                     val cleared = try { setValue(fresh, "") } catch (_: Exception) { false }
-                    Thread.sleep(120)
+                    safeDelay(120)
                     target = currentTarget()
                     if (!cleared || !target?.text?.toString().isNullOrBlank()) {
                         Log.w(TAG, "Existing input could not be safely cleared; refusing to append text")
@@ -1742,7 +1803,7 @@ class JarvisAccessibilityService : AccessibilityService() {
                         Log.w(TAG, "Safe paste unavailable; no second typing strategy was attempted")
                         return false
                     }
-                    Thread.sleep(180)
+                    safeDelay(180)
                     lastTypeVerified = textEqualsExpected(currentTarget())
                     if (!lastTypeVerified) {
                         Log.w(TAG, "Pasted text could not be verified exactly; refusing to retry and duplicate it")
@@ -1768,10 +1829,19 @@ class JarvisAccessibilityService : AccessibilityService() {
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 450))
             .build()
+        val callback = createGestureCallback("longPressAndPaste")
         try {
-            dispatchGesture(gesture, null, null)
+            val dispatched = dispatchGesture(gesture, callback, null)
+            if (!dispatched) {
+                AccessibilityHealthModel.updateState(
+                    AccessibilityState.DEGRADED,
+                    "Long-press paste dispatch rejected"
+                )
+                return false
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Long-press gesture dispatch failed: ${e.message}")
+            AccessibilityHealthModel.updateState(AccessibilityState.ERROR, e.message)
             return false
         }
 
@@ -1779,7 +1849,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         val startTime = System.currentTimeMillis()
         var pasteNode: AccessibilityNodeInfo? = null
         while (System.currentTimeMillis() - startTime < 800L) {
-            try { Thread.sleep(60) } catch (_: Exception) {}
+            safeDelay(60)
             pasteNode = findPasteButtonAcrossWindows()
             if (pasteNode != null) break
         }
@@ -1787,7 +1857,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         if (pasteNode != null) {
             Log.i(TAG, "Found native Paste popup menu item: ${pasteNode.text ?: pasteNode.contentDescription}")
             val clicked = clickNodeAndTap(pasteNode)
-            Thread.sleep(120)
+            safeDelay(120)
             return clicked
         }
         return false
@@ -1929,7 +1999,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             } catch (e: Exception) {
                 Log.d(TAG, "verifyTextVisibleAnywhere error: ${e.message}")
             }
-            try { Thread.sleep(300) } catch (_: Exception) {}
+            safeDelay(300)
         }
         return false
     }

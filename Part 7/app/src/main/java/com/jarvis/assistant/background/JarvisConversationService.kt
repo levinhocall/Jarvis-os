@@ -895,6 +895,7 @@ class JarvisConversationService : Service() {
 
         _isSessionOn.value = true
         _isStandby.value = false
+        acquireWifiLock()
         lastResponseTimedOut = false
         val now = System.currentTimeMillis()
         lastUserSpeechDetectedTime = now
@@ -3142,6 +3143,7 @@ class JarvisConversationService : Service() {
     private fun enterStandby(announce: Boolean = false) {
         if (_isStandby.value) return
         abandonAudioDuckFocus()
+        releaseWifiLock()
         com.jarvis.assistant.audio.JarvisSoundEffects.playStandbySound()
         isPendingBackgroundTransition = false
         stopActiveConversation()
@@ -3485,6 +3487,10 @@ class JarvisConversationService : Service() {
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:JarvisConversation")
                 .also { it.acquire(6 * 60 * 60 * 1000L) }
         }
+        acquireWifiLock()
+    }
+
+    private fun acquireWifiLock() {
         if (wifiLock?.isHeld != true) {
             val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
             wifiLock = wifiManager?.createWifiLock(
@@ -3498,11 +3504,15 @@ class JarvisConversationService : Service() {
         }
     }
 
+    private fun releaseWifiLock() {
+        wifiLock?.takeIf { it.isHeld }?.release()
+        wifiLock = null
+    }
+
     private fun releaseWakeLock() {
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
-        wifiLock?.takeIf { it.isHeld }?.release()
-        wifiLock = null
+        releaseWifiLock()
     }
 
     override fun onDestroy() {

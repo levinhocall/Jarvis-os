@@ -441,8 +441,11 @@ class UiGroundingEngine {
         for (spatial in spatialTerms) {
             if (combinedText.contains(spatial)) {
                 val normSpatial = spatial.replace(" ", "-")
+                val dm = android.content.res.Resources.getSystem().displayMetrics
+                val displayWidth = dm.widthPixels.coerceAtLeast(720)
+                val displayHeight = dm.heightPixels.coerceAtLeast(1280)
                 val matched = elements.filter { it.isImageOrThumbnail }.firstOrNull { el ->
-                    val elSpatial = getSpatialPosition(el.bounds, 1080, 2400).lowercase(Locale.ROOT)
+                    val elSpatial = getSpatialPosition(el.bounds, displayWidth, displayHeight).lowercase(Locale.ROOT)
                     elSpatial == normSpatial
                 }
                 if (matched != null) return matched
@@ -518,8 +521,11 @@ class UiGroundingEngine {
 
         val screenBounds = Rect()
         root?.getBoundsInScreen(screenBounds)
-        val screenWidth = if (screenBounds.width() > 0) screenBounds.width() else elements.maxOfOrNull { it.bounds.right } ?: 1080
-        val screenHeight = if (screenBounds.height() > 0) screenBounds.height() else elements.maxOfOrNull { it.bounds.bottom } ?: 2400
+        val dm = android.content.res.Resources.getSystem().displayMetrics
+        val fallbackWidth = dm.widthPixels.coerceAtLeast(720)
+        val fallbackHeight = dm.heightPixels.coerceAtLeast(1280)
+        val screenWidth = if (screenBounds.width() > 0) screenBounds.width() else elements.maxOfOrNull { it.bounds.right } ?: fallbackWidth
+        val screenHeight = if (screenBounds.height() > 0) screenBounds.height() else elements.maxOfOrNull { it.bounds.bottom } ?: fallbackHeight
 
         val isWebSearchPage = (pkg.contains("chrome", ignoreCase = true) || pkg.contains("browser", ignoreCase = true)) &&
             isGoogleSearchResults(elements)

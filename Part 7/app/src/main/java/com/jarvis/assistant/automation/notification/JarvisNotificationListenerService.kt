@@ -133,6 +133,7 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         )
 
         recentNotifications[sbn.key] = cached
+        notificationOrder.remove(sbn.key)
         notificationOrder.add(sbn.key)
 
         // Process financial/UPI transactions into Expense Ledger
