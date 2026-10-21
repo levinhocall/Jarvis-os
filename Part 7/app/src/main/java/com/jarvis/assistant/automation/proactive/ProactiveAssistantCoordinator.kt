@@ -91,6 +91,72 @@ object ProactiveAssistantCoordinator {
         }
     }
 
+    private val candidateMap = ConcurrentHashMap<String, ProactiveCandidate>()
+
+    /**
+     * Posts a candidate proactive suggestion through the InterruptionGovernor.
+     * Enforces quiet hours, frequency capping, confidence thresholds, and adaptive learning.
+     */
+    fun postProactiveSuggestion(
+        candidate: ProactiveCandidate,
+        currentHourOverride: Int? = null
+    ): GovernorDecision {
+        val decision = InterruptionGovernor.evaluate(candidate, currentHourOverride)
+        if (!decision.isAllowed) {
+            Log.d(TAG, "Proactive suggestion '${candidate.title}' suppressed by Governor: ${decision.reason}")
+            return decision
+        }
+
+        candidateMap[candidate.id] = candidate
+        val item = ScheduledProactiveItem(
+            id = candidate.id,
+            title = candidate.title,
+            description = candidate.description,
+            triggerTimeMs = candidate.timestamp,
+            missionId = null
+        )
+        scheduledItems[item.id] = item
+
+        if (candidate.deliveryType == SuggestionDeliveryType.OVERT_NOTIFICATION) {
+            InterruptionGovernor.recordOvertDelivered(candidate.timestamp)
+        }
+
+        updateAlertsFlow()
+        Log.i(TAG, "Delivered proactive suggestion: '${candidate.title}' [${candidate.category}]")
+        return decision
+    }
+
+    /**
+     * Event-driven handler for low battery transitions without busy waiting.
+     */
+    fun onLowBatteryDetected(
+        batteryPct: Int,
+        isCharging: Boolean,
+        currentHourOverride: Int? = null
+    ): GovernorDecision? {
+        if (isCharging || batteryPct > 20) return null
+        val candidate = ProactiveCandidate(
+            id = "alert_low_battery",
+            title = "Low Battery Warning ($batteryPct%)",
+            description = "Battery is at $batteryPct%. Would you like to enable power saver mode?",
+            category = ProactiveCategory.BATTERY_HEALTH,
+            confidence = 0.95f,
+            deliveryType = SuggestionDeliveryType.OVERT_NOTIFICATION
+        )
+        return postProactiveSuggestion(candidate, currentHourOverride)
+    }
+
+    /**
+     * Records user feedback (accepted / dismissed) on a suggestion to adapt proactive frequency.
+     */
+    fun recordFeedback(id: String, accepted: Boolean) {
+        val candidate = candidateMap[id]
+        if (candidate != null) {
+            InterruptionGovernor.recordFeedback(candidate.category, accepted)
+        }
+        dismissAlert(id)
+    }
+
     /**
      * Dismisses or cancels a scheduled proactive alert.
      */
