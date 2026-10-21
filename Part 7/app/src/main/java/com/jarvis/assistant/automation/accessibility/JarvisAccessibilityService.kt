@@ -304,6 +304,7 @@ class JarvisAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         try {
             event ?: return
+            AccessibilityHealthModel.recordEventReceived()
             val eventType = event.eventType
             val pkg = try { event.packageName?.toString().orEmpty() } catch (_: Throwable) { "" }
 
@@ -1175,6 +1176,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 Log.d(TAG, "Gesture completed: $actionName")
                 consecutiveGestureFailures = 0
+                AccessibilityHealthModel.recordGestureDispatched(true, actionName)
                 if (AccessibilityHealthModel.state.value == AccessibilityState.DEGRADED) {
                     AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
                 }
@@ -1183,6 +1185,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             override fun onCancelled(gestureDescription: GestureDescription?) {
                 Log.w(TAG, "Gesture cancelled by system: $actionName")
                 consecutiveGestureFailures++
+                AccessibilityHealthModel.recordGestureDispatched(false, "Cancelled: $actionName")
                 if (consecutiveGestureFailures >= 3) {
                     AccessibilityHealthModel.updateState(
                         AccessibilityState.DEGRADED,

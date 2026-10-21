@@ -3,6 +3,7 @@ package com.jarvis.assistant.automation.agent
 import android.graphics.Rect
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
+import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
 import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
 import kotlinx.coroutines.delay
 
@@ -64,23 +65,23 @@ object ActionVerifier {
                 }
 
                 if (normalize(actualText) == normalize(cleanExpected)) {
-                    return VerificationResult(
+                    return record(VerificationResult(
                         isVerified = true,
                         reason = "Text verified in target field",
                         stateChanged = true,
                         actualValue = null
-                    )
+                    ))
                 }
             }
 
         }
 
-        return VerificationResult(
+        return record(VerificationResult(
             isVerified = false,
             reason = "Text mismatch: the target input value did not match the requested text",
             stateChanged = false,
             isRetryable = true
-        )
+        ))
     }
 
     /**
@@ -98,20 +99,20 @@ object ActionVerifier {
         // 1. Window or package transition
         if (postSignature.packageName != preSignature.packageName ||
             postSignature.className != preSignature.className) {
-            return VerificationResult(
+            return record(VerificationResult(
                 isVerified = true,
                 reason = "Window transitioned successfully (${postSignature.packageName ?: postSignature.className})",
                 stateChanged = true
-            )
+            ))
         }
 
         // 2. Element tree change
         if (!postSignature.isEquivalentTo(preSignature)) {
-            return VerificationResult(
+            return record(VerificationResult(
                 isVerified = true,
                 reason = "UI content updated following click",
                 stateChanged = true
-            )
+            ))
         }
 
         // Slight extra delay in case of slow animation
@@ -119,19 +120,19 @@ object ActionVerifier {
         val secondCheckRoot = service.getActiveRootNode() ?: service.getAppRootNode()
         val secondSignature = ScreenSignatureCalculator.computeSignature(secondCheckRoot)
         if (!secondSignature.isEquivalentTo(preSignature)) {
-            return VerificationResult(
+            return record(VerificationResult(
                 isVerified = true,
                 reason = "UI transitioned after layout animation",
                 stateChanged = true
-            )
+            ))
         }
 
-        return VerificationResult(
+        return record(VerificationResult(
             isVerified = false,
             reason = "No detectable UI change after click (UI state remained identical)",
             stateChanged = false,
             isRetryable = true
-        )
+        ))
     }
 
     /**
@@ -142,16 +143,21 @@ object ActionVerifier {
         postSignature: ScreenSignature
     ): VerificationResult {
         if (postSignature.isEquivalentTo(preSignature)) {
-            return VerificationResult(
+            return record(VerificationResult(
                 isVerified = false,
                 reason = "No visible scroll progress detected; the list end is unproven",
                 stateChanged = false
-            )
+            ))
         }
-        return VerificationResult(
+        return record(VerificationResult(
             isVerified = true,
             reason = "Scroll revealed new content",
             stateChanged = true
-        )
+        ))
+    }
+
+    private fun record(result: VerificationResult): VerificationResult {
+        AccessibilityHealthModel.recordActionVerified(result.isVerified, result.reason)
+        return result
     }
 }

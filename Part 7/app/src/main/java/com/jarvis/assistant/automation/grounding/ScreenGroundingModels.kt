@@ -2,6 +2,17 @@ package com.jarvis.assistant.automation.grounding
 
 import android.graphics.Rect
 
+data class ScreenBounds(
+    val left: Int = 0,
+    val top: Int = 0,
+    val right: Int = 0,
+    val bottom: Int = 0
+) {
+    val width: Int get() = right - left
+    val height: Int get() = bottom - top
+    fun contains(x: Int, y: Int): Boolean = x in left..right && y in top..bottom
+}
+
 /**
  * Screen element metadata extracted from Accessibility node hierarchies or vision inputs.
  */
@@ -10,12 +21,15 @@ data class GroundedElement(
     val text: String = "",
     val contentDescription: String? = null,
     val bounds: Rect = Rect(),
+    val screenBounds: ScreenBounds = ScreenBounds(bounds.left, bounds.top, bounds.right, bounds.bottom),
     val isClickable: Boolean = false,
     val isEditable: Boolean = false,
     val isScrollable: Boolean = false,
     val isVisibleToUser: Boolean = true,
     val className: String = "",
-    val packageName: String = ""
+    val packageName: String = "",
+    val isPassword: Boolean = false,
+    val isProtected: Boolean = false
 ) {
     val displayLabel: String
         get() = when {
@@ -47,7 +61,9 @@ enum class GroundingOutcome {
     FOUND_AMBIGUOUS,
     NOT_FOUND,
     STALE_OBSERVATION,
-    INACCESSIBLE
+    INACCESSIBLE,
+    SECURE_CONTENT_BLOCKED,
+    COORDINATE_OUT_OF_BOUNDS
 }
 
 /**
@@ -60,7 +76,11 @@ data class ScreenContext(
     val capturedTimestamp: Long = System.currentTimeMillis(),
     val isInvalidated: Boolean = false,
     val confidence: ScreenConfidence = ScreenConfidence.HIGH,
-    val ttlMs: Long = 2500L
+    val ttlMs: Long = 2500L,
+    val isSecureWindow: Boolean = false,
+    val securityReason: String? = null,
+    val screenWidth: Int = 1080,
+    val screenHeight: Int = 2400
 ) {
     val isFresh: Boolean
         get() = !isInvalidated && (System.currentTimeMillis() - capturedTimestamp <= ttlMs)
@@ -88,7 +108,8 @@ data class ActionPreconditionResult(
     val isValid: Boolean,
     val reason: String,
     val requiresUserApproval: Boolean = false,
-    val approvalPrompt: String? = null
+    val approvalPrompt: String? = null,
+    val isInterruptedOrStale: Boolean = false
 )
 
 data class ActionOutcomeResult(

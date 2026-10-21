@@ -107,25 +107,30 @@ object ScreenGroundingEngine {
 
             node.getBoundsInScreen(tempRect)
 
+            val isPassword = try { node.isPassword } catch (_: Throwable) { false }
+
             // Capture potential screen title from prominent top-level text
             if (detectedTitle == null && text.isNotBlank() && tempRect.top < 250 && !isClickable && !isEditable) {
                 detectedTitle = text
             }
 
             // Only retain interactive or content-bearing elements
-            if (isVisible && (text.isNotBlank() || desc.isNotBlank() || isClickable || isEditable)) {
+            if (isVisible && (text.isNotBlank() || desc.isNotBlank() || isClickable || isEditable || isPassword)) {
                 elements.add(
                     GroundedElement(
                         id = viewId,
-                        text = text,
-                        contentDescription = desc.ifBlank { null },
+                        text = if (isPassword) "••••••" else text,
+                        contentDescription = if (isPassword) "Password Field" else desc.ifBlank { null },
                         bounds = Rect(tempRect),
+                        screenBounds = ScreenBounds(tempRect.left, tempRect.top, tempRect.right, tempRect.bottom),
                         isClickable = isClickable,
                         isEditable = isEditable,
                         isScrollable = isScrollable,
                         isVisibleToUser = isVisible,
                         className = className,
-                        packageName = node.packageName?.toString() ?: pkgName
+                        packageName = node.packageName?.toString() ?: pkgName,
+                        isPassword = isPassword,
+                        isProtected = isPassword
                     )
                 )
             }
@@ -138,14 +143,99 @@ object ScreenGroundingEngine {
             }
         }
 
+        val hasPassword = elements.any { it.isPassword }
+        val isSecurePkg = pkgName.contains("keyguard", ignoreCase = true) ||
+            pkgName.contains("credentials", ignoreCase = true)
+
         return ScreenContext(
             foregroundPackage = pkgName,
             screenTitle = detectedTitle,
             elements = elements,
             capturedTimestamp = System.currentTimeMillis(),
             isInvalidated = false,
-            confidence = ScreenConfidence.HIGH
+            confidence = if (hasPassword || isSecurePkg) ScreenConfidence.APPROXIMATE else ScreenConfidence.HIGH,
+            isSecureWindow = hasPassword || isSecurePkg,
+            securityReason = if (hasPassword) "Password input detected" else if (isSecurePkg) "Secure system screen" else null
         )
+    }
+
+    /**
+     * Grounds a screen coordinate (x, y) into a semantic UI element with bounds checking.
+     * Prevents blind blind clicks if the coordinate falls outside screen bounds or hits protected content.
+     */
+    fun groundCoordinate(
+        screen: ScreenContext,
+        x: Int,
+        y: Int,
+        actionType: ActionType = ActionType.CLICK
+    ): GroundingMatch {
+        if (!screen.isFresh) {
+            return GroundingMatch(
+                target = null,
+                matchOutcome = GroundingOutcome.STALE_OBSERVATION,
+                explanation = "Screen context expired. Re-observation required before dispatching coordinate ($x, $y)."
+            )
+        }
+
+        if (screen.isSecureWindow) {
+            return GroundingMatch(
+                target = null,
+                matchOutcome = GroundingOutcome.SECURE_CONTENT_BLOCKED,
+                explanation = "Screen is in a secure window (${screen.securityReason ?: "FLAG_SECURE"}). Automated interaction blocked."
+            )
+        }
+
+        if (x < 0 || x > screen.screenWidth || y < 0 || y > screen.screenHeight) {
+            return GroundingMatch(
+                target = null,
+                matchOutcome = GroundingOutcome.COORDINATE_OUT_OF_BOUNDS,
+                explanation = "Coordinate ($x, $y) is outside screen boundaries (${screen.screenWidth}x${screen.screenHeight})."
+            )
+        }
+
+        val covering = screen.elements.filter { el ->
+            el.screenBounds.contains(x, y)
+        }.sortedBy { it.screenBounds.width * it.screenBounds.height }
+
+        val best = covering.firstOrNull()
+        if (best != null) {
+            if (best.isPassword || best.isProtected) {
+                return GroundingMatch(
+                    target = best,
+                    matchOutcome = GroundingOutcome.SECURE_CONTENT_BLOCKED,
+                    explanation = "Element at ($x, $y) is a protected or password field."
+                )
+            }
+            return GroundingMatch(
+                target = best,
+                matchOutcome = GroundingOutcome.FOUND_EXACT,
+                confidenceScore = 0.95f,
+                candidates = covering,
+                explanation = "Grounded coordinate ($x, $y) to semantic node '${best.displayLabel}' [${best.className}]."
+            )
+        }
+
+        return GroundingMatch(
+            target = null,
+            matchOutcome = GroundingOutcome.NOT_FOUND,
+            confidenceScore = 0.3f,
+            explanation = "Coordinate ($x, $y) does not hit any registered semantic interactive element."
+        )
+    }
+
+    /**
+     * Provides clear recovery guidance when grounding fails.
+     */
+    fun getRecoveryGuidance(outcome: GroundingOutcome, query: String = ""): String {
+        return when (outcome) {
+            GroundingOutcome.FOUND_EXACT -> "Target successfully identified."
+            GroundingOutcome.FOUND_AMBIGUOUS -> "Multiple elements match '$query'. Please specify by unique label or location."
+            GroundingOutcome.NOT_FOUND -> "Target '$query' was not found on screen. Try scrolling or check if the target app is open."
+            GroundingOutcome.STALE_OBSERVATION -> "Screen changed during action planning. Please refresh view."
+            GroundingOutcome.INACCESSIBLE -> "Screen is currently inaccessible. Check if Accessibility Service is enabled."
+            GroundingOutcome.SECURE_CONTENT_BLOCKED -> "Content is protected by Android security (FLAG_SECURE/credentials). User must complete this action manually."
+            GroundingOutcome.COORDINATE_OUT_OF_BOUNDS -> "Coordinates were out of current screen bounds. Recalculation required."
+        }
     }
 
     /**
@@ -162,6 +252,14 @@ object ScreenGroundingEngine {
                 target = null,
                 matchOutcome = GroundingOutcome.STALE_OBSERVATION,
                 explanation = "Screen context is stale or invalidated. Re-observation required."
+            )
+        }
+
+        if (screen.isSecureWindow) {
+            return GroundingMatch(
+                target = null,
+                matchOutcome = GroundingOutcome.SECURE_CONTENT_BLOCKED,
+                explanation = "Screen is in a secure window (${screen.securityReason ?: "FLAG_SECURE"}). Automated interaction blocked."
             )
         }
 
@@ -264,7 +362,16 @@ object ScreenGroundingEngine {
         if (!screen.isFresh) {
             return ActionPreconditionResult(
                 isValid = false,
-                reason = "Screen context expired or invalidated before action dispatch."
+                reason = "Screen context expired or invalidated before action dispatch.",
+                isInterruptedOrStale = true
+            )
+        }
+
+        if (screen.isSecureWindow) {
+            return ActionPreconditionResult(
+                isValid = false,
+                reason = "Cannot execute action in secure window: ${screen.securityReason ?: "FLAG_SECURE"}.",
+                isInterruptedOrStale = false
             )
         }
 
@@ -279,20 +386,30 @@ object ScreenGroundingEngine {
             )
         }
 
-        // Validate bounds
-        if (target.bounds.width() <= 0 || target.bounds.height() <= 0) {
+        if (target.isPassword || target.isProtected) {
             return ActionPreconditionResult(
                 isValid = false,
-                reason = "Target element '${target.displayLabel}' has invalid screen bounds: ${target.bounds}."
+                reason = "Target '${target.displayLabel}' is a secure/password element. Automated interaction rejected."
+            )
+        }
+
+        // Validate bounds
+        if (target.screenBounds.width <= 0 || target.screenBounds.height <= 0) {
+            return ActionPreconditionResult(
+                isValid = false,
+                reason = "Target element '${target.displayLabel}' has invalid screen bounds: ${target.screenBounds}."
             )
         }
 
         // Verify element is still present in current screen elements
-        val stillPresent = screen.elements.any { it.bounds == target.bounds && it.className == target.className }
+        val stillPresent = screen.elements.any { el ->
+            el.screenBounds == target.screenBounds && el.className == target.className
+        }
         if (!stillPresent) {
             return ActionPreconditionResult(
                 isValid = false,
-                reason = "Target element '${target.displayLabel}' is no longer visible on screen."
+                reason = "Target element '${target.displayLabel}' is no longer visible on screen.",
+                isInterruptedOrStale = true
             )
         }
 

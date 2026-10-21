@@ -51,6 +51,85 @@ object AccessibilityHealthModel {
     /** Epoch millis of the most recent state transition. */
     val lastStateChange: StateFlow<Long> = _lastStateChange.asStateFlow()
 
+    private val _lastEventReceivedTimestamp = MutableStateFlow(0L)
+    /** Epoch millis of the most recent accessibility event received. */
+    val lastEventReceivedTimestamp: StateFlow<Long> = _lastEventReceivedTimestamp.asStateFlow()
+
+    private val _totalEventsReceived = MutableStateFlow(0L)
+    /** Total accessibility events processed since service started. */
+    val totalEventsReceived: StateFlow<Long> = _totalEventsReceived.asStateFlow()
+
+    private val _lastGestureDispatchedTimestamp = MutableStateFlow(0L)
+    /** Epoch millis of the most recent gesture dispatched. */
+    val lastGestureDispatchedTimestamp: StateFlow<Long> = _lastGestureDispatchedTimestamp.asStateFlow()
+
+    private val _lastActionVerifiedTimestamp = MutableStateFlow(0L)
+    /** Epoch millis of the most recent successful closed-loop action verification. */
+    val lastActionVerifiedTimestamp: StateFlow<Long> = _lastActionVerifiedTimestamp.asStateFlow()
+
+    private val _isReceivingEvents = MutableStateFlow(false)
+    val isReceivingEvents: StateFlow<Boolean> = _isReceivingEvents.asStateFlow()
+
+    /**
+     * Records arrival of an active AccessibilityEvent from system_server.
+     */
+    fun recordEventReceived() {
+        val now = System.currentTimeMillis()
+        _lastEventReceivedTimestamp.value = now
+        _totalEventsReceived.value += 1
+        _isReceivingEvents.value = true
+    }
+
+    /**
+     * Records a gesture dispatch outcome.
+     */
+    fun recordGestureDispatched(success: Boolean, details: String? = null) {
+        val now = System.currentTimeMillis()
+        _lastGestureDispatchedTimestamp.value = now
+        if (!success && details != null) {
+            Log.w(TAG, "Gesture dispatch failure: $details")
+        }
+    }
+
+    /**
+     * Records a closed-loop verification outcome for an automated UI action.
+     */
+    fun recordActionVerified(isVerified: Boolean, details: String? = null) {
+        val now = System.currentTimeMillis()
+        if (isVerified) {
+            _lastActionVerifiedTimestamp.value = now
+        }
+        Log.d(TAG, "Action verified=$isVerified: ${details ?: "No details"}")
+    }
+
+    data class AccessibilityStatusSummary(
+        val state: AccessibilityState,
+        val isOperational: Boolean,
+        val isReceivingEvents: Boolean,
+        val lastEventReceivedAgeMs: Long,
+        val lastGestureDispatchedAgeMs: Long,
+        val lastActionVerifiedAgeMs: Long,
+        val lastError: String?
+    )
+
+    fun getOperationalStatusSummary(): AccessibilityStatusSummary {
+        val now = System.currentTimeMillis()
+        val eventAge = if (_lastEventReceivedTimestamp.value > 0) now - _lastEventReceivedTimestamp.value else -1L
+        val gestureAge = if (_lastGestureDispatchedTimestamp.value > 0) now - _lastGestureDispatchedTimestamp.value else -1L
+        val verifiedAge = if (_lastActionVerifiedTimestamp.value > 0) now - _lastActionVerifiedTimestamp.value else -1L
+        val receiving = _lastEventReceivedTimestamp.value > 0 && eventAge < 10_000L
+
+        return AccessibilityStatusSummary(
+            state = _state.value,
+            isOperational = isOperational(),
+            isReceivingEvents = receiving,
+            lastEventReceivedAgeMs = eventAge,
+            lastGestureDispatchedAgeMs = gestureAge,
+            lastActionVerifiedAgeMs = verifiedAge,
+            lastError = _lastError.value
+        )
+    }
+
     /**
      * Transition to [newState], optionally recording an [error] message.
      *
