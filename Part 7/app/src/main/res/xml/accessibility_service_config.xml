@@ -7,5 +7,4 @@
     android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="true"
-    android:canTakeScreenshot="true"
-    android:settingsActivity="com.jarvis.assistant.ui.settings.SettingsActivity" />
+    android:canTakeScreenshot="true" />

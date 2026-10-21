@@ -168,9 +168,18 @@ class PermissionActivity : AppCompatActivity() {
 
         if (hasMic && hasLoc && hasNotif && isA11ySatisfied) {
             if (a11yState == AccessibilityState.ENABLED) {
-                binding.btnGrantAll.text = "CONNECTING ACCESSIBILITY SERVICE…"
-                binding.btnGrantAll.alpha = 0.85f
-                binding.btnGrantAll.isEnabled = false
+                binding.btnGrantAll.text = "CONNECTING… TAP TO RECHECK / FINISH"
+                binding.btnGrantAll.alpha = 1.0f
+                binding.btnGrantAll.isEnabled = true
+                binding.btnGrantAll.setOnClickListener {
+                    AccessibilityHealthModel.refreshFromSystem(this@PermissionActivity)
+                    if (AccessibilityHealthModel.isOperational()) {
+                        finish()
+                    } else {
+                        pollAccessibilityState()
+                        PermissionHelper.openAccessibilitySettings(this@PermissionActivity)
+                    }
+                }
             } else {
                 binding.btnGrantAll.text = "ALL ESSENTIAL PERMISSIONS GRANTED ✓"
                 binding.btnGrantAll.alpha = 0.7f
@@ -180,6 +189,9 @@ class PermissionActivity : AppCompatActivity() {
             binding.btnGrantAll.text = "GRANT ALL PERMISSIONS"
             binding.btnGrantAll.alpha = 1.0f
             binding.btnGrantAll.isEnabled = true
+            binding.btnGrantAll.setOnClickListener {
+                requestAllMissingPermissions()
+            }
         }
     }
 
@@ -199,8 +211,8 @@ class PermissionActivity : AppCompatActivity() {
             AccessibilityState.ENABLED -> {
                 statusTv.text = "Connecting… (Enabled in Settings)"
                 statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
-                button.text = "Connecting…"
-                button.alpha = 0.85f
+                button.text = "Recheck / Manage"
+                button.alpha = 1.0f
                 button.isEnabled = true
             }
             AccessibilityState.DEGRADED -> {

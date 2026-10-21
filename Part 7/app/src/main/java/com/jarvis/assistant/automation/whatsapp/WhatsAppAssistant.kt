@@ -160,14 +160,21 @@ class WhatsAppAssistant(
                 }
             }
 
-            // Arm accessibility service BEFORE launching WhatsApp so it's ready to click immediately
-            JarvisAccessibilityService.triggerWhatsAppSend(message)
+            val isA11yActive = JarvisAccessibilityService.isRunning()
+            if (isA11yActive) {
+                // Arm accessibility service BEFORE launching WhatsApp so it clicks send immediately
+                JarvisAccessibilityService.triggerWhatsAppSend(message)
+            }
 
             ActivityLauncherHelper.startActivitySafely(context, intent)
 
             val recipient = draft.contactName
             pendingDraft = null
-            "Sending WhatsApp message to $recipient."
+            if (isA11yActive) {
+                "Sending WhatsApp message to $recipient."
+            } else {
+                "Opening WhatsApp with your message for $recipient. Tap Send to send it, or enable JARVIS in Accessibility Settings for automatic sending."
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send WhatsApp message: ${e.message}", e)
             pendingDraft = null

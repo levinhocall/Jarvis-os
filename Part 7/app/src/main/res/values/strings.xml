@@ -55,5 +55,7 @@
     <string name="category_contacts">Contacts</string>
     <string name="category_routines">Routines</string>
     <string name="category_notes">Notes</string>
+    <string name="notification_service_label">JARVIS Notification Engine</string>
+    <string name="notification_service_desc">Enables JARVIS to read incoming notifications for hands-free WhatsApp replies, expense tracking, and intelligent headset whispers.</string>
 </resources>
 

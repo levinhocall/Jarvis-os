@@ -31,7 +31,11 @@ class ContactResolver(private val context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun resolveContact(query: String): ContactResolutionResult {
+    /**
+     * Resolves a contact query. Supports literal names with digits ("Gufran Khan 4", "Papa 2")
+     * as well as trailing index disambiguation ("gufran khan 4" -> 4th Gufran Khan).
+     */
+    fun resolveContact(query: String, explicitIndex: Int? = null): ContactResolutionResult {
         if (!hasPermission()) {
             Log.w(TAG, "Cannot resolve contacts: READ_CONTACTS permission not granted")
             return ContactResolutionResult.PermissionDenied
@@ -47,58 +51,101 @@ class ContactResolver(private val context: Context) {
             return ContactResolutionResult.NoMatch
         }
 
-        // 1. Exact Name Matches (case-insensitive)
+        // PASS 1: Literal Exact Match First (handles literal "Gufran Khan 4", "Papa 2", "Home 1")
         val exactMatches = allContacts.filter { it.name.lowercase(Locale.ROOT) == cleanQuery }
-        if (exactMatches.size == 1) {
+        if (exactMatches.size == 1 && explicitIndex == null) {
             return ContactResolutionResult.SingleMatch(exactMatches.first())
-        } else if (exactMatches.size > 1) {
+        } else if (exactMatches.size > 1 && explicitIndex == null) {
             return ContactResolutionResult.MultipleMatches(exactMatches)
         }
 
-        // 2. Nickname resolution
+        // PASS 2: Index Extraction Disambiguation
+        val (baseQuery, parsedIndex) = extractIndexFromQuery(cleanQuery)
+        val effectiveIndex = explicitIndex ?: parsedIndex
+
+        if (effectiveIndex != null && baseQuery.isNotBlank()) {
+            val baseCandidates = matchInternal(baseQuery, allContacts)
+            if (baseCandidates.isNotEmpty()) {
+                return if (effectiveIndex in 1..baseCandidates.size) {
+                    ContactResolutionResult.SingleMatch(baseCandidates[effectiveIndex - 1])
+                } else {
+                    ContactResolutionResult.MultipleMatches(baseCandidates)
+                }
+            }
+        }
+
+        // PASS 3: Standard Resolution on Original Query
+        val candidates = matchInternal(cleanQuery, allContacts)
+        return when {
+            candidates.size == 1 -> ContactResolutionResult.SingleMatch(candidates.first())
+            candidates.size > 1 -> ContactResolutionResult.MultipleMatches(candidates)
+            else -> ContactResolutionResult.NoMatch
+        }
+    }
+
+    private fun matchInternal(cleanQuery: String, allContacts: List<ContactInfo>): List<ContactInfo> {
+        // 1. Exact match
+        val exact = allContacts.filter { it.name.lowercase(Locale.ROOT) == cleanQuery }
+        if (exact.isNotEmpty()) return exact
+
+        // 2. Nicknames
         val nicknameAliases = NICKNAME_MAP[cleanQuery]
         if (nicknameAliases != null) {
-            val nicknameMatches = allContacts.filter { contact ->
+            val nickMatches = allContacts.filter { contact ->
                 val lowerName = contact.name.lowercase(Locale.ROOT)
                 nicknameAliases.any { alias -> lowerName.contains(alias) }
             }
-            if (nicknameMatches.size == 1) {
-                return ContactResolutionResult.SingleMatch(nicknameMatches.first())
-            } else if (nicknameMatches.size > 1) {
-                return ContactResolutionResult.MultipleMatches(nicknameMatches)
-            }
+            if (nickMatches.isNotEmpty()) return nickMatches
         }
 
-        // 3. Prefix or Word Boundary matches (e.g. "Rahul" matching "Rahul Sharma")
+        // 3. Word boundary / prefix match (preserving digits)
         val wordMatches = allContacts.filter { contact ->
             val lowerName = contact.name.lowercase(Locale.ROOT)
-            val tokens = lowerName.split(" ", ".", "_", "-")
+            val tokens = lowerName.split(" ", ".", "_", "-").filter { it.isNotBlank() }
             tokens.any { token -> token == cleanQuery || token.startsWith(cleanQuery) }
         }
-        if (wordMatches.size == 1) {
-            return ContactResolutionResult.SingleMatch(wordMatches.first())
-        } else if (wordMatches.size > 1) {
-            return ContactResolutionResult.MultipleMatches(wordMatches)
-        }
+        if (wordMatches.isNotEmpty()) return wordMatches
 
-        // 4. Fuzzy Levenshtein matching
+        // 4. Fuzzy Levenshtein match
         val scored = allContacts.map { contact ->
             val score = calculateSimilarity(cleanQuery, contact.name.lowercase(Locale.ROOT))
             Pair(contact, score)
         }.filter { it.second >= 0.70 }
             .sortedByDescending { it.second }
 
-        return when {
-            scored.isEmpty() -> ContactResolutionResult.NoMatch
-            scored.size == 1 -> ContactResolutionResult.SingleMatch(scored.first().first)
-            scored.first().second - (scored.getOrNull(1)?.second ?: 0f) > 0.15f -> {
-                // Clear top winner
-                ContactResolutionResult.SingleMatch(scored.first().first)
+        if (scored.isNotEmpty()) {
+            if (scored.size == 1 || (scored.first().second - (scored.getOrNull(1)?.second ?: 0f) > 0.15f)) {
+                return listOf(scored.first().first)
             }
-            else -> {
-                ContactResolutionResult.MultipleMatches(scored.take(3).map { it.first })
-            }
+            return scored.take(5).map { it.first }
         }
+
+        return emptyList()
+    }
+
+    private fun extractIndexFromQuery(query: String): Pair<String, Int?> {
+        val trailingRegex = Regex("^(.*?)\\s+(?:number\\s+|no\\.?\\s+)?([a-zA-Z0-9]+)$", RegexOption.IGNORE_CASE)
+        val match = trailingRegex.find(query) ?: return Pair(query, null)
+        val base = match.groupValues[1].trim()
+        val token = match.groupValues[2].trim().lowercase(Locale.ROOT)
+
+        val idx = token.toIntOrNull()
+            ?: Regex("^(\\d{1,2})(?:st|nd|rd|th)$").find(token)?.groupValues?.get(1)?.toIntOrNull()
+            ?: when (token) {
+                "one", "first", "1st", "pehla", "ek" -> 1
+                "two", "second", "2nd", "doosra", "dusra", "do" -> 2
+                "three", "third", "3rd", "teesra", "teen" -> 3
+                "four", "fourth", "4th", "chautha", "chaar", "char" -> 4
+                "five", "fifth", "5th", "paanchva", "paanch" -> 5
+                "six", "sixth", "6th", "chhattha", "chhe" -> 6
+                "seven", "seventh", "7th", "saatva", "saat" -> 7
+                "eight", "eighth", "8th", "aathva", "aath" -> 8
+                "nine", "ninth", "9th", "nauva", "nau" -> 9
+                "ten", "tenth", "10th", "dasva", "das" -> 10
+                else -> null
+            }
+
+        return if (idx != null && base.isNotBlank()) Pair(base, idx) else Pair(query, null)
     }
 
     private fun loadAllContacts(): List<ContactInfo> {
@@ -124,8 +171,7 @@ class ContactResolver(private val context: Context) {
                 val nameIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
                 val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 val keyIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY)
-
-                val seenNumbers = mutableSetOf<String>()
+                val seenEntries = mutableSetOf<String>()
 
                 while (it.moveToNext()) {
                     val id = if (idIdx >= 0) it.getString(idIdx) ?: "" else ""
@@ -139,8 +185,9 @@ class ContactResolver(private val context: Context) {
                         digitsOnly.length == 11 && digitsOnly.startsWith("0") -> "91${digitsOnly.substring(1)}"
                         else -> digitsOnly
                     }
-                    if (name.isNotBlank() && cleanNum.isNotBlank() && !seenNumbers.contains(cleanNum)) {
-                        seenNumbers.add(cleanNum)
+                    val signature = "${name.lowercase()}|$cleanNum"
+                    if (name.isNotBlank() && cleanNum.isNotBlank() && !seenEntries.contains(signature)) {
+                        seenEntries.add(signature)
                         contacts.add(ContactInfo(id = id, name = name, phoneNumber = cleanNum, lookupKey = lookupKey))
                     }
                 }

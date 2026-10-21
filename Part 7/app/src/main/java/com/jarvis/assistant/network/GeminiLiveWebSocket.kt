@@ -422,13 +422,17 @@ class GeminiLiveWebSocket(
                         // 10. call_contact
                         put(JSONObject().apply {
                             put("name", "call_contact")
-                            put("description", "Places a standard phone call to a saved contact by spoken name, e.g. \"call mom\", \"call Rahul\", \"phone Dad\".")
+                            put("description", "Places a standard phone call to a saved contact by spoken name, e.g. \"call mom\", \"call Rahul\", \"call Gufran Khan 4\". If the user specifies an ordinal or index (e.g. 'call the 4th Gufran Khan', 'call Gufran Khan 4', 'chautha wala'), pass contact_name='Gufran Khan' and contact_index=4 (or include the digit in contact_name). If multiple matches were returned and the user chooses an option, pass contact_index.")
                             put("parameters", JSONObject().apply {
                                 put("type", "OBJECT")
                                 put("properties", JSONObject().apply {
                                     put("contact_name", JSONObject().apply {
                                         put("type", "STRING")
-                                        put("description", "The contact's name as the user said it, e.g. \"mom\", \"Rahul\".")
+                                        put("description", "The contact's name as spoken by the user, e.g. \"Gufran Khan\", \"Papa 2\", \"Home 1\".")
+                                    })
+                                    put("contact_index", JSONObject().apply {
+                                        put("type", "INTEGER")
+                                        put("description", "Optional 1-based index (e.g. 1, 2, 3, 4) if the user requested a specific contact number or choice.")
                                     })
                                 })
                                 put("required", JSONArray().put("contact_name"))

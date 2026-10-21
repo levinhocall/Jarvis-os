@@ -56,7 +56,7 @@ class HandsFreeActivity : AppCompatActivity() {
      */
     private fun pollAccessibilityState() {
         lifecycleScope.launch {
-            val intervals = listOf(150L, 350L, 800L, 1500L)
+            val intervals = listOf(150L, 350L, 600L, 1000L, 1500L, 2000L)
             for (interval in intervals) {
                 delay(interval)
                 AccessibilityHealthModel.refreshFromSystem(this@HandsFreeActivity)
@@ -87,9 +87,9 @@ class HandsFreeActivity : AppCompatActivity() {
                 binding.tvAccessibilityStatus.setTextColor(
                     ContextCompat.getColor(this, R.color.status_amber)
                 )
-                binding.btnToggleAccessibility.text = "Connecting to Service…"
-                binding.btnToggleAccessibility.isEnabled = false
-                binding.btnToggleAccessibility.alpha = 0.85f
+                binding.btnToggleAccessibility.text = "Connecting… Tap to Recheck or Toggle"
+                binding.btnToggleAccessibility.isEnabled = true
+                binding.btnToggleAccessibility.alpha = 1.0f
             }
             AccessibilityState.DEGRADED -> {
                 binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(

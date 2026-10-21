@@ -133,6 +133,50 @@ object PermissionHelper {
         }
     }
 
+    fun isVivoDevice(): Boolean {
+        val manufacturer = Build.MANUFACTURER.lowercase(java.util.Locale.ROOT)
+        val brand = Build.BRAND.lowercase(java.util.Locale.ROOT)
+        return manufacturer.contains("vivo") || brand.contains("vivo") || manufacturer.contains("iqoo") || brand.contains("iqoo")
+    }
+
+    fun isXiaomiDevice(): Boolean {
+        val manufacturer = Build.MANUFACTURER.lowercase(java.util.Locale.ROOT)
+        return manufacturer.contains("xiaomi") || manufacturer.contains("redmi") || manufacturer.contains("poco")
+    }
+
+    fun openVivoAutostart(context: Context): Boolean {
+        val intents = listOf(
+            Intent().setComponent(android.content.ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+            Intent().setComponent(android.content.ComponentName("com.iqoo.powersaving", "com.iqoo.powersaving.PowerSavingActivity")),
+            Intent().setComponent(android.content.ComponentName("com.vivo.abe", "com.vivo.abe.feature.power.BatteryOptimizationActivity")),
+            Intent().setComponent(android.content.ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.PurviewTabActivity"))
+        )
+        for (intent in intents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                return true
+            } catch (_: Exception) {}
+        }
+        return false
+    }
+
+    fun openVivoHighBackgroundPower(context: Context): Boolean {
+        val intents = listOf(
+            Intent().setComponent(android.content.ComponentName("com.vivo.abe", "com.vivo.abe.restriction.CheckManageRestrictionActivity")),
+            Intent().setComponent(android.content.ComponentName("com.vivo.abe", "com.vivo.abe.feature.power.BatteryOptimizationActivity")),
+            Intent().setComponent(android.content.ComponentName("com.iqoo.powersaving", "com.iqoo.powersaving.PowerSavingActivity"))
+        )
+        for (intent in intents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                return true
+            } catch (_: Exception) {}
+        }
+        return false
+    }
+
     fun requestAccessibilityWithRestrictedGuidance(activity: android.app.Activity) {
         if (isAccessibilityServiceEnabled(activity)) {
             openAccessibilitySettings(activity)
@@ -140,13 +184,14 @@ object PermissionHelper {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isRestrictedSettingsActive(activity)) {
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+            val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
                 .setTitle("Security Authorization Required")
                 .setMessage(
                     "Android 13/14 requires a 2-step approval for sideloaded automation apps:\n\n" +
                     "Step 1: Tap '1. Trigger In Settings' → Find JARVIS → Tap it (system will show 'Restricted setting').\n\n" +
                     "Step 2: Tap '2. Unlock App Info' → Tap 3 dots (⋮) top-right (or scroll to bottom on Xiaomi/Vivo) → Select 'Allow restricted settings' and confirm PIN.\n\n" +
-                    "Step 3: Return to Accessibility Settings and toggle JARVIS ON."
+                    "Step 3: Return to Accessibility Settings and toggle JARVIS ON." +
+                    if (isVivoDevice()) "\n\nVivo Note: Also enable 'Autostart' and 'Allow high background power consumption' in iManager to keep the service running." else ""
                 )
                 .setPositiveButton("1. Trigger In Settings") { _, _ ->
                     openAccessibilitySettings(activity)
@@ -155,7 +200,8 @@ object PermissionHelper {
                     openAppSettings(activity)
                 }
                 .setNegativeButton("Cancel", null)
-                .show()
+
+            builder.show()
         } else {
             openAccessibilitySettings(activity)
         }

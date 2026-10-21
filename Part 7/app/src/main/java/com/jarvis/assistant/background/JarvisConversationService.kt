@@ -2201,18 +2201,88 @@ class JarvisConversationService : Service() {
 
                     "call_contact" -> {
                         val contact = args.optString("contact_name", "").trim()
+                        val explicitIndex = if (args.has("contact_index")) args.optInt("contact_index") else null
                         audioPlayer?.flush()
-                        val callResult = com.jarvis.assistant.util.ContactCaller.callContact(this@JarvisConversationService, contact)
-                        val (ok, msg) = when (callResult) {
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> Pair(true, "Calling ${callResult.contact.name}.")
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.NoMatch -> Pair(false, "Could not find contact $contact.")
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.MultipleMatches -> Pair(false, "Multiple contacts found for $contact.")
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.MissingContactsPermission -> Pair(false, "Contacts permission is not granted, so JARVIS cannot look up that saved contact.")
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.MissingCallPermission -> Pair(false, "Phone call permission is not granted.")
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.CallFailed -> Pair(false, "Could not place phone call.")
+
+                        val callResult = com.jarvis.assistant.util.ContactCaller.callContact(
+                            context = this@JarvisConversationService,
+                            spokenName = contact,
+                            explicitIndex = explicitIndex
+                        )
+
+                        when (callResult) {
+                            is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> {
+                                result.put("success", true)
+                                result.put("contact_name", callResult.contact.name)
+                                result.put("phone_number", callResult.contact.number)
+                                val msg = if (callResult.indexUsed != null && callResult.totalCandidates != null) {
+                                    "Calling ${callResult.contact.name} (contact #${callResult.indexUsed} of ${callResult.totalCandidates}: ${callResult.contact.number})."
+                                } else {
+                                    "Calling ${callResult.contact.name} (${callResult.contact.number})."
+                                }
+                                result.put("message", msg)
+                            }
+                            is com.jarvis.assistant.util.ContactCaller.CallResult.MultipleMatches -> {
+                                result.put("success", false)
+                                result.put("disambiguation_required", true)
+                                result.put("query", callResult.query)
+                                result.put("candidate_count", callResult.matches.size)
+
+                                val candidatesArray = org.json.JSONArray()
+                                val sb = StringBuilder("Found ${callResult.matches.size} contacts for \"${callResult.query}\":\n")
+                                callResult.matches.forEachIndexed { i, c ->
+                                    val idx = i + 1
+                                    candidatesArray.put(org.json.JSONObject().apply {
+                                        put("index", idx)
+                                        put("name", c.name)
+                                        put("number", c.number)
+                                        put("type", c.type)
+                                    })
+                                    sb.append("$idx. ${c.name} (${c.type}: ${c.number})\n")
+                                }
+                                sb.append("Ask the user which one they would like to call by stating the number (1 to ${callResult.matches.size}) or full name.")
+                                result.put("candidates", candidatesArray)
+                                result.put("message", sb.toString().trim())
+                            }
+                            is com.jarvis.assistant.util.ContactCaller.CallResult.IndexOutOfBounds -> {
+                                result.put("success", false)
+                                result.put("disambiguation_required", true)
+                                result.put("index_out_of_bounds", true)
+                                result.put("requested_index", callResult.requestedIndex)
+                                result.put("candidate_count", callResult.matches.size)
+
+                                val candidatesArray = org.json.JSONArray()
+                                val sb = StringBuilder("Requested contact #${callResult.requestedIndex}, but only ${callResult.matches.size} contacts exist for \"${callResult.query}\":\n")
+                                callResult.matches.forEachIndexed { i, c ->
+                                    val idx = i + 1
+                                    candidatesArray.put(org.json.JSONObject().apply {
+                                        put("index", idx)
+                                        put("name", c.name)
+                                        put("number", c.number)
+                                    })
+                                    sb.append("$idx. ${c.name} (${c.number})\n")
+                                }
+                                sb.append("Please ask the user to pick a number between 1 and ${callResult.matches.size}.")
+                                result.put("candidates", candidatesArray)
+                                result.put("message", sb.toString().trim())
+                            }
+                            is com.jarvis.assistant.util.ContactCaller.CallResult.NoMatch -> {
+                                result.put("success", false)
+                                result.put("message", "Could not find contact \"$contact\" in your saved contacts.")
+                            }
+                            is com.jarvis.assistant.util.ContactCaller.CallResult.MissingContactsPermission -> {
+                                result.put("success", false)
+                                result.put("message", "Contacts permission is not granted, so JARVIS cannot look up that saved contact.")
+                            }
+                            is com.jarvis.assistant.util.ContactCaller.CallResult.MissingCallPermission -> {
+                                result.put("success", false)
+                                result.put("message", "Phone call permission is not granted. Please grant Phone permission in Settings.")
+                            }
+                            is com.jarvis.assistant.util.ContactCaller.CallResult.CallFailed -> {
+                                result.put("success", false)
+                                result.put("message", "Could not place phone call due to a telephony error.")
+                            }
                         }
-                        result.put("success", ok)
-                        result.put("message", msg)
                     }
 
                     "set_volume" -> {

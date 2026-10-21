@@ -80,19 +80,41 @@ class CommandExecutor(
 
             // Navigation & Gestures
             is JarvisCommand.ScrollScreen -> {
-                val scrolled = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
-                    ?.performSmartScroll(command.direction, command.distance) ?: false
-                if (scrolled) "Scrolled ${command.direction}." else "Unable to scroll."
+                val a11y = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                if (a11y == null) {
+                    "Cannot scroll: Accessibility Service is not active. Please enable JARVIS in Settings."
+                } else {
+                    val scrolled = a11y.performSmartScroll(command.direction, command.distance)
+                    if (scrolled) "Scrolled ${command.direction}." else "Unable to scroll."
+                }
             }
             is JarvisCommand.NavigateBack -> {
-                val backed = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
-                    ?.performSystemGesture("back") ?: false
-                if (backed) "Going back." else "Unable to go back."
+                val a11y = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                if (a11y == null) {
+                    "Cannot go back: Accessibility Service is not active."
+                } else {
+                    val backed = a11y.performSystemGesture("back")
+                    if (backed) "Going back." else "Unable to go back."
+                }
             }
             is JarvisCommand.NavigateHome -> {
-                val homed = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                val a11yHomed = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
                     ?.performSystemGesture("home") ?: false
-                if (homed) "Returning home." else "Unable to return home."
+                if (a11yHomed) {
+                    "Returning home."
+                } else {
+                    // Standard system Intent fallback (works unconditionally across all Android versions)
+                    try {
+                        val homeIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                            addCategory(android.content.Intent.CATEGORY_HOME)
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        phoneManager.context.startActivity(homeIntent)
+                        "Returning home."
+                    } catch (e: Exception) {
+                        "Unable to return home."
+                    }
+                }
             }
             is JarvisCommand.StopOrPause -> {
                 com.jarvis.assistant.automation.agent.AgentTaskEngine.requestCancellation()
@@ -131,9 +153,13 @@ class CommandExecutor(
                 }
             }
             is JarvisCommand.ClickElementByText -> {
-                val clicked = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
-                    ?.clickNodeBySemanticMatch(command.targetText) ?: false
-                if (clicked) "Clicked ${command.targetText}." else "Could not find ${command.targetText} on screen."
+                val a11y = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                if (a11y == null) {
+                    "Cannot click elements: Accessibility Service is not active. Please enable JARVIS in Settings."
+                } else {
+                    val clicked = a11y.clickNodeBySemanticMatch(command.targetText)
+                    if (clicked) "Clicked ${command.targetText}." else "Could not find ${command.targetText} on screen."
+                }
             }
             is JarvisCommand.ExecuteProtocol -> {
                 com.jarvis.assistant.automation.protocol.ProtocolManager.executeProtocol(

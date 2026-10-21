@@ -33,6 +33,13 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "JarvisAccessibility"
+        val MONITORED_EVENT_TYPES = intArrayOf(
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED
+        )
+
         private val _uiChanges = MutableStateFlow(UiChange(0L, "", 0, 0L))
         val uiChanges: StateFlow<UiChange> = _uiChanges.asStateFlow()
 
@@ -43,6 +50,30 @@ class JarvisAccessibilityService : AccessibilityService() {
         fun isRunning(): Boolean = instance != null && AccessibilityHealthModel.isOperational()
         fun isEnabled(): Boolean = instance != null
         fun healthState(): AccessibilityState = AccessibilityHealthModel.state.value
+
+        /**
+         * Asynchronously awaits the live AccessibilityService instance up to [timeoutMs].
+         * Eliminates startup IPC race conditions when the service is enabled in settings
+         * but system_server has not yet invoked onServiceConnected().
+         */
+        suspend fun awaitInstance(context: Context? = null, timeoutMs: Long = 1500L): JarvisAccessibilityService? {
+            instance?.let { return it }
+
+            val isEnabledInSettings = context?.let {
+                AccessibilityHealthModel.isServiceEnabledInSettings(it)
+            } ?: (AccessibilityHealthModel.state.value == AccessibilityState.ENABLED)
+
+            if (!isEnabledInSettings) {
+                return null
+            }
+
+            val startTime = System.currentTimeMillis()
+            while (System.currentTimeMillis() - startTime < timeoutMs) {
+                kotlinx.coroutines.delay(50L)
+                instance?.let { return it }
+            }
+            return instance
+        }
 
         fun triggerWhatsAppSend(targetText: String? = null) {
             instance?.armWhatsAppSend(targetText)
@@ -208,12 +239,26 @@ class JarvisAccessibilityService : AccessibilityService() {
     private var deleteStage = 0
 
     override fun onServiceConnected() {
-        super.onServiceConnected()
-        instance = this
-        AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
-        applyDynamicConfigSafely()
-        Log.i(TAG, "JarvisAccessibilityService connected and active")
-        ensureJarvisServiceActive()
+        try {
+            super.onServiceConnected()
+            instance = this
+            AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
+            applyDynamicConfigSafely()
+            Log.i(TAG, "JarvisAccessibilityService connected and active")
+
+            // NON-BLOCKING: Return binder initialization immediately to system_server.
+            // Post service check asynchronously to avoid main-thread IPC contention.
+            handler.postDelayed({
+                try {
+                    ensureJarvisServiceActive()
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Asynchronous ensureJarvisServiceActive caught safely: ${t.message}")
+                }
+            }, 1000L)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Fatal-safe guard caught error in onServiceConnected: ${t.message}", t)
+            AccessibilityHealthModel.updateState(AccessibilityState.ERROR, t.message)
+        }
     }
 
     private fun applyDynamicConfigSafely() {
@@ -227,136 +272,203 @@ class JarvisAccessibilityService : AccessibilityService() {
                 currentInfo.flags = updatedFlags
                 serviceInfo = currentInfo
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Dynamic AccessibilityServiceInfo update skipped or failed safely: ${e.message}")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Dynamic AccessibilityServiceInfo update skipped or failed safely: ${t.message}")
         }
     }
 
     private fun ensureJarvisServiceActive() {
         try {
-            if (!com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value &&
-                !com.jarvis.assistant.background.JarvisConversationService.isStandby.value) {
-                if (com.jarvis.assistant.JarvisApp.isAppForeground.value ||
-                    Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                    val intent = Intent(this, com.jarvis.assistant.background.JarvisConversationService::class.java).apply {
-                        action = com.jarvis.assistant.background.JarvisConversationService.ACTION_ENTER_STANDBY
-                    }
-                    androidx.core.content.ContextCompat.startForegroundService(this, intent)
-                    Log.i(TAG, "JarvisAccessibilityService ensured JarvisConversationService is running in standby")
-                }
+            val isSessionActive = com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value
+            val isStandbyActive = com.jarvis.assistant.background.JarvisConversationService.isStandby.value
+            if (isSessionActive || isStandbyActive) return
+
+            // STRICT GUARD: Never call startForegroundService from background on API 26+ (Android 8.0+)
+            // to avoid IllegalStateException and ForegroundServiceStartNotAllowedException.
+            val isForeground = com.jarvis.assistant.JarvisApp.isAppForeground.value
+            if (!isForeground) {
+                Log.d(TAG, "Skipping standby start: app is backgrounded, avoiding FGS start restrictions")
+                return
             }
+
+            val intent = Intent(this, com.jarvis.assistant.background.JarvisConversationService::class.java).apply {
+                action = com.jarvis.assistant.background.JarvisConversationService.ACTION_ENTER_STANDBY
+            }
+            androidx.core.content.ContextCompat.startForegroundService(this, intent)
+            Log.i(TAG, "JarvisAccessibilityService ensured JarvisConversationService is running in standby")
         } catch (t: Throwable) {
             Log.w(TAG, "Could not start JarvisConversationService from accessibility service: ${t.message}")
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        event ?: return
-        val pkg = event.packageName?.toString().orEmpty()
-        if (event.eventType in setOf(
-                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-                AccessibilityEvent.TYPE_WINDOWS_CHANGED,
-                AccessibilityEvent.TYPE_VIEW_SCROLLED
-            )) {
-            val previous = _uiChanges.value
-            _uiChanges.value = UiChange(previous.revision + 1, pkg, event.eventType, System.currentTimeMillis())
-        }
+        try {
+            event ?: return
+            val eventType = event.eventType
+            val pkg = try { event.packageName?.toString().orEmpty() } catch (_: Throwable) { "" }
 
-        // Auto-extract incoming OTP / verification codes from notifications (SMS, WhatsApp, banking)
-        if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-            try {
-                val texts = event.text
-                val fullText = texts.joinToString(" ")
-                if (fullText.isNotBlank()) {
-                    val otpRegex = Regex("""\b(?:OTP|code|verification|passcode|is|pin|password)[^\d]*(\d{4,8})\b""", RegexOption.IGNORE_CASE)
-                    val match = otpRegex.find(fullText) ?: Regex("""\b(\d{4,6})\b""").find(fullText)
-                    if (match != null) {
-                        val code = match.groupValues.lastOrNull { it.isNotBlank() && it.all { c -> c.isDigit() } }
-                        if (code != null && code.length in 4..8) {
-                            Log.i(TAG, "Auto-detected incoming OTP/code from notification ($pkg): $code")
-                            latestExtractedOtp = ExtractedOtp(code, System.currentTimeMillis(), pkg)
+            // UI Change Tracking (Zero-allocation lookup)
+            var matchesMonitored = false
+            for (type in MONITORED_EVENT_TYPES) {
+                if (eventType == type) {
+                    matchesMonitored = true
+                    break
+                }
+            }
+            if (matchesMonitored) {
+                val previous = _uiChanges.value
+                _uiChanges.value = UiChange(previous.revision + 1, pkg, eventType, System.currentTimeMillis())
+            }
+
+            // Auto-extract incoming OTP / verification codes from notifications (SMS, WhatsApp, banking)
+            if (eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
+                try {
+                    val texts = event.text
+                    if (!texts.isNullOrEmpty()) {
+                        val fullText = texts.filterNotNull().joinToString(" ")
+                        if (fullText.isNotBlank()) {
+                            val otpRegex = Regex("""\b(?:OTP|code|verification|passcode|is|pin|password)[^\d]*(\d{4,8})\b""", RegexOption.IGNORE_CASE)
+                            val match = otpRegex.find(fullText) ?: Regex("""\b(\d{4,6})\b""").find(fullText)
+                            if (match != null) {
+                                val code = match.groupValues.lastOrNull { it.isNotBlank() && it.all { c -> c.isDigit() } }
+                                if (code != null && code.length in 4..8) {
+                                    Log.i(TAG, "Auto-detected incoming OTP/code from notification ($pkg): $code")
+                                    latestExtractedOtp = ExtractedOtp(code, System.currentTimeMillis(), pkg)
+                                }
+                            }
                         }
                     }
+                } catch (t: Throwable) {
+                    Log.d(TAG, "Error inspecting notification for OTP: ${t.message}")
                 }
-            } catch (e: Exception) {
-                Log.d(TAG, "Error inspecting notification for OTP: ${e.message}")
             }
-        }
 
-        if (isWaitingForWhatsAppSend && (pkg == "com.whatsapp" || pkg == "com.whatsapp.w4b")) {
-            if (System.currentTimeMillis() - whatsAppArmTime < 14000) {
-                attemptWhatsAppSendAction(0)
-            } else {
-                isWaitingForWhatsAppSend = false
+            // Safe UI Automations: Localized try-catches prevent one failure from killing the service
+            if (isWaitingForWhatsAppSend && (pkg == "com.whatsapp" || pkg == "com.whatsapp.w4b")) {
+                try {
+                    if (System.currentTimeMillis() - whatsAppArmTime < 14000) {
+                        attemptWhatsAppSendAction(0)
+                    } else {
+                        isWaitingForWhatsAppSend = false
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Error in WhatsApp send automation: ${t.message}")
+                }
             }
-        }
 
-        if (isWaitingForWhatsAppCall && (pkg == "com.whatsapp" || pkg == "com.whatsapp.w4b")) {
-            if (System.currentTimeMillis() - whatsAppCallArmTime < 14000) {
-                attemptWhatsAppCallAction(0)
-            } else {
-                isWaitingForWhatsAppCall = false
+            if (isWaitingForWhatsAppCall && (pkg == "com.whatsapp" || pkg == "com.whatsapp.w4b")) {
+                try {
+                    if (System.currentTimeMillis() - whatsAppCallArmTime < 14000) {
+                        attemptWhatsAppCallAction(0)
+                    } else {
+                        isWaitingForWhatsAppCall = false
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Error in WhatsApp call automation: ${t.message}")
+                }
             }
-        }
 
-        if (isWaitingForYouTubePlay && (pkg == "com.google.android.youtube" || pkg == "app.revanced.android.youtube")) {
-            if (System.currentTimeMillis() - youTubeArmTime < 10000) {
-                attemptClickFirstYouTubeVideo(0)
-            } else {
-                isWaitingForYouTubePlay = false
+            if (isWaitingForYouTubePlay && (pkg == "com.google.android.youtube" || pkg == "app.revanced.android.youtube")) {
+                try {
+                    if (System.currentTimeMillis() - youTubeArmTime < 10000) {
+                        attemptClickFirstYouTubeVideo(0)
+                    } else {
+                        isWaitingForYouTubePlay = false
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Error in YouTube play automation: ${t.message}")
+                }
             }
-        }
 
-        if (isWaitingForYouTubeSubscribe && (pkg == "com.google.android.youtube" || pkg == "app.revanced.android.youtube")) {
-            if (System.currentTimeMillis() - youTubeSubscribeArmTime < 10000) {
-                attemptYouTubeSubscribe()
-            } else {
-                isWaitingForYouTubeSubscribe = false
+            if (isWaitingForYouTubeSubscribe && (pkg == "com.google.android.youtube" || pkg == "app.revanced.android.youtube")) {
+                try {
+                    if (System.currentTimeMillis() - youTubeSubscribeArmTime < 10000) {
+                        attemptYouTubeSubscribe()
+                    } else {
+                        isWaitingForYouTubeSubscribe = false
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Error in YouTube subscribe automation: ${t.message}")
+                }
             }
-        }
 
-        if (isWaitingForYouTubeFullscreen && (pkg == "com.google.android.youtube" || pkg == "app.revanced.android.youtube")) {
-            if (System.currentTimeMillis() - youTubeFullscreenArmTime < 8000) {
-                attemptYouTubeFullscreen(1)
-            } else {
-                isWaitingForYouTubeFullscreen = false
+            if (isWaitingForYouTubeFullscreen && (pkg == "com.google.android.youtube" || pkg == "app.revanced.android.youtube")) {
+                try {
+                    if (System.currentTimeMillis() - youTubeFullscreenArmTime < 8000) {
+                        attemptYouTubeFullscreen(1)
+                    } else {
+                        isWaitingForYouTubeFullscreen = false
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Error in YouTube fullscreen automation: ${t.message}")
+                }
             }
-        }
 
-        if (isWaitingForWhatsAppDelete && (pkg == "com.whatsapp" || pkg == "com.whatsapp.w4b")) {
-            if (System.currentTimeMillis() - whatsAppDeleteArmTime < 15000) {
-                attemptWhatsAppDeleteAction()
-            } else {
-                isWaitingForWhatsAppDelete = false
+            if (isWaitingForWhatsAppDelete && (pkg == "com.whatsapp" || pkg == "com.whatsapp.w4b")) {
+                try {
+                    if (System.currentTimeMillis() - whatsAppDeleteArmTime < 15000) {
+                        attemptWhatsAppDeleteAction()
+                    } else {
+                        isWaitingForWhatsAppDelete = false
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Error in WhatsApp delete automation: ${t.message}")
+                }
             }
+        } catch (t: Throwable) {
+            // CRITICAL: Prevent ANY uncaught exception from escaping onAccessibilityEvent,
+            // which would trigger an unhandled crash and cause Android to permanently disable the service.
+            Log.e(TAG, "Fatal-safe guard caught unhandled exception in onAccessibilityEvent: ${t.message}", t)
         }
     }
 
     override fun onInterrupt() {
-        Log.w(TAG, "JarvisAccessibilityService interrupted")
-        AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED, "Service interrupted by system")
+        try {
+            Log.w(TAG, "JarvisAccessibilityService interrupted")
+            AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED, "Service interrupted by system")
+        } catch (t: Throwable) {
+            Log.w(TAG, "onInterrupt suppressed error: ${t.message}")
+        }
     }
 
     override fun onDestroy() {
-        if (instance === this) instance = null
-        AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service destroyed")
-        super.onDestroy()
+        try {
+            if (instance === this) instance = null
+            AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service destroyed")
+        } catch (t: Throwable) {
+            Log.w(TAG, "onDestroy suppressed error: ${t.message}")
+        } finally {
+            super.onDestroy()
+        }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        if (instance === this) instance = null
-        AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
+        try {
+            if (instance === this) instance = null
+            AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
+        } catch (t: Throwable) {
+            Log.w(TAG, "onUnbind suppressed error: ${t.message}")
+        }
         return true // Allows onRebind to be invoked when system reconnects without destroying service
     }
 
     override fun onRebind(intent: Intent?) {
-        super.onRebind(intent)
-        instance = this
-        AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
-        applyDynamicConfigSafely()
-        Log.i(TAG, "JarvisAccessibilityService rebound and active")
-        ensureJarvisServiceActive()
+        try {
+            super.onRebind(intent)
+            instance = this
+            AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
+            applyDynamicConfigSafely()
+            Log.i(TAG, "JarvisAccessibilityService rebound and active")
+            handler.postDelayed({
+                try {
+                    ensureJarvisServiceActive()
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Asynchronous onRebind ensureJarvisServiceActive caught safely: ${t.message}")
+                }
+            }, 1000L)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Fatal-safe guard caught error in onRebind: ${t.message}", t)
+        }
     }
 
     // -------------------------------------------------------------
@@ -739,7 +851,7 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     private fun attemptClickFirstYouTubeVideo(attempt: Int): Boolean {
-        val rootNode = rootInActiveWindow ?: return false
+        val rootNode = getActiveRootNode(excludeJarvisOverlay = false) ?: return false
 
         val videoViewIds = listOf(
             "com.google.android.youtube:id/thumbnail",
@@ -786,7 +898,7 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     private fun attemptYouTubeSubscribe(): Boolean {
-        val rootNode = rootInActiveWindow ?: return false
+        val rootNode = getActiveRootNode(excludeJarvisOverlay = false) ?: return false
 
         val subIds = listOf(
             "com.google.android.youtube:id/subscribe_button",
@@ -860,7 +972,7 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     private fun attemptYouTubeFullscreen(attempt: Int): Boolean {
-        val rootNode = rootInActiveWindow ?: return false
+        val rootNode = getActiveRootNode(excludeJarvisOverlay = false) ?: return false
 
         val fsIds = listOf(
             "com.google.android.youtube:id/fullscreen_button",
@@ -1196,7 +1308,7 @@ class JarvisAccessibilityService : AccessibilityService() {
      * video (NOT the "Subscribe" button).
      */
     fun openChannel(): Boolean {
-        val root = rootInActiveWindow ?: return false
+        val root = getActiveRootNode() ?: return false
         val candidates = mutableListOf<AccessibilityNodeInfo>()
         collectByResourceId(root, "channel", candidates)
         val target = candidates
@@ -1213,7 +1325,7 @@ class JarvisAccessibilityService : AccessibilityService() {
     fun toggleFullscreen(): Boolean {
         if (clickNodeMatching("full screen", "fullscreen")) return true
 
-        val root = rootInActiveWindow ?: return false
+        val root = getActiveRootNode() ?: return false
         val candidates = mutableListOf<AccessibilityNodeInfo>()
         collectByResourceId(root, "fullscreen", candidates)
         val target = candidates.firstOrNull { it.isClickable } ?: return false
@@ -1222,7 +1334,7 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     /** Auto-clicks first video result when YouTube search opens. */
     fun clickFirstVideoResult(): Boolean {
-        val root = rootInActiveWindow ?: return false
+        val root = getActiveRootNode() ?: return false
         val candidates = mutableListOf<AccessibilityNodeInfo>()
         collectClickableVideoNodes(root, candidates)
         if (candidates.isNotEmpty()) {
@@ -1247,7 +1359,7 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     private fun clickNodeMatching(vararg keywords: String, exclude: String? = null): Boolean {
         return try {
-            val root = rootInActiveWindow ?: return false
+            val root = getActiveRootNode() ?: return false
             val lowerKeywords = keywords.map { it.lowercase() }
             val lowerExclude = exclude?.lowercase()
 
@@ -1321,7 +1433,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         mainHandler.postDelayed(object : Runnable {
             var attempts = 0
             override fun run() {
-                val root = rootInActiveWindow
+                val root = getActiveRootNode()
                 if (root != null) {
                     val sendNode = findWhatsAppSendButton(root)
                     if (sendNode != null) {
@@ -1364,7 +1476,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             var callButtonTapped = false
 
             override fun run() {
-                val root = rootInActiveWindow
+                val root = getActiveRootNode()
                 if (root != null) {
                     if (!callButtonTapped) {
                         val callNode = findWhatsAppCallButton(root, isVideo)
@@ -1496,13 +1608,29 @@ class JarvisAccessibilityService : AccessibilityService() {
         return true
     }
 
+    val safeRootInActiveWindow: AccessibilityNodeInfo?
+        get() = try {
+            rootInActiveWindow
+        } catch (t: Throwable) {
+            Log.d(TAG, "safeRootInActiveWindow suppressed exception: ${t.message}")
+            null
+        }
+
+    val safeWindows: List<AccessibilityWindowInfo>
+        get() = try {
+            windows ?: emptyList()
+        } catch (t: Throwable) {
+            Log.d(TAG, "safeWindows suppressed exception: ${t.message}")
+            emptyList()
+        }
+
     fun clickNodeWithText(text: String): Boolean {
-        val root = rootInActiveWindow ?: return false
+        val root = getActiveRootNode() ?: return false
         return clickFirstMatchingText(root, text)
     }
 
     fun typeText(textToType: String): Boolean {
-        val root = rootInActiveWindow ?: return false
+        val root = getActiveRootNode() ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
         if (focused != null && focused.isEditable) {
             val args = Bundle().apply {
@@ -1515,7 +1643,7 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     fun getActiveRootNode(excludeJarvisOverlay: Boolean = true): AccessibilityNodeInfo? {
         try {
-            val windowList = windows
+            val windowList = safeWindows
             if (windowList.isNotEmpty()) {
                 val targetWin = if (excludeJarvisOverlay) {
                     windowList.firstOrNull { win ->
@@ -1536,15 +1664,22 @@ class JarvisAccessibilityService : AccessibilityService() {
                 }
                 if (targetWin?.root != null) return targetWin.root
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error inspecting windows in getActiveRootNode: ${e.message}")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Error inspecting windows in getActiveRootNode: ${t.message}")
         }
 
-        val active = rootInActiveWindow ?: return null
-        if (excludeJarvisOverlay && active.packageName == packageName) {
-            return null
+        // SAFE FALLBACK: Wrapped strictly in try-catch to absorb SecurityException / IllegalStateException
+        return try {
+            val active = safeRootInActiveWindow ?: return null
+            if (excludeJarvisOverlay && active.packageName == packageName) {
+                null
+            } else {
+                active
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Error in getActiveRootNode rootInActiveWindow fallback: ${t.message}")
+            null
         }
-        return active
     }
 
     fun getAppRootNode(): AccessibilityNodeInfo? {

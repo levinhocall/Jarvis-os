@@ -248,6 +248,32 @@ class HomeFragment : Fragment() {
         if (PermissionHelper.hasLocationPermission(requireContext())) {
             fetchLiveWeather()
         }
+
+        // Auto-dismiss resolved live errors on resume (e.g. user just enabled Accessibility or granted permissions)
+        val err = com.jarvis.assistant.background.JarvisConversationService.liveError.value
+        if (err != null) {
+            when (err.errorCode) {
+                "ACCESSIBILITY_DISABLED" -> {
+                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational() ||
+                        PermissionHelper.isAccessibilityServiceEnabled(requireContext())) {
+                        com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
+                        hideLiveErrorOverlay()
+                    }
+                }
+                "PERMISSIONS_MISSING" -> {
+                    if (PermissionHelper.hasAllRequiredPermissions(requireContext())) {
+                        com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
+                        hideLiveErrorOverlay()
+                    }
+                }
+                "API_KEY_MISSING", "API_KEY_INVALID" -> {
+                    if (preferences.apiKey.isNotBlank()) {
+                        com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
+                        hideLiveErrorOverlay()
+                    }
+                }
+            }
+        }
     }
 
     override fun onPause() {
@@ -277,6 +303,32 @@ class HomeFragment : Fragment() {
     private fun checkLocationAndFetchWeather() {
         if (PermissionHelper.hasLocationPermission(requireContext())) {
             fetchLiveWeather()
+        }
+
+        // Auto-dismiss resolved live errors on resume (e.g. user just enabled Accessibility or granted permissions)
+        val err = com.jarvis.assistant.background.JarvisConversationService.liveError.value
+        if (err != null) {
+            when (err.errorCode) {
+                "ACCESSIBILITY_DISABLED" -> {
+                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational() ||
+                        PermissionHelper.isAccessibilityServiceEnabled(requireContext())) {
+                        com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
+                        hideLiveErrorOverlay()
+                    }
+                }
+                "PERMISSIONS_MISSING" -> {
+                    if (PermissionHelper.hasAllRequiredPermissions(requireContext())) {
+                        com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
+                        hideLiveErrorOverlay()
+                    }
+                }
+                "API_KEY_MISSING", "API_KEY_INVALID" -> {
+                    if (preferences.apiKey.isNotBlank()) {
+                        com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
+                        hideLiveErrorOverlay()
+                    }
+                }
+            }
         } else {
             locationPermissionLauncher.launch(
                 arrayOf(
