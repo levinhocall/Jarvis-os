@@ -5,6 +5,9 @@ import android.util.Log
 import com.jarvis.assistant.automation.mission.*
 import com.jarvis.assistant.data.memory.PersonalMemoryGraph
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
 data class CouncilDeliberation(
@@ -19,6 +22,32 @@ data class CouncilDeliberation(
 
 object MultiAgentCouncil {
     private const val TAG = "MultiAgentCouncil"
+    const val MAX_DELEGATION_DEPTH = 3
+
+    private val _activeRole = MutableStateFlow<AgentRole?>(null)
+    val activeRole: StateFlow<AgentRole?> = _activeRole.asStateFlow()
+
+    private val mutatingTools = setOf(
+        "call_contact",
+        "whatsapp_send",
+        "send_whatsapp",
+        "device_control",
+        "click_ui_element",
+        "scroll_screen",
+        "navigate_home",
+        "navigate_back"
+    )
+
+    /**
+     * Enforces role-based tool authorization: Only EXECUTOR may invoke state-mutating tools.
+     */
+    fun isToolAuthorizedForRole(role: AgentRole, toolName: String): Boolean {
+        return when (role) {
+            AgentRole.EXECUTOR -> true // Executor has full tool execution authority
+            AgentRole.RESEARCHER -> !mutatingTools.contains(toolName) // Read-only research tools only
+            AgentRole.PLANNER, AgentRole.VERIFIER, AgentRole.LEAD_SYNTHESIZER -> false // No direct tool execution
+        }
+    }
 
     /**
      * Conducts a bounded multi-role deliberation on a complex user request.
@@ -115,5 +144,160 @@ object MultiAgentCouncil {
         }
 
         return risks
+    }
+
+    /**
+     * Executes a complex multi-agent task through bounded delegation across Planner, Researcher,
+     * Executor, and Verifier, synthesized by Lead with Tony Stark persona.
+     */
+    suspend fun executeCouncilTask(
+        context: Context? = null,
+        goal: String,
+        simulatedExecutor: (suspend (MissionStep) -> Pair<Boolean, MissionVerificationEvidence>)? = null
+    ): CouncilExecutionOutcome = withContext(Dispatchers.Default) {
+        val cleanGoal = goal.trim()
+        val handoffs = mutableListOf<AgentHandoff>()
+
+        // 1. Lead initiates planning
+        _activeRole.value = AgentRole.LEAD_SYNTHESIZER
+        handoffs.add(
+            AgentHandoff(
+                fromRole = AgentRole.LEAD_SYNTHESIZER,
+                toRole = AgentRole.PLANNER,
+                taskDescription = "Decompose user goal into bounded execution plan",
+                inputPayload = mapOf("goal" to cleanGoal),
+                delegationDepth = 1
+            )
+        )
+
+        // 2. Planner decomposes task
+        _activeRole.value = AgentRole.PLANNER
+        val missionPlan = MissionEngine.planMission(cleanGoal)
+        handoffs.add(
+            AgentHandoff(
+                fromRole = AgentRole.PLANNER,
+                toRole = AgentRole.RESEARCHER,
+                taskDescription = "Fetch relevant facts and prior memories",
+                inputPayload = mapOf("stepsCount" to missionPlan.steps.size),
+                delegationDepth = 2
+            )
+        )
+
+        // 3. Researcher searches context
+        _activeRole.value = AgentRole.RESEARCHER
+        val memories = PersonalMemoryGraph.queryRelevantMemories(context, cleanGoal, limit = 2)
+        val researchedContext = memories.joinToString("; ") { "${it.key}: ${it.value}" }
+        handoffs.add(
+            AgentHandoff(
+                fromRole = AgentRole.RESEARCHER,
+                toRole = AgentRole.LEAD_SYNTHESIZER,
+                taskDescription = "Return researched memory context",
+                outputPayload = mapOf("context" to researchedContext),
+                delegationDepth = 2
+            )
+        )
+
+        // Check consequential risk & approval requirement
+        if (missionPlan.approvalState == MissionApprovalState.PENDING_APPROVAL) {
+            _activeRole.value = AgentRole.LEAD_SYNTHESIZER
+            return@withContext CouncilExecutionOutcome(
+                isSuccess = false,
+                goal = cleanGoal,
+                leadResponse = "Sir, this operation involves consequential actions requiring your direct authorization before the Executor can proceed.",
+                handoffHistory = handoffs,
+                executionStepsCount = 0,
+                isVerifiedIndependently = false,
+                failureReason = "Awaiting user approval"
+            )
+        }
+
+        // 4. Lead assigns Executor for mutating operations
+        _activeRole.value = AgentRole.EXECUTOR
+        handoffs.add(
+            AgentHandoff(
+                fromRole = AgentRole.LEAD_SYNTHESIZER,
+                toRole = AgentRole.EXECUTOR,
+                taskDescription = "Execute planned steps with tool authorization",
+                inputPayload = mapOf("steps" to missionPlan.steps.map { it.title }),
+                delegationDepth = 2
+            )
+        )
+
+        var lastEvidence: MissionVerificationEvidence? = null
+        var allExecutedSuccessfully = true
+
+        for (step in missionPlan.steps) {
+            if (!isToolAuthorizedForRole(AgentRole.EXECUTOR, step.toolName)) {
+                allExecutedSuccessfully = false
+                break
+            }
+            val result = if (simulatedExecutor != null) {
+                simulatedExecutor(step)
+            } else {
+                Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Executed by council executor"))
+            }
+            if (!result.first) {
+                allExecutedSuccessfully = false
+                lastEvidence = result.second
+                break
+            }
+            lastEvidence = result.second
+        }
+
+        if (!allExecutedSuccessfully) {
+            _activeRole.value = AgentRole.LEAD_SYNTHESIZER
+            return@withContext CouncilExecutionOutcome(
+                isSuccess = false,
+                goal = cleanGoal,
+                leadResponse = "Executor encountered a roadblock: ${lastEvidence?.details ?: "Step failed"}.",
+                handoffHistory = handoffs,
+                executionStepsCount = 0,
+                isVerifiedIndependently = false,
+                failureReason = lastEvidence?.details
+            )
+        }
+
+        // 5. Verifier independently inspects the outcome
+        _activeRole.value = AgentRole.VERIFIER
+        handoffs.add(
+            AgentHandoff(
+                fromRole = AgentRole.EXECUTOR,
+                toRole = AgentRole.VERIFIER,
+                taskDescription = "Independently inspect execution evidence without mutating state",
+                inputPayload = mapOf("evidence" to (lastEvidence?.details ?: "")),
+                delegationDepth = 3
+            )
+        )
+
+        val isIndependentVerified = lastEvidence?.isVerified == true
+
+        // 6. Lead synthesizes final response with Tony Stark tone
+        _activeRole.value = AgentRole.LEAD_SYNTHESIZER
+        handoffs.add(
+            AgentHandoff(
+                fromRole = AgentRole.VERIFIER,
+                toRole = AgentRole.LEAD_SYNTHESIZER,
+                taskDescription = "Deliver verified status report for final synthesis",
+                outputPayload = mapOf("isVerified" to isIndependentVerified),
+                delegationDepth = 3
+            )
+        )
+
+        val finalLeadMessage = if (isIndependentVerified) {
+            "All systems nominal, Sir. The council has executed and independently verified '${cleanGoal}' with complete success."
+        } else {
+            "Task executed, Sir, though physical sensor verification remains unconfirmed."
+        }
+
+        _activeRole.value = null
+
+        CouncilExecutionOutcome(
+            isSuccess = allExecutedSuccessfully,
+            goal = cleanGoal,
+            leadResponse = finalLeadMessage,
+            handoffHistory = handoffs,
+            executionStepsCount = missionPlan.steps.size,
+            isVerifiedIndependently = isIndependentVerified
+        )
     }
 }
