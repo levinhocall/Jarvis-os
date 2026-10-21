@@ -36,6 +36,12 @@ interface MemoryDao {
     @Query("DELETE FROM memories WHERE rawText LIKE '%' || :keyword || '%' OR `key` LIKE '%' || :keyword || '%' OR `value` LIKE '%' || :keyword || '%'")
     suspend fun deleteMemoriesByKeyword(keyword: String): Int
 
+    @Query("SELECT * FROM memories WHERE `key` = :key AND category = :category LIMIT 1")
+    suspend fun getMemoryByKeyAndCategory(key: String, category: String): MemoryEntity?
+
+    @Query("DELETE FROM memories WHERE expiryTimeMs IS NOT NULL AND expiryTimeMs < :currentTime")
+    suspend fun deleteExpiredMemories(currentTime: Long): Int
+
     @Query("DELETE FROM memories")
     suspend fun clearAllMemories()
 }

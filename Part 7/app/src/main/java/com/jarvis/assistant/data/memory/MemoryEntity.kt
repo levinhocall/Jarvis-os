@@ -14,8 +14,14 @@ data class MemoryEntity(
     val key: String,
     val value: String,
     val rawText: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val provenance: String = "EXPLICIT_USER_STATEMENT",
+    val sensitivity: String = "PREFERENCE",
+    val expiryTimeMs: Long? = null
 ) {
+    val isExpired: Boolean
+        get() = expiryTimeMs != null && System.currentTimeMillis() > expiryTimeMs
+
     companion object {
         const val CATEGORY_PERSONAL = "Personal"
         const val CATEGORY_PREFERENCES = "Preferences"

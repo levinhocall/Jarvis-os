@@ -68,7 +68,7 @@ object PersonalMemoryGraph {
         val sanitizedValue = EpisodicVectorMemory.sanitizeForStorage(value.trim())
         val cleanKey = key.trim().lowercase(Locale.ROOT)
 
-        val expiry = if (ttlDays != null && ttlDays > 0) {
+        val expiry = if (ttlDays != null) {
             System.currentTimeMillis() + (ttlDays.toLong() * 24 * 3600 * 1000)
         } else null
 
@@ -107,7 +107,10 @@ object PersonalMemoryGraph {
                     rawText = "$cleanKey: $sanitizedValue",
                     category = category,
                     key = cleanKey,
-                    value = sanitizedValue
+                    value = sanitizedValue,
+                    provenance = provenance.name,
+                    sensitivity = sensitivity.name,
+                    expiryTimeMs = expiry
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to persist to Room: ${e.message}")
