@@ -17,9 +17,16 @@ import androidx.core.content.ContextCompat
 import androidx.core.widget.NestedScrollView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
+import com.jarvis.assistant.automation.accessibility.AccessibilityState
 import com.jarvis.assistant.databinding.ActivityPermissionBinding
 import com.jarvis.assistant.util.PermissionHelper
 import com.jarvis.assistant.util.ThemeManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class PermissionActivity : AppCompatActivity() {
 
@@ -103,11 +110,37 @@ class PermissionActivity : AppCompatActivity() {
         binding.btnOpenSettings.setOnClickListener {
             PermissionHelper.openAppSettings(this)
         }
+
+        observeAccessibilityHealth()
     }
 
     override fun onResume() {
         super.onResume()
+        AccessibilityHealthModel.refreshFromSystem(this)
         updatePermissionStates()
+        pollAccessibilityState()
+    }
+
+    private fun observeAccessibilityHealth() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AccessibilityHealthModel.state.collect {
+                    updatePermissionStates()
+                }
+            }
+        }
+    }
+
+    private fun pollAccessibilityState() {
+        lifecycleScope.launch {
+            val intervals = listOf(150L, 350L, 800L, 1500L)
+            for (interval in intervals) {
+                delay(interval)
+                AccessibilityHealthModel.refreshFromSystem(this@PermissionActivity)
+                updatePermissionStates()
+                if (AccessibilityHealthModel.isOperational()) break
+            }
+        }
     }
 
     private fun updatePermissionStates() {
@@ -115,13 +148,13 @@ class PermissionActivity : AppCompatActivity() {
         val hasLoc = PermissionHelper.hasLocationPermission(this)
         val hasNotif = PermissionHelper.hasNotificationPermission(this)
         val hasOverlay = PermissionHelper.hasOverlayPermission(this)
-        val hasA11y = PermissionHelper.isAccessibilityServiceEnabled(this)
+        val a11yState = AccessibilityHealthModel.state.value
 
         updateCardState(hasMic, binding.tvStatusMic, binding.btnGrantMic)
         updateCardState(hasLoc, binding.tvStatusLocation, binding.btnGrantLocation)
         updateCardState(hasNotif, binding.tvStatusNotification, binding.btnGrantNotification)
         updateCardState(hasOverlay, binding.tvStatusOverlay, binding.btnGrantOverlay)
-        updateCardState(hasA11y, binding.tvStatusAccessibility, binding.btnGrantAccessibility)
+        updateAccessibilityCardState(a11yState, binding.tvStatusAccessibility, binding.btnGrantAccessibility)
         updateExtraPermission("contacts", PermissionHelper.hasContactsPermission(this))
         updateExtraPermission("phone", hasPermission(Manifest.permission.CALL_PHONE))
         updateExtraPermission("camera", hasPermission(Manifest.permission.CAMERA))
@@ -129,14 +162,75 @@ class PermissionActivity : AppCompatActivity() {
         updateExtraPermission("battery", PermissionHelper.hasBatteryOptimizationPermission(this))
         updateExtraPermission("brightness", PermissionHelper.hasWriteSettingsPermission(this))
 
-        if (hasMic && hasLoc && hasNotif && hasA11y) {
-            binding.btnGrantAll.text = "ALL ESSENTIAL PERMISSIONS GRANTED ✓"
-            binding.btnGrantAll.alpha = 0.7f
-            binding.btnGrantAll.isEnabled = false
+        val isA11ySatisfied = a11yState == AccessibilityState.CONNECTED ||
+                              a11yState == AccessibilityState.DEGRADED ||
+                              a11yState == AccessibilityState.ENABLED
+
+        if (hasMic && hasLoc && hasNotif && isA11ySatisfied) {
+            if (a11yState == AccessibilityState.ENABLED) {
+                binding.btnGrantAll.text = "CONNECTING ACCESSIBILITY SERVICE…"
+                binding.btnGrantAll.alpha = 0.85f
+                binding.btnGrantAll.isEnabled = false
+            } else {
+                binding.btnGrantAll.text = "ALL ESSENTIAL PERMISSIONS GRANTED ✓"
+                binding.btnGrantAll.alpha = 0.7f
+                binding.btnGrantAll.isEnabled = false
+            }
         } else {
             binding.btnGrantAll.text = "GRANT ALL PERMISSIONS"
             binding.btnGrantAll.alpha = 1.0f
             binding.btnGrantAll.isEnabled = true
+        }
+    }
+
+    private fun updateAccessibilityCardState(
+        state: AccessibilityState,
+        statusTv: TextView,
+        button: Button
+    ) {
+        when (state) {
+            AccessibilityState.CONNECTED -> {
+                statusTv.text = "Active & Granted ✓"
+                statusTv.setTextColor(Color.parseColor("#10B981")) // Emerald Green
+                button.text = "Manage"
+                button.alpha = 1.0f
+                button.isEnabled = true
+            }
+            AccessibilityState.ENABLED -> {
+                statusTv.text = "Connecting… (Enabled in Settings)"
+                statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
+                button.text = "Connecting…"
+                button.alpha = 0.85f
+                button.isEnabled = true
+            }
+            AccessibilityState.DEGRADED -> {
+                statusTv.text = "Active (Degraded) • Tap Manage"
+                statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
+                button.text = "Manage"
+                button.alpha = 1.0f
+                button.isEnabled = true
+            }
+            AccessibilityState.DISCONNECTED -> {
+                statusTv.text = "Disconnected • Re-enable Required"
+                statusTv.setTextColor(Color.parseColor("#EF4444")) // Red
+                button.text = "Grant"
+                button.alpha = 1.0f
+                button.isEnabled = true
+            }
+            AccessibilityState.ERROR -> {
+                statusTv.text = "Service Error • Restart Required"
+                statusTv.setTextColor(Color.parseColor("#EF4444")) // Red
+                button.text = "Grant"
+                button.alpha = 1.0f
+                button.isEnabled = true
+            }
+            AccessibilityState.DISABLED -> {
+                statusTv.text = "Action Required • Tap Grant"
+                statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
+                button.text = "Grant"
+                button.alpha = 1.0f
+                button.isEnabled = true
+            }
         }
     }
 

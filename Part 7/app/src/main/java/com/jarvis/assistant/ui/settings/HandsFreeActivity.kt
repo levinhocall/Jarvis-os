@@ -7,11 +7,18 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.jarvis.assistant.R
+import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
+import com.jarvis.assistant.automation.accessibility.AccessibilityState
 import com.jarvis.assistant.databinding.ActivityHandsFreeBinding
 import com.jarvis.assistant.ui.permission.PermissionActivity
 import com.jarvis.assistant.util.PermissionHelper
 import com.jarvis.assistant.util.ThemeManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class HandsFreeActivity : AppCompatActivity() {
 
@@ -25,11 +32,114 @@ class HandsFreeActivity : AppCompatActivity() {
         ThemeManager.applyDynamicBackground(binding.root)
 
         setupListeners()
+        observeAccessibilityHealth()
     }
 
     override fun onResume() {
         super.onResume()
-        updateServiceStatus()
+        AccessibilityHealthModel.refreshFromSystem(this)
+        pollAccessibilityState()
+    }
+
+    private fun observeAccessibilityHealth() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AccessibilityHealthModel.state.collect { state ->
+                    updateServiceStatus(state)
+                }
+            }
+        }
+    }
+
+    /**
+     * Rapid polling to reconcile 50-250ms Binder latency after user returns from Settings.
+     */
+    private fun pollAccessibilityState() {
+        lifecycleScope.launch {
+            val intervals = listOf(150L, 350L, 800L, 1500L)
+            for (interval in intervals) {
+                delay(interval)
+                AccessibilityHealthModel.refreshFromSystem(this@HandsFreeActivity)
+                if (AccessibilityHealthModel.isOperational()) break
+            }
+        }
+    }
+
+    private fun updateServiceStatus(state: AccessibilityState) {
+        when (state) {
+            AccessibilityState.CONNECTED -> {
+                binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.status_green)
+                )
+                binding.tvAccessibilityStatus.text = "HANDS-FREE SERVICE: ACTIVE"
+                binding.tvAccessibilityStatus.setTextColor(
+                    ContextCompat.getColor(this, R.color.status_green)
+                )
+                binding.btnToggleAccessibility.text = "Accessibility Service is Active"
+                binding.btnToggleAccessibility.isEnabled = true
+                binding.btnToggleAccessibility.alpha = 1.0f
+            }
+            AccessibilityState.ENABLED -> {
+                binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.status_amber)
+                )
+                binding.tvAccessibilityStatus.text = "SERVICE CONNECTING… PLEASE WAIT"
+                binding.tvAccessibilityStatus.setTextColor(
+                    ContextCompat.getColor(this, R.color.status_amber)
+                )
+                binding.btnToggleAccessibility.text = "Connecting to Service…"
+                binding.btnToggleAccessibility.isEnabled = false
+                binding.btnToggleAccessibility.alpha = 0.85f
+            }
+            AccessibilityState.DEGRADED -> {
+                binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.status_amber)
+                )
+                binding.tvAccessibilityStatus.text = "SERVICE ACTIVE (DEGRADED)"
+                binding.tvAccessibilityStatus.setTextColor(
+                    ContextCompat.getColor(this, R.color.status_amber)
+                )
+                binding.btnToggleAccessibility.text = "Service Degraded • Tap to Check"
+                binding.btnToggleAccessibility.isEnabled = true
+                binding.btnToggleAccessibility.alpha = 1.0f
+            }
+            AccessibilityState.DISCONNECTED -> {
+                binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.status_red)
+                )
+                binding.tvAccessibilityStatus.text = "SERVICE DISCONNECTED • TAP TO RE-ENABLE"
+                binding.tvAccessibilityStatus.setTextColor(
+                    ContextCompat.getColor(this, R.color.status_red)
+                )
+                binding.btnToggleAccessibility.text = "Reconnect Accessibility Service"
+                binding.btnToggleAccessibility.isEnabled = true
+                binding.btnToggleAccessibility.alpha = 1.0f
+            }
+            AccessibilityState.ERROR -> {
+                binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.status_red)
+                )
+                binding.tvAccessibilityStatus.text = "SERVICE ERROR • TAP TO RESTART"
+                binding.tvAccessibilityStatus.setTextColor(
+                    ContextCompat.getColor(this, R.color.status_red)
+                )
+                binding.btnToggleAccessibility.text = "Restart Accessibility Service"
+                binding.btnToggleAccessibility.isEnabled = true
+                binding.btnToggleAccessibility.alpha = 1.0f
+            }
+            AccessibilityState.DISABLED -> {
+                binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.status_red)
+                )
+                binding.tvAccessibilityStatus.text = "SERVICE DISABLED • TAP TO ENABLE"
+                binding.tvAccessibilityStatus.setTextColor(
+                    ContextCompat.getColor(this, R.color.status_red)
+                )
+                binding.btnToggleAccessibility.text = "Enable Accessibility Service"
+                binding.btnToggleAccessibility.isEnabled = true
+                binding.btnToggleAccessibility.alpha = 1.0f
+            }
+        }
     }
 
     private fun setupListeners() {
@@ -67,29 +177,6 @@ class HandsFreeActivity : AppCompatActivity() {
 
         binding.tvFooterHandsFree.setOnClickListener {
             openUrl("https://t.me/+sYana61LvHdmZmE1")
-        }
-    }
-
-    private fun updateServiceStatus() {
-        val isEnabled = PermissionHelper.isAccessibilityServiceEnabled(this)
-        if (isEnabled) {
-            binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
-                ContextCompat.getColor(this, R.color.status_green)
-            )
-            binding.tvAccessibilityStatus.text = "HANDS-FREE SERVICE: ACTIVE"
-            binding.tvAccessibilityStatus.setTextColor(
-                ContextCompat.getColor(this, R.color.status_green)
-            )
-            binding.btnToggleAccessibility.text = "Accessibility Service is Active"
-        } else {
-            binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
-                ContextCompat.getColor(this, R.color.status_red)
-            )
-            binding.tvAccessibilityStatus.text = "SERVICE DISABLED • TAP TO ENABLE"
-            binding.tvAccessibilityStatus.setTextColor(
-                ContextCompat.getColor(this, R.color.status_red)
-            )
-            binding.btnToggleAccessibility.text = "Enable Accessibility Service"
         }
     }
 

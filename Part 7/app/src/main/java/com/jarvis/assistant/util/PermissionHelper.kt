@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
 import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
 
 object PermissionHelper {
@@ -81,46 +82,46 @@ object PermissionHelper {
     }
 
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
-        if (JarvisAccessibilityService.isRunning()) return true
-
-        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager
-        if (am != null) {
-            val enabledServices = am.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            val isEnabled = enabledServices.any {
-                it.resolveInfo?.serviceInfo?.packageName == context.packageName &&
-                (it.resolveInfo?.serviceInfo?.name == JarvisAccessibilityService::class.java.name ||
-                 it.id.startsWith("${context.packageName}/"))
-            }
-            if (isEnabled) return true
+        AccessibilityHealthModel.refreshFromSystem(context)
+        if (JarvisAccessibilityService.isRunning() || JarvisAccessibilityService.instance != null) {
+            return true
         }
+        return AccessibilityHealthModel.isServiceEnabledInSettings(context)
+    }
 
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
+    fun isAccessibilityServiceOperational(): Boolean {
+        return JarvisAccessibilityService.isRunning()
+    }
 
-        val expectedComponent = android.content.ComponentName(context, JarvisAccessibilityService::class.java)
-        val fullFlattened = expectedComponent.flattenToString()
-        val shortFlattened = expectedComponent.flattenToShortString()
+    fun isAccessibilityServiceConnecting(): Boolean {
+        return AccessibilityHealthModel.isConnecting()
+    }
 
-        val colonSplitter = android.text.TextUtils.SimpleStringSplitter(':')
-        colonSplitter.setString(enabledServices)
-        while (colonSplitter.hasNext()) {
-            val componentStr = colonSplitter.next()
-            if (componentStr.equals(fullFlattened, ignoreCase = true) ||
-                componentStr.equals(shortFlattened, ignoreCase = true) ||
-                (componentStr.contains(context.packageName) && componentStr.contains("JarvisAccessibilityService"))) {
-                return true
-            }
+    fun isRestrictedSettingsActive(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        return try {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager ?: return false
+            val mode = appOps.unsafeCheckOpNoThrow(
+                "android:access_restricted_settings",
+                android.os.Process.myUid(),
+                context.packageName
+            )
+            mode == android.app.AppOpsManager.MODE_ERRORED || mode == android.app.AppOpsManager.MODE_IGNORED
+        } catch (_: Exception) {
+            false
         }
-        return false
     }
 
     fun openAccessibilitySettings(context: Context) {
+        val targetComponent = android.content.ComponentName(context, JarvisAccessibilityService::class.java).flattenToString()
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(":settings:fragment_args_key", targetComponent)
+            putExtra(":settings:show_fragment_args", android.os.Bundle().apply {
+                putString(":settings:fragment_args_key", targetComponent)
+            })
+        }
         try {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
             context.startActivity(intent)
         } catch (_: Exception) {
             try {
@@ -133,21 +134,25 @@ object PermissionHelper {
     }
 
     fun requestAccessibilityWithRestrictedGuidance(activity: android.app.Activity) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !isAccessibilityServiceEnabled(activity)) {
+        if (isAccessibilityServiceEnabled(activity)) {
+            openAccessibilitySettings(activity)
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isRestrictedSettingsActive(activity)) {
             com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                .setTitle("Enable JARVIS Accessibility")
+                .setTitle("Security Authorization Required")
                 .setMessage(
-                    "On Android 13/14/15, sideloaded apps require one-time security authorization:\n\n" +
-                    "1. Tap 'OPEN APP INFO' below.\n" +
-                    "2. Tap the 3 dots (⋮) in the top-right corner.\n" +
-                    "3. Select 'Allow restricted settings' (confirm with PIN/fingerprint).\n" +
-                    "4. Then tap 'OPEN ACCESSIBILITY' to toggle JARVIS ON."
+                    "Android 13/14 requires a 2-step approval for sideloaded automation apps:\n\n" +
+                    "Step 1: Tap '1. Trigger In Settings' → Find JARVIS → Tap it (system will show 'Restricted setting').\n\n" +
+                    "Step 2: Tap '2. Unlock App Info' → Tap 3 dots (⋮) top-right (or scroll to bottom on Xiaomi/Vivo) → Select 'Allow restricted settings' and confirm PIN.\n\n" +
+                    "Step 3: Return to Accessibility Settings and toggle JARVIS ON."
                 )
-                .setPositiveButton("Open App Info") { _, _ ->
-                    openAppSettings(activity)
-                }
-                .setNeutralButton("Open Accessibility") { _, _ ->
+                .setPositiveButton("1. Trigger In Settings") { _, _ ->
                     openAccessibilitySettings(activity)
+                }
+                .setNeutralButton("2. Unlock App Info") { _, _ ->
+                    openAppSettings(activity)
                 }
                 .setNegativeButton("Cancel", null)
                 .show()

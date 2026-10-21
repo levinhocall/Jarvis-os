@@ -86,11 +86,13 @@ class JarvisAccessibilityService : AccessibilityService() {
             val s = instance ?: return null
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
             return try {
-                withTimeoutOrNull(1500L) {
+                withTimeoutOrNull(2000L) {
                     suspendCancellableCoroutine { cont ->
                         s.takeScreenCapture { bmp ->
                             if (cont.isActive) {
                                 cont.resume(bmp, null)
+                            } else {
+                                bmp?.recycle() // Prevents native bitmap graphic memory leak on timeout
                             }
                         }
                     }
@@ -179,9 +181,10 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private var consecutiveGestureFailures = 0
 
     private var isWaitingForWhatsAppSend = false
-    private var pendingWhatsAppMessage: String? = null
+    private var pendingWhatsAppMessage = null as String?
     private var whatsAppArmTime = 0L
     private var whatsAppSendTaps = 0
 
@@ -208,20 +211,25 @@ class JarvisAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
-        try {
-            serviceInfo?.let { info ->
-                info.flags = info.flags or
-                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
-                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
-                serviceInfo = info
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error applying dynamic AccessibilityServiceInfo: ${e.message}")
-            AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED, "ServiceInfo config failed: ${e.message}")
-        }
+        applyDynamicConfigSafely()
         Log.i(TAG, "JarvisAccessibilityService connected and active")
         ensureJarvisServiceActive()
+    }
+
+    private fun applyDynamicConfigSafely() {
+        try {
+            val currentInfo = serviceInfo ?: return
+            val updatedFlags = currentInfo.flags or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            if (currentInfo.flags != updatedFlags) {
+                currentInfo.flags = updatedFlags
+                serviceInfo = currentInfo
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Dynamic AccessibilityServiceInfo update skipped or failed safely: ${e.message}")
+        }
     }
 
     private fun ensureJarvisServiceActive() {
@@ -339,7 +347,16 @@ class JarvisAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         if (instance === this) instance = null
         AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
-        return super.onUnbind(intent)
+        return true // Allows onRebind to be invoked when system reconnects without destroying service
+    }
+
+    override fun onRebind(intent: Intent?) {
+        super.onRebind(intent)
+        instance = this
+        AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
+        applyDynamicConfigSafely()
+        Log.i(TAG, "JarvisAccessibilityService rebound and active")
+        ensureJarvisServiceActive()
     }
 
     // -------------------------------------------------------------
@@ -1045,6 +1062,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         return object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 Log.d(TAG, "Gesture completed: $actionName")
+                consecutiveGestureFailures = 0
                 if (AccessibilityHealthModel.state.value == AccessibilityState.DEGRADED) {
                     AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
                 }
@@ -1052,10 +1070,13 @@ class JarvisAccessibilityService : AccessibilityService() {
 
             override fun onCancelled(gestureDescription: GestureDescription?) {
                 Log.w(TAG, "Gesture cancelled by system: $actionName")
-                AccessibilityHealthModel.updateState(
-                    AccessibilityState.DEGRADED,
-                    "Gesture '$actionName' cancelled by system"
-                )
+                consecutiveGestureFailures++
+                if (consecutiveGestureFailures >= 3) {
+                    AccessibilityHealthModel.updateState(
+                        AccessibilityState.DEGRADED,
+                        "Repeated gestures ($consecutiveGestureFailures) cancelled by system"
+                    )
+                }
             }
         }
     }
@@ -1493,37 +1514,37 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     fun getActiveRootNode(excludeJarvisOverlay: Boolean = true): AccessibilityNodeInfo? {
-        val active = rootInActiveWindow
-        if (active != null) {
-            if (!excludeJarvisOverlay || active.packageName != packageName) {
-                return active
-            }
-        }
-
         try {
-            val appWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-
-            val targetWin = if (excludeJarvisOverlay) {
-                appWindows.firstOrNull { it.root?.packageName != packageName && (it.isFocused || it.isActive) }
-                    ?: appWindows.firstOrNull { it.root?.packageName != packageName }
-                    ?: appWindows.firstOrNull { it.isFocused || it.isActive }
-                    ?: appWindows.firstOrNull()
-            } else {
-                appWindows.firstOrNull { it.isFocused || it.isActive } ?: appWindows.firstOrNull()
+            val windowList = windows
+            if (windowList.isNotEmpty()) {
+                val targetWin = if (excludeJarvisOverlay) {
+                    windowList.firstOrNull { win ->
+                        win.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
+                        win.root?.packageName != packageName &&
+                        (win.isFocused || win.isActive)
+                    } ?: windowList.firstOrNull { win ->
+                        win.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
+                        win.root?.packageName != packageName
+                    }
+                } else {
+                    windowList.firstOrNull { win ->
+                        win.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
+                        (win.isFocused || win.isActive)
+                    } ?: windowList.firstOrNull { win ->
+                        win.type == AccessibilityWindowInfo.TYPE_APPLICATION
+                    }
+                }
+                if (targetWin?.root != null) return targetWin.root
             }
-            if (targetWin?.root != null) return targetWin.root
-
-            val anyFocused = windows.firstOrNull { it.isFocused && (!excludeJarvisOverlay || it.root?.packageName != packageName) }
-            if (anyFocused?.root != null) return anyFocused.root
-
-            val anyActive = windows.firstOrNull { it.isActive && (!excludeJarvisOverlay || it.root?.packageName != packageName) }
-            if (anyActive?.root != null) return anyActive.root
-
-            return active
         } catch (e: Exception) {
-            Log.w(TAG, "Error resolving active root node across windows: ${e.message}")
-            return active
+            Log.w(TAG, "Error inspecting windows in getActiveRootNode: ${e.message}")
         }
+
+        val active = rootInActiveWindow ?: return null
+        if (excludeJarvisOverlay && active.packageName == packageName) {
+            return null
+        }
+        return active
     }
 
     fun getAppRootNode(): AccessibilityNodeInfo? {
@@ -1825,7 +1846,10 @@ class JarvisAccessibilityService : AccessibilityService() {
     private fun performLongPressAndPaste(targetRect: Rect): Boolean {
         val clickX = targetRect.centerX().toFloat()
         val clickY = targetRect.centerY().toFloat()
-        val path = Path().apply { moveTo(clickX, clickY) }
+        val path = Path().apply {
+            moveTo(clickX, clickY)
+            lineTo(clickX + 1f, clickY + 1f)
+        }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 450))
             .build()

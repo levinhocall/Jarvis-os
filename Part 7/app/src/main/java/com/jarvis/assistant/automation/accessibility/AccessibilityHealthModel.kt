@@ -1,10 +1,12 @@
 package com.jarvis.assistant.automation.accessibility
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
+import android.view.accessibility.AccessibilityManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,12 +88,8 @@ object AccessibilityHealthModel {
         val enabledInSettings = isServiceEnabledInSettings(context)
 
         if (enabledInSettings) {
-            // Enabled but not yet connected (or was disconnected).
-            if (_state.value != AccessibilityState.DISCONNECTED &&
-                _state.value != AccessibilityState.ERROR
-            ) {
-                updateState(AccessibilityState.ENABLED)
-            }
+            // Enabled in settings, but binder instance is not yet connected or is reconnecting
+            updateState(AccessibilityState.ENABLED)
         } else {
             updateState(AccessibilityState.DISABLED)
         }
@@ -102,6 +100,8 @@ object AccessibilityHealthModel {
         return _state.value == AccessibilityState.CONNECTED ||
                _state.value == AccessibilityState.DEGRADED
     }
+
+    fun isConnecting(): Boolean = _state.value == AccessibilityState.ENABLED
 
     /**
      * Returns user-facing guidance on how to recover from the current
@@ -129,35 +129,83 @@ object AccessibilityHealthModel {
     }
 
     // ------------------------------------------------------------------
-    // Internal helpers
+    // Resilient System Settings Verification (Supports Stock AOSP & OEM ROMs)
     // ------------------------------------------------------------------
 
-    private fun isServiceEnabledInSettings(context: Context): Boolean {
+    fun isServiceEnabledInSettings(context: Context): Boolean {
+        // Check 1: Settings.Secure with master switch
         try {
-            val enabledServices = Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            ) ?: return false
+            val cr = context.contentResolver
+            val isMasterEnabled = try {
+                Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1
+            } catch (_: Exception) {
+                true // fallback
+            }
 
-            val expected = ComponentName(context, JarvisAccessibilityService::class.java)
-            val fullFlattened = expected.flattenToString()
-            val shortFlattened = expected.flattenToShortString()
+            if (isMasterEnabled) {
+                val enabledServices = Settings.Secure.getString(
+                    cr,
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                )
+                if (!enabledServices.isNullOrBlank()) {
+                    val expectedComponent = ComponentName(context, JarvisAccessibilityService::class.java)
+                    val expectedPackage = context.packageName
+                    val expectedSimpleName = JarvisAccessibilityService::class.java.simpleName
 
-            val splitter = TextUtils.SimpleStringSplitter(':')
-            splitter.setString(enabledServices)
-            while (splitter.hasNext()) {
-                val component = splitter.next()
-                if (component.equals(fullFlattened, ignoreCase = true) ||
-                    component.equals(shortFlattened, ignoreCase = true) ||
-                    (component.contains(context.packageName) &&
-                     component.contains("JarvisAccessibilityService"))
-                ) {
-                    return true
+                    val colonSplitter = TextUtils.SimpleStringSplitter(':')
+                    colonSplitter.setString(enabledServices)
+                    while (colonSplitter.hasNext()) {
+                        val rawComponent = colonSplitter.next().trim()
+                        if (rawComponent.isEmpty()) continue
+
+                        // Normalized unflattening (handles both full and short formats)
+                        val unflattened = ComponentName.unflattenFromString(rawComponent)
+                        if (unflattened != null) {
+                            if (unflattened == expectedComponent ||
+                                (unflattened.packageName.equals(expectedPackage, ignoreCase = true) &&
+                                 unflattened.className.endsWith(expectedSimpleName, ignoreCase = true))) {
+                                return true
+                            }
+                        }
+
+                        // Fuzzy fallback matching
+                        if (rawComponent.contains(expectedPackage, ignoreCase = true) &&
+                            rawComponent.contains(expectedSimpleName, ignoreCase = true)) {
+                            return true
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error checking accessibility settings: ${e.message}")
+            Log.w(TAG, "Error checking accessibility secure settings: ${e.message}")
         }
+
+        // Check 2: AccessibilityManager IPC fallback (checks both generic and all masks)
+        try {
+            val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+            if (am != null) {
+                val checkMasks = intArrayOf(
+                    AccessibilityServiceInfo.FEEDBACK_ALL_MASK,
+                    AccessibilityServiceInfo.FEEDBACK_GENERIC
+                )
+                for (mask in checkMasks) {
+                    val services = am.getEnabledAccessibilityServiceList(mask)
+                    if (!services.isNullOrEmpty()) {
+                        val matched = services.any { info ->
+                            val sInfo = info.resolveInfo?.serviceInfo
+                            sInfo?.packageName == context.packageName &&
+                            (sInfo.name == JarvisAccessibilityService::class.java.name ||
+                             info.id.startsWith("${context.packageName}/") ||
+                             info.id.contains("JarvisAccessibilityService"))
+                        }
+                        if (matched) return true
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error checking AccessibilityManager service list: ${e.message}")
+        }
+
         return false
     }
 }

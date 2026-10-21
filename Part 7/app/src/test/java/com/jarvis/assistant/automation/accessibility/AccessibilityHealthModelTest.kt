@@ -82,8 +82,27 @@ class AccessibilityHealthModelTest {
         AccessibilityHealthModel.updateState(AccessibilityState.ENABLED)
         assertEquals(AccessibilityState.ENABLED, AccessibilityHealthModel.state.value)
         assertFalse(AccessibilityHealthModel.isOperational())
+        assertTrue(AccessibilityHealthModel.isConnecting())
         val guidance = AccessibilityHealthModel.getRecoveryGuidance()
         assertNotNull(guidance)
         assertTrue(guidance!!.contains("hasn't connected yet", ignoreCase = true))
+    }
+
+    @Test
+    fun testIsConnectingReturnsTrueOnlyWhenEnabled() {
+        AccessibilityHealthModel.updateState(AccessibilityState.DISABLED)
+        assertFalse(AccessibilityHealthModel.isConnecting())
+
+        AccessibilityHealthModel.updateState(AccessibilityState.ENABLED)
+        assertTrue(AccessibilityHealthModel.isConnecting())
+
+        AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
+        assertFalse(AccessibilityHealthModel.isConnecting())
+
+        AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED)
+        assertFalse(AccessibilityHealthModel.isConnecting())
+
+        AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED)
+        assertFalse(AccessibilityHealthModel.isConnecting())
     }
 }
