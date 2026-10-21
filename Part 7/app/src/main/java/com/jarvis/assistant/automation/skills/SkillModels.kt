@@ -26,7 +26,23 @@ data class SkillDefinition(
     val timeoutSeconds: Int = 60,
     val executionCount: Int = 0,
     val lastExecutedAt: Long? = null,
-    val isUserCreated: Boolean = true
+    val isUserCreated: Boolean = true,
+    val isEnabled: Boolean = true
+)
+
+sealed class SkillValidationResult {
+    object Valid : SkillValidationResult()
+    data class Invalid(val reasons: List<String>) : SkillValidationResult()
+}
+
+data class SkillDryRunResult(
+    val isValid: Boolean,
+    val skillName: String,
+    val resolvedSteps: List<MissionStep>,
+    val riskClassification: MissionRisk,
+    val requiresApproval: Boolean,
+    val warnings: List<String> = emptyList(),
+    val validationError: String? = null
 )
 
 data class SkillExecutionResult(

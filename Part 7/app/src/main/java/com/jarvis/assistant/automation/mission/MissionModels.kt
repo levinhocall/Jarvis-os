@@ -79,7 +79,7 @@ sealed class ToolExecutionResult {
 data class MissionStep(
     val stepId: String = UUID.randomUUID().toString(),
     val title: String,
-    val description: String,
+    val description: String = "",
     val toolName: String,
     val parameters: Map<String, Any?> = emptyMap(),
     val requiredPermissions: List<String> = emptyList(),

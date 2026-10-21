@@ -81,51 +81,28 @@ class MemoryRepository(private val memoryDao: MemoryDao) {
         return true
     }
 
+    private val gson = com.google.gson.GsonBuilder().setPrettyPrinting().create()
+
     suspend fun exportMemoriesAsJson(): String {
         val list = memoryDao.getAllMemories()
-        val jsonArray = org.json.JSONArray()
-        for (item in list) {
-            val obj = org.json.JSONObject().apply {
-                put("id", item.id)
-                put("category", item.category)
-                put("key", item.key)
-                put("value", item.value)
-                put("rawText", item.rawText)
-                put("timestamp", item.timestamp)
-                put("provenance", item.provenance)
-                put("sensitivity", item.sensitivity)
-                if (item.expiryTimeMs != null) {
-                    put("expiryTimeMs", item.expiryTimeMs)
-                }
-            }
-            jsonArray.put(obj)
-        }
-        return jsonArray.toString(2)
+        return gson.toJson(list)
     }
 
     suspend fun importMemoriesFromJson(jsonStr: String): Int {
         var count = 0
         try {
-            val jsonArray = org.json.JSONArray(jsonStr)
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                val cat = obj.optString("category", MemoryEntity.CATEGORY_NOTES)
-                val key = obj.optString("key", "")
-                val value = obj.optString("value", "")
-                val raw = obj.optString("rawText", "$key: $value")
-                val prov = obj.optString("provenance", "EXPLICIT_USER_STATEMENT")
-                val sens = obj.optString("sensitivity", "PREFERENCE")
-                val exp = if (obj.has("expiryTimeMs")) obj.getLong("expiryTimeMs") else null
-
-                if (key.isNotBlank()) {
+            val type = object : com.google.gson.reflect.TypeToken<List<MemoryEntity>>() {}.type
+            val list: List<MemoryEntity> = gson.fromJson(jsonStr, type) ?: emptyList()
+            for (item in list) {
+                if (item.key.isNotBlank()) {
                     saveMemory(
-                        rawText = raw,
-                        category = cat,
-                        key = key,
-                        value = value,
-                        provenance = prov,
-                        sensitivity = sens,
-                        expiryTimeMs = exp
+                        rawText = item.rawText,
+                        category = item.category,
+                        key = item.key,
+                        value = item.value,
+                        provenance = item.provenance,
+                        sensitivity = item.sensitivity,
+                        expiryTimeMs = item.expiryTimeMs
                     )
                     count++
                 }
