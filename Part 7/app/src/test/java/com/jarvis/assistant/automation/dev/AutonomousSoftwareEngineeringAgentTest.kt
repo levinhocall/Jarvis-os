@@ -317,4 +317,26 @@ class AutonomousSoftwareEngineeringAgentTest {
         assertFalse(report.success)
         assertEquals(DevStepStatus.FAILED, plan.status)
     }
+
+    @Test
+    fun `test termux execution tool reports uninstalled environment honestly`() = runBlocking {
+        val termuxTool = TermuxBridgeDevTool { null } // Null context simulates test / unavailable context
+        val result = termuxTool.execute(
+            project,
+            mapOf("command" to "gradle assembleDebug"),
+            sandbox,
+            devAgent,
+            isApprovedByUser = true
+        )
+        assertTrue(result is DevToolResult.Failure)
+        assertTrue((result as DevToolResult.Failure).error.contains("unavailable for Termux bridge"))
+    }
+
+    @Test
+    fun `test termux bridge completes deferred result on broadcast notification`() {
+        val executionId = "test-exec-123"
+        // Verify notifyResult completes without crashing even for untracked IDs
+        TermuxBridge.notifyResult(executionId, 0, "Build Successful", "")
+        TermuxBridge.notifyResult(executionId, 1, "", "Build Failed")
+    }
 }

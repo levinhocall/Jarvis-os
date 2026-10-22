@@ -145,6 +145,7 @@ object PermissionHelper {
     }
 
     fun openVivoAutostart(context: Context): Boolean {
+        com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.triggerOemSetupAutoClick()
         val intents = listOf(
             Intent().setComponent(android.content.ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
             Intent().setComponent(android.content.ComponentName("com.iqoo.powersaving", "com.iqoo.powersaving.PowerSavingActivity")),
@@ -162,6 +163,7 @@ object PermissionHelper {
     }
 
     fun openVivoHighBackgroundPower(context: Context): Boolean {
+        com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.triggerOemSetupAutoClick()
         val intents = listOf(
             Intent().setComponent(android.content.ComponentName("com.vivo.abe", "com.vivo.abe.restriction.CheckManageRestrictionActivity")),
             Intent().setComponent(android.content.ComponentName("com.vivo.abe", "com.vivo.abe.feature.power.BatteryOptimizationActivity")),
@@ -178,6 +180,7 @@ object PermissionHelper {
     }
 
     fun openXiaomiAutostart(context: Context): Boolean {
+        com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.triggerOemSetupAutoClick()
         val intents = listOf(
             Intent().setComponent(android.content.ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
             Intent("miui.intent.action.OP_AUTO_START").addCategory(Intent.CATEGORY_DEFAULT),
@@ -194,6 +197,7 @@ object PermissionHelper {
     }
 
     fun openXiaomiBatteryOptimization(context: Context): Boolean {
+        com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.triggerOemSetupAutoClick()
         val intents = listOf(
             Intent().setComponent(android.content.ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")).apply {
                 putExtra("package_name", context.packageName)
@@ -329,6 +333,7 @@ object PermissionHelper {
     }
 
     fun requestBatteryOptimization(context: Context) {
+        com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.triggerOemSetupAutoClick()
         try {
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = Uri.parse("package:${context.packageName}")

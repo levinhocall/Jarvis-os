@@ -306,6 +306,43 @@ class ExecuteApprovedCommandDevTool : DevTool {
     }
 }
 
+class TermuxBridgeDevTool(private val contextProvider: () -> android.content.Context?) : DevTool {
+    override val name: String = "termux_execute"
+    override val description: String = "Executes native commands via Termux RUN_COMMAND service on Android without root"
+    override val riskLevel: DevToolRisk = DevToolRisk.MUTATING_CONSEQUENTIAL
+    override val requiresApproval: Boolean = true
+
+    override suspend fun execute(
+        project: DevProject,
+        params: Map<String, Any?>,
+        sandbox: CapabilitySandbox,
+        devAgent: SoftwareEngineeringAgent,
+        isApprovedByUser: Boolean
+    ): DevToolResult {
+        val context = contextProvider()
+            ?: return DevToolResult.Failure(name, "Android application context unavailable for Termux bridge")
+        val command = params["command"] as? String
+            ?: return DevToolResult.Failure(name, "Missing parameter 'command'")
+
+        val textCheck = sandbox.validateInputText(command)
+        if (textCheck is SandboxCheckResult.Blocked) {
+            return DevToolResult.Failure(name, "Security check blocked command: ${textCheck.reason}", isRecoverable = false)
+        }
+
+        val gitRisk = devAgent.auditGitOperation(command)
+        if (gitRisk.isDestructive && !isApprovedByUser) {
+            return DevToolResult.AwaitingApproval(
+                toolName = name,
+                reason = "Potentially destructive command requires approval in Termux: ${gitRisk.warningMessage}",
+                proposedAction = command
+            )
+        }
+
+        val timeoutSec = (params["timeoutSeconds"] as? Number)?.toLong() ?: 120L
+        return TermuxBridge.executeCommand(context, command, project.workspaceRoot, timeoutSec)
+    }
+}
+
 class ArtifactVerificationDevTool : DevTool {
     override val name: String = "verify_artifact"
     override val description: String = "Verifies artifact existence, non-empty size, and SHA-256 on disk"
@@ -360,9 +397,11 @@ object DevToolRegistry {
 
     fun getAllTools(): List<DevTool> = tools.values.toList()
 
-    fun detectEnvironment(workspacePath: String): DevEnvironmentCapability {
+    fun detectEnvironment(workspacePath: String, context: android.content.Context? = null): DevEnvironmentCapability {
         val file = File(workspacePath)
         val canAccessFiles = file.exists() && file.canRead()
+        val hasTermux = context != null && TermuxBridge.isTermuxInstalled(context)
+
         val canRunProcess = try {
             val p = ProcessBuilder("echo", "test").start()
             p.waitFor(1, TimeUnit.SECONDS)
@@ -380,6 +419,7 @@ object DevToolRegistry {
         }
 
         val type = when {
+            hasTermux -> DevEnvironmentType.TERMUX_BRIDGE
             canRunProcess && canRunGit -> DevEnvironmentType.LOCAL_PROCESS
             canAccessFiles -> DevEnvironmentType.RESTRICTED_STORAGE_ONLY
             else -> DevEnvironmentType.RESTRICTED_STORAGE_ONLY
@@ -387,13 +427,14 @@ object DevToolRegistry {
 
         return DevEnvironmentCapability(
             type = type,
-            canExecuteCommands = canRunProcess,
+            canExecuteCommands = canRunProcess || hasTermux,
             canAccessFiles = canAccessFiles,
-            canRunGit = canRunGit,
-            canRunBuildTools = canRunProcess,
+            canRunGit = canRunGit || hasTermux,
+            canRunBuildTools = canRunProcess || hasTermux,
             description = when (type) {
+                DevEnvironmentType.TERMUX_BRIDGE -> "Termux Bridge active: full Linux shell, compiler, Git, and build tools available on-device without root"
                 DevEnvironmentType.LOCAL_PROCESS -> "Full local environment with shell process execution and Git support"
-                DevEnvironmentType.RESTRICTED_STORAGE_ONLY -> "Restricted environment: File inspection and editing supported; shell command execution restricted"
+                DevEnvironmentType.RESTRICTED_STORAGE_ONLY -> "Restricted environment: File inspection and editing supported; install Termux to enable shell builds on phone"
                 else -> "Standard environment"
             }
         )

@@ -99,6 +99,10 @@ class JarvisAccessibilityService : AccessibilityService() {
             instance?.armWhatsAppDelete(forEveryone)
         }
 
+        fun triggerOemSetupAutoClick() {
+            instance?.armOemSetupAutoClick()
+        }
+
         data class ExtractedOtp(val code: String, val timestamp: Long, val senderPkg: String)
         @Volatile
         var latestExtractedOtp: ExtractedOtp? = null
@@ -237,6 +241,9 @@ class JarvisAccessibilityService : AccessibilityService() {
     private var deleteForEveryone = false
     private var whatsAppDeleteArmTime = 0L
     private var deleteStage = 0
+
+    private var isWaitingForOemSetupAutoClick = false
+    private var oemSetupArmTime = 0L
 
     override fun onServiceConnected() {
         try {
@@ -414,6 +421,18 @@ class JarvisAccessibilityService : AccessibilityService() {
                     }
                 } catch (t: Throwable) {
                     Log.w(TAG, "Error in WhatsApp delete automation: ${t.message}")
+                }
+            }
+
+            if (isWaitingForOemSetupAutoClick && isOemSetupPackage(pkg)) {
+                try {
+                    if (System.currentTimeMillis() - oemSetupArmTime < 25000) {
+                        attemptOemSetupAutoClick()
+                    } else {
+                        isWaitingForOemSetupAutoClick = false
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Error in OEM setup auto click: ${t.message}")
                 }
             }
         } catch (t: Throwable) {
@@ -1167,6 +1186,93 @@ class JarvisAccessibilityService : AccessibilityService() {
             if (node.isClickable || node.parent?.isClickable == true) {
                 if (clickNodeAndTap(node)) return true
             }
+        }
+        return false
+    }
+
+    // -------------------------------------------------------------
+    // OEM Autostart & Battery Optimization Auto-Setup Assistant
+    // -------------------------------------------------------------
+
+    fun armOemSetupAutoClick() {
+        isWaitingForOemSetupAutoClick = true
+        oemSetupArmTime = System.currentTimeMillis()
+        Log.i(TAG, "Armed for OEM background optimization auto-setup (25s window)")
+        handler.postDelayed({ pollOemSetupAutoClick(1) }, 800)
+    }
+
+    private fun isOemSetupPackage(pkg: String): Boolean {
+        val lower = pkg.lowercase(Locale.ROOT)
+        return lower.contains("miui") || lower.contains("securitycenter") || lower.contains("powerkeeper") ||
+                lower.contains("vivo") || lower.contains("iqoo") || lower.contains("permissionmanager") ||
+                lower.contains("settings") || lower.contains("lool")
+    }
+
+    private fun pollOemSetupAutoClick(attempt: Int) {
+        if (!isWaitingForOemSetupAutoClick || attempt > 12) {
+            isWaitingForOemSetupAutoClick = false
+            return
+        }
+        val done = attemptOemSetupAutoClick()
+        if (!done) {
+            handler.postDelayed({ pollOemSetupAutoClick(attempt + 1) }, 1000)
+        }
+    }
+
+    private fun attemptOemSetupAutoClick(): Boolean {
+        val root = getActiveRootNode() ?: return false
+        try {
+            // Case 1: Battery Optimization Screen ("No restrictions" / "Don't optimize" / "Allow" / "Unrestricted")
+            val batteryTargetTerms = listOf("No restrictions", "Don't optimize", "Unrestricted", "Allow high background power consumption", "Allow")
+            for (term in batteryTargetTerms) {
+                val nodes = root.findAccessibilityNodeInfosByText(term)
+                for (node in nodes) {
+                    if (node.isChecked) {
+                        Log.i(TAG, "OEM setup: '$term' is already checked")
+                        isWaitingForOemSetupAutoClick = false
+                        AccessibilityHealthModel.recordActionSuccess("OEM Auto-Setup")
+                        return true
+                    }
+                    if (clickNodeAndTap(node)) {
+                        Log.i(TAG, "OEM setup: auto-clicked '$term'")
+                        isWaitingForOemSetupAutoClick = false
+                        AccessibilityHealthModel.recordActionSuccess("OEM Auto-Setup")
+                        return true
+                    }
+                }
+            }
+
+            // Case 2: Autostart app list (Finding Jarvis toggle)
+            val jarvisKeywords = listOf("Jarvis", "JARVIS", "JARVIS OS")
+            for (kw in jarvisKeywords) {
+                val nodes = root.findAccessibilityNodeInfosByText(kw)
+                for (node in nodes) {
+                    val parent = node.parent
+                    if (parent != null) {
+                        for (i in 0 until parent.childCount) {
+                            val child = parent.getChild(i) ?: continue
+                            if (child.isCheckable) {
+                                if (!child.isChecked) {
+                                    child.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                                    Log.i(TAG, "OEM setup: toggled switch for '$kw'")
+                                    isWaitingForOemSetupAutoClick = false
+                                    AccessibilityHealthModel.recordActionSuccess("OEM Auto-Setup")
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                    if (node.isClickable) {
+                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        Log.i(TAG, "OEM setup: clicked item for '$kw'")
+                        isWaitingForOemSetupAutoClick = false
+                        AccessibilityHealthModel.recordActionSuccess("OEM Auto-Setup")
+                        return true
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "attemptOemSetupAutoClick caught error: ${t.message}")
         }
         return false
     }
