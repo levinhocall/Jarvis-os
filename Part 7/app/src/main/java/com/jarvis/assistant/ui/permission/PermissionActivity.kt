@@ -100,7 +100,17 @@ class PermissionActivity : AppCompatActivity() {
         }
 
         binding.btnGrantAccessibility.setOnClickListener {
-            PermissionHelper.requestAccessibilityWithRestrictedGuidance(this)
+            val a11yState = AccessibilityHealthModel.state.value
+            if (a11yState == AccessibilityState.CONNECTED || a11yState == AccessibilityState.DEGRADED) {
+                showAccessibilityDiagnosticDialog()
+            } else {
+                PermissionHelper.requestAccessibilityWithRestrictedGuidance(this)
+            }
+        }
+
+        binding.cardAccessibilityPermission.setOnLongClickListener {
+            showAccessibilityDiagnosticDialog()
+            true
         }
 
         binding.btnGrantAll.setOnClickListener {
@@ -364,6 +374,22 @@ class PermissionActivity : AppCompatActivity() {
         status.text = if (granted) "Granted ✓" else "Not granted"
         status.setTextColor(if (granted) Color.parseColor("#10B981") else Color.parseColor("#F59E0B"))
         extraButtons[key]?.text = if (granted) "Manage" else "Grant"
+    }
+
+    private fun showAccessibilityDiagnosticDialog() {
+        val report = AccessibilityHealthModel.getDiagnosticReport(this)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Accessibility System Diagnostics")
+            .setMessage(report.diagnosticSummary)
+            .setPositiveButton("Recheck") { _, _ ->
+                AccessibilityHealthModel.refreshFromSystem(this)
+                updatePermissionStates()
+            }
+            .setNeutralButton("Settings") { _, _ ->
+                PermissionHelper.openAccessibilitySettings(this)
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun resolveThemeColor(attribute: Int): Int {

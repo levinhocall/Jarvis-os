@@ -105,4 +105,36 @@ class AccessibilityHealthModelTest {
         AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED)
         assertFalse(AccessibilityHealthModel.isConnecting())
     }
+
+    @Test
+    fun testBoundedActionFailuresBeforeDegraded() {
+        AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
+        assertTrue(AccessibilityHealthModel.isOperational())
+
+        // 1st failure: transient, stays CONNECTED
+        AccessibilityHealthModel.recordActionFailure("testClick", "screen locked")
+        assertEquals(AccessibilityState.CONNECTED, AccessibilityHealthModel.state.value)
+        assertNotNull(AccessibilityHealthModel.lastError.value)
+
+        // 2nd failure: stays CONNECTED
+        AccessibilityHealthModel.recordActionFailure("testClick", "screen locked")
+        assertEquals(AccessibilityState.CONNECTED, AccessibilityHealthModel.state.value)
+
+        // 3rd failure: threshold reached, transitions to DEGRADED
+        AccessibilityHealthModel.recordActionFailure("testClick", "screen locked")
+        assertEquals(AccessibilityState.DEGRADED, AccessibilityHealthModel.state.value)
+        assertTrue(AccessibilityHealthModel.isOperational()) // Degraded is still operational
+    }
+
+    @Test
+    fun testActionSuccessHealsDegradedState() {
+        AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED, "Transient gesture timeout")
+        assertEquals(AccessibilityState.DEGRADED, AccessibilityHealthModel.state.value)
+
+        // Action success resets consecutive failures
+        AccessibilityHealthModel.recordActionSuccess("clickButton")
+        assertTrue(AccessibilityHealthModel.lastActionSucceeded.value)
+        assertEquals("clickButton", AccessibilityHealthModel.lastActionName.value)
+        assertTrue(AccessibilityHealthModel.lastSuccessfulActionTimestamp.value > 0)
+    }
 }

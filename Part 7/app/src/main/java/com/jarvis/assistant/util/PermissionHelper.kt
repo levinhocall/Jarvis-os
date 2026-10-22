@@ -177,6 +177,66 @@ object PermissionHelper {
         return false
     }
 
+    fun openXiaomiAutostart(context: Context): Boolean {
+        val intents = listOf(
+            Intent().setComponent(android.content.ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
+            Intent("miui.intent.action.OP_AUTO_START").addCategory(Intent.CATEGORY_DEFAULT),
+            Intent().setComponent(android.content.ComponentName("com.miui.securitycenter", "com.miui.securityscan.MainActivity"))
+        )
+        for (intent in intents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                return true
+            } catch (_: Exception) {}
+        }
+        return false
+    }
+
+    fun openXiaomiBatteryOptimization(context: Context): Boolean {
+        val intents = listOf(
+            Intent().setComponent(android.content.ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")).apply {
+                putExtra("package_name", context.packageName)
+                putExtra("package_label", "JARVIS")
+            },
+            Intent().setComponent(android.content.ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsContainerManagementActivity"))
+        )
+        for (intent in intents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                return true
+            } catch (_: Exception) {}
+        }
+        return false
+    }
+
+    fun showXiaomiAccessibilitySetupDialog(activity: android.app.Activity) {
+        val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+            .setTitle("Xiaomi / Redmi / Poco Setup")
+            .setMessage(
+                "MIUI & HyperOS have strict background cleaners that disconnect Accessibility after idle.\n\n" +
+                "To ensure 24/7 reliability:\n" +
+                "1. Tap 'Accessibility' → Downloaded Apps → Turn JARVIS ON.\n" +
+                "2. Tap 'Autostart' → Enable Autostart for JARVIS.\n" +
+                "3. Tap 'Battery Saver' → Set to 'No restrictions'."
+            )
+            .setPositiveButton("1. Accessibility") { _, _ ->
+                openAccessibilitySettings(activity)
+            }
+            .setNeutralButton("2. Autostart") { _, _ ->
+                if (!openXiaomiAutostart(activity)) {
+                    openAppSettings(activity)
+                }
+            }
+            .setNegativeButton("3. Battery Saver") { _, _ ->
+                if (!openXiaomiBatteryOptimization(activity)) {
+                    openAppSettings(activity)
+                }
+            }
+        builder.show()
+    }
+
     fun isAppSideloaded(context: Context): Boolean {
         return try {
             val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -228,6 +288,11 @@ object PermissionHelper {
 
         if (isVivoDevice()) {
             showVivoAccessibilitySetupDialog(activity)
+            return
+        }
+
+        if (isXiaomiDevice()) {
+            showXiaomiAccessibilitySetupDialog(activity)
             return
         }
 

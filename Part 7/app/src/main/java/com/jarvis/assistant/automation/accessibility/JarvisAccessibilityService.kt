@@ -1219,14 +1219,12 @@ class JarvisAccessibilityService : AccessibilityService() {
                 val callback = createGestureCallback("longPressAt($x, $y)")
                 val dispatched = dispatchGesture(gesture, callback, null)
                 if (!dispatched) {
-                    AccessibilityHealthModel.updateState(
-                        AccessibilityState.DEGRADED,
-                        "Long-press dispatch rejected at ($x, $y)"
-                    )
+                    consecutiveGestureFailures++
+                    AccessibilityHealthModel.recordActionFailure("longPressAt", "Long-press dispatch rejected at ($x, $y)")
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Long-press gesture failed: ${e.message}")
-                AccessibilityHealthModel.updateState(AccessibilityState.ERROR, e.message)
+                AccessibilityHealthModel.recordActionFailure("longPressAt", e.message ?: "Exception")
             }
         }
     }
@@ -1278,16 +1276,14 @@ class JarvisAccessibilityService : AccessibilityService() {
                 val callback = createGestureCallback("clickAt($x, $y)")
                 val dispatched = dispatchGesture(gesture, callback, null)
                 if (!dispatched) {
+                    consecutiveGestureFailures++
                     Log.w(TAG, "dispatchGesture returned false for clickAt($x, $y)")
-                    AccessibilityHealthModel.updateState(
-                        AccessibilityState.DEGRADED,
-                        "Gesture dispatch rejected at ($x, $y)"
-                    )
+                    AccessibilityHealthModel.recordActionFailure("clickAt", "Gesture dispatch rejected at ($x, $y)")
                 }
                 return dispatched
             } catch (e: Exception) {
                 Log.d(TAG, "Gesture click at ($x, $y) failed: ${e.message}")
-                AccessibilityHealthModel.updateState(AccessibilityState.ERROR, e.message)
+                AccessibilityHealthModel.recordActionFailure("clickAt", e.message ?: "Exception")
             }
         }
         return false
@@ -1757,16 +1753,14 @@ class JarvisAccessibilityService : AccessibilityService() {
                 val callback = createGestureCallback("scroll $direction ($distance)")
                 val dispatched = dispatchGesture(gesture, callback, null)
                 if (!dispatched) {
-                    AccessibilityHealthModel.updateState(
-                        AccessibilityState.DEGRADED,
-                        "Scroll dispatch rejected"
-                    )
+                    consecutiveGestureFailures++
+                    AccessibilityHealthModel.recordActionFailure("scroll", "Scroll dispatch rejected")
                 }
                 Log.i(TAG, "Dispatched safe-zone scroll $direction ($distance) gesture: $dispatched")
                 return dispatched
             } catch (e: Exception) {
                 Log.e(TAG, "Scroll gesture failed: ${e.message}")
-                AccessibilityHealthModel.updateState(AccessibilityState.ERROR, e.message)
+                AccessibilityHealthModel.recordActionFailure("scroll", e.message ?: "Exception")
             }
         }
         return false
@@ -2002,15 +1996,13 @@ class JarvisAccessibilityService : AccessibilityService() {
         try {
             val dispatched = dispatchGesture(gesture, callback, null)
             if (!dispatched) {
-                AccessibilityHealthModel.updateState(
-                    AccessibilityState.DEGRADED,
-                    "Long-press paste dispatch rejected"
-                )
+                consecutiveGestureFailures++
+                AccessibilityHealthModel.recordActionFailure("longPressAndPaste", "Long-press paste dispatch rejected")
                 return false
             }
         } catch (e: Exception) {
             Log.e(TAG, "Long-press gesture dispatch failed: ${e.message}")
-            AccessibilityHealthModel.updateState(AccessibilityState.ERROR, e.message)
+            AccessibilityHealthModel.recordActionFailure("longPressAndPaste", e.message ?: "Exception")
             return false
         }
 
