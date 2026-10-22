@@ -18,6 +18,13 @@ object ReliabilityCoordinator {
     var overallState: SystemHealthState = SystemHealthState.HEALTHY
         private set
 
+    fun sanitize(text: String): String {
+        var clean = text
+        clean = clean.replace(Regex("""AIza[0-9A-Za-z-_]{30,40}"""), "[REDACTED_GEMINI_KEY]")
+        clean = clean.replace(Regex("""(?i)(?:bearer|key|token|password|secret)[=:\s]+[A-Za-z0-9_\-\.]{8,}"""), "[REDACTED_SECRET]")
+        return clean
+    }
+
     /**
      * Reports a diagnostic event and updates component/system health.
      */
