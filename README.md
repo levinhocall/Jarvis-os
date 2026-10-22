@@ -1,11 +1,10 @@
-<<<<<<< HEAD
 # 🤖 JARVIS Voice Assistant - Complete Tutorial Playlist (Parts 1 to 7)
 
 [![License: Custom](https://img.shields.io/badge/License-Tech_GPTx_Attribution-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-green.svg)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.20-purple.svg)](https://kotlinlang.org)
 [![Gradle](https://img.shields.io/badge/Gradle-8.9-brightgreen.svg)](https://gradle.org)
-[![Releases](https://img.shields.io/badge/APK_Releases-Part_1_to_7-orange.svg)](https://github.com/techgptx/Playlist/releases)
+[![Releases](https://img.shields.io/badge/APK_Releases-Part_1_to_7-orange.svg)](https://github.com/levinhocall/Jarvis-os/releases)
 
 Welcome to the official source code repository for the **JARVIS Android AI Assistant Series** by **Tech GPTx**!
 Every part in this playlist is organized into its own self-contained, ready-to-run Android Studio project.
@@ -28,17 +27,17 @@ Every part in this playlist is organized into its own self-contained, ready-to-r
 
 ## 📲 Direct APK Downloads (Parts 1 to 7)
 
-Don't want to compile from source right now? Pre-built APKs for Parts 1 to 7 are available in the **[GitHub Releases](https://github.com/techgptx/Playlist/releases)** section:
+Don't want to compile from source right now? Pre-built APKs for Parts 1 to 7 are available in the **[GitHub Releases](https://github.com/levinhocall/Jarvis-os/releases)** section:
 
 | Part | Name | Features Highlight | APK Download |
 |---|---|---|---|
-| **Part 1** | JARVIS-Part-1 | Gemini Live Bidi WebSocket, PCM Streaming, 3D Canvas Orb | [Download APK](https://github.com/techgptx/Playlist/releases) |
-| **Part 2** | JARVIS-Part-2 | Vosk Offline Hotword Manager, Foreground Services | [Download APK](https://github.com/techgptx/Playlist/releases) |
-| **Part 3** | JARVIS-Part-3 | Offline Wake Word, Accessibility Engine, Memory Room DB | [Download APK](https://github.com/techgptx/Playlist/releases) |
-| **Part 4** | JARVIS-Part-4 | Ultra Low-Latency Audio Pipeline, Natural Barge-In | [Download APK](https://github.com/techgptx/Playlist/releases) |
-| **Part 5** | JARVIS-Part-5 | WhatsApp & YouTube System Automations, UI Polish | [Download APK](https://github.com/techgptx/Playlist/releases) |
-| **Part 6** | JARVIS-Part-6 | Real-time Live Screen-Sharing Vision & Reasoning | [Download APK](https://github.com/techgptx/Playlist/releases) |
-| **Part 7** | JARVIS-Part-7 | Agentic Workflows, 17 Floating Overlays, Sound FX | [Download APK](https://github.com/techgptx/Playlist/releases) |
+| **Part 1** | JARVIS-Part-1 | Gemini Live Bidi WebSocket, PCM Streaming, 3D Canvas Orb | [Download APK](https://github.com/levinhocall/Jarvis-os/releases) |
+| **Part 2** | JARVIS-Part-2 | Vosk Offline Hotword Manager, Foreground Services | [Download APK](https://github.com/levinhocall/Jarvis-os/releases) |
+| **Part 3** | JARVIS-Part-3 | Offline Wake Word, Accessibility Engine, Memory Room DB | [Download APK](https://github.com/levinhocall/Jarvis-os/releases) |
+| **Part 4** | JARVIS-Part-4 | Ultra Low-Latency Audio Pipeline, Natural Barge-In | [Download APK](https://github.com/levinhocall/Jarvis-os/releases) |
+| **Part 5** | JARVIS-Part-5 | WhatsApp & YouTube System Automations, UI Polish | [Download APK](https://github.com/levinhocall/Jarvis-os/releases) |
+| **Part 6** | JARVIS-Part-6 | Real-time Live Screen-Sharing Vision & Reasoning | [Download APK](https://github.com/levinhocall/Jarvis-os/releases) |
+| **Part 7** | JARVIS-Part-7 | Agentic Workflows, 17 Floating Overlays, Sound FX | [Download APK](https://github.com/levinhocall/Jarvis-os/releases) |
 
 ---
 
@@ -80,6 +79,3 @@ Playlist/
 
 Happy coding! Build your own JARVIS! 🎙️⚡  
 *Follow & Subscribe to **Tech GPTx** for more AI & Android tutorials!*
-=======
-# Jarvis-os
->>>>>>> 092fa1f73c1a12b18b31becbb5b99e5a0f25e3d6
