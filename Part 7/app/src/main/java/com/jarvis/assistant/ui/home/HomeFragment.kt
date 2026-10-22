@@ -169,8 +169,8 @@ class HomeFragment : Fragment() {
                     val state = pendingOrbState ?: when (viewModel.conversationState.value) {
                         ConversationState.LISTENING, ConversationState.INTERRUPTED -> "listening"
                         ConversationState.SPEAKING -> "speaking"
-                        ConversationState.THINKING -> "thinking"
-                        ConversationState.IDLE -> "idle"
+                        ConversationState.THINKING, ConversationState.EXECUTING, ConversationState.RECOVERING -> "thinking"
+                        ConversationState.IDLE, ConversationState.WAITING_FOR_APPROVAL, ConversationState.FAILED -> "idle"
                     }
                     setOrbState(state)
                 }
@@ -486,6 +486,42 @@ class HomeFragment : Fragment() {
                                     binding.tvHoldHint.text = "Tap to mute • Hold to power off"
                                     binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
                                         Color.parseColor("#10B981")
+                                    )
+                                }
+                                ConversationState.EXECUTING -> {
+                                    setOrbState("thinking")
+                                    binding.tvListeningStatus.text = "EXECUTING MISSION..."
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#3B82F6"))
+                                    binding.tvHoldHint.text = "Tap to view progress or cancel"
+                                    binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
+                                        Color.parseColor("#3B82F6")
+                                    )
+                                }
+                                ConversationState.WAITING_FOR_APPROVAL -> {
+                                    setOrbState("idle")
+                                    binding.tvListeningStatus.text = "WAITING FOR APPROVAL"
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#F59E0B"))
+                                    binding.tvHoldHint.text = "Confirmation required to proceed"
+                                    binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
+                                        Color.parseColor("#F59E0B")
+                                    )
+                                }
+                                ConversationState.RECOVERING -> {
+                                    setOrbState("thinking")
+                                    binding.tvListeningStatus.text = "SELF-HEALING / RECOVERING..."
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#F59E0B"))
+                                    binding.tvHoldHint.text = "Reconnecting service..."
+                                    binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
+                                        Color.parseColor("#F59E0B")
+                                    )
+                                }
+                                ConversationState.FAILED -> {
+                                    setOrbState("idle")
+                                    binding.tvListeningStatus.text = "ACTION FAILED"
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#EF4444"))
+                                    binding.tvHoldHint.text = "Tap to inspect details"
+                                    binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
+                                        Color.parseColor("#EF4444")
                                     )
                                 }
                             }
