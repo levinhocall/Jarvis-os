@@ -30,7 +30,8 @@ class MemoryAdapter(
         fun bind(item: MemoryEntity) {
             binding.tvMemoryFact.text = item.rawText
             binding.tvMemoryDate.text = item.formattedDate
-            binding.tvMemoryCategory.text = item.category.uppercase()
+            val sourceText = if (!item.sourceConversationId.isNullOrBlank()) " • ${item.sourceConversationId.take(8)}" else ""
+            binding.tvMemoryCategory.text = "${item.category.uppercase()} • ${item.memoryType}$sourceText"
 
             val context = binding.root.context
             val colorRes = when (item.category) {

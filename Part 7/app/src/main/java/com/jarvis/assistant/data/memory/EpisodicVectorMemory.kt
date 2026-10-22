@@ -47,8 +47,9 @@ object EpisodicVectorMemory {
 
     // Regex patterns for automatic sensitive credential redaction
     private val SENSITIVE_PATTERNS = listOf(
+        Regex("""AIza[0-9A-Za-z-_]{30,40}"""), // Google / Gemini API key pattern
         Regex("(?i)\\b(password|passwd|pwd)\\s*(?:[:=]|is)?\\s*\\S+"),
-        Regex("(?i)\\b(api[_-]?key|secret[_-]?key|bearer)\\s*(?:[:=]|is)?\\s*\\S+"),
+        Regex("(?i)\\b(api[\\s_-]?key|secret[\\s_-]?key|bearer|token)\\s*(?:[:=]|is)?\\s*\\S+"),
         Regex("\\b\\d{4}[ -]?\\d{4}[ -]?\\d{4}[ -]?\\d{4}\\b"), // 16-digit card numbers
         Regex("(?i)\\b(cvv|cvc)\\s*[:=]?\\s*\\d{3,4}\\b"),
         Regex("(?i)\\b(otp|verification code)\\s*(?:[:=]|is)?\\s*\\d{4,8}\\b")

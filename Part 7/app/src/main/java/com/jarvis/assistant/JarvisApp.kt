@@ -31,6 +31,9 @@ class JarvisApp : Application() {
     lateinit var chatRepository: ChatRepository
         private set
 
+    lateinit var conversationRepository: com.jarvis.assistant.data.chat.ConversationRepository
+        private set
+
     lateinit var memoryDatabase: MemoryDatabase
         private set
 
@@ -68,6 +71,7 @@ class JarvisApp : Application() {
         // Memory System
         memoryDatabase = MemoryDatabase.getInstance(this)
         memoryRepository = MemoryRepository(memoryDatabase.memoryDao())
+        conversationRepository = com.jarvis.assistant.data.chat.ConversationRepository(memoryDatabase.chatDao())
         memoryManager = MemoryManager(memoryRepository, preferences, chatRepository, appScope)
 
         // Automation Systems
