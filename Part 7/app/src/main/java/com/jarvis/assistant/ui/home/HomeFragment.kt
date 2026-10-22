@@ -254,8 +254,7 @@ class HomeFragment : Fragment() {
         if (err != null) {
             when (err.errorCode) {
                 "ACCESSIBILITY_DISABLED" -> {
-                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational() ||
-                        PermissionHelper.isAccessibilityServiceEnabled(requireContext())) {
+                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational()) {
                         com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
                         hideLiveErrorOverlay()
                     }
@@ -310,8 +309,7 @@ class HomeFragment : Fragment() {
         if (err != null) {
             when (err.errorCode) {
                 "ACCESSIBILITY_DISABLED" -> {
-                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational() ||
-                        PermissionHelper.isAccessibilityServiceEnabled(requireContext())) {
+                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational()) {
                         com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
                         hideLiveErrorOverlay()
                     }
@@ -558,11 +556,24 @@ class HomeFragment : Fragment() {
                                     }
                                 }
                                 "ACCESSIBILITY_DISABLED" -> {
+                                    val a11yState = com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.state.value
+
                                     binding.ivLiveErrorIcon.setImageResource(R.drawable.ic_settings_shield)
                                     binding.ivLiveErrorIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
                                     binding.tvLiveErrorTitle.setTextColor(Color.parseColor("#F59E0B"))
+
+                                    if (a11yState == com.jarvis.assistant.automation.accessibility.AccessibilityState.ENABLED) {
+                                        binding.tvLiveErrorTitle.text = "ACCESSIBILITY NOT CONNECTED"
+                                        binding.tvLiveErrorMessage.text = "Service is enabled in Settings, but the background binder was killed or hasn't connected. Tap FIX to toggle Off and On in Settings."
+                                    } else {
+                                        binding.tvLiveErrorTitle.text = "ACCESSIBILITY REQUIRED"
+                                        binding.tvLiveErrorMessage.text = "Jarvis requires Accessibility to complete actions and navigate your phone. Tap FIX to enable."
+                                    }
+
                                     binding.btnFixLiveError.setOnClickListener {
-                                        PermissionHelper.openAccessibilitySettings(requireContext())
+                                        activity?.let { act ->
+                                            PermissionHelper.requestAccessibilityWithRestrictedGuidance(act)
+                                        } ?: PermissionHelper.openAccessibilitySettings(requireContext())
                                     }
                                 }
                                 "PERMISSIONS_MISSING" -> {

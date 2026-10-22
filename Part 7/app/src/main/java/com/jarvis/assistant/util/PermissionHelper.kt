@@ -177,21 +177,68 @@ object PermissionHelper {
         return false
     }
 
+    fun isAppSideloaded(context: Context): Boolean {
+        return try {
+            val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getInstallerPackageName(context.packageName)
+            }
+            installer.isNullOrBlank() ||
+            installer.contains("packageinstaller") ||
+            installer.contains("filemanager") ||
+            installer.contains("download") ||
+            installer.contains("shell")
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    fun showVivoAccessibilitySetupDialog(activity: android.app.Activity) {
+        val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+            .setTitle("Vivo / iQOO Accessibility Setup")
+            .setMessage(
+                "On Vivo devices (Funtouch OS / Origin OS), 3 steps are required for Jarvis to work:\n\n" +
+                "Step 1: In Accessibility Settings → Installed services (or Downloaded apps) → Toggle JARVIS ON.\n\n" +
+                "Step 2: If 'Restricted setting' appears, tap '2. Unlock App Info' → Tap 3 dots (⋮) top-right → 'Allow restricted settings' and confirm PIN.\n\n" +
+                "Step 3: In iManager / Battery settings, enable 'Autostart' and 'Allow high background power consumption' so Vivo does not kill the accessibility service."
+            )
+            .setPositiveButton("1. Open Accessibility") { _, _ ->
+                openAccessibilitySettings(activity)
+            }
+            .setNeutralButton("2. Unlock App Info") { _, _ ->
+                openAppSettings(activity)
+            }
+            .setNegativeButton("3. Vivo Battery/Power") { _, _ ->
+                if (!openVivoHighBackgroundPower(activity)) {
+                    if (!openVivoAutostart(activity)) {
+                        openAppSettings(activity)
+                    }
+                }
+            }
+        builder.show()
+    }
+
     fun requestAccessibilityWithRestrictedGuidance(activity: android.app.Activity) {
-        if (isAccessibilityServiceEnabled(activity)) {
+        if (isAccessibilityServiceOperational()) {
             openAccessibilitySettings(activity)
             return
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isRestrictedSettingsActive(activity)) {
+        if (isVivoDevice()) {
+            showVivoAccessibilitySetupDialog(activity)
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && (isRestrictedSettingsActive(activity) || isAppSideloaded(activity))) {
             val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
                 .setTitle("Security Authorization Required")
                 .setMessage(
                     "Android 13/14 requires a 2-step approval for sideloaded automation apps:\n\n" +
                     "Step 1: Tap '1. Trigger In Settings' → Find JARVIS → Tap it (system will show 'Restricted setting').\n\n" +
                     "Step 2: Tap '2. Unlock App Info' → Tap 3 dots (⋮) top-right (or scroll to bottom on Xiaomi/Vivo) → Select 'Allow restricted settings' and confirm PIN.\n\n" +
-                    "Step 3: Return to Accessibility Settings and toggle JARVIS ON." +
-                    if (isVivoDevice()) "\n\nVivo Note: Also enable 'Autostart' and 'Allow high background power consumption' in iManager to keep the service running." else ""
+                    "Step 3: Return to Accessibility Settings and toggle JARVIS ON."
                 )
                 .setPositiveButton("1. Trigger In Settings") { _, _ ->
                     openAccessibilitySettings(activity)

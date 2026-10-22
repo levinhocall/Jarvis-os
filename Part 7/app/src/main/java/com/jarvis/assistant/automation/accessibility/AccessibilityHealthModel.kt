@@ -167,10 +167,10 @@ object AccessibilityHealthModel {
         val enabledInSettings = isServiceEnabledInSettings(context)
 
         if (enabledInSettings) {
-            // Enabled in settings, but binder instance is not yet connected or is reconnecting
-            updateState(AccessibilityState.ENABLED)
+            // Enabled in settings, but binder instance is not yet connected or was killed
+            updateState(AccessibilityState.ENABLED, "Service enabled in Settings but binder instance is not connected. Toggle Off and On to restart.")
         } else {
-            updateState(AccessibilityState.DISABLED)
+            updateState(AccessibilityState.DISABLED, "Service is disabled in Android Accessibility Settings.")
         }
     }
 

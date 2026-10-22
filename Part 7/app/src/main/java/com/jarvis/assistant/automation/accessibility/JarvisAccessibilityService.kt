@@ -1656,6 +1656,10 @@ class JarvisAccessibilityService : AccessibilityService() {
                     } ?: windowList.firstOrNull { win ->
                         win.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
                         win.root?.packageName != packageName
+                    } ?: windowList.firstOrNull { win ->
+                        win.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+                        win.root?.packageName != packageName &&
+                        (win.isFocused || win.isActive)
                     }
                 } else {
                     windowList.firstOrNull { win ->
@@ -1663,6 +1667,9 @@ class JarvisAccessibilityService : AccessibilityService() {
                         (win.isFocused || win.isActive)
                     } ?: windowList.firstOrNull { win ->
                         win.type == AccessibilityWindowInfo.TYPE_APPLICATION
+                    } ?: windowList.firstOrNull { win ->
+                        win.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+                        (win.isFocused || win.isActive)
                     }
                 }
                 if (targetWin?.root != null) return targetWin.root
