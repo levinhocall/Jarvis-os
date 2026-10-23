@@ -10,6 +10,9 @@ import com.jarvis.assistant.automation.mission.MissionRisk
 import kotlinx.coroutines.delay
 import java.util.Locale
 
+import com.jarvis.assistant.security.sandbox.RiskPolicy
+import com.jarvis.assistant.security.sandbox.UntrustedContentSanitizer
+
 /**
  * Self-Healing Autonomous Agent Loop.
  *
@@ -41,11 +44,6 @@ object SelfHealingAgentLoop {
             return highRisk
         }
 
-    private val SENSITIVE_KEYWORDS = listOf(
-        "pay", "payment", "upi", "transfer money", "delete", "remove",
-        "factory reset", "format", "send money", "buy", "purchase"
-    )
-
     enum class StepOutcome {
         SUCCESS,
         RECOVERABLE_FAILURE,
@@ -69,10 +67,9 @@ object SelfHealingAgentLoop {
     ) {
         val requiresApproval: Boolean
             get() = SENSITIVE_TOOLS.contains(toolName) ||
-                SENSITIVE_KEYWORDS.any { title.lowercase(Locale.ROOT).contains(it) } ||
+                RiskPolicy.containsSensitiveKeyword(title) ||
                 arguments.values.any { arg ->
-                    val s = arg.toString().lowercase(Locale.ROOT)
-                    SENSITIVE_KEYWORDS.any { s.contains(it) }
+                    arg != null && RiskPolicy.containsSensitiveKeyword(arg.toString())
                 }
     }
 
@@ -80,7 +77,8 @@ object SelfHealingAgentLoop {
         val missionId: String,
         val goal: String,
         val steps: List<TaskStep>,
-        var isCancelled: Boolean = false
+        var isCancelled: Boolean = false,
+        var hasUntrustedContentInstructions: Boolean = false
     ) {
         val isCompleted: Boolean
             get() = steps.isNotEmpty() && steps.all { it.outcome == StepOutcome.SUCCESS }
@@ -100,9 +98,13 @@ object SelfHealingAgentLoop {
 
     /**
      * Validates a step before execution.
-     * Rejects unregistered tools, shell code injections, and detects sensitive actions.
+     * Rejects unregistered tools, shell code injections, and detects sensitive actions using word boundaries.
      */
-    fun validateStepPrecondition(step: TaskStep, userApproved: Boolean = false): StepValidation {
+    fun validateStepPrecondition(
+        step: TaskStep,
+        userApproved: Boolean = false,
+        hasUntrustedContentInstructions: Boolean = false
+    ): StepValidation {
         // 1. Tool registration check
         if (!REGISTERED_TOOLS.contains(step.toolName)) {
             return StepValidation(
@@ -112,7 +114,16 @@ object SelfHealingAgentLoop {
             )
         }
 
-        // 2. Sensitive action guard
+        // 2. Untrusted content instruction flag guard
+        if (hasUntrustedContentInstructions && (step.isConsequential || step.requiresApproval) && !userApproved) {
+            return StepValidation(
+                isPermitted = false,
+                requiresUserApproval = true,
+                reason = "Untrusted on-screen content contained instruction-like text. Explicit user confirmation required before consequential action '${step.title}'."
+            )
+        }
+
+        // 3. Sensitive action guard with word boundaries
         if (step.requiresApproval && !userApproved) {
             return StepValidation(
                 isPermitted = false,
@@ -145,7 +156,7 @@ object SelfHealingAgentLoop {
             return StepOutcome.CANCELLED
         }
 
-        val validation = validateStepPrecondition(step, userApproved)
+        val validation = validateStepPrecondition(step, userApproved, mission.hasUntrustedContentInstructions)
         if (!validation.isPermitted) {
             if (validation.requiresUserApproval) {
                 step.outcome = StepOutcome.APPROVAL_REQUIRED
