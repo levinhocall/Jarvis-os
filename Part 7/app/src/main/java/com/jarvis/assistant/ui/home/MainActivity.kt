@@ -23,6 +23,7 @@ import com.jarvis.assistant.background.JarvisConversationService
 import com.jarvis.assistant.data.model.ConversationState
 import com.jarvis.assistant.databinding.ActivityMainBinding
 import com.jarvis.assistant.ui.chat.ChatFragment
+import com.jarvis.assistant.ui.dev.CodingDevFragment
 import com.jarvis.assistant.ui.settings.SettingsFragment
 import com.jarvis.assistant.util.PermissionHelper
 import kotlinx.coroutines.flow.combine
@@ -34,8 +35,10 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val TAB_HOME = 0
         const val TAB_CHAT = 1
-        const val TAB_SETTINGS = 2
-        const val TAB_UPDATES = 3
+        const val TAB_CODING = 2
+        const val TAB_SETTINGS = 3
+
+        var activeInstance: MainActivity? = null
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -45,8 +48,8 @@ class MainActivity : AppCompatActivity() {
     private var currentTab = TAB_HOME
     private val homeFragment by lazy { HomeFragment() }
     private val chatFragment by lazy { ChatFragment() }
+    private val codingFragment by lazy { CodingDevFragment() }
     private val settingsFragment by lazy { SettingsFragment() }
-    private val updatesFragment by lazy { UpdatesFragment() }
 
     private val requestAudioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -178,14 +181,14 @@ class MainActivity : AppCompatActivity() {
         val trans = supportFragmentManager.beginTransaction()
             .add(R.id.fragmentContainer, homeFragment, "TAB_0")
             .add(R.id.fragmentContainer, chatFragment, "TAB_1")
-            .add(R.id.fragmentContainer, settingsFragment, "TAB_2")
-            .add(R.id.fragmentContainer, updatesFragment, "TAB_3")
+            .add(R.id.fragmentContainer, codingFragment, "TAB_2")
+            .add(R.id.fragmentContainer, settingsFragment, "TAB_3")
 
         val allTabs = listOf(
             TAB_HOME to homeFragment,
             TAB_CHAT to chatFragment,
-            TAB_SETTINGS to settingsFragment,
-            TAB_UPDATES to updatesFragment
+            TAB_CODING to codingFragment,
+            TAB_SETTINGS to settingsFragment
         )
 
         allTabs.forEach { (tabId, frag) ->
@@ -222,6 +225,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        activeInstance = this
         viewModel.refreshSettings()
         val prefs = com.jarvis.assistant.JarvisApp.instance.preferences
         if (appliedThemeKey != prefs.appTheme || appliedCustomHex != prefs.customThemeColor) {
@@ -231,11 +235,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        if (activeInstance == this) {
+            activeInstance = null
+        }
+    }
+
     private fun setupNavigationDock() {
         binding.tabHome.setOnClickListener { selectTab(TAB_HOME) }
         binding.tabChat.setOnClickListener { selectTab(TAB_CHAT) }
+        binding.tabCoding.setOnClickListener { selectTab(TAB_CODING) }
         binding.tabSettings.setOnClickListener { selectTab(TAB_SETTINGS) }
-        binding.tabUpdates.setOnClickListener { selectTab(TAB_UPDATES) }
 
         binding.tabMic.setOnClickListener {
             handleMicOrOrbClick()
@@ -254,8 +265,8 @@ class MainActivity : AppCompatActivity() {
         val tabs = listOf(
             TAB_HOME to homeFragment,
             TAB_CHAT to chatFragment,
-            TAB_SETTINGS to settingsFragment,
-            TAB_UPDATES to updatesFragment
+            TAB_CODING to codingFragment,
+            TAB_SETTINGS to settingsFragment
         )
 
         val trans = supportFragmentManager.beginTransaction()
@@ -316,8 +327,8 @@ class MainActivity : AppCompatActivity() {
         val navItems = listOf(
             Triple(TAB_HOME, binding.pillTabHome, Pair(binding.ivTabHome, binding.tvTabHome)),
             Triple(TAB_CHAT, binding.pillTabChat, Pair(binding.ivTabChat, binding.tvTabChat)),
-            Triple(TAB_SETTINGS, binding.pillTabSettings, Pair(binding.ivTabSettings, binding.tvTabSettings)),
-            Triple(TAB_UPDATES, binding.pillTabUpdates, Pair(binding.ivTabUpdates, binding.tvTabUpdates))
+            Triple(TAB_CODING, binding.pillTabCoding, Pair(binding.ivTabCoding, binding.tvTabCoding)),
+            Triple(TAB_SETTINGS, binding.pillTabSettings, Pair(binding.ivTabSettings, binding.tvTabSettings))
         )
 
         navItems.forEach { (tabId, pill, views) ->

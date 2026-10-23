@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/themeBg"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="96dp">
+
+    <!-- Top Header -->
+    <LinearLayout
+        android:id="@+id/layoutDevHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:id="@+id/ivDevIcon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_jarvis_icon_square"
+            android:src="@drawable/ic_code_chip"
+            android:padding="8dp"
+            app:tint="?attr/themeAccent"
+            android:contentDescription="Dev Studio Icon" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Dev Studio"
+                android:textColor="?attr/themeTextPrimary"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium" />
+
+            <TextView
+                android:id="@+id/tvDevSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Autonomous Engineering • Git • Build"
+                android:textColor="?attr/themeTextMuted"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvDevAgentBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AGENT IDLE"
+            android:textColor="@color/status_green"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-medium"
+            android:textStyle="bold"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"
+            android:background="@drawable/bg_jarvis_status_badge" />
+    </LinearLayout>
+
+    <!-- Quick Action Chips Bar -->
+    <HorizontalScrollView
+        android:id="@+id/scrollDevActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:layout_marginTop="12dp"
+        app:layout_constraintTop_toBottomOf="@id/layoutDevHeader">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnChipBuildApk"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="🔨 Build APK"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:textColor="?attr/themeAccent"
+                app:strokeColor="?attr/themeAccent"
+                app:strokeWidth="1dp"
+                android:layout_marginEnd="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnChipGitStatus"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="📊 Git Status"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:textColor="?attr/themeTextPrimary"
+                app:strokeColor="?attr/themeCardBorder"
+                app:strokeWidth="1dp"
+                android:layout_marginEnd="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnChipGitPush"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="🚀 Git Push"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:textColor="?attr/themeTextPrimary"
+                app:strokeColor="?attr/themeCardBorder"
+                app:strokeWidth="1dp"
+                android:layout_marginEnd="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnChipRunTests"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="🧪 Run Tests"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:textColor="?attr/themeTextPrimary"
+                app:strokeColor="?attr/themeCardBorder"
+                app:strokeWidth="1dp"
+                android:layout_marginEnd="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnChipInitRepo"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="📦 Init Repo"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:textColor="?attr/themeTextPrimary"
+                app:strokeColor="?attr/themeCardBorder"
+                app:strokeWidth="1dp"
+                android:layout_marginEnd="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnChipClearConsole"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="🧹 Clear"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:textColor="?attr/themeTextMuted"
+                app:strokeColor="?attr/themeCardBorder"
+                app:strokeWidth="1dp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- Terminal & Build Output Console Card -->
+    <LinearLayout
+        android:id="@+id/layoutConsoleCard"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_jarvis_card"
+        android:padding="12dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp"
+        app:layout_constraintTop_toBottomOf="@id/scrollDevActions"
+        app:layout_constraintBottom_toTopOf="@id/layoutCommandInput">
+
+        <!-- Console Bar Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <View
+                android:id="@+id/viewConsoleIndicator"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/bg_jarvis_mic_center"
+                android:backgroundTint="@color/status_green" />
+
+            <TextView
+                android:id="@+id/tvConsoleHeader"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="TERMINAL CONSOLE • BASH &amp; GIT"
+                android:textColor="?attr/themeTextMuted"
+                android:textSize="11sp"
+                android:letterSpacing="0.05"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"
+                android:layout_marginStart="8dp" />
+
+            <TextView
+                android:id="@+id/btnCopyLogs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="COPY"
+                android:textColor="?attr/themeAccent"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"
+                android:padding="4dp" />
+        </LinearLayout>
+
+        <!-- Scrollable Monospace Terminal Logs -->
+        <ScrollView
+            android:id="@+id/scrollTerminalLog"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:scrollbars="vertical">
+
+            <TextView
+                android:id="@+id/tvTerminalLog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:typeface="monospace"
+                android:textSize="12sp"
+                android:textColor="#34D399"
+                android:lineSpacingExtra="3dp"
+                android:textIsSelectable="true"
+                android:text="JARVIS Autonomous Engineering Agent v2.0\nReady. Type a prompt or select a quick action above." />
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- Command / Prompt Input Bar -->
+    <LinearLayout
+        android:id="@+id/layoutCommandInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <EditText
+            android:id="@+id/etDevCommand"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:hint="Type coding prompt, git or build command..."
+            android:textColorHint="?attr/themeTextMuted"
+            android:textColor="?attr/themeTextPrimary"
+            android:textSize="13sp"
+            android:background="@drawable/bg_jarvis_icon_square"
+            android:paddingHorizontal="14dp"
+            android:imeOptions="actionSend"
+            android:inputType="text" />
+
+        <ImageButton
+            android:id="@+id/btnExecuteDevCommand"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_jarvis_pill_button"
+            android:src="@drawable/ic_send_up"
+            app:tint="#FFFFFF"
+            android:contentDescription="Execute" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

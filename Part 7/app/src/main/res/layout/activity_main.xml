@@ -168,7 +168,49 @@
             </LinearLayout>
         </FrameLayout>
 
-        <!-- Tab 4: Settings -->
+        <!-- Tab 4: Coding / Dev Studio -->
+        <FrameLayout
+            android:id="@+id/tabCoding"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true">
+
+            <LinearLayout
+                android:id="@+id/pillTabCoding"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
+                android:minWidth="52dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="3dp">
+
+                <ImageView
+                    android:id="@+id/ivTabCoding"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_code_chip"
+                    app:tint="?attr/themeTextMuted"
+                    android:contentDescription="Coding" />
+
+                <TextView
+                    android:id="@+id/tvTabCoding"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Coding"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif-medium"
+                    android:includeFontPadding="false"
+                    android:layout_marginTop="2dp"
+                    android:textColor="?attr/themeTextMuted" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- Tab 5: Settings -->
         <FrameLayout
             android:id="@+id/tabSettings"
             android:layout_width="0dp"
@@ -201,61 +243,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Settings"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:fontFamily="sans-serif-medium"
-                    android:includeFontPadding="false"
-                    android:layout_marginTop="2dp"
-                    android:textColor="?attr/themeTextMuted" />
-            </LinearLayout>
-        </FrameLayout>
-
-        <!-- Tab 5: Updates -->
-        <FrameLayout
-            android:id="@+id/tabUpdates"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:clickable="true"
-            android:focusable="true">
-
-            <LinearLayout
-                android:id="@+id/pillTabUpdates"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:layout_gravity="center"
-                android:minWidth="52dp"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="3dp">
-
-                <FrameLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        android:id="@+id/ivTabUpdates"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:src="@drawable/ic_nav_bell"
-                        app:tint="?attr/themeTextMuted"
-                        android:contentDescription="Updates" />
-
-                    <View
-                        android:id="@+id/badgeUpdates"
-                        android:layout_width="6dp"
-                        android:layout_height="6dp"
-                        android:layout_gravity="top|end"
-                        android:background="@drawable/bg_jarvis_mic_center"
-                        android:backgroundTint="@color/status_red" />
-                </FrameLayout>
-
-                <TextView
-                    android:id="@+id/tvTabUpdates"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Updates"
                     android:textSize="10sp"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif-medium"

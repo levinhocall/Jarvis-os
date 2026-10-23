@@ -222,6 +222,14 @@ class JarvisUnifiedRuntime(
             // 4. Cognitive Routing
             val route = router.route(input, isNetworkAvailable = isNetworkAvailable)
 
+            if (route.taskType == com.jarvis.assistant.automation.routing.TaskTaxonomy.CODING_DEV) {
+                try {
+                    com.jarvis.assistant.ui.home.MainActivity.activeInstance?.runOnUiThread {
+                        com.jarvis.assistant.ui.home.MainActivity.activeInstance?.selectTab(com.jarvis.assistant.ui.home.MainActivity.TAB_CODING)
+                    }
+                } catch (_: Throwable) {}
+            }
+
             // 5. Offline Mode Handling
             if (!isNetworkAvailable || (route.selectedTier == ModelTier.LOCAL_REFLEX && route.providerId == "local_reflex")) {
                 val offlineResult = offlineCoordinator.handleCommandOffline(input)
