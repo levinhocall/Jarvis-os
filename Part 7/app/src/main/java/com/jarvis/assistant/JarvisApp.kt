@@ -17,6 +17,7 @@ import com.jarvis.assistant.data.repository.ChatRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,6 +62,9 @@ class JarvisApp : Application() {
     lateinit var commandExecutor: CommandExecutor
         private set
 
+    lateinit var unifiedRuntime: com.jarvis.assistant.core.runtime.JarvisUnifiedRuntime
+        private set
+
     override fun onCreate() {
         super.onCreate()
         SecurityManager.verify(this)
@@ -88,6 +92,12 @@ class JarvisApp : Application() {
             whatsappAssistant = whatsAppAssistant,
             memoryManager = memoryManager
         )
+
+        // Unified Runtime & Self-Diagnostics
+        unifiedRuntime = com.jarvis.assistant.core.runtime.JarvisUnifiedRuntime()
+        appScope.launch {
+            unifiedRuntime.bootSelfTest(context = this@JarvisApp)
+        }
 
         VoskModelManager.init(this, CoroutineScope(Dispatchers.Default))
         com.jarvis.assistant.audio.HeadsetWhisperManager.init(this, appScope)

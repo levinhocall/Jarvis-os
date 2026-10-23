@@ -2776,7 +2776,10 @@ class JarvisConversationService : Service() {
         val clean = text.lowercase(Locale.ROOT).trim()
         val patterns = listOf(
             "stop", "ruk jao", "ruko", "cancel", "abort", "pause",
-            "bas karo", "bas", "wait", "suno", "thahar", "hold on", "ruk ja", "band karo"
+            "bas karo", "bas", "wait", "suno", "thahar", "hold on", "ruk ja", "band karo",
+            "chup", "chup karo", "chup ho jao", "chup raho", "chup kar", "shutup", "shut up",
+            "arrey ruko", "arey ruko", "arre suno", "arey suno", "suno na", "bas bas",
+            "ek minute", "ek second", "rehne do", "ruk", "shant ho jao", "shant raho"
         )
         val matched = patterns.firstOrNull { containsPhrase(clean, it) } ?: return false
         val matchIndex = clean.indexOf(matched)
