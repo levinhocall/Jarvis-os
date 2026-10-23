@@ -9,20 +9,24 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.jarvis.assistant.data.chat.ChatDao
 import com.jarvis.assistant.data.chat.ChatMessageEntity
 import com.jarvis.assistant.data.chat.ChatSessionEntity
+import com.jarvis.assistant.data.mission.MissionDao
+import com.jarvis.assistant.data.mission.MissionEntity
 
 @Database(
     entities = [
         MemoryEntity::class,
         ChatSessionEntity::class,
-        ChatMessageEntity::class
+        ChatMessageEntity::class,
+        MissionEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class MemoryDatabase : RoomDatabase() {
 
     abstract fun memoryDao(): MemoryDao
     abstract fun chatDao(): ChatDao
+    abstract fun missionDao(): MissionDao
 
     companion object {
         private const val DATABASE_NAME = "jarvis_memory.db"
@@ -80,6 +84,26 @@ abstract class MemoryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS missions (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        goal TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        planJson TEXT NOT NULL,
+                        currentStepIndex INTEGER NOT NULL,
+                        approvalState TEXT NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        deduplicationKeysJson TEXT NOT NULL DEFAULT '[]',
+                        outcomeSummary TEXT
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_missions_status ON missions(status)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_missions_updatedAt ON missions(updatedAt)")
+            }
+        }
+
         @Volatile
         private var instance: MemoryDatabase? = null
 
@@ -90,7 +114,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                     MemoryDatabase::class.java,
                     DATABASE_NAME
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { instance = it }

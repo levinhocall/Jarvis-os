@@ -123,6 +123,9 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     kapt("androidx.room:room-compiler:2.6.1")
 
+    // WorkManager for background and scheduled triggers
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     // Security Crypto for EncryptedSharedPreferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 

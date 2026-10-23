@@ -95,8 +95,10 @@ class JarvisApp : Application() {
 
         // Unified Runtime & Self-Diagnostics
         unifiedRuntime = com.jarvis.assistant.core.runtime.JarvisUnifiedRuntime()
+        com.jarvis.assistant.automation.mission.MissionEngine.missionDao = memoryDatabase.missionDao()
         appScope.launch {
             unifiedRuntime.bootSelfTest(context = this@JarvisApp)
+            com.jarvis.assistant.automation.mission.MissionEngine.resumeNonTerminalMissions(this@JarvisApp)
         }
 
         VoskModelManager.init(this, CoroutineScope(Dispatchers.Default))

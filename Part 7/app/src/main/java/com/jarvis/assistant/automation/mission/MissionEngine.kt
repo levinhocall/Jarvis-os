@@ -39,6 +39,89 @@ object MissionEngine {
     // Pluggable LLM planner instance (used when network + healthy provider are available)
     var llmPlanner: com.jarvis.assistant.automation.agent.LlmPlanner? = null
 
+    // Persistent Room DAO for survivable missions across process death and reboots
+    var missionDao: com.jarvis.assistant.data.mission.MissionDao? = null
+    private val gson = com.google.gson.Gson()
+
+    suspend fun persistMission(mission: MissionDefinition, currentStepIdx: Int = 0) {
+        val dao = missionDao ?: return
+        try {
+            val entity = com.jarvis.assistant.data.mission.MissionEntity(
+                id = mission.missionId,
+                goal = mission.goal,
+                status = mission.status.name,
+                planJson = gson.toJson(mission.steps),
+                currentStepIndex = currentStepIdx,
+                approvalState = mission.approvalState.name,
+                updatedAt = System.currentTimeMillis(),
+                deduplicationKeysJson = gson.toJson(recentConsequentialActions.keys().toList()),
+                outcomeSummary = mission.outcomeSummary
+            )
+            dao.insertOrUpdate(entity)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to persist mission ${mission.missionId}: ${e.message}", e)
+        }
+    }
+
+    suspend fun resumeNonTerminalMissions(context: Context? = null): List<MissionDefinition> = mutex.withLock {
+        val dao = missionDao ?: return emptyList()
+        val entities = dao.getNonTerminalMissions()
+        val list = mutableListOf<MissionDefinition>()
+
+        for (e in entities) {
+            try {
+                // Restore dedup keys
+                if (e.deduplicationKeysJson.isNotBlank()) {
+                    val keys = gson.fromJson(e.deduplicationKeysJson, Array<String>::class.java)
+                    keys?.forEach { recentConsequentialActions[it] = e.updatedAt }
+                }
+
+                val type = object : com.google.gson.reflect.TypeToken<List<MissionStep>>() {}.type
+                val steps: List<MissionStep> = gson.fromJson(e.planJson, type) ?: emptyList()
+
+                // If in flight step was non-idempotent or consequential at crash time -> mark UNVERIFIED
+                val sanitizedSteps = steps.mapIndexed { idx, st ->
+                    if (idx == e.currentStepIndex && (st.status == MissionStepStatus.RUNNING || st.status == MissionStepStatus.PENDING)) {
+                        if (!st.isIdempotent || st.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
+                            st.copy(
+                                status = MissionStepStatus.UNVERIFIED,
+                                failureReason = "Process died while step was in flight. Manual user confirmation required."
+                            )
+                        } else {
+                            st
+                        }
+                    } else {
+                        st
+                    }
+                }
+
+                val hasUnverified = sanitizedSteps.any { it.status == MissionStepStatus.UNVERIFIED }
+                val overallStatus = if (hasUnverified) {
+                    MissionOverallStatus.WAITING_FOR_APPROVAL
+                } else {
+                    try { MissionOverallStatus.valueOf(e.status) } catch (_: Exception) { MissionOverallStatus.EXECUTING }
+                }
+
+                val mission = MissionDefinition(
+                    missionId = e.id,
+                    goal = e.goal,
+                    steps = sanitizedSteps,
+                    status = overallStatus,
+                    approvalState = if (hasUnverified) MissionApprovalState.PENDING_APPROVAL else try { MissionApprovalState.valueOf(e.approvalState) } catch (_: Exception) { MissionApprovalState.APPROVED },
+                    outcomeSummary = e.outcomeSummary,
+                    createdAt = e.updatedAt,
+                    updatedAt = System.currentTimeMillis()
+                )
+
+                persistMission(mission, e.currentStepIndex)
+                list.add(mission)
+            } catch (err: Exception) {
+                Log.e(TAG, "Error resuming mission: ${err.message}", err)
+            }
+        }
+        return list
+    }
+
     /**
      * Initializes and launches a mission from a user goal.
      * Tries LLM planner when available; falls back to deterministic regex planner for offline fast-path.
