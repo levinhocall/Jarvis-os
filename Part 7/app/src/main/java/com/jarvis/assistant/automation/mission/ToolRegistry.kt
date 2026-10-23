@@ -23,6 +23,19 @@ object ToolRegistry {
 
     private val tools = ConcurrentHashMap<String, ToolDefinition>()
 
+    val TOOL_ALIASES: Map<String, String> = mapOf(
+        "send_whatsapp_message" to "whatsapp_send",
+        "send_whatsapp" to "whatsapp_send",
+        "make_phone_call" to "call_contact",
+        "search_and_play_youtube" to "youtube_play",
+        "search_youtube" to "youtube_play",
+        "set_flashlight" to "device_control",
+        "click_element" to "click_ui_element",
+        "scroll" to "scroll_screen"
+    )
+
+    fun resolveToolName(name: String): String = TOOL_ALIASES[name] ?: name
+
     init {
         registerBuiltInTools()
     }
@@ -77,6 +90,23 @@ object ToolRegistry {
 
         register(
             ToolDefinition(
+                name = "delete_whatsapp_message",
+                description = "Deletes a message or conversation in WhatsApp",
+                parameters = listOf(
+                    ToolParameter("contact", "String", "Contact name or chat identifier", required = true),
+                    ToolParameter("target_text", "String", "Optional specific text of message to delete", required = false)
+                ),
+                requiredPermissions = listOf(
+                    android.Manifest.permission.READ_CONTACTS
+                ),
+                requiresAccessibility = true,
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
                 name = "search_web",
                 description = "Searches the web via browser or search provider",
                 parameters = listOf(
@@ -113,6 +143,19 @@ object ToolRegistry {
 
         register(
             ToolDefinition(
+                name = "open_app",
+                description = "Launches an installed Android application",
+                parameters = listOf(
+                    ToolParameter("app_name", "String", "Name or label of the application", required = true),
+                    ToolParameter("package_name", "String", "Optional package identifier", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
                 name = "click_ui_element",
                 description = "Clicks a visible on-screen UI element by semantic text",
                 parameters = listOf(
@@ -120,6 +163,20 @@ object ToolRegistry {
                 ),
                 requiresAccessibility = true,
                 riskLevel = MissionRisk.MEDIUM,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "type_text",
+                description = "Types text into the currently focused input field",
+                parameters = listOf(
+                    ToolParameter("text", "String", "Text content to type", required = true),
+                    ToolParameter("target_text", "String", "Optional label or description of the field", required = false)
+                ),
+                requiresAccessibility = true,
+                riskLevel = MissionRisk.LOW,
                 isIdempotent = false
             )
         )
@@ -168,15 +225,108 @@ object ToolRegistry {
                 isIdempotent = true
             )
         )
+
+        register(
+            ToolDefinition(
+                name = "log_recall_core",
+                description = "Logs or updates long-term memory key-value context",
+                parameters = listOf(
+                    ToolParameter("key", "String", "Memory category or identifier", required = true),
+                    ToolParameter("value", "String", "Memory content to store", required = true)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "query_recall_core",
+                description = "Retrieves stored long-term memory context",
+                parameters = listOf(
+                    ToolParameter("query", "String", "Search query or category", required = true)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "task_completed",
+                description = "Signals that the goal has been successfully accomplished",
+                parameters = listOf(
+                    ToolParameter("summary", "String", "Truthful final outcome report", required = true)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        // Dev & Coding capabilities
+        register(
+            ToolDefinition(
+                name = "termux_execute",
+                description = "Executes command in Termux development environment",
+                parameters = listOf(
+                    ToolParameter("command", "String", "Shell command to run", required = true)
+                ),
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "inspect_code",
+                description = "Reads or inspects codebase files",
+                parameters = listOf(
+                    ToolParameter("path", "String", "File path relative to repository root", required = true)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "edit_code",
+                description = "Edits or patches codebase files",
+                parameters = listOf(
+                    ToolParameter("path", "String", "File path to modify", required = true),
+                    ToolParameter("content", "String", "Content or replacement code", required = true)
+                ),
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "run_git",
+                description = "Runs git version control operations",
+                parameters = listOf(
+                    ToolParameter("subcommand", "String", "Git subcommand (e.g. status, diff, commit)", required = true)
+                ),
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
     }
 
     fun register(tool: ToolDefinition) {
         tools[tool.name] = tool
     }
 
-    fun getTool(name: String): ToolDefinition? = tools[name]
+    fun getTool(name: String): ToolDefinition? = tools[resolveToolName(name)]
 
-    fun getAllTools(): List<ToolDefinition> = tools.values.toList()
+    fun getAllTools(): List<ToolDefinition> = tools.values.distinctBy { it.name }
+
+    fun getAllToolNamesWithAliases(): Set<String> {
+        val set = tools.keys.toMutableSet()
+        set.addAll(TOOL_ALIASES.keys)
+        return set
+    }
 
     /**
      * Strictly validates a proposed tool invocation before execution.
@@ -186,7 +336,7 @@ object ToolRegistry {
         parameters: Map<String, Any?>,
         context: Context? = null
     ): ToolValidationResult {
-        val tool = tools[toolName] ?: return ToolValidationResult.UnknownTool(toolName)
+        val tool = getTool(toolName) ?: return ToolValidationResult.UnknownTool(toolName)
 
         // 1. Validate required parameters
         val missing = mutableListOf<String>()

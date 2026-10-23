@@ -36,14 +36,74 @@ object MissionEngine {
     // Registered tool execution hook (for custom runners or unit tests)
     var toolExecutor: (suspend (step: MissionStep, context: Context?) -> Pair<Boolean, MissionVerificationEvidence>)? = null
 
+    // Pluggable LLM planner instance (used when network + healthy provider are available)
+    var llmPlanner: com.jarvis.assistant.automation.agent.LlmPlanner? = null
+
     /**
      * Initializes and launches a mission from a user goal.
+     * Tries LLM planner when available; falls back to deterministic regex planner for offline fast-path.
      */
     suspend fun startMission(
         context: Context? = null,
         goal: String,
         userConstraints: List<String> = emptyList()
     ): MissionDefinition = mutex.withLock {
+        val planner = llmPlanner
+        if (planner != null && planner.isAvailable()) {
+            val missionId = java.util.UUID.randomUUID().toString()
+            val initialMission = MissionDefinition(
+                missionId = missionId,
+                goal = goal,
+                userConstraints = userConstraints,
+                steps = emptyList(),
+                status = MissionOverallStatus.EXECUTING,
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = initialMission
+            engineScope.launch {
+                val result = planner.planAndExecute(goal, context) { toolName, args ->
+                    val step = MissionStep(
+                        title = "LLM Step: $toolName",
+                        toolName = toolName,
+                        parameters = args
+                    )
+                    val (success, evidence) = executeSingleStep(step, context)
+                    Pair(success && evidence.isVerified, evidence.details)
+                }
+
+                val convertedSteps = result.history.map { h ->
+                    MissionStep(
+                        title = "Step ${h.stepIndex}: ${h.toolName}",
+                        toolName = h.toolName,
+                        parameters = h.arguments,
+                        status = if (h.isVerified) MissionStepStatus.COMPLETED else MissionStepStatus.FAILED,
+                        verificationEvidence = MissionVerificationEvidence(
+                            evidenceType = if (h.isVerified) EvidenceType.EXTERNAL_API_ACKNOWLEDGED else EvidenceType.UNVERIFIED,
+                            isVerified = h.isVerified,
+                            details = h.observation
+                        )
+                    )
+                }
+
+                val finalStatus = if (result.isSuccess) {
+                    MissionOverallStatus.COMPLETED
+                } else if (result.history.any { !it.isVerified }) {
+                    MissionOverallStatus.UNVERIFIED
+                } else {
+                    MissionOverallStatus.FAILED
+                }
+
+                _activeMission.value = initialMission.copy(
+                    steps = convertedSteps,
+                    status = finalStatus,
+                    outcomeSummary = result.summary,
+                    updatedAt = System.currentTimeMillis()
+                )
+            }
+            return@withLock initialMission
+        }
+
         val mission = planMission(goal, userConstraints, context)
         _activeMission.value = mission
         Log.i(TAG, "Planned mission ${mission.missionId}: '${mission.goal}' with status ${mission.status}")

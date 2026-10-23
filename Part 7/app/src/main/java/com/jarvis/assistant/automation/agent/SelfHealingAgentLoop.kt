@@ -5,6 +5,8 @@ import com.jarvis.assistant.automation.grounding.ActionOutcomeResult
 import com.jarvis.assistant.automation.grounding.ActionType
 import com.jarvis.assistant.automation.grounding.ScreenContext
 import com.jarvis.assistant.automation.grounding.ScreenGroundingEngine
+import com.jarvis.assistant.automation.mission.ToolRegistry
+import com.jarvis.assistant.automation.mission.MissionRisk
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -19,30 +21,25 @@ object SelfHealingAgentLoop {
     private const val TAG = "SelfHealingAgentLoop"
     const val DEFAULT_MAX_RETRIES = 3
 
-    // Registered safe tools
-    val REGISTERED_TOOLS = setOf(
-        "open_app",
-        "click_element",
-        "type_text",
-        "scroll",
-        "navigate_back",
-        "search_and_play_youtube",
-        "search_youtube",
-        "send_whatsapp_message",
-        "delete_whatsapp_message",
-        "make_phone_call",
-        "set_flashlight",
-        "log_recall_core",
-        "query_recall_core",
-        "task_completed"
-    )
+    // Registered safe tools - strictly derived from single source of truth ToolRegistry
+    val REGISTERED_TOOLS: Set<String>
+        get() = ToolRegistry.getAllToolNamesWithAliases()
 
-    // Sensitive actions that mandate explicit user confirmation
-    private val SENSITIVE_TOOLS = setOf(
-        "send_whatsapp_message",
-        "delete_whatsapp_message",
-        "make_phone_call"
-    )
+    // Sensitive actions that mandate explicit user confirmation - derived from ToolRegistry risk levels
+    val SENSITIVE_TOOLS: Set<String>
+        get() {
+            val highRisk = ToolRegistry.getAllTools()
+                .filter { it.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL || it.name == "call_contact" }
+                .map { it.name }
+                .toMutableSet()
+            // Include legacy aliases
+            ToolRegistry.TOOL_ALIASES.forEach { (alias, target) ->
+                if (highRisk.contains(target)) {
+                    highRisk.add(alias)
+                }
+            }
+            return highRisk
+        }
 
     private val SENSITIVE_KEYWORDS = listOf(
         "pay", "payment", "upi", "transfer money", "delete", "remove",
