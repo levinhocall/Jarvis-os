@@ -193,7 +193,8 @@ class JarvisConversationService : Service() {
             }
         }
 
-        val isScreenSharing: StateFlow<Boolean> = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing
+        val screenBridge = ScreenCaptureBridge()
+        val isScreenSharing: StateFlow<Boolean> = screenBridge.isSharing
 
         fun elevateToMediaProjection(): Boolean {
             return activeInstance?.elevateToMediaProjection() == true
@@ -238,7 +239,7 @@ class JarvisConversationService : Service() {
         }
 
         fun stopScreenCapture() {
-            com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().stopCapture()
+            screenBridge.stopCapture()
             activeInstance?.demoteFromMediaProjection()
         }
 
@@ -263,6 +264,7 @@ class JarvisConversationService : Service() {
     private var taskProgressOverlayJob: Job? = null
     private var overlayPermissionWarningTaskId: String? = null
     private val preferences by lazy { (applicationContext as JarvisApp).preferences }
+    val deviceActionDispatcher by lazy { DeviceActionDispatcher(this) }
 
     // --- Active-conversation components ---
     private var audioRecorder: AudioRecorder? = null
