@@ -21,12 +21,22 @@ enum class ModelTier {
     FRONTIER_REASONING
 }
 
+enum class CircuitBreakerState {
+    CLOSED,
+    OPEN,
+    HALF_OPEN
+}
+
 data class ProviderHealth(
     val providerId: String,
     val isHealthy: Boolean = true,
     val consecutiveErrors: Int = 0,
     val averageLatencyMs: Long = 250L,
-    val lastErrorTimestamp: Long? = null
+    val lastErrorTimestamp: Long? = null,
+    val circuitState: CircuitBreakerState = CircuitBreakerState.CLOSED,
+    val successCount: Int = 0,
+    val totalRequests: Int = 0,
+    val successRate: Float = 1.0f
 )
 
 data class RoutingDecision(

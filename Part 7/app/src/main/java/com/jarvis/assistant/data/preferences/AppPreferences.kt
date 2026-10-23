@@ -419,4 +419,136 @@ class AppPreferences(context: Context) {
     fun clearChatHistory() {
         prefs.edit().remove(KEY_CHAT_HISTORY).apply()
     }
+
+    // --- Key Pool & Multi-Provider Architecture (Phase 5) ---
+
+    private val roundRobinIndices = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
+
+    fun getApiKeyPool(providerId: String = "gemini"): List<ApiKeyRecord> {
+        val storage = secureApiPrefs ?: prefs
+        val json = storage.getString("key_pool_$providerId", null) ?: return emptyList()
+        return try {
+            val type = object : TypeToken<List<ApiKeyRecord>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun addApiKeyToPool(providerId: String, rawKey: String) {
+        val cleanKey = rawKey.trim()
+        if (cleanKey.isBlank()) return
+        val currentList = getApiKeyPool(providerId).toMutableList()
+        if (currentList.none { it.key == cleanKey }) {
+            currentList.add(ApiKeyRecord(key = cleanKey, providerId = providerId))
+            val storage = secureApiPrefs ?: prefs
+            storage.edit().putString("key_pool_$providerId", gson.toJson(currentList)).apply()
+        }
+    }
+
+    fun removeApiKeyFromPool(providerId: String, rawKey: String) {
+        val cleanKey = rawKey.trim()
+        val currentList = getApiKeyPool(providerId).toMutableList()
+        currentList.removeAll { it.key == cleanKey }
+        val storage = secureApiPrefs ?: prefs
+        storage.edit().putString("key_pool_$providerId", gson.toJson(currentList)).apply()
+    }
+
+    @Synchronized
+    fun getNextActiveKey(providerId: String = "gemini"): String? {
+        val list = getApiKeyPool(providerId)
+        val now = System.currentTimeMillis()
+
+        // Filter active keys or cooldown keys whose cooldown has expired
+        val usableKeys = list.filter { record ->
+            when (record.state) {
+                ApiKeyState.ACTIVE -> true
+                ApiKeyState.COOLDOWN -> {
+                    if (now >= record.cooldownUntilTimestamp) {
+                        record.state = ApiKeyState.ACTIVE
+                        true
+                    } else false
+                }
+                ApiKeyState.INVALID -> false
+            }
+        }
+
+        if (usableKeys.isEmpty()) {
+            return if (providerId == "gemini") apiKey.ifBlank { null } else null
+        }
+
+        val atomicIdx = roundRobinIndices.getOrPut(providerId) { java.util.concurrent.atomic.AtomicInteger(0) }
+        val idx = Math.floorMod(atomicIdx.getAndIncrement(), usableKeys.size)
+        return usableKeys[idx].key
+    }
+
+    @Synchronized
+    fun reportKeyRateLimit(providerId: String, key: String) {
+        val list = getApiKeyPool(providerId)
+        val record = list.find { it.key == key } ?: return
+        record.failureCount++
+        // Exponential backoff with jitter
+        val baseMs = 60_000L * (1 shl (record.failureCount - 1).coerceAtMost(4))
+        val jitterMs = (Math.random() * 5000L).toLong()
+        record.state = ApiKeyState.COOLDOWN
+        record.cooldownUntilTimestamp = System.currentTimeMillis() + baseMs + jitterMs
+
+        val storage = secureApiPrefs ?: prefs
+        storage.edit().putString("key_pool_$providerId", gson.toJson(list)).apply()
+    }
+
+    @Synchronized
+    fun reportKeyInvalid(providerId: String, key: String) {
+        val list = getApiKeyPool(providerId)
+        val record = list.find { it.key == key } ?: return
+        record.state = ApiKeyState.INVALID
+
+        val storage = secureApiPrefs ?: prefs
+        storage.edit().putString("key_pool_$providerId", gson.toJson(list)).apply()
+    }
+
+    // --- Usage & Cost Tracking ---
+
+    fun recordUsage(providerId: String, promptTokens: Int, completionTokens: Int, costUsd: Double) {
+        val pTokens = prefs.getLong("usage_prompt_tokens_$providerId", 0L) + promptTokens
+        val cTokens = prefs.getLong("usage_comp_tokens_$providerId", 0L) + completionTokens
+        val currentCostBits = prefs.getLong("usage_cost_$providerId", java.lang.Double.doubleToRawLongBits(0.0))
+        val newCost = java.lang.Double.longBitsToDouble(currentCostBits) + costUsd
+
+        prefs.edit()
+            .putLong("usage_prompt_tokens_$providerId", pTokens)
+            .putLong("usage_comp_tokens_$providerId", cTokens)
+            .putLong("usage_cost_$providerId", java.lang.Double.doubleToRawLongBits(newCost))
+            .apply()
+    }
+
+    fun getUsageStats(providerId: String): ProviderUsageStats {
+        val pTokens = prefs.getLong("usage_prompt_tokens_$providerId", 0L)
+        val cTokens = prefs.getLong("usage_comp_tokens_$providerId", 0L)
+        val currentCostBits = prefs.getLong("usage_cost_$providerId", java.lang.Double.doubleToRawLongBits(0.0))
+        val cost = java.lang.Double.longBitsToDouble(currentCostBits)
+        return ProviderUsageStats(providerId, pTokens, cTokens, cost)
+    }
 }
+
+enum class ApiKeyState {
+    ACTIVE,
+    COOLDOWN,
+    INVALID
+}
+
+data class ApiKeyRecord(
+    val key: String,
+    val providerId: String = "gemini",
+    var state: ApiKeyState = ApiKeyState.ACTIVE,
+    var cooldownUntilTimestamp: Long = 0L,
+    var failureCount: Int = 0,
+    val addedTimestamp: Long = System.currentTimeMillis()
+)
+
+data class ProviderUsageStats(
+    val providerId: String,
+    val totalPromptTokens: Long = 0L,
+    val totalCompletionTokens: Long = 0L,
+    val totalCostUsd: Double = 0.0
+)

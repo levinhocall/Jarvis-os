@@ -6,9 +6,16 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
+import android.view.Gravity
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.jarvis.assistant.JarvisApp
 import com.jarvis.assistant.R
@@ -76,6 +83,110 @@ class ApiConnectionActivity : AppCompatActivity() {
         if (preferences.customEndpoint.isNotBlank()) {
             binding.tvEndpointSummary.text = "Active Endpoint: ${preferences.customEndpoint}"
         }
+
+        loadKeyPool()
+        loadUsageStats()
+    }
+
+    private fun loadKeyPool() {
+        binding.layoutKeyPoolContainer.removeAllViews()
+        val pool = preferences.getApiKeyPool("gemini")
+
+        if (pool.isEmpty()) {
+            val emptyTv = TextView(this).apply {
+                text = "No secondary keys in pool. Primary key above is used."
+                setTextColor(Color.parseColor("#94A3B8"))
+                textSize = 13f
+            }
+            binding.layoutKeyPoolContainer.addView(emptyTv)
+            return
+        }
+
+        for (item in pool) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 10, 0, 10)
+            }
+
+            val maskedKey = if (item.key.length > 8) {
+                "${item.key.take(4)}...****...${item.key.takeLast(4)}"
+            } else {
+                "****"
+            }
+
+            val keyTv = TextView(this).apply {
+                text = maskedKey
+                setTextColor(Color.WHITE)
+                textSize = 13f
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+
+            val (badgeText, badgeColor) = when (item.state) {
+                com.jarvis.assistant.data.preferences.ApiKeyState.ACTIVE -> "ACTIVE" to "#22C55E"
+                com.jarvis.assistant.data.preferences.ApiKeyState.COOLDOWN -> "COOLDOWN" to "#F59E0B"
+                com.jarvis.assistant.data.preferences.ApiKeyState.INVALID -> "INVALID" to "#EF4444"
+            }
+
+            val statusTv = TextView(this).apply {
+                text = badgeText
+                setTextColor(Color.parseColor(badgeColor))
+                textSize = 11f
+                setPadding(12, 4, 12, 4)
+                setBackgroundResource(R.drawable.bg_jarvis_status_badge)
+            }
+
+            val deleteBtn = ImageView(this).apply {
+                setImageResource(R.drawable.ic_close)
+                imageTintList = ColorStateList.valueOf(Color.parseColor("#EF4444"))
+                setPadding(16, 8, 8, 8)
+                setOnClickListener {
+                    preferences.removeApiKeyFromPool("gemini", item.key)
+                    loadKeyPool()
+                    Toast.makeText(this@ApiConnectionActivity, "Key removed from pool", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            row.addView(keyTv)
+            row.addView(statusTv)
+            row.addView(deleteBtn)
+            binding.layoutKeyPoolContainer.addView(row)
+        }
+    }
+
+    private fun loadUsageStats() {
+        val geminiStats = preferences.getUsageStats("gemini")
+        val openAiStats = preferences.getUsageStats("openai_compatible")
+
+        val geminiCostFormatted = String.format(java.util.Locale.US, "%.4f", geminiStats.totalCostUsd)
+        val openAiCostFormatted = String.format(java.util.Locale.US, "%.4f", openAiStats.totalCostUsd)
+
+        binding.tvGeminiUsageStats.text =
+            "Gemini: ${geminiStats.totalPromptTokens} prompt / ${geminiStats.totalCompletionTokens} comp tokens ($$geminiCostFormatted)"
+        binding.tvOpenAiUsageStats.text =
+            "OpenAI Compatible: ${openAiStats.totalPromptTokens} prompt / ${openAiStats.totalCompletionTokens} comp tokens ($$openAiCostFormatted)"
+    }
+
+    private fun showAddPoolKeyDialog() {
+        val input = EditText(this).apply {
+            hint = "Enter Gemini API key (AIzaSy...)"
+            setSingleLine(true)
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Add Key to Rotation Pool")
+            .setMessage("Add an additional Gemini API key. Calls will rotate round-robin across active keys.")
+            .setView(input)
+            .setPositiveButton("Add") { _, _ ->
+                val newKey = input.text.toString().trim()
+                if (newKey.isNotBlank()) {
+                    preferences.addApiKeyToPool("gemini", newKey)
+                    loadKeyPool()
+                    Toast.makeText(this, "Key added to rotation pool", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun setupListeners() {
@@ -102,6 +213,10 @@ class ApiConnectionActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             testConnection(enteredKey)
+        }
+
+        binding.btnAddPoolKey.setOnClickListener {
+            showAddPoolKeyDialog()
         }
 
         binding.btnSaveConnection.setOnClickListener {
