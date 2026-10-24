@@ -17,9 +17,75 @@ object VoiceInterruptionCoordinator {
     private const val TAG = "VoiceInterruptionCoord"
     private const val DEBOUNCE_WINDOW_MS = 350L
 
+    interface TimeProvider {
+        fun currentTimeMillis(): Long
+    }
+
+    object SystemTimeProvider : TimeProvider {
+        override fun currentTimeMillis(): Long = System.currentTimeMillis()
+    }
+
+    var timeProvider: TimeProvider = SystemTimeProvider
+
+    const val ECHO_TAIL_MS = 450L
+    const val WATCHDOG_FORCE_UNMUTE_MS = 60_000L
+
+    val playbackBufferCount = java.util.concurrent.atomic.AtomicInteger(0)
+    val lastPlaybackFinishTime = AtomicLong(0L)
+    val playbackStartTime = AtomicLong(0L)
+
     val activeEpoch = AtomicLong(0L)
     private val lastInterruptionTime = AtomicLong(0L)
     private val isInterruptionActive = AtomicBoolean(false)
+
+    /**
+     * Called when an audio playback chunk is submitted to the output player.
+     */
+    fun onPlaybackBufferEnqueued() {
+        if (playbackBufferCount.getAndIncrement() == 0) {
+            playbackStartTime.set(timeProvider.currentTimeMillis())
+        }
+    }
+
+    /**
+     * Called when an audio playback chunk finishes rendering.
+     */
+    fun onPlaybackBufferCompleted() {
+        val remaining = playbackBufferCount.updateAndGet { if (it > 0) it - 1 else 0 }
+        if (remaining == 0) {
+            lastPlaybackFinishTime.set(timeProvider.currentTimeMillis())
+        }
+    }
+
+    /**
+     * Called on speech interruption or manual playback stop.
+     */
+    fun onPlaybackStopped() {
+        playbackBufferCount.set(0)
+        lastPlaybackFinishTime.set(timeProvider.currentTimeMillis())
+    }
+
+    /**
+     * Returns true if microphone input should be suppressed to prevent loudspeaker self-echo.
+     * Mutes during active playback buffer rendering, maintains a 450ms acoustic dissipation tail,
+     * and employs a 60s watchdog to automatically force unmute if buffers stall.
+     */
+    fun isEchoGuardMuted(): Boolean {
+        val now = timeProvider.currentTimeMillis()
+        val count = playbackBufferCount.get()
+        if (count > 0) {
+            val elapsed = now - playbackStartTime.get()
+            if (elapsed > WATCHDOG_FORCE_UNMUTE_MS) {
+                Log.w(TAG, "Echo guard watchdog triggered: audio playback stalled for ${elapsed}ms. Force-unmuting.")
+                playbackBufferCount.set(0)
+                lastPlaybackFinishTime.set(now)
+                return false
+            }
+            return true
+        }
+        val timeSinceFinish = now - lastPlaybackFinishTime.get()
+        return timeSinceFinish in 0 until ECHO_TAIL_MS
+    }
 
     // Hotwords for instantaneous (<50ms) single-token barge-in
     private val INSTANT_HOTWORDS = setOf(

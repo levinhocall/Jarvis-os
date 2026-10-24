@@ -1496,10 +1496,9 @@ class JarvisConversationService : Service() {
             if (_isSessionOn.value) {
                 val now = System.currentTimeMillis()
 
-                // Acoustic Echo Decay Protection (AEDP):
-                // For 150ms after speaker audio stops, discard mic chunks so room reverberation
-                // does not bounce into Gemini Live and cause false self-interruption.
-                if (now - lastPlaybackEndTime < 150L) {
+                // Acoustic Echo Decay & Echo Guard Protection:
+                // Mutes microphone while assistant audio plays and for 450ms tail after playback stops
+                if (com.jarvis.assistant.audio.VoiceInterruptionCoordinator.isEchoGuardMuted()) {
                     consecutiveVoicedFrames = 0
                     return@AudioRecorder
                 }
