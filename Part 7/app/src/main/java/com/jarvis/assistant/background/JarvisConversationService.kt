@@ -263,6 +263,7 @@ class JarvisConversationService : Service() {
     private var taskProgressOverlay: com.jarvis.assistant.ui.agent.TaskProgressOverlay? = null
     private var taskProgressOverlayJob: Job? = null
     private var overlayPermissionWarningTaskId: String? = null
+    private var edgeGlow: com.jarvis.assistant.ui.fx.ListeningEdgeGlow? = null
     private val preferences by lazy { (applicationContext as JarvisApp).preferences }
     val deviceActionDispatcher by lazy { DeviceActionDispatcher(this) }
 
@@ -474,6 +475,7 @@ class JarvisConversationService : Service() {
         if (_conversationState.value != state) {
             _conversationState.value = state
             updateNotification()
+            edgeGlow?.updateState(state)
         }
     }
 
@@ -616,6 +618,7 @@ class JarvisConversationService : Service() {
         com.jarvis.assistant.automation.offline.OfflineIntelligenceRouter.init(applicationContext)
         headsetAudioRouter = com.jarvis.assistant.audio.HeadsetAudioRouter(applicationContext)
         taskProgressOverlay = com.jarvis.assistant.ui.agent.TaskProgressOverlay(this)
+        edgeGlow = com.jarvis.assistant.ui.fx.ListeningEdgeGlow(this)
         taskProgressOverlayJob = serviceScope.launch(Dispatchers.Main.immediate) {
             combine(
                 com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState,
@@ -902,6 +905,7 @@ class JarvisConversationService : Service() {
         _liveError.value = null
 
         _isSessionOn.value = true
+        edgeGlow?.start()
         _isStandby.value = false
         acquireWifiLock()
         lastResponseTimedOut = false
@@ -3180,6 +3184,7 @@ class JarvisConversationService : Service() {
         cancelAllActiveTools()
         com.jarvis.assistant.automation.agent.AgentTaskEngine.resetForSession()
         _isSessionOn.value = false
+        edgeGlow?.stop()
         finalizeTurn()
 
 
@@ -3615,6 +3620,8 @@ class JarvisConversationService : Service() {
     }
 
     override fun onDestroy() {
+        edgeGlow?.stop()
+        edgeGlow = null
         taskProgressOverlayJob?.cancel()
         taskProgressOverlayJob = null
         taskProgressOverlay?.destroy()
