@@ -11,6 +11,36 @@ enum class DevEnvironmentType {
     REMOTE_ENVIRONMENT
 }
 
+enum class CapabilityState {
+    READY,
+    RUNNING,
+    NOT_CONFIGURED,
+    UNAVAILABLE,
+    BLOCKED,
+    FAILED
+}
+
+enum class ExecutionTarget {
+    HOST_LINUX_PROCESS,
+    TERMUX_BRIDGE,
+    APP_INTERNAL_RESTRICTED,
+    UNAVAILABLE
+}
+
+data class DevEnvironmentStatus(
+    val internalWorkspaceStatus: CapabilityState,
+    val internalWorkspacePath: String,
+    val termuxStatus: CapabilityState,
+    val termuxDetails: String,
+    val gitStatus: CapabilityState,
+    val gitDetails: String,
+    val gradleStatus: CapabilityState,
+    val gradleDetails: String,
+    val activeExecutionTarget: ExecutionTarget,
+    val overallBadge: String,
+    val badgeColorHex: String
+)
+
 data class DevEnvironmentCapability(
     val type: DevEnvironmentType,
     val canExecuteCommands: Boolean,

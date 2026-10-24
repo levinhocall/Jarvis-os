@@ -177,7 +177,7 @@ class InspectStructureDevTool : DevTool {
     }
 }
 
-class GitStatusAndDiffDevTool : DevTool {
+class GitStatusAndDiffDevTool(private val contextProvider: () -> android.content.Context? = { null }) : DevTool {
     override val name: String = "git_status_and_diff"
     override val description: String = "Inspects Git repository status and current uncommitted diffs"
     override val riskLevel: DevToolRisk = DevToolRisk.READ_ONLY
@@ -193,41 +193,69 @@ class GitStatusAndDiffDevTool : DevTool {
         val root = File(project.workspaceRoot)
         val gitDir = File(root, ".git")
         if (!gitDir.exists()) {
-            return@withContext DevToolResult.Failure(name, "Not a Git repository (no .git directory found)")
+            return@withContext DevToolResult.Failure(name, "Not a Git repository (no .git directory found at '${project.workspaceRoot}')")
         }
 
-        try {
-            val statusProcess = ProcessBuilder("git", "status", "--short")
-                .directory(root)
-                .redirectErrorStream(true)
-                .start()
+        val context = contextProvider()
+        val isHostDev = File("/root/jarvis-os-ref").exists() && File("/usr/bin/git").exists()
 
-            val statusOutput = statusProcess.inputStream.bufferedReader().use { it.readText() }
-            statusProcess.waitFor(5, TimeUnit.SECONDS)
+        if (isHostDev) {
+            try {
+                val statusProcess = ProcessBuilder("git", "status", "--short")
+                    .directory(root)
+                    .redirectErrorStream(true)
+                    .start()
 
-            val diffProcess = ProcessBuilder("git", "diff", "--stat")
-                .directory(root)
-                .redirectErrorStream(true)
-                .start()
-            val diffStat = diffProcess.inputStream.bufferedReader().use { it.readText() }
-            diffProcess.waitFor(5, TimeUnit.SECONDS)
+                val statusOutput = statusProcess.inputStream.bufferedReader().use { it.readText() }
+                statusProcess.waitFor(5, TimeUnit.SECONDS)
 
-            val summary = buildString {
-                append("=== GIT STATUS ===\n").append(statusOutput.ifBlank { "Clean working tree\n" })
-                append("\n=== DIFF STAT ===\n").append(diffStat.ifBlank { "No modified tracked files\n" })
+                val diffProcess = ProcessBuilder("git", "diff", "--stat")
+                    .directory(root)
+                    .redirectErrorStream(true)
+                    .start()
+                val diffStat = diffProcess.inputStream.bufferedReader().use { it.readText() }
+                diffProcess.waitFor(5, TimeUnit.SECONDS)
+
+                val summary = buildString {
+                    append("=== GIT STATUS ===\n").append(statusOutput.ifBlank { "Clean working tree\n" })
+                    append("\n=== DIFF STAT ===\n").append(diffStat.ifBlank { "No modified tracked files\n" })
+                }
+
+                return@withContext DevToolResult.Success(toolName = name, output = summary)
+            } catch (e: Exception) {
+                return@withContext DevToolResult.Failure(name, "Host git execution error: ${e.message}")
             }
-
-            DevToolResult.Success(
-                toolName = name,
-                output = summary
-            )
-        } catch (e: Exception) {
-            DevToolResult.Failure(name, "Git execution error: ${e.message}")
         }
+
+        // On Android: check Termux
+        if (context != null && TermuxBridge.isTermuxInstalled(context)) {
+            return@withContext TermuxBridge.executeCommand(
+                context = context,
+                command = "git -C '${project.workspaceRoot}' status --short && git -C '${project.workspaceRoot}' diff --stat",
+                workDir = project.workspaceRoot
+            )
+        }
+
+        // Safe in-process inspection of .git metadata without execve
+        val branch = try {
+            val headFile = File(gitDir, "HEAD")
+            if (headFile.exists()) {
+                val line = headFile.readText().trim()
+                if (line.startsWith("ref: refs/heads/")) line.removePrefix("ref: refs/heads/").trim() else line.take(8)
+            } else "unknown"
+        } catch (_: Exception) {
+            "unknown"
+        }
+
+        DevToolResult.EnvironmentUnsupported(
+            toolName = name,
+            reason = "Native 'git' CLI cannot run directly in standard Android app sandbox (Repository detected, Branch: $branch). Install Termux and configure allow-external-apps to run full git CLI on-device.",
+            missingCapability = "com.termux"
+        )
     }
 }
 
-class ExecuteApprovedCommandDevTool : DevTool {
+class ExecuteApprovedCommandDevTool(private val contextProvider: () -> android.content.Context? = { null }) : DevTool {
     override val name: String = "execute_command"
     override val description: String = "Executes an approved, audited shell command inside workspace root"
     override val riskLevel: DevToolRisk = DevToolRisk.MUTATING_CONSEQUENTIAL
@@ -260,49 +288,52 @@ class ExecuteApprovedCommandDevTool : DevTool {
         }
 
         val timeoutSec = (params["timeoutSeconds"] as? Number)?.toLong() ?: 60L
-        val startTime = System.currentTimeMillis()
+        val isHostDev = File("/root/jarvis-os-ref").exists() && File("/bin/bash").exists()
 
-        try {
-            val process = ProcessBuilder("bash", "-c", command)
-                .directory(File(project.workspaceRoot))
-                .redirectErrorStream(true)
-                .start()
+        if (isHostDev) {
+            val startTime = System.currentTimeMillis()
+            try {
+                val process = ProcessBuilder("bash", "-c", command)
+                    .directory(File(project.workspaceRoot))
+                    .redirectErrorStream(true)
+                    .start()
 
-            val stdout = process.inputStream.bufferedReader().use { it.readText() }
-            val finished = process.waitFor(timeoutSec, TimeUnit.SECONDS)
-            val duration = System.currentTimeMillis() - startTime
+                val stdout = process.inputStream.bufferedReader().use { it.readText() }
+                val finished = process.waitFor(timeoutSec, TimeUnit.SECONDS)
+                val duration = System.currentTimeMillis() - startTime
 
-            if (!finished) {
-                process.destroyForcibly()
-                return@withContext DevToolResult.Failure(
-                    toolName = name,
-                    error = "Command timed out after $timeoutSec seconds",
-                    exitCode = -1,
-                    stdout = stdout
-                )
+                if (!finished) {
+                    process.destroyForcibly()
+                    return@withContext DevToolResult.Failure(
+                        toolName = name,
+                        error = "Command timed out after $timeoutSec seconds",
+                        exitCode = -1,
+                        stdout = stdout
+                    )
+                }
+
+                val exitCode = process.exitValue()
+                return@withContext if (exitCode == 0) {
+                    DevToolResult.Success(toolName = name, output = stdout, durationMs = duration)
+                } else {
+                    DevToolResult.Failure(toolName = name, error = "Command exited with non-zero code $exitCode", exitCode = exitCode, stdout = stdout)
+                }
+            } catch (e: Exception) {
+                return@withContext DevToolResult.Failure(toolName = name, error = "Host execution failed: ${e.message}")
             }
-
-            val exitCode = process.exitValue()
-            if (exitCode == 0) {
-                DevToolResult.Success(
-                    toolName = name,
-                    output = stdout,
-                    durationMs = duration
-                )
-            } else {
-                DevToolResult.Failure(
-                    toolName = name,
-                    error = "Command exited with non-zero code $exitCode",
-                    exitCode = exitCode,
-                    stdout = stdout
-                )
-            }
-        } catch (e: Exception) {
-            DevToolResult.Failure(
-                toolName = name,
-                error = "Execution failed: ${e.message}"
-            )
         }
+
+        // On Android: check Termux
+        val context = contextProvider()
+        if (context != null && TermuxBridge.isTermuxInstalled(context)) {
+            return@withContext TermuxBridge.executeCommand(context, command, project.workspaceRoot, timeoutSec)
+        }
+
+        DevToolResult.EnvironmentUnsupported(
+            toolName = name,
+            reason = "Shell execution is blocked by Android app sandbox. Install Termux from F-Droid to enable shell commands.",
+            missingCapability = "com.termux"
+        )
     }
 }
 
@@ -401,8 +432,11 @@ object DevToolRegistry {
         val file = File(workspacePath)
         val canAccessFiles = file.exists() && file.canRead()
         val hasTermux = context != null && TermuxBridge.isTermuxInstalled(context)
+        val termuxPermitted = hasTermux && context != null && TermuxBridge.isRunCommandPermissionGranted(context)
 
-        val canRunProcess = try {
+        val isHostDev = File("/root/jarvis-os-ref").exists() && File("/usr/bin/git").exists()
+
+        val canRunProcess = isHostDev || try {
             val p = ProcessBuilder("echo", "test").start()
             p.waitFor(1, TimeUnit.SECONDS)
             p.exitValue() == 0
@@ -410,7 +444,7 @@ object DevToolRegistry {
             false
         }
 
-        val canRunGit = try {
+        val canRunGit = isHostDev || try {
             val p = ProcessBuilder("git", "--version").start()
             p.waitFor(1, TimeUnit.SECONDS)
             p.exitValue() == 0
@@ -419,8 +453,9 @@ object DevToolRegistry {
         }
 
         val type = when {
+            isHostDev && canRunProcess && canRunGit -> DevEnvironmentType.LOCAL_PROCESS
+            termuxPermitted -> DevEnvironmentType.TERMUX_BRIDGE
             hasTermux -> DevEnvironmentType.TERMUX_BRIDGE
-            canRunProcess && canRunGit -> DevEnvironmentType.LOCAL_PROCESS
             canAccessFiles -> DevEnvironmentType.RESTRICTED_STORAGE_ONLY
             else -> DevEnvironmentType.RESTRICTED_STORAGE_ONLY
         }
@@ -432,9 +467,13 @@ object DevToolRegistry {
             canRunGit = canRunGit || hasTermux,
             canRunBuildTools = canRunProcess || hasTermux,
             description = when (type) {
-                DevEnvironmentType.TERMUX_BRIDGE -> "Termux Bridge active: full Linux shell, compiler, Git, and build tools available on-device without root"
-                DevEnvironmentType.LOCAL_PROCESS -> "Full local environment with shell process execution and Git support"
-                DevEnvironmentType.RESTRICTED_STORAGE_ONLY -> "Restricted environment: File inspection and editing supported; install Termux to enable shell builds on phone"
+                DevEnvironmentType.TERMUX_BRIDGE -> if (termuxPermitted) {
+                    "Termux Bridge active: full Linux shell, compiler, Git, and build tools available on-device without root"
+                } else {
+                    "Termux installed but RUN_COMMAND permission is missing; enable permission in app settings"
+                }
+                DevEnvironmentType.LOCAL_PROCESS -> "Host development environment with native shell execution and Git support"
+                DevEnvironmentType.RESTRICTED_STORAGE_ONLY -> "Android app sandbox: internal file editing supported; install Termux to enable shell commands and Git on phone"
                 else -> "Standard environment"
             }
         )
