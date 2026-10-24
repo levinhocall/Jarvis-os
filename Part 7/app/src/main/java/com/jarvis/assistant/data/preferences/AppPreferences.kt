@@ -2,6 +2,7 @@ package com.jarvis.assistant.data.preferences
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.provider.Settings
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -11,6 +12,7 @@ import com.jarvis.assistant.data.model.ChatTurn
 import com.jarvis.assistant.data.model.GeminiConstants
 
 class AppPreferences(context: Context) {
+    private val appContext: Context = context.applicationContext
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
     private val secureApiPrefs: SharedPreferences? = try {
         val masterKey = MasterKey.Builder(context.applicationContext)
@@ -254,7 +256,21 @@ class AppPreferences(context: Context) {
         set(value) = prefs.edit().putString(KEY_ASSISTANT_NAME, value.trim().ifBlank { "Jarvis" }).apply()
 
     var isReduceMotionEnabled: Boolean
-        get() = prefs.getBoolean(KEY_REDUCE_MOTION, false)
+        get() {
+            if (prefs.contains(KEY_REDUCE_MOTION)) {
+                return prefs.getBoolean(KEY_REDUCE_MOTION, false)
+            }
+            return try {
+                val scale = Settings.Global.getFloat(
+                    appContext.contentResolver,
+                    Settings.Global.ANIMATOR_DURATION_SCALE,
+                    1.0f
+                )
+                scale == 0.0f
+            } catch (_: Exception) {
+                false
+            }
+        }
         set(value) = prefs.edit().putBoolean(KEY_REDUCE_MOTION, value).apply()
 
     var isNewLookBetaEnabled: Boolean
@@ -273,6 +289,7 @@ class AppPreferences(context: Context) {
                 "dark", "midnight_onyx", "cyberpunk_neon", "emerald_obsidian" -> "dark"
                 "red" -> "red"
                 "sunset", "rose_gold" -> "sunset"
+                "lia", "pearl" -> "lia"
                 "custom" -> "custom"
                 else -> "light"
             }

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Reusable 3D Glass & Widget Styles -->
+    <style name="Widget.Jarvis.GlassCard" parent="">
+        <item name="glassCornerRadius">@dimen/card_radius_lg</item>
+        <item name="glassSurfaceColor">@color/glass_surface</item>
+        <item name="glassBorderColor">@color/glass_border</item>
+        <item name="glassRimLightColor">@color/glass_rim_light</item>
+        <item name="glassBorderWidth">@dimen/glass_border_width</item>
+        <item name="glassElevation">@dimen/glass_elevation</item>
+    </style>
+
+    <style name="Widget.Jarvis.PrimaryPillButton" parent="">
+        <item name="android:minHeight">@dimen/min_touch_target</item>
+        <item name="pillStartColor">@color/accent_pill_start</item>
+        <item name="pillEndColor">@color/accent_pill_end</item>
+        <item name="pillTextColor">@color/accent_pill_text</item>
+        <item name="pillHaptic">true</item>
+    </style>
+
+    <style name="TextAppearance.Jarvis.SerifTitle" parent="">
+        <item name="android:fontFamily">@font/instrument_serif</item>
+        <item name="android:textColor">@color/glass_text_primary</item>
+        <item name="android:textSize">28sp</item>
+    </style>
+
+    <style name="TextAppearance.Jarvis.UiBody" parent="">
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="android:textColor">@color/glass_text_secondary</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+</resources>

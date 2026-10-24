@@ -23,6 +23,7 @@ object ThemeManager {
             "dark" -> Color.parseColor("#070914")
             "red" -> Color.parseColor("#0E0307")
             "sunset" -> Color.parseColor("#FFF0EA")
+            "lia", "pearl" -> Color.parseColor("#06050E")
             "custom" -> try { Color.parseColor(customHex ?: "#FFFFFF") } catch (_: Exception) { Color.WHITE }
             else -> Color.parseColor("#EEF2F9")
         }
@@ -36,6 +37,7 @@ object ThemeManager {
             "dark" -> Triple(R.style.Theme_JarvisAssistant_Dark, false, Color.parseColor("#070914"))
             "red" -> Triple(R.style.Theme_JarvisAssistant_Red, false, Color.parseColor("#0E0307"))
             "sunset" -> Triple(R.style.Theme_JarvisAssistant_Sunset, true, Color.parseColor("#FFF0EA"))
+            "lia", "pearl" -> Triple(R.style.Theme_JarvisAssistant_Lia, false, Color.parseColor("#06050E"))
             "custom" -> {
                 val customHex = prefs?.customThemeColor ?: "#FFFFFF"
                 val parsedColor = try { Color.parseColor(customHex) } catch (_: Exception) { Color.WHITE }

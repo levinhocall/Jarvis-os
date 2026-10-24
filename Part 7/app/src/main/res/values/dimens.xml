@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Spacing Tokens -->
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">12dp</dimen>
+    <dimen name="spacing_base">16dp</dimen>
+    <dimen name="spacing_lg">24dp</dimen>
+    <dimen name="spacing_xl">32dp</dimen>
+    <dimen name="spacing_xxl">48dp</dimen>
+
+    <!-- Touch Targets -->
+    <dimen name="min_touch_target">48dp</dimen>
+
+    <!-- Corner Radii -->
+    <dimen name="corner_radius_sm">12dp</dimen>
+    <dimen name="corner_radius_md">20dp</dimen>
+    <dimen name="corner_radius_lg">28dp</dimen>
+    <dimen name="corner_radius_pill">999dp</dimen>
+    <dimen name="card_radius_md">16dp</dimen>
+    <dimen name="card_radius_lg">24dp</dimen>
+
+    <!-- Glass & Elevation Specs -->
+    <dimen name="glass_border_width">1dp</dimen>
+    <dimen name="glass_elevation">8dp</dimen>
+    <dimen name="glass_rim_light_height">1dp</dimen>
+</resources>
