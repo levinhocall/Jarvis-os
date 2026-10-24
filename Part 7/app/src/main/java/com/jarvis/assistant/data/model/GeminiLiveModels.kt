@@ -60,6 +60,12 @@ object GeminiConstants {
     const val PERSONALITY_COMPANION = "Companion Mode"
     const val PERSONALITY_PROFESSIONAL = "Professional Mode"
     const val PERSONALITY_FOCUS = "Focus Mode"
+    const val PERSONALITY_FRIENDLY = "Friendly Mode"
+    const val PERSONALITY_FUNNY = "Funny Mode"
+    const val PERSONALITY_TEACHER = "Teacher Mode"
+    const val PERSONALITY_DEVELOPER = "Developer Mode"
+    const val PERSONALITY_HUNGRY = "Foodie Mode"
+    const val PERSONALITY_NAUTANKI = "Nautanki Mode"
 
     val SUPPORTED_PERSONALITIES = listOf(
         PERSONALITY_ASSISTANT,
@@ -68,7 +74,13 @@ object GeminiConstants {
         PERSONALITY_NAZIB,
         PERSONALITY_COMPANION,
         PERSONALITY_FOCUS,
-        PERSONALITY_PROFESSIONAL
+        PERSONALITY_PROFESSIONAL,
+        PERSONALITY_FRIENDLY,
+        PERSONALITY_FUNNY,
+        PERSONALITY_TEACHER,
+        PERSONALITY_DEVELOPER,
+        PERSONALITY_HUNGRY,
+        PERSONALITY_NAUTANKI
     )
 
     const val WS_BASE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"

@@ -839,6 +839,7 @@ class JarvisConversationService : Service() {
         return withContext(Dispatchers.IO) {
             val memoryContext = app.memoryManager.getSystemPromptContext()
             val favSong = app.memoryManager.resolveSongQuery("my favorite song")
+            val conversationRecap = com.jarvis.assistant.data.memory.ConversationMemory.instance.recap()
             com.jarvis.assistant.util.PromptGenerator.generateSystemPrompt(
                 personality = preferences.personality,
                 userName = preferences.userName,
@@ -848,7 +849,9 @@ class JarvisConversationService : Service() {
                 userLocation = preferences.userLocation,
                 isTorchOn = app.phoneControlManager.isTorchOn,
                 language = preferences.language,
-                isSilentExecutionMode = preferences.isSilentExecutionMode
+                isSilentExecutionMode = preferences.isSilentExecutionMode,
+                assistantName = preferences.assistantName,
+                conversationRecap = conversationRecap
             )
         }
     }
@@ -3141,6 +3144,14 @@ class JarvisConversationService : Service() {
                 app.memoryManager.addShortTermTurn(
                     userText = query.ifEmpty { "Spoken user query" },
                     jarvisText = reply
+                )
+                com.jarvis.assistant.data.memory.ConversationMemory.instance.addTurn(
+                    role = "User",
+                    content = query.ifEmpty { "Spoken user query" }
+                )
+                com.jarvis.assistant.data.memory.ConversationMemory.instance.addTurn(
+                    role = preferences.assistantName,
+                    content = reply
                 )
             }
         }

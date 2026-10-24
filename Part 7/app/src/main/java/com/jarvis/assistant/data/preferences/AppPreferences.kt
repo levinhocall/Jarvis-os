@@ -77,6 +77,10 @@ class AppPreferences(context: Context) {
         private const val KEY_ORB_SCALE = "key_orb_scale"
         private const val KEY_ORB_HUE = "key_orb_hue"
         private const val KEY_CUSTOM_ENDPOINT = "key_custom_endpoint"
+        const val KEY_ASSISTANT_NAME = "key_assistant_name"
+        const val KEY_REDUCE_MOTION = "key_reduce_motion"
+        const val KEY_NEW_LOOK_BETA = "key_new_look_beta"
+        const val KEY_LISTENING_EDGE_GLOW = "key_listening_edge_glow"
     }
 
     var isOwnerVoiceEnabled: Boolean
@@ -244,6 +248,22 @@ class AppPreferences(context: Context) {
         set(value) {
             prefs.edit().putString(KEY_USER_NAME, value.trim()).apply()
         }
+
+    var assistantName: String
+        get() = prefs.getString(KEY_ASSISTANT_NAME, "Jarvis")?.trim().takeUnless { it.isNullOrBlank() } ?: "Jarvis"
+        set(value) = prefs.edit().putString(KEY_ASSISTANT_NAME, value.trim().ifBlank { "Jarvis" }).apply()
+
+    var isReduceMotionEnabled: Boolean
+        get() = prefs.getBoolean(KEY_REDUCE_MOTION, false)
+        set(value) = prefs.edit().putBoolean(KEY_REDUCE_MOTION, value).apply()
+
+    var isNewLookBetaEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NEW_LOOK_BETA, false)
+        set(value) = prefs.edit().putBoolean(KEY_NEW_LOOK_BETA, value).apply()
+
+    var isListeningEdgeGlowEnabled: Boolean
+        get() = prefs.getBoolean(KEY_LISTENING_EDGE_GLOW, true)
+        set(value) = prefs.edit().putBoolean(KEY_LISTENING_EDGE_GLOW, value).apply()
 
     var appTheme: String
         get() {
