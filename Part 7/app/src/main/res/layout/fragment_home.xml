@@ -124,6 +124,13 @@
             android:layout_height="match_parent"
             android:layout_gravity="center"
             android:background="@android:color/transparent" />
+
+        <com.jarvis.assistant.ui.fx.LiaOrb3DView
+            android:id="@+id/liaOrb3DView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:visibility="gone" />
     </FrameLayout>
 
     <!-- Sleek Futuristic Status Pill -->
@@ -494,5 +501,16 @@
             app:backgroundTint="@null"
             android:textColor="#FFFFFF" />
     </LinearLayout>
+
+    <com.jarvis.assistant.ui.fx.LiaSplash3D
+        android:id="@+id/liaSplashView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:elevation="100dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

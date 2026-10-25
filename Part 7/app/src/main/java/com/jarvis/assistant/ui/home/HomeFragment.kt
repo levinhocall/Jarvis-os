@@ -89,6 +89,17 @@ class HomeFragment : Fragment() {
 
         setupOrbWebView()
 
+        binding.liaOrb3DView.setOnClickListener {
+            (activity as? MainActivity)?.handleMicOrOrbClick()
+        }
+        binding.liaOrb3DView.setOnLongClickListener {
+            (activity as? MainActivity)?.handleHoldMicOrOrb()
+            true
+        }
+        if (preferences.isNewLookBetaEnabled && !com.jarvis.assistant.ui.fx.LiaSplash3D.played) {
+            binding.liaSplashView.startIntro()
+        }
+
         binding.btnScreenShareQuick.setOnClickListener {
             val isSharing = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value
             if (isSharing) {
@@ -199,6 +210,15 @@ class HomeFragment : Fragment() {
 
     fun setOrbState(state: String) {
         pendingOrbState = state
+        _binding?.liaOrb3DView?.let { orb3d ->
+            val convState = when (state.lowercase()) {
+                "listening" -> ConversationState.LISTENING
+                "speaking" -> ConversationState.SPEAKING
+                "thinking" -> ConversationState.THINKING
+                else -> ConversationState.IDLE
+            }
+            orb3d.updateState(convState)
+        }
         if (!isPageLoaded) return
         activity?.runOnUiThread {
             _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$state');", null)
@@ -225,6 +245,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun pushExternalAudio(amp: Float, bass: Float, high: Float) {
+        _binding?.liaOrb3DView?.setAudioAmplitude(amp)
         if (!isPageLoaded) return
         val now = System.currentTimeMillis()
         if (now - lastAudioPushTime < 33L) return // ~30 calls per second throttle
@@ -237,8 +258,21 @@ class HomeFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
-        binding.orbWebView.onResume()
-        binding.orbWebView.resumeTimers()
+
+        val use3dShader = preferences.isNewLookBetaEnabled &&
+                preferences.orbAnimation in listOf("shader_3d", "3d_shader") &&
+                android.os.Build.VERSION.SDK_INT >= 33 &&
+                !preferences.isReduceMotionEnabled
+
+        if (use3dShader) {
+            binding.liaOrb3DView.visibility = View.VISIBLE
+            binding.orbWebView.visibility = View.GONE
+        } else {
+            binding.liaOrb3DView.visibility = View.GONE
+            binding.orbWebView.visibility = View.VISIBLE
+            binding.orbWebView.onResume()
+            binding.orbWebView.resumeTimers()
+        }
         renderTaskFallback(com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.value)
 
         // Sync theme with settings
@@ -357,14 +391,14 @@ class HomeFragment : Fragment() {
     private fun updateHomeHeaderAndVoiceStatus() {
         if (_binding == null) return
         val userName = preferences.userName.ifBlank { "NAZIB" }
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        val timeGreeting = when (hour) {
-            in 4..11 -> "Good morning"
-            in 12..16 -> "Good afternoon"
-            in 17..21 -> "Good evening"
-            else -> "Welcome back"
+        binding.tvGreeting.text = com.jarvis.assistant.util.TimeGreetingHelper.getFullGreeting(userName)
+        if (preferences.isNewLookBetaEnabled) {
+            try {
+                val serifFont = androidx.core.content.res.ResourcesCompat.getFont(requireContext(), R.font.instrument_serif)
+                binding.tvGreeting.typeface = serifFont
+                binding.tvGreeting.textSize = 20f
+            } catch (_: Exception) {}
         }
-        binding.tvGreeting.text = "$timeGreeting, $userName"
 
         val currentLang = preferences.language.ifBlank { "Auto" }
         binding.tvQuickLanguageStatus.text = if (currentLang.contains("Auto", ignoreCase = true)) "Auto" else currentLang

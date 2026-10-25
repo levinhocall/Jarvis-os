@@ -110,6 +110,20 @@ class ChatFragment : Fragment() {
             }
         }
 
+        val prefs = (activity?.applicationContext as? JarvisApp)?.preferences
+        val assistantName = prefs?.assistantName ?: "Jarvis"
+        binding.tvChatTitle.text = assistantName
+        binding.etMessageInput.hint = "Message $assistantName..."
+
+        if (prefs?.isNewLookBetaEnabled == true && android.os.Build.VERSION.SDK_INT >= 33 && !prefs.isReduceMotionEnabled) {
+            binding.chatHeaderOrb.visibility = View.VISIBLE
+            viewLifecycleOwner.lifecycleScope.launch {
+                com.jarvis.assistant.background.JarvisConversationService.conversationState.collect { state ->
+                    binding.chatHeaderOrb.updateState(state)
+                }
+            }
+        }
+
         observeChatTurns()
     }
 
