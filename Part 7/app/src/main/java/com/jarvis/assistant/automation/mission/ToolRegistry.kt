@@ -447,6 +447,37 @@ object ToolRegistry {
                 isIdempotent = false
             )
         )
+
+        register(
+            ToolDefinition(
+                name = "execute_social_media_task",
+                description = "Automates social media tasks on Instagram, Facebook, and WhatsApp",
+                parameters = listOf(
+                    ToolParameter("platform", "String", "Target platform: 'INSTAGRAM', 'FACEBOOK', or 'WHATSAPP'", required = true),
+                    ToolParameter("action", "String", "Social action e.g. 'CREATE_POST', 'CREATE_REEL', 'CREATE_STORY', 'TEXT_POST', 'SEND_MESSAGE'", required = true),
+                    ToolParameter("media_uri", "String", "Safe content:// URI of image/video to upload", required = false),
+                    ToolParameter("caption", "String", "Caption, post text, or message text", required = false),
+                    ToolParameter("mode", "String", "Task mode: 'PUBLISH' or 'DRAFT'", required = false),
+                    ToolParameter("target_account", "String", "Target recipient or account name", required = false)
+                ),
+                requiresAccessibility = true,
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "social_media_task_control",
+                description = "Controls an active social media task (CONFIRM, REJECT, RESUME, CANCEL, STATUS)",
+                parameters = listOf(
+                    ToolParameter("command", "String", "Control command: 'CONFIRM', 'REJECT', 'RESUME', 'CANCEL', or 'STATUS'", required = true),
+                    ToolParameter("task_id", "String", "Active task identifier", required = true)
+                ),
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
     }
 
     fun register(tool: ToolDefinition) {
