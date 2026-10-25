@@ -13,6 +13,10 @@ class VoiceLatencyTracker(
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
 
+    companion object {
+        val shared: VoiceLatencyTracker by lazy { VoiceLatencyTracker() }
+    }
+
     data class TurnLatency(
         val turnId: Long,
         val userSpeechEndedMs: Long,
@@ -130,6 +134,65 @@ class VoiceLatencyTracker(
         synchronized(recentTurns) {
             val valid = recentTurns.mapNotNull { it.timeToFirstAudioMs }
             return if (valid.isNotEmpty()) valid.average().toLong() else null
+        }
+    }
+
+    fun getP50TtftMs(): Long? {
+        synchronized(recentTurns) {
+            val valid = recentTurns.mapNotNull { it.timeToFirstTokenMs }.sorted()
+            if (valid.isEmpty()) return null
+            return valid[valid.size / 2]
+        }
+    }
+
+    fun getP95TtftMs(): Long? {
+        synchronized(recentTurns) {
+            val valid = recentTurns.mapNotNull { it.timeToFirstTokenMs }.sorted()
+            if (valid.isEmpty()) return null
+            val idx = (valid.size * 0.95).toInt().coerceAtMost(valid.size - 1)
+            return valid[idx]
+        }
+    }
+
+    fun getMinTtftMs(): Long? {
+        synchronized(recentTurns) {
+            return recentTurns.mapNotNull { it.timeToFirstTokenMs }.minOrNull()
+        }
+    }
+
+    fun getMaxTtftMs(): Long? {
+        synchronized(recentTurns) {
+            return recentTurns.mapNotNull { it.timeToFirstTokenMs }.maxOrNull()
+        }
+    }
+
+    fun getP50TtfaMs(): Long? {
+        synchronized(recentTurns) {
+            val valid = recentTurns.mapNotNull { it.timeToFirstAudioMs }.sorted()
+            if (valid.isEmpty()) return null
+            return valid[valid.size / 2]
+        }
+    }
+
+    fun getP95TtfaMs(): Long? {
+        synchronized(recentTurns) {
+            val valid = recentTurns.mapNotNull { it.timeToFirstAudioMs }.sorted()
+            if (valid.isEmpty()) return null
+            val idx = (valid.size * 0.95).toInt().coerceAtMost(valid.size - 1)
+            return valid[idx]
+        }
+    }
+
+    fun getCompletedTurnCount(): Int {
+        synchronized(recentTurns) {
+            return recentTurns.size
+        }
+    }
+
+    fun clear() {
+        currentTurn.set(null)
+        synchronized(recentTurns) {
+            recentTurns.clear()
         }
     }
 }

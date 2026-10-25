@@ -123,6 +123,25 @@ class JarvisConversationService : Service() {
         private val _connectionStatus = MutableStateFlow("READY")
         val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
 
+        private val _reconnectCount = MutableStateFlow(0)
+        val reconnectCount: StateFlow<Int> = _reconnectCount.asStateFlow()
+
+        fun incrementReconnectCount() {
+            _reconnectCount.value++
+        }
+
+        private val _detectedLanguage = MutableStateFlow("UNKNOWN")
+        val detectedLanguage: StateFlow<String> = _detectedLanguage.asStateFlow()
+
+        fun updateDetectedLanguage(text: String?) {
+            if (!text.isNullOrBlank()) {
+                val detected = com.jarvis.assistant.data.model.LanguageDetector.detect(text)
+                if (detected != com.jarvis.assistant.data.model.DetectedLanguage.UNKNOWN) {
+                    _detectedLanguage.value = detected.name
+                }
+            }
+        }
+
         private val _audioLevel = MutableStateFlow(0f)
         val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
 
@@ -1124,6 +1143,7 @@ class JarvisConversationService : Service() {
                                 }
                                 currentTurnUserText.append(trimmed)
                                 _liveUserTranscript.value = currentTurnUserText.toString().trim()
+                                updateDetectedLanguage(_liveUserTranscript.value)
                                 if (_conversationState.value == ConversationState.SPEAKING) {
                                     triggerVoiceBargeIn("user_text_received")
                                 } else if (_conversationState.value == ConversationState.IDLE) {

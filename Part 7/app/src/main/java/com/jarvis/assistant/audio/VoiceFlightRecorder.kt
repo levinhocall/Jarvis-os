@@ -73,6 +73,9 @@ object VoiceFlightRecorder {
     fun recordSpeechEnd() {
         speechEndNano.set(System.nanoTime())
         record(stage = "USER_SPEECH_END", details = "vad_turn_boundary")
+        try {
+            VoiceLatencyTracker.shared.markUserSpeechEnded()
+        } catch (_: Throwable) {}
     }
 
     fun recordAiRequestSent() {
@@ -86,6 +89,9 @@ object VoiceFlightRecorder {
         val speechEnd = speechEndNano.get()
         val latency = if (speechEnd > 0) (now - speechEnd) / 1_000_000L else null
         record(stage = "AI_FIRST_TOKEN", details = "text_or_audio_meta", durationMs = latency)
+        try {
+            VoiceLatencyTracker.shared.markFirstTextReceived()
+        } catch (_: Throwable) {}
     }
 
     fun recordFirstAudioFrame() {
@@ -95,17 +101,26 @@ object VoiceFlightRecorder {
         val req = aiRequestNano.get()
         val latency = if (req > 0) (now - req) / 1_000_000L else null
         record(stage = "FIRST_AUDIO_FRAME", details = "track_write_start", durationMs = latency)
+        try {
+            VoiceLatencyTracker.shared.markFirstAudioReceived()
+        } catch (_: Throwable) {}
     }
 
     fun recordPlaybackComplete() {
         val start = playbackStartNano.get()
         val duration = if (start > 0) (System.nanoTime() - start) / 1_000_000L else null
         record(stage = "PLAYBACK_COMPLETE", details = "speaker_drain_done", durationMs = duration)
+        try {
+            VoiceLatencyTracker.shared.markTurnCompleted()
+        } catch (_: Throwable) {}
     }
 
     fun recordBargeIn(source: String) {
         bargeInCount.incrementAndGet()
         record(stage = "BARGE_IN_TRIGGERED", details = "source=$source")
+        try {
+            VoiceLatencyTracker.shared.cancelCurrentTurn()
+        } catch (_: Throwable) {}
     }
 
     fun recordAudioRoute(route: String, mode: String) {

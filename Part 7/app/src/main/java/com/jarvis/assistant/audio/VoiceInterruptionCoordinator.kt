@@ -65,6 +65,10 @@ object VoiceInterruptionCoordinator {
         lastPlaybackFinishTime.set(timeProvider.currentTimeMillis())
     }
 
+    private val watchdogTriggerCount = AtomicLong(0L)
+    fun getWatchdogTriggerCount(): Long = watchdogTriggerCount.get()
+    fun resetWatchdogTriggerCount() = watchdogTriggerCount.set(0L)
+
     /**
      * Returns true if microphone input should be suppressed to prevent loudspeaker self-echo.
      * Mutes during active playback buffer rendering, maintains a 450ms acoustic dissipation tail,
@@ -76,6 +80,7 @@ object VoiceInterruptionCoordinator {
         if (count > 0) {
             val elapsed = now - playbackStartTime.get()
             if (elapsed > WATCHDOG_FORCE_UNMUTE_MS) {
+                watchdogTriggerCount.incrementAndGet()
                 Log.w(TAG, "Echo guard watchdog triggered: audio playback stalled for ${elapsed}ms. Force-unmuting.")
                 playbackBufferCount.set(0)
                 lastPlaybackFinishTime.set(now)

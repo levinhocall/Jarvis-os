@@ -136,6 +136,19 @@ object AppLauncher {
      * Finds matching launchable apps for a spoken query.
      */
     fun findMatchingApps(context: Context, spokenName: String): List<InstalledApp> {
+        return matchAppsFromList(spokenName, getLaunchableApps(context))
+    }
+
+    /**
+     * Matches a spoken query against a candidate list of apps:
+     * 1. Exact label first (case-insensitive)
+     * 2. Spoken alias resolution
+     * 3. Prefix match (label starts with query) OR Word-prefix (any word starts with query)
+     *    with key length >= 3. If key length < 3, only exact matches are accepted.
+     * 4. NEVER loose substring: rejecting substrings inside words (e.g. "cast" inside "podcast").
+     * 5. Package name match: only if key length >= 3.
+     */
+    fun matchAppsFromList(spokenName: String, apps: List<InstalledApp>): List<InstalledApp> {
         val rawQuery = spokenName.trim().lowercase()
         if (rawQuery.isEmpty()) return emptyList()
 
@@ -145,39 +158,47 @@ object AppLauncher {
             .trim()
             .ifEmpty { rawQuery }
 
-        val apps = getLaunchableApps(context)
+        // 1. Exact match on cleanQuery or rawQuery first
+        val exactMatches = apps.filter { it.label.equals(cleanQuery, ignoreCase = true) }
+        if (exactMatches.isNotEmpty()) return exactMatches
 
+        if (cleanQuery != rawQuery) {
+            val rawExact = apps.filter { it.label.equals(rawQuery, ignoreCase = true) }
+            if (rawExact.isNotEmpty()) return rawExact
+        }
+
+        // 2. Spoken alias lookup
         SPOKEN_ALIASES[cleanQuery]?.let { candidates ->
             for (candidate in candidates) {
-                val hit = apps.filter { it.label.lowercase() == candidate }
+                val hit = apps.filter { it.label.equals(candidate, ignoreCase = true) }
                 if (hit.isNotEmpty()) return hit
             }
             for (candidate in candidates) {
-                val hit = apps.filter { it.label.lowercase().contains(candidate) }
+                val hit = apps.filter { app ->
+                    val lowerLabel = app.label.lowercase()
+                    lowerLabel.startsWith(candidate) ||
+                            lowerLabel.split(Regex("[\\s._-]+")).any { it.startsWith(candidate) }
+                }
                 if (hit.isNotEmpty()) return hit
             }
         }
 
-        // Matching strategy
-        val exactMatches = apps.filter { it.label.lowercase() == cleanQuery }
-        if (exactMatches.isNotEmpty()) return exactMatches
+        // 3. Prefix / Word-prefix with key length >= 3 (NEVER loose substring)
+        if (cleanQuery.length >= 3) {
+            // Word-prefix: label starts with query or any word token starts with query
+            val wordPrefixMatches = apps.filter { app ->
+                val lowerLabel = app.label.lowercase()
+                lowerLabel.startsWith(cleanQuery) ||
+                    lowerLabel.split(Regex("[\\s._-]+")).filter { it.isNotBlank() }.any { it.startsWith(cleanQuery) }
+            }
+            if (wordPrefixMatches.isNotEmpty()) return wordPrefixMatches
 
-        val startsWithMatches = apps.filter { it.label.lowercase().startsWith(cleanQuery) }
-        if (startsWithMatches.isNotEmpty()) return startsWithMatches
-
-        val containsMatches = apps.filter { it.label.lowercase().contains(cleanQuery) }
-        if (containsMatches.isNotEmpty()) return containsMatches
-
-        val pkgMatches = apps.filter { it.packageName.lowercase().contains(cleanQuery.replace(" ", "")) }
-        if (pkgMatches.isNotEmpty()) return pkgMatches
-
-        // Try rawQuery if cleanQuery didn't match
-        if (cleanQuery != rawQuery) {
-            val rawExact = apps.filter { it.label.lowercase() == rawQuery }
-            if (rawExact.isNotEmpty()) return rawExact
-
-            val rawContains = apps.filter { it.label.lowercase().contains(rawQuery) }
-            if (rawContains.isNotEmpty()) return rawContains
+            // Package name matches (only if domain segment starts with compactKey, never loose interior substring)
+            val compactKey = cleanQuery.replace(" ", "")
+            val pkgMatches = apps.filter { app ->
+                app.packageName.lowercase().split(".").any { it.startsWith(compactKey) }
+            }
+            if (pkgMatches.isNotEmpty()) return pkgMatches
         }
 
         return emptyList()

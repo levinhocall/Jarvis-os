@@ -226,11 +226,14 @@ class SettingsFragment : Fragment() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Voice Engine Diagnostics")
             .setMessage(summary)
-            .setPositiveButton("Close", null)
+            .setPositiveButton("Live Telemetry HUD") { _, _ ->
+                startActivity(android.content.Intent(requireContext(), com.jarvis.assistant.ui.debug.VoiceDebugActivity::class.java))
+            }
             .setNeutralButton("Clear Logs") { _, _ ->
                 com.jarvis.assistant.audio.VoiceFlightRecorder.clearHistory()
                 Toast.makeText(requireContext(), "Flight Recorder cleared", Toast.LENGTH_SHORT).show()
             }
+            .setNegativeButton("Close", null)
             .show()
     }
 

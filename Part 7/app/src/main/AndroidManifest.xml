@@ -168,6 +168,13 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@style/Theme.JarvisAssistant" />
 
+        <!-- Voice Pipeline Diagnostics & Telemetry HUD -->
+        <activity
+            android:name=".ui.debug.VoiceDebugActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.JarvisAssistant" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.forge.fileprovider"

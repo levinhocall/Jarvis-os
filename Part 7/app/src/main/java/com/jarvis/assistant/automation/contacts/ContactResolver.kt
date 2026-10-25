@@ -9,7 +9,10 @@ import androidx.core.content.ContextCompat
 import java.util.Locale
 import kotlin.math.min
 
-class ContactResolver(private val context: Context) {
+class ContactResolver(
+    private val context: Context? = null,
+    private val permissionChecker: (() -> Boolean)? = null
+) {
 
     companion object {
         private const val TAG = "ContactResolver"
@@ -25,10 +28,16 @@ class ContactResolver(private val context: Context) {
     }
 
     fun hasPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_CONTACTS
-        ) == PackageManager.PERMISSION_GRANTED
+        if (permissionChecker != null) return permissionChecker.invoke()
+        val ctx = context ?: return false
+        return try {
+            ContextCompat.checkSelfPermission(
+                ctx,
+                Manifest.permission.READ_CONTACTS
+            ) == PackageManager.PERMISSION_GRANTED
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
@@ -41,14 +50,35 @@ class ContactResolver(private val context: Context) {
             return ContactResolutionResult.PermissionDenied
         }
 
+        val allContacts = loadAllContacts()
+        return resolveContactsList(query, allContacts, explicitIndex)
+    }
+
+    /**
+     * Pure resolution logic over a provided list of contacts.
+     * Evaluates:
+     * 0. Phone number short-circuit (digits length >= 7)
+     * 1. Literal exact matches
+     * 2. Index extraction ("gufran khan 2")
+     * 3. Candidate ranking (Exact > Nickname > Prefix > Contains > Fuzzy)
+     */
+    fun resolveContactsList(query: String, allContacts: List<ContactInfo>, explicitIndex: Int? = null): ContactResolutionResult {
         val cleanQuery = query.trim().lowercase(Locale.ROOT)
-        if (cleanQuery.isBlank()) {
+        if (cleanQuery.isBlank() || allContacts.isEmpty()) {
             return ContactResolutionResult.NoMatch
         }
 
-        val allContacts = loadAllContacts()
-        if (allContacts.isEmpty()) {
-            return ContactResolutionResult.NoMatch
+        // 0. Phone number short-circuit (e.g. "+919876543210", "9876543210")
+        val digits = cleanQuery.replace(Regex("[^0-9]"), "")
+        if (digits.length >= 7 && (digits.length >= cleanQuery.length - 2)) {
+            val phoneMatches = allContacts.filter { contact ->
+                val contactDigits = contact.phoneNumber.replace(Regex("[^0-9]"), "")
+                contactDigits.endsWith(digits) || digits.endsWith(contactDigits)
+            }
+            if (phoneMatches.isNotEmpty()) {
+                return if (phoneMatches.size == 1) ContactResolutionResult.SingleMatch(phoneMatches.first())
+                else ContactResolutionResult.MultipleMatches(phoneMatches)
+            }
         }
 
         // PASS 1: Literal Exact Match First (handles literal "Gufran Khan 4", "Papa 2", "Home 1")
@@ -64,7 +94,7 @@ class ContactResolver(private val context: Context) {
         val effectiveIndex = explicitIndex ?: parsedIndex
 
         if (effectiveIndex != null && baseQuery.isNotBlank()) {
-            val baseCandidates = matchInternal(baseQuery, allContacts)
+            val baseCandidates = matchContacts(baseQuery, allContacts)
             if (baseCandidates.isNotEmpty()) {
                 return if (effectiveIndex in 1..baseCandidates.size) {
                     ContactResolutionResult.SingleMatch(baseCandidates[effectiveIndex - 1])
@@ -75,7 +105,7 @@ class ContactResolver(private val context: Context) {
         }
 
         // PASS 3: Standard Resolution on Original Query
-        val candidates = matchInternal(cleanQuery, allContacts)
+        val candidates = matchContacts(cleanQuery, allContacts)
         return when {
             candidates.size == 1 -> ContactResolutionResult.SingleMatch(candidates.first())
             candidates.size > 1 -> ContactResolutionResult.MultipleMatches(candidates)
@@ -83,13 +113,25 @@ class ContactResolver(private val context: Context) {
         }
     }
 
-    private fun matchInternal(cleanQuery: String, allContacts: List<ContactInfo>): List<ContactInfo> {
+    /**
+     * Candidate matching with strict ranking:
+     * 1. Exact match
+     * 2. Nicknames
+     * 3. Name prefix match (full name starts with query)
+     * 4. Word-boundary prefix match (any word token starts with query)
+     * 5. Contains match (substring in name, query length >= 3)
+     * 6. Fuzzy Levenshtein match
+     */
+    fun matchContacts(cleanQuery: String, allContacts: List<ContactInfo>): List<ContactInfo> {
+        val q = cleanQuery.trim().lowercase(Locale.ROOT)
+        if (q.isBlank()) return emptyList()
+
         // 1. Exact match
-        val exact = allContacts.filter { it.name.lowercase(Locale.ROOT) == cleanQuery }
+        val exact = allContacts.filter { it.name.lowercase(Locale.ROOT) == q }
         if (exact.isNotEmpty()) return exact
 
         // 2. Nicknames
-        val nicknameAliases = NICKNAME_MAP[cleanQuery]
+        val nicknameAliases = NICKNAME_MAP[q]
         if (nicknameAliases != null) {
             val nickMatches = allContacts.filter { contact ->
                 val lowerName = contact.name.lowercase(Locale.ROOT)
@@ -98,17 +140,31 @@ class ContactResolver(private val context: Context) {
             if (nickMatches.isNotEmpty()) return nickMatches
         }
 
-        // 3. Word boundary / prefix match (preserving digits)
+        // 3. Name prefix match (full contact name starts with query)
+        val namePrefixMatches = allContacts.filter { contact ->
+            contact.name.lowercase(Locale.ROOT).startsWith(q)
+        }
+        if (namePrefixMatches.isNotEmpty()) return namePrefixMatches
+
+        // 4. Word boundary / token prefix match
         val wordMatches = allContacts.filter { contact ->
             val lowerName = contact.name.lowercase(Locale.ROOT)
             val tokens = lowerName.split(" ", ".", "_", "-").filter { it.isNotBlank() }
-            tokens.any { token -> token == cleanQuery || token.startsWith(cleanQuery) }
+            tokens.any { token -> token.startsWith(q) }
         }
         if (wordMatches.isNotEmpty()) return wordMatches
 
-        // 4. Fuzzy Levenshtein match
+        // 5. Contains / substring match (ranked below prefix, above fuzzy, guarded by length >= 3)
+        if (q.length >= 3) {
+            val containsMatches = allContacts.filter { contact ->
+                contact.name.lowercase(Locale.ROOT).contains(q)
+            }
+            if (containsMatches.isNotEmpty()) return containsMatches
+        }
+
+        // 6. Fuzzy Levenshtein match
         val scored = allContacts.map { contact ->
-            val score = calculateSimilarity(cleanQuery, contact.name.lowercase(Locale.ROOT))
+            val score = calculateSimilarity(q, contact.name.lowercase(Locale.ROOT))
             Pair(contact, score)
         }.filter { it.second >= 0.70 }
             .sortedByDescending { it.second }
@@ -149,6 +205,7 @@ class ContactResolver(private val context: Context) {
     }
 
     private fun loadAllContacts(): List<ContactInfo> {
+        val ctx = context ?: return emptyList()
         val contacts = mutableListOf<ContactInfo>()
         val projection = arrayOf(
             ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
@@ -158,7 +215,7 @@ class ContactResolver(private val context: Context) {
         )
 
         try {
-            val cursor = context.contentResolver.query(
+            val cursor = ctx.contentResolver.query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 projection,
                 null,
