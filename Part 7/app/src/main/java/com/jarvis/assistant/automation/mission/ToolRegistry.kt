@@ -478,6 +478,20 @@ object ToolRegistry {
                 isIdempotent = false
             )
         )
+
+        // Website Forge 3D live builder capability
+        register(
+            ToolDefinition(
+                name = "build_website",
+                description = "Builds a complete, modern responsive website or landing page using Website Forge live 3D builder",
+                parameters = listOf(
+                    ToolParameter("prompt", "String", "Description or specification of the website to build", required = true),
+                    ToolParameter("mode", "String", "Generation mode: 'new' or 'edit'", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = false
+            )
+        )
     }
 
     fun register(tool: ToolDefinition) {

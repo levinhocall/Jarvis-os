@@ -2572,6 +2572,22 @@ class JarvisConversationService : Service() {
                         result.put("message", "Screen inspected successfully.")
                     }
 
+                    "build_website" -> {
+                        val prompt = args.optString("prompt", "")
+                        val mode = args.optString("mode", "new")
+                        val isEdit = mode.equals("edit", ignoreCase = true)
+                        com.jarvis.assistant.forge.ForgeController.init(applicationContext)
+                        com.jarvis.assistant.forge.ForgeController.start(prompt, isEdit)
+                        val forgeIntent = Intent(applicationContext, com.jarvis.assistant.ui.forge.ForgeActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            putExtra(com.jarvis.assistant.ui.forge.ForgeActivity.EXTRA_PROMPT, prompt)
+                        }
+                        startActivity(forgeIntent)
+                        result.put("result", "forge_started")
+                        result.put("success", true)
+                        result.put("message", "Website Forge started building the website in background.")
+                    }
+
 
                     else -> {
                         Log.w("JarvisService", "Unknown toolCall name: $name")

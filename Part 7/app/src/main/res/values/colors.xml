@@ -59,6 +59,15 @@
     <color name="naira_chip_bg">#F1F5F9</color>
 
     <!-- LIA 3D Design Tokens ("A Pearl of Light in the Night") -->
+    <!-- Website Forge & 3D Tokens -->
+    <color name="bg_primary">#070709</color>
+    <color name="bg_secondary">#121218</color>
+    <color name="accent_purple">#8B5CF6</color>
+    <color name="accent_cyan">#06B6D4</color>
+    <color name="accent_gold">#F59E0B</color>
+    <color name="error_red">#EF4444</color>
+    <color name="text_tertiary">#64748B</color>
+
     <!-- Base Dark Semantic Tokens -->
     <color name="lia_background">#06050E</color>
     <color name="lia_gradient_top">#15113A</color>

@@ -1,5 +1,6 @@
 package com.jarvis.assistant.ui.chat
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -142,6 +143,20 @@ class ChatFragment : Fragment() {
             "[FILE: ${att.fileName}]\n${att.summary}\n\n$text".trim()
         } else {
             text
+        }
+
+        // Direct Forge Intent recognition
+        if (com.jarvis.assistant.forge.ForgeIntent.matches(fullMessage)) {
+            val forgePrompt = com.jarvis.assistant.forge.ForgeIntent.extractPrompt(fullMessage)
+            val ctx = requireContext()
+            com.jarvis.assistant.forge.ForgeController.init(ctx)
+            com.jarvis.assistant.forge.ForgeController.start(forgePrompt)
+            val intent = Intent(ctx, com.jarvis.assistant.ui.forge.ForgeActivity::class.java).apply {
+                putExtra(com.jarvis.assistant.ui.forge.ForgeActivity.EXTRA_PROMPT, forgePrompt)
+            }
+            startActivity(intent)
+            binding.etMessageInput.text?.clear()
+            return
         }
 
         JarvisConversationService.sendTextMessage(fullMessage)

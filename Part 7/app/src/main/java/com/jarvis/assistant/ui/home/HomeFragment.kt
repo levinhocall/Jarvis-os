@@ -259,6 +259,10 @@ class HomeFragment : Fragment() {
         super.onResume()
         com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
 
+        if (com.jarvis.assistant.forge.ForgeController.consumePendingOpen()) {
+            startActivity(Intent(requireContext(), com.jarvis.assistant.ui.forge.ForgeActivity::class.java))
+        }
+
         val use3dShader = preferences.isNewLookBetaEnabled &&
                 preferences.orbAnimation in listOf("shader_3d", "3d_shader") &&
                 android.os.Build.VERSION.SDK_INT >= 33 &&

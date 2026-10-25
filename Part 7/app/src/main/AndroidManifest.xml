@@ -161,6 +161,23 @@
             </intent-filter>
         </receiver>
 
+        <!-- Website Forge (Live 3D Website Builder) -->
+        <activity
+            android:name=".ui.forge.ForgeActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.JarvisAssistant" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.forge.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/forge_file_paths" />
+        </provider>
+
     </application>
 
 </manifest>
