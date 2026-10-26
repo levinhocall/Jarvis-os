@@ -336,4 +336,28 @@ class SocialVisualAgentTest {
         assertEquals(SocialAction.CREATE_POST, req.action)
         assertEquals(TaskMode.DRAFT, req.mode)
     }
+
+    @Test
+    fun testA11yDisconnectedReportsEnabledNotConnected() {
+        fakeDriver.currentObservation = ScreenObservation(
+            observationId = "obs_empty",
+            packageName = "",
+            windowClass = "",
+            elements = emptyList(),
+            screenSize = Pair(1080, 2400),
+            windowStamp = System.currentTimeMillis()
+        )
+
+        val request = SocialTaskRequest(
+            platform = Platform.INSTAGRAM,
+            action = SocialAction.CREATE_POST,
+            mediaUri = "content://media/external/images/media/55",
+            mode = TaskMode.PUBLISH
+        )
+
+        val report = coordinator.startTask(request)
+        assertEquals("ENABLED_NOT_CONNECTED", report.status)
+        assertFalse(report.submittedVerified)
+        assertTrue(report.details.contains("Accessibility service"))
+    }
 }

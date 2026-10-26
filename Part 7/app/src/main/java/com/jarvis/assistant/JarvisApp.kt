@@ -67,6 +67,8 @@ class JarvisApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.init(this)
+        com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordLifecycle("JarvisApp", "onCreate:start")
         SecurityManager.verify(this)
         instance = this
         preferences = AppPreferences(this)
@@ -116,6 +118,7 @@ class JarvisApp : Application() {
             override fun onActivityResumed(activity: android.app.Activity) {
                 currentResumedActivity = activity
                 com.jarvis.assistant.util.ThemeManager.applyTheme(activity)
+                com.jarvis.assistant.automation.accessibility.A11yWatchdog.inspectAndRecover(this@JarvisApp, isAppForeground = true)
             }
             override fun onActivityPaused(activity: android.app.Activity) {
                 if (currentResumedActivity === activity) {
@@ -133,6 +136,7 @@ class JarvisApp : Application() {
                 }
             }
         })
+        com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordLifecycle("JarvisApp", "onCreate:end")
     }
 
     var currentResumedActivity: android.app.Activity? = null

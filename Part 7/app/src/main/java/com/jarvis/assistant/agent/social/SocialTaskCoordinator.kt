@@ -44,6 +44,21 @@ class SocialTaskCoordinator(
         val obs = driver.capture()
         session.lastObservation = obs
 
+        // Check if accessibility service is missing / not connected
+        if (obs.packageName.isBlank() && obs.elements.isEmpty()) {
+            sm.moveTo(TaskState.FAILED)
+            val report = TaskReport(
+                taskId = taskId,
+                platform = request.platform,
+                action = request.action,
+                status = "ENABLED_NOT_CONNECTED",
+                submittedVerified = false,
+                details = "Accessibility service is enabled but not connected. Live probe failed."
+            )
+            session.report = report
+            return report
+        }
+
         // 1. Check for blockers
         val blocker = BlockerDetector.detectBlocker(obs)
         if (blocker != null) {

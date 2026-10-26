@@ -77,7 +77,7 @@ class ProductionScreenDriver : ScreenDriver {
         if (obs.isStale(System.currentTimeMillis())) {
             return DriverResult.stale("Observation ${obs.observationId} is stale")
         }
-        val service = getService() ?: return DriverResult.failed("Accessibility service unavailable")
+        val service = getService() ?: return DriverResult.failed("ENABLED_NOT_CONNECTED: Accessibility service is enabled but not connected")
 
         val target = obs.elements.find { it.id == elementId || it.text.equals(elementId, ignoreCase = true) }
             ?: return DriverResult.notFound("Element $elementId not in observation")
@@ -90,14 +90,14 @@ class ProductionScreenDriver : ScreenDriver {
     }
 
     override fun gestureTap(x: Float, y: Float): DriverResult {
-        val service = getService() ?: return DriverResult.failed("Accessibility service unavailable")
+        val service = getService() ?: return DriverResult.failed("ENABLED_NOT_CONNECTED: Accessibility service is enabled but not connected")
         val tapped = service.clickAt(x, y)
         return if (tapped) DriverResult.ok("Tapped at ($x, $y)")
         else DriverResult.failed("Failed to tap at ($x, $y)")
     }
 
     override fun setText(elementId: String, text: String): DriverResult {
-        val service = getService() ?: return DriverResult.failed("Accessibility service unavailable")
+        val service = getService() ?: return DriverResult.failed("ENABLED_NOT_CONNECTED: Accessibility service is enabled but not connected")
         val root = try { service.rootInActiveWindow } catch (_: Exception) { null }
             ?: return DriverResult.failed("No active window to set text")
 
@@ -114,21 +114,21 @@ class ProductionScreenDriver : ScreenDriver {
     }
 
     override fun scroll(direction: String): DriverResult {
-        val service = getService() ?: return DriverResult.failed("Accessibility service unavailable")
+        val service = getService() ?: return DriverResult.failed("ENABLED_NOT_CONNECTED: Accessibility service is enabled but not connected")
         val scrolled = service.performSmartScroll(direction, "medium")
         return if (scrolled) DriverResult.ok("Scrolled $direction")
         else DriverResult.failed("Scroll $direction failed")
     }
 
     override fun back(): DriverResult {
-        val service = getService() ?: return DriverResult.failed("Accessibility service unavailable")
+        val service = getService() ?: return DriverResult.failed("ENABLED_NOT_CONNECTED: Accessibility service is enabled but not connected")
         val done = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
         return if (done) DriverResult.ok("Dispatched BACK")
         else DriverResult.failed("GLOBAL_ACTION_BACK failed")
     }
 
     override fun home(): DriverResult {
-        val service = getService() ?: return DriverResult.failed("Accessibility service unavailable")
+        val service = getService() ?: return DriverResult.failed("ENABLED_NOT_CONNECTED: Accessibility service is enabled but not connected")
         val done = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
         return if (done) DriverResult.ok("Dispatched HOME")
         else DriverResult.failed("GLOBAL_ACTION_HOME failed")

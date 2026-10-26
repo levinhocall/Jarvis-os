@@ -1,3 +1,9 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.concurrent.TimeUnit
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -19,6 +25,23 @@ val copyrightOwner = configuredValue("JARVIS_COPYRIGHT_OWNER")?.ifBlank { null }
 val verificationEndpoint = configuredValue("JARVIS_VERIFICATION_ENDPOINT").orEmpty()
 val releaseSigningReady = listOf(releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { !it.isNullOrBlank() }
 
+val gitShortSha: String = try {
+    val process = ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+        .directory(rootDir)
+        .redirectOutput(ProcessBuilder.Redirect.PIPE)
+        .redirectError(ProcessBuilder.Redirect.PIPE)
+        .start()
+    process.waitFor(3, TimeUnit.SECONDS)
+    val out = process.inputStream.bufferedReader().readText().trim()
+    out.ifBlank { "b8979f5" }
+} catch (e: Exception) {
+    "b8979f5"
+}
+
+val buildTimestamp: String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss 'UTC'", Locale.US).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}.format(Date())
+
 android {
     namespace = "com.jarvis.assistant"
     compileSdk = 34
@@ -35,6 +58,8 @@ android {
         buildConfigField("String", "COPYRIGHT_OWNER", buildConfigString(copyrightOwner.ifBlank { "Unconfigured" }))
         buildConfigField("String", "PINNED_RELEASE_CERT_SHA256", buildConfigString(releaseCertSha256))
         buildConfigField("String", "VERIFICATION_ENDPOINT", buildConfigString(verificationEndpoint))
+        buildConfigField("String", "BUILD_GIT_SHA", buildConfigString(gitShortSha))
+        buildConfigField("String", "BUILD_TIMESTAMP", buildConfigString(buildTimestamp))
     }
 
     signingConfigs {
