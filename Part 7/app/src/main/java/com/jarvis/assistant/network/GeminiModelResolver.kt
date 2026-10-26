@@ -13,9 +13,27 @@ data class ModelCandidate(
     val minorVersion: Int,
     val isFlash: Boolean
 ) : Comparable<ModelCandidate> {
+    /** Higher = less preferred variant (lite / preview / experimental). */
+    private val variantPenalty: Int
+        get() {
+            val lower = id.lowercase(Locale.ROOT)
+            var penalty = 0
+            if (lower.contains("lite")) penalty += 2
+            if (lower.contains("preview") || lower.contains("exp")) penalty += 1
+            return penalty
+        }
+
     override fun compareTo(other: ModelCandidate): Int {
         val ver = (majorVersion * 1000 + minorVersion).compareTo(other.majorVersion * 1000 + other.minorVersion)
-        return if (ver != 0) ver else id.compareTo(other.id)
+        if (ver != 0) return ver
+        // Same version: the plain stable model beats lite/preview/experimental variants
+        // (lower penalty = greater = sorted first in the descending order used by the resolver).
+        val penalty = other.variantPenalty.compareTo(variantPenalty)
+        if (penalty != 0) return penalty
+        // Then the shorter (plain) id beats suffixed ones such as "-001" / "-latest".
+        val length = other.id.length.compareTo(id.length)
+        if (length != 0) return length
+        return id.compareTo(other.id)
     }
 }
 

@@ -56,10 +56,22 @@ object AccessibilityBreadcrumbs {
         }
     }
 
+    private val lastSlowEventMs = java.util.concurrent.atomic.AtomicLong(0L)
+    private const val SLOW_EVENT_MIN_INTERVAL_MS = 5_000L
+
     fun record(category: String, message: String) {
+        // SLOW_EVENT is written from inside onAccessibilityEvent (main thread, already slow):
+        // rate-limit it and keep it memory-only so it never adds a disk write to the slow path.
+        // It reaches the disk with the next regular entry.
+        val isSlowEvent = category == "SLOW_EVENT"
+        if (isSlowEvent) {
+            val nowMs = System.currentTimeMillis()
+            val last = lastSlowEventMs.get()
+            if (nowMs - last < SLOW_EVENT_MIN_INTERVAL_MS || !lastSlowEventMs.compareAndSet(last, nowMs)) return
+        }
         val timestamp = synchronized(dateFormat) { dateFormat.format(Date()) }
         val entry = "[$timestamp UTC] [$category] $message"
-        addEntry(entry)
+        addEntry(entry, persist = !isSlowEvent)
     }
 
     fun recordLifecycle(component: String, event: String) {
@@ -83,13 +95,13 @@ object AccessibilityBreadcrumbs {
         record("ERROR", "[$contextMsg] ${t.javaClass.simpleName}: $safeMsg; Frames: $topFrames")
     }
 
-    private fun addEntry(entry: String) {
+    private fun addEntry(entry: String, persist: Boolean = true) {
         synchronized(lock) {
             while (entries.size >= MAX_ENTRIES) {
                 entries.pollFirst()
             }
             entries.addLast(entry)
-            persistEntriesAsync()
+            if (persist) persistEntriesAsync()
         }
     }
 

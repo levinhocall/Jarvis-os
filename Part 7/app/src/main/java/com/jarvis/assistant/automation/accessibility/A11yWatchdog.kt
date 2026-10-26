@@ -73,13 +73,29 @@ object A11yWatchdog {
     }
 
     /**
+     * Expands the short component spelling ("pkg/.Cls") to the full one ("pkg/pkg.Cls") so that
+     * both spellings that different Android builds/OEMs store in ENABLED_ACCESSIBILITY_SERVICES compare equal.
+     * Pure string logic (no Android classes) so it stays unit-testable on the JVM.
+     */
+    fun normalizeComponent(component: String): String {
+        val trimmed = component.trim()
+        val slash = trimmed.indexOf('/')
+        if (slash <= 0 || slash == trimmed.length - 1) return trimmed
+        val pkg = trimmed.substring(0, slash)
+        val cls = trimmed.substring(slash + 1)
+        val fullCls = if (cls.startsWith(".")) pkg + cls else cls
+        return "$pkg/$fullCls"
+    }
+
+    /**
      * Pure component rebind string transformer.
-     * Toggles ONLY targetComponent in and out of the colon-separated string.
+     * Toggles ONLY targetComponent (in either spelling) in and out of the colon-separated string.
      */
     fun removeComponentFromSettings(currentSettings: String, targetComponent: String): String {
+        val normalizedTarget = normalizeComponent(targetComponent)
         return currentSettings.split(":")
             .map { it.trim() }
-            .filter { it.isNotBlank() && it != targetComponent }
+            .filter { it.isNotBlank() && normalizeComponent(it) != normalizedTarget }
             .joinToString(":")
     }
 
@@ -88,18 +104,65 @@ object A11yWatchdog {
         return if (cleaned.isBlank()) targetComponent else "$cleaned:$targetComponent"
     }
 
-    fun inspectAndRecover(context: Context, isAppForeground: Boolean = true) {
-        val now = System.currentTimeMillis()
-        val settingsEnabled = AccessibilityHealthModel.isServiceEnabledInSettings(context)
-        val instancePresent = JarvisAccessibilityService.instance != null
+    /** Single background thread: the watchdog may sleep (binding grace, auto-rebind) and must never run on the main thread. */
+    internal val watchdogExecutor: java.util.concurrent.ExecutorService =
+        java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "a11y-watchdog").apply { isDaemon = true }
+        }
 
-        if (!settingsEnabled || instancePresent) {
+    private val lastRunElapsedMs = java.util.concurrent.atomic.AtomicLong(0L)
+    private const val MIN_RUN_INTERVAL_MS = 5_000L
+    private const val BINDING_GRACE_MS = 8_000L
+    private const val WATCHDOG_PREFS = "a11y_watchdog"
+    private const val PREF_LAST_NOTIFY = "last_notification_ms"
+
+    /**
+     * Entry point (called on every activity resume). Never blocks the caller: the real work runs on
+     * [watchdogExecutor], and runs are throttled to one per [MIN_RUN_INTERVAL_MS].
+     */
+    fun inspectAndRecover(context: Context, isAppForeground: Boolean = true) {
+        val nowElapsed = android.os.SystemClock.elapsedRealtime()
+        val previous = lastRunElapsedMs.get()
+        if (previous != 0L && nowElapsed - previous < MIN_RUN_INTERVAL_MS) return
+        lastRunElapsedMs.set(nowElapsed)
+        val appContext = context.applicationContext
+        try {
+            watchdogExecutor.execute {
+                try {
+                    inspectAndRecoverBlocking(appContext)
+                } catch (t: Throwable) {
+                    AccessibilityBreadcrumbs.recordException(t, "watchdog:inspectAndRecover")
+                }
+            }
+        } catch (t: Throwable) {
+            AccessibilityBreadcrumbs.recordException(t, "watchdog:submit")
+        }
+    }
+
+    /** Runs on a background thread only. Safe to sleep here. */
+    internal fun inspectAndRecoverBlocking(context: Context) {
+        if (!AccessibilityHealthModel.isServiceEnabledInSettings(context) ||
+            JarvisAccessibilityService.instance != null
+        ) {
             return
         }
 
+        // Right after process start / boot the system may simply not have bound the service yet:
+        // wait out a short grace period (using REAL process uptime) and re-check before declaring it stale.
+        val uptimeMs = android.os.SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime()
+        if (uptimeMs < BINDING_GRACE_MS) {
+            try {
+                Thread.sleep(BINDING_GRACE_MS - uptimeMs)
+            } catch (_: InterruptedException) {
+                return
+            }
+            if (JarvisAccessibilityService.instance != null) return
+        }
+
+        val now = System.currentTimeMillis()
         AccessibilityBreadcrumbs.record("WATCHDOG", "Stale binding detected: settings=ENABLED, instance=NULL")
 
-        // 1. Check optional auto-rebind
+        // 1. Optional auto-rebind (opt-in, needs WRITE_SECURE_SETTINGS granted via adb)
         val hasWritePerm = context.checkCallingOrSelfPermission(
             android.Manifest.permission.WRITE_SECURE_SETTINGS
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -116,9 +179,20 @@ object A11yWatchdog {
             return
         }
 
-        // 2. Post notification if rate limit allows
-        if (shouldNotifyUser(settingsEnabled, instancePresent, now, lastNotificationTimestamp, 10000L)) {
+        // 2. Notification, rate-limited across process restarts (persisted, not memory-only)
+        val watchdogPrefs = context.getSharedPreferences(WATCHDOG_PREFS, Context.MODE_PRIVATE)
+        val lastNotified = maxOf(lastNotificationTimestamp, watchdogPrefs.getLong(PREF_LAST_NOTIFY, 0L))
+        val uptimeNow = android.os.SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime()
+        if (shouldNotifyUser(
+                settingsEnabled = true,
+                instancePresent = false,
+                nowMs = now,
+                lastNotifiedMs = lastNotified,
+                uptimeMs = uptimeNow
+            )
+        ) {
             lastNotificationTimestamp = now
+            watchdogPrefs.edit().putLong(PREF_LAST_NOTIFY, now).apply()
             postRecoveryNotification(context)
         }
     }
@@ -194,7 +268,23 @@ object A11yWatchdog {
             val action = intent?.action ?: return
             AccessibilityBreadcrumbs.record("RECEIVER", "Broadcast received: $action")
             if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-                inspectAndRecover(context, isAppForeground = false)
+                // Keep the receiver alive while the (background) watchdog waits for the system to bind the service.
+                val pending = goAsync()
+                val appContext = context.applicationContext
+                try {
+                    watchdogExecutor.execute {
+                        try {
+                            inspectAndRecoverBlocking(appContext)
+                        } catch (t: Throwable) {
+                            AccessibilityBreadcrumbs.recordException(t, "watchdog:receiver")
+                        } finally {
+                            pending.finish()
+                        }
+                    }
+                } catch (t: Throwable) {
+                    AccessibilityBreadcrumbs.recordException(t, "watchdog:receiver_submit")
+                    pending.finish()
+                }
             }
         }
     }
