@@ -68,18 +68,23 @@ class JarvisUnifiedRuntime(
     ): SystemBootReport {
         val diagnostics = mutableListOf<SubsystemDiagnostic>()
 
-        // 1. Accessibility Perception Diagnostic (Real state via AccessibilityHealthModel)
+        // 1. Accessibility Perception Diagnostic (Real state via AccessibilityHealthModel & live probe)
+        val a11yWorking = if (context != null) {
+            com.jarvis.assistant.util.PermissionHelper.isAccessibilityServiceWorking(context)
+        } else {
+            isAccessibilityServiceConnected
+        }
         val a11yLatency = measureElapsedMs {
             AccessibilityHealthModel.isOperational()
         }
-        val a11yStatus = if (isAccessibilityServiceConnected) SubsystemStatus.HEALTHY else SubsystemStatus.DEGRADED
+        val a11yStatus = if (a11yWorking) SubsystemStatus.HEALTHY else SubsystemStatus.DEGRADED
         diagnostics.add(
             SubsystemDiagnostic(
                 subsystemName = "Accessibility Perception",
                 status = a11yStatus,
                 latencyMs = a11yLatency,
-                diagnosticMessage = if (isAccessibilityServiceConnected) "Accessibility service connected and operational." else "Accessibility service disabled.",
-                requiredActionForUser = if (isAccessibilityServiceConnected) null else "Enable Jarvis in Android Accessibility Settings."
+                diagnosticMessage = if (a11yWorking) "Accessibility service connected and operational (live probe passed)." else "Accessibility service not working (binder disconnected or unverified).",
+                requiredActionForUser = if (a11yWorking) null else "Open Accessibility Settings / Guided Fix to reconnect service."
             )
         )
 

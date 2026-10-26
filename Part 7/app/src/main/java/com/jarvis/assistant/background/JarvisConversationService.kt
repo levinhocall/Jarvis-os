@@ -759,49 +759,54 @@ class JarvisConversationService : Service() {
     private fun ensureMicrophoneForegroundService() {
         val notification = buildNotification()
         val hasMicPerm = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
-        var combinedTypes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            val base = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            if (hasMicPerm) {
-                base or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            } else {
-                base
-            }
-        } else {
-            0
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q &&
-            com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value) {
-            combinedTypes = combinedTypes or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-        }
+        val hasProjection = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value
+        val selectedTypes = ForegroundTypeSelector.selectTypes(
+            sdkInt = android.os.Build.VERSION.SDK_INT,
+            hasMicPermission = hasMicPerm,
+            hasActiveMediaProjection = hasProjection
+        )
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             try {
-                startForeground(NOTIFICATION_ID, notification, combinedTypes)
-                Log.d("JarvisService", "startForeground elevated to types=$combinedTypes")
+                startForeground(NOTIFICATION_ID, notification, selectedTypes)
+                Log.d("JarvisService", "startForeground elevated to types=$selectedTypes")
             } catch (e: Exception) {
+                com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(e, "startForeground:primary_failed")
                 Log.w("JarvisService", "startForeground with combined types failed: ${e.message}")
+                val fallbackType = ForegroundTypeSelector.getSafeFallbackType(android.os.Build.VERSION.SDK_INT)
                 try {
-                    startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                    startForeground(NOTIFICATION_ID, notification, fallbackType)
+                    Log.i("JarvisService", "startForeground fallback succeeded with type=$fallbackType")
                 } catch (fallbackEx: Exception) {
+                    com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(fallbackEx, "startForeground:fallback_failed")
                     Log.w("JarvisService", "startForeground fallback failed: ${fallbackEx.message}")
                 }
             }
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            try {
+                startForeground(NOTIFICATION_ID, notification)
+            } catch (e: Exception) {
+                com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(e, "startForeground:legacy_failed")
+                Log.w("JarvisService", "Legacy startForeground failed: ${e.message}")
+            }
         }
     }
 
     fun elevateToMediaProjection(): Boolean {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val notification = buildNotification()
-            val types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            val hasMicPerm = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+            val types = ForegroundTypeSelector.selectTypes(
+                sdkInt = android.os.Build.VERSION.SDK_INT,
+                hasMicPermission = hasMicPerm,
+                hasActiveMediaProjection = true
+            )
             try {
                 startForeground(NOTIFICATION_ID, notification, types)
-                Log.i("JarvisService", "Foreground service elevated to include MEDIA_PROJECTION")
+                Log.i("JarvisService", "Foreground service elevated to include MEDIA_PROJECTION (types=$types)")
                 return true
             } catch (e: Exception) {
+                com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(e, "elevateToMediaProjection")
                 Log.w("JarvisService", "Failed to elevate to MEDIA_PROJECTION: ${e.message}")
                 return false
             }
@@ -812,12 +817,17 @@ class JarvisConversationService : Service() {
     fun demoteFromMediaProjection() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val notification = buildNotification()
-            val types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            val hasMicPerm = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+            val types = ForegroundTypeSelector.selectTypes(
+                sdkInt = android.os.Build.VERSION.SDK_INT,
+                hasMicPermission = hasMicPerm,
+                hasActiveMediaProjection = false
+            )
             try {
                 startForeground(NOTIFICATION_ID, notification, types)
-                Log.i("JarvisService", "Foreground service demoted from MEDIA_PROJECTION")
+                Log.i("JarvisService", "Foreground service demoted from MEDIA_PROJECTION to types=$types")
             } catch (e: Exception) {
+                com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(e, "demoteFromMediaProjection")
                 Log.w("JarvisService", "Failed to demote from MEDIA_PROJECTION: ${e.message}")
             }
         }

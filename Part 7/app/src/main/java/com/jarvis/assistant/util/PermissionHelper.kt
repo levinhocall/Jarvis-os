@@ -81,12 +81,58 @@ object PermissionHelper {
         }
     }
 
+    @Volatile
+    private var cachedProbeWorking: Boolean? = null
+    @Volatile
+    private var lastProbeTimestamp: Long = 0L
+
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
         AccessibilityHealthModel.refreshFromSystem(context)
         if (JarvisAccessibilityService.isRunning() || JarvisAccessibilityService.instance != null) {
             return true
         }
         return AccessibilityHealthModel.isServiceEnabledInSettings(context)
+    }
+
+    /**
+     * Truthful working status of the Accessibility Service.
+     * Performs a live window probe with a short ~2.0s cache to avoid IPC churn.
+     * Returns true ONLY if the service is enabled in settings AND live window probe succeeds.
+     */
+    fun isAccessibilityServiceWorking(context: Context): Boolean {
+        val now = System.currentTimeMillis()
+        val cached = cachedProbeWorking
+        if (cached != null && (now - lastProbeTimestamp < 2000L)) {
+            return cached
+        }
+
+        val settingsEnabled = AccessibilityHealthModel.isServiceEnabledInSettings(context)
+        if (!settingsEnabled) {
+            cachedProbeWorking = false
+            lastProbeTimestamp = now
+            return false
+        }
+
+        val instance = JarvisAccessibilityService.instance
+        if (instance == null) {
+            cachedProbeWorking = false
+            lastProbeTimestamp = now
+            return false
+        }
+
+        val (probeResult, _) = com.jarvis.assistant.automation.accessibility.AccessibilityDoctor.performLiveProbe()
+        val isWorking = (probeResult == com.jarvis.assistant.automation.accessibility.LiveProbeResult.SUCCESS ||
+                probeResult == com.jarvis.assistant.automation.accessibility.LiveProbeResult.NULL_ROOT) &&
+                AccessibilityHealthModel.isOperational()
+
+        cachedProbeWorking = isWorking
+        lastProbeTimestamp = now
+        return isWorking
+    }
+
+    fun getTruthfulAccessibilityStatus(context: Context): com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus {
+        val report = com.jarvis.assistant.automation.accessibility.AccessibilityDoctor.buildReport(context)
+        return report.truthfulStatus
     }
 
     fun isAccessibilityServiceOperational(): Boolean {
@@ -194,6 +240,33 @@ object PermissionHelper {
             } catch (_: Exception) {}
         }
         return false
+    }
+
+    fun openOemAutostartSettings(context: Context): Boolean {
+        if (isVivoDevice()) {
+            if (openVivoAutostart(context)) return true
+        } else if (isXiaomiDevice()) {
+            if (openXiaomiAutostart(context)) return true
+        }
+        val fallbackIntents = listOf(
+            Intent().setComponent(android.content.ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
+            Intent().setComponent(android.content.ComponentName("com.oplus.battery", "com.oplus.battery.AppListActivity")),
+            Intent().setComponent(android.content.ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")),
+            Intent().setComponent(android.content.ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity"))
+        )
+        for (intent in fallbackIntents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                return true
+            } catch (_: Exception) {}
+        }
+        return try {
+            openAppSettings(context)
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun openXiaomiBatteryOptimization(context: Context): Boolean {

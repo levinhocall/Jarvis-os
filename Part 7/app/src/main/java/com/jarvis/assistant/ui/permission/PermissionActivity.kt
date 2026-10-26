@@ -1,6 +1,7 @@
 package com.jarvis.assistant.ui.permission
 
 import android.Manifest
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -164,7 +165,11 @@ class PermissionActivity : AppCompatActivity() {
         updateCardState(hasLoc, binding.tvStatusLocation, binding.btnGrantLocation)
         updateCardState(hasNotif, binding.tvStatusNotification, binding.btnGrantNotification)
         updateCardState(hasOverlay, binding.tvStatusOverlay, binding.btnGrantOverlay)
-        updateAccessibilityCardState(a11yState, binding.tvStatusAccessibility, binding.btnGrantAccessibility)
+
+        val isA11yWorking = PermissionHelper.isAccessibilityServiceWorking(this)
+        val truthfulStatus = PermissionHelper.getTruthfulAccessibilityStatus(this)
+        updateAccessibilityCardState(a11yState, truthfulStatus, binding.tvStatusAccessibility, binding.btnGrantAccessibility)
+
         updateExtraPermission("contacts", PermissionHelper.hasContactsPermission(this))
         updateExtraPermission("phone", hasPermission(Manifest.permission.CALL_PHONE))
         updateExtraPermission("camera", hasPermission(Manifest.permission.CAMERA))
@@ -172,28 +177,16 @@ class PermissionActivity : AppCompatActivity() {
         updateExtraPermission("battery", PermissionHelper.hasBatteryOptimizationPermission(this))
         updateExtraPermission("brightness", PermissionHelper.hasWriteSettingsPermission(this))
 
-        val isA11ySatisfied = a11yState == AccessibilityState.CONNECTED ||
-                              a11yState == AccessibilityState.DEGRADED ||
-                              a11yState == AccessibilityState.ENABLED
-
-        if (hasMic && hasLoc && hasNotif && isA11ySatisfied) {
-            if (a11yState == AccessibilityState.ENABLED) {
-                binding.btnGrantAll.text = "CONNECTING… TAP TO RECHECK / FINISH"
-                binding.btnGrantAll.alpha = 1.0f
-                binding.btnGrantAll.isEnabled = true
-                binding.btnGrantAll.setOnClickListener {
-                    AccessibilityHealthModel.refreshFromSystem(this@PermissionActivity)
-                    if (AccessibilityHealthModel.isOperational()) {
-                        finish()
-                    } else {
-                        pollAccessibilityState()
-                        PermissionHelper.openAccessibilitySettings(this@PermissionActivity)
-                    }
-                }
-            } else {
-                binding.btnGrantAll.text = "ALL ESSENTIAL PERMISSIONS GRANTED ✓"
-                binding.btnGrantAll.alpha = 0.7f
-                binding.btnGrantAll.isEnabled = false
+        if (hasMic && hasLoc && hasNotif && isA11yWorking) {
+            binding.btnGrantAll.text = "ALL ESSENTIAL PERMISSIONS GRANTED ✓"
+            binding.btnGrantAll.alpha = 0.7f
+            binding.btnGrantAll.isEnabled = false
+        } else if (hasMic && hasLoc && hasNotif && truthfulStatus == com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.ENABLED_NOT_CONNECTED) {
+            binding.btnGrantAll.text = "SERVICE ON BUT NOT CONNECTED — TAP TO FIX"
+            binding.btnGrantAll.alpha = 1.0f
+            binding.btnGrantAll.isEnabled = true
+            binding.btnGrantAll.setOnClickListener {
+                startActivity(Intent(this@PermissionActivity, com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
             }
         } else {
             binding.btnGrantAll.text = "GRANT ALL PERMISSIONS"
@@ -207,51 +200,70 @@ class PermissionActivity : AppCompatActivity() {
 
     private fun updateAccessibilityCardState(
         state: AccessibilityState,
+        truthfulStatus: com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus,
         statusTv: TextView,
         button: Button
     ) {
-        when (state) {
-            AccessibilityState.CONNECTED -> {
+        when (truthfulStatus) {
+            com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.WORKING -> {
                 statusTv.text = "Active & Granted ✓"
                 statusTv.setTextColor(Color.parseColor("#10B981")) // Emerald Green
                 button.text = "Manage"
                 button.alpha = 1.0f
                 button.isEnabled = true
+                button.setOnClickListener {
+                    PermissionHelper.openAccessibilitySettings(this@PermissionActivity)
+                }
             }
-            AccessibilityState.ENABLED -> {
-                statusTv.text = "Connecting… (Enabled in Settings)"
+            com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.ENABLED_NOT_CONNECTED -> {
+                statusTv.text = "Service is ON but not connected — tap to fix"
                 statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
-                button.text = "Recheck / Manage"
+                button.text = "Fix"
                 button.alpha = 1.0f
                 button.isEnabled = true
+                button.setOnClickListener {
+                    startActivity(Intent(this@PermissionActivity, com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
+                }
             }
-            AccessibilityState.DEGRADED -> {
-                statusTv.text = "Active (Degraded) • Tap Manage"
+            com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.CONNECTED_NO_EVENTS -> {
+                statusTv.text = "Connected (No Events) • Tap Fix"
                 statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
-                button.text = "Manage"
+                button.text = "Fix"
                 button.alpha = 1.0f
                 button.isEnabled = true
+                button.setOnClickListener {
+                    startActivity(Intent(this@PermissionActivity, com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
+                }
             }
-            AccessibilityState.DISCONNECTED -> {
-                statusTv.text = "Disconnected • Re-enable Required"
+            com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.DEGRADED -> {
+                statusTv.text = "Service Degraded • Tap Fix"
+                statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
+                button.text = "Fix"
+                button.alpha = 1.0f
+                button.isEnabled = true
+                button.setOnClickListener {
+                    startActivity(Intent(this@PermissionActivity, com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
+                }
+            }
+            com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.CRASH_LOOP -> {
+                statusTv.text = "Crash Loop Detected • Tap Fix"
                 statusTv.setTextColor(Color.parseColor("#EF4444")) // Red
-                button.text = "Grant"
+                button.text = "Fix"
                 button.alpha = 1.0f
                 button.isEnabled = true
+                button.setOnClickListener {
+                    startActivity(Intent(this@PermissionActivity, com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
+                }
             }
-            AccessibilityState.ERROR -> {
-                statusTv.text = "Service Error • Restart Required"
-                statusTv.setTextColor(Color.parseColor("#EF4444")) // Red
-                button.text = "Grant"
-                button.alpha = 1.0f
-                button.isEnabled = true
-            }
-            AccessibilityState.DISABLED -> {
+            com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.NOT_ENABLED -> {
                 statusTv.text = "Action Required • Tap Grant"
-                statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
+                statusTv.setTextColor(Color.parseColor("#EF4444")) // Red
                 button.text = "Grant"
                 button.alpha = 1.0f
                 button.isEnabled = true
+                button.setOnClickListener {
+                    PermissionHelper.requestAccessibilityWithRestrictedGuidance(this@PermissionActivity)
+                }
             }
         }
     }

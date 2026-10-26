@@ -292,7 +292,7 @@ class HomeFragment : Fragment() {
         if (err != null) {
             when (err.errorCode) {
                 "ACCESSIBILITY_DISABLED" -> {
-                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational()) {
+                    if (com.jarvis.assistant.util.PermissionHelper.isAccessibilityServiceWorking(requireContext())) {
                         com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
                         hideLiveErrorOverlay()
                     }
@@ -347,7 +347,7 @@ class HomeFragment : Fragment() {
         if (err != null) {
             when (err.errorCode) {
                 "ACCESSIBILITY_DISABLED" -> {
-                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational()) {
+                    if (com.jarvis.assistant.util.PermissionHelper.isAccessibilityServiceWorking(requireContext())) {
                         com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
                         hideLiveErrorOverlay()
                     }
@@ -600,18 +600,17 @@ class HomeFragment : Fragment() {
                                     binding.ivLiveErrorIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
                                     binding.tvLiveErrorTitle.setTextColor(Color.parseColor("#F59E0B"))
 
-                                    if (a11yState == com.jarvis.assistant.automation.accessibility.AccessibilityState.ENABLED) {
+                                    val truthfulStatus = com.jarvis.assistant.util.PermissionHelper.getTruthfulAccessibilityStatus(requireContext())
+                                    if (truthfulStatus == com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.ENABLED_NOT_CONNECTED) {
                                         binding.tvLiveErrorTitle.text = "ACCESSIBILITY NOT CONNECTED"
-                                        binding.tvLiveErrorMessage.text = "Service is enabled in Settings, but the background binder was killed or hasn't connected. Tap FIX to toggle Off and On in Settings."
+                                        binding.tvLiveErrorMessage.text = "Service is ON in Settings, but background binder is disconnected. Tap FIX for guided repair."
                                     } else {
                                         binding.tvLiveErrorTitle.text = "ACCESSIBILITY REQUIRED"
                                         binding.tvLiveErrorMessage.text = "Jarvis requires Accessibility to complete actions and navigate your phone. Tap FIX to enable."
                                     }
 
                                     binding.btnFixLiveError.setOnClickListener {
-                                        activity?.let { act ->
-                                            PermissionHelper.requestAccessibilityWithRestrictedGuidance(act)
-                                        } ?: PermissionHelper.openAccessibilitySettings(requireContext())
+                                        startActivity(Intent(requireContext(), com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
                                     }
                                 }
                                 "PERMISSIONS_MISSING" -> {

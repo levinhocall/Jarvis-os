@@ -83,6 +83,7 @@ class AppPreferences(context: Context) {
         const val KEY_REDUCE_MOTION = "key_reduce_motion"
         const val KEY_NEW_LOOK_BETA = "key_new_look_beta"
         const val KEY_LISTENING_EDGE_GLOW = "key_listening_edge_glow"
+        const val KEY_A11Y_AUTO_REPAIR = "key_a11y_auto_repair"
     }
 
     var isOwnerVoiceEnabled: Boolean
@@ -280,6 +281,10 @@ class AppPreferences(context: Context) {
     var isListeningEdgeGlowEnabled: Boolean
         get() = prefs.getBoolean(KEY_LISTENING_EDGE_GLOW, true)
         set(value) = prefs.edit().putBoolean(KEY_LISTENING_EDGE_GLOW, value).apply()
+
+    var isA11yAutoRepairEnabled: Boolean
+        get() = prefs.getBoolean(KEY_A11Y_AUTO_REPAIR, false)
+        set(value) = prefs.edit().putBoolean(KEY_A11Y_AUTO_REPAIR, value).apply()
 
     var appTheme: String
         get() {
