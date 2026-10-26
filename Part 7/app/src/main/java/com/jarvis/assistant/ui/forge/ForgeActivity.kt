@@ -65,6 +65,8 @@ class ForgeActivity : AppCompatActivity() {
     private lateinit var tvStatSpeed: TextView
     private lateinit var tvStatElapsed: TextView
     private lateinit var btnCancel: Button
+    private lateinit var btnRetry: Button
+    private lateinit var tvErrorDetails: TextView
 
     private lateinit var trackSegs: List<View>
 
@@ -156,6 +158,8 @@ class ForgeActivity : AppCompatActivity() {
         tvStatSpeed = findViewById(R.id.tvStatSpeed)
         tvStatElapsed = findViewById(R.id.tvStatElapsed)
         btnCancel = findViewById(R.id.btnCancel)
+        btnRetry = findViewById(R.id.btnRetry)
+        tvErrorDetails = findViewById(R.id.tvErrorDetails)
 
         trackSegs = listOf(
             findViewById(R.id.trackSeg1),
@@ -211,6 +215,10 @@ class ForgeActivity : AppCompatActivity() {
     private fun setupListeners() {
         btnCancel.setOnClickListener {
             ForgeController.cancel()
+        }
+
+        btnRetry.setOnClickListener {
+            ForgeController.retry()
         }
 
         findViewById<View>(R.id.btnToolbarBack).setOnClickListener {
@@ -275,13 +283,21 @@ class ForgeActivity : AppCompatActivity() {
                 generatedSiteView.visibility = View.GONE
                 forgeToolbar.visibility = View.GONE
                 btnToolbarHandle.visibility = View.GONE
+                btnRetry.visibility = View.GONE
+                tvErrorDetails.visibility = View.GONE
 
                 tvPromptChip.text = state.prompt.ifBlank { "Website Builder" }
                 tvStageLabel.text = "Stage ${state.stage.index}: ${state.stage.label}"
+                tvStageLabel.setTextColor(Color.parseColor("#EEE9FF"))
                 tvStageDesc.text = state.stage.description
+                tvStageDesc.setTextColor(Color.parseColor("#A7A0CC"))
 
                 val percent = (state.progress * 100).toInt()
                 tvPercent.text = "$percent%"
+                tvPercent.setTextColor(Color.parseColor("#EEE9FF"))
+
+                btnCancel.text = "Cancel"
+                btnCancel.setOnClickListener { ForgeController.cancel() }
 
                 // Update 6 segments
                 trackSegs.forEachIndexed { i, seg ->
@@ -326,10 +342,39 @@ class ForgeActivity : AppCompatActivity() {
             ForgePhase.FAILED, ForgePhase.CANCELLED -> {
                 setImmersiveMode(false)
                 forgeHudContainer.visibility = View.VISIBLE
-                tvStageLabel.text = if (state.phase == ForgePhase.CANCELLED) "Build Cancelled" else "Build Failed"
+                val isFailed = state.phase == ForgePhase.FAILED
+                tvStageLabel.text = if (isFailed) "Build Failed" else "Build Cancelled"
+                tvStageLabel.setTextColor(if (isFailed) Color.parseColor("#EF4444") else Color.parseColor("#F59E0B"))
                 tvStageDesc.text = state.error ?: "Unable to complete website build."
+                tvStageDesc.setTextColor(Color.parseColor("#CBD5E1"))
+
+                val failedIdx = (state.stage.index - 1).coerceIn(0, 5)
+                trackSegs.forEachIndexed { i, seg ->
+                    when {
+                        i < failedIdx -> seg.setBackgroundColor(Color.parseColor("#8B5CF6"))
+                        i == failedIdx -> seg.setBackgroundColor(if (isFailed) Color.parseColor("#EF4444") else Color.parseColor("#F59E0B"))
+                        else -> seg.setBackgroundColor(Color.parseColor("#121218"))
+                    }
+                }
+
                 btnCancel.text = "Close"
                 btnCancel.setOnClickListener { finish() }
+
+                if (isFailed) {
+                    btnRetry.visibility = View.VISIBLE
+                    btnRetry.setOnClickListener { ForgeController.retry() }
+                } else {
+                    btnRetry.visibility = View.GONE
+                }
+
+                val detail = state.rawError ?: ""
+                if (detail.isNotBlank() && detail != state.error) {
+                    tvErrorDetails.visibility = View.VISIBLE
+                    tvErrorDetails.text = detail
+                } else {
+                    tvErrorDetails.visibility = View.GONE
+                }
+
                 if (!isUsingFallback) {
                     forgeWebGlScene.triggerFail()
                 }

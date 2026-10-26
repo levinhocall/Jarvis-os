@@ -94,6 +94,9 @@ class VoiceDebugActivity : AppCompatActivity() {
         btnCyclePersonality = findViewById(R.id.btn_cycle_personality)
         btnBack = findViewById(R.id.btn_back)
         btnRefresh = findViewById(R.id.btn_refresh)
+
+        findViewById<TextView>(R.id.tv_build_stamp).text =
+            "Build: ${com.jarvis.assistant.BuildConfig.BUILD_GIT_SHA} | ${com.jarvis.assistant.BuildConfig.BUILD_TIMESTAMP}"
     }
 
     private fun setupListeners() {
@@ -113,6 +116,39 @@ class VoiceDebugActivity : AppCompatActivity() {
             val nextPersona = personalities[nextIdx]
             prefs.personality = nextPersona.id
             refreshStaticTelemetry()
+        }
+
+        findViewById<Button>(R.id.btn_copy_a11y_doctor).setOnClickListener {
+            val report = com.jarvis.assistant.automation.accessibility.AccessibilityDoctor.generateCopyableReport(this)
+            val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            cm?.setPrimaryClip(android.content.ClipData.newPlainText("Jarvis Accessibility Report", report))
+            android.widget.Toast.makeText(this, "Accessibility Doctor report copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+        }
+
+        findViewById<Button>(R.id.btn_open_a11y_fix).setOnClickListener {
+            startActivity(android.content.Intent(this, com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
+        }
+
+        val tvForgeResult = findViewById<TextView>(R.id.tv_forge_self_test_result)
+
+        findViewById<Button>(R.id.btn_forge_self_test).setOnClickListener {
+            tvForgeResult.text = "Running Forge probe..."
+            lifecycleScope.launch {
+                val res = com.jarvis.assistant.forge.ForgeSelfTester.runProbe(this@VoiceDebugActivity)
+                tvForgeResult.text = res.summary
+                tvForgeResult.setTextColor(if (res.success) 0xFF34D399.toInt() else 0xFFF87171.toInt())
+            }
+        }
+
+        findViewById<Button>(R.id.btn_forge_mini_build).setOnClickListener {
+            tvForgeResult.text = "Starting Mini Build stream..."
+            lifecycleScope.launch {
+                val res = com.jarvis.assistant.forge.ForgeSelfTester.runMiniBuild(this@VoiceDebugActivity) { stage ->
+                    tvForgeResult.text = stage
+                }
+                tvForgeResult.text = res.summary
+                tvForgeResult.setTextColor(if (res.success) 0xFF34D399.toInt() else 0xFFF87171.toInt())
+            }
         }
     }
 

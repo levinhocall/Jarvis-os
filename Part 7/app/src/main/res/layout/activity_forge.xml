@@ -65,7 +65,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/lia_text_primary"
                 android:textSize="22sp"
                 android:textStyle="bold"
                 tools:text="Stage 1: BLUEPRINT" />
@@ -75,7 +75,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:textColor="@color/text_secondary"
+                android:textColor="@color/lia_text_secondary"
                 android:textSize="13sp"
                 tools:text="Synthesizing metadata, viewport, and document head" />
         </LinearLayout>
@@ -95,7 +95,7 @@
                 android:layout_height="wrap_content"
                 android:fontFamily="serif"
                 android:textStyle="italic"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/lia_text_primary"
                 android:textSize="72sp"
                 tools:text="48%" />
 
@@ -189,16 +189,52 @@
                     tools:text="12s" />
             </LinearLayout>
 
-            <!-- Cancel Button (Minimum touch target >= 48dp) -->
-            <Button
-                android:id="@+id/btnCancel"
+            <!-- Collapsible Error Details -->
+            <TextView
+                android:id="@+id/tvErrorDetails"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:gravity="center"
+                android:textColor="#94A3B8"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="Details: 404 NOT_FOUND" />
+
+            <!-- Buttons: Cancel / Close and Retry (Minimum touch target >= 48dp) -->
+            <LinearLayout
+                android:id="@+id/llHudButtons"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:minWidth="130dp"
-                android:background="@drawable/bg_glass_card"
-                android:text="Cancel"
-                android:textColor="@color/text_primary"
-                android:textAllCaps="false" />
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+
+                <Button
+                    android:id="@+id/btnCancel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:minWidth="120dp"
+                    android:background="@drawable/bg_glass_card"
+                    android:text="Cancel"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/btnRetry"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:minWidth="120dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/bg_glass_card"
+                    android:text="Retry"
+                    android:textColor="#60A5FA"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
     </RelativeLayout>
 

@@ -56,7 +56,8 @@ data class ForgeUiState(
     val log: List<String> = emptyList(),
     val buildId: String = "",
     val file: File? = null,
-    val error: String? = null
+    val error: String? = null,
+    val rawError: String? = null
 )
 
 /**

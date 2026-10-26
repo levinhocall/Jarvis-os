@@ -57,61 +57,21 @@ class WebsiteForgeClient(
 
     /**
      * Resolves the best available flash model from the Gemini API or returns the cached model.
-     * Selects the first generateContent model whose name contains "flash" but not "live"/"image"/"tts".
+     * Uses GeminiModelResolver to ensure version >= 3.x is selected and dead 2.5 models are skipped.
      */
     suspend fun resolveModel(apiKey: String): String = withContext(Dispatchers.IO) {
-        val cached = cachedModelName.get()
+        val cached = com.jarvis.assistant.network.GeminiModelResolver.getCachedModel()
         if (!cached.isNullOrBlank()) {
             return@withContext cached
         }
-
-        try {
-            val request = Request.Builder()
-                .url("https://generativelanguage.googleapis.com/v1beta/models")
-                .header("x-goog-api-key", apiKey)
-                .get()
-                .build()
-
-            httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string()
-                    if (!body.isNullOrBlank()) {
-                        val json = JSONObject(body)
-                        val models = json.optJSONArray("models") ?: JSONArray()
-                        for (i in 0 until models.length()) {
-                            val modelObj = models.optJSONObject(i) ?: continue
-                            val rawName = modelObj.optString("name", "")
-                            val lower = rawName.lowercase(Locale.ROOT)
-                            val methods = modelObj.optJSONArray("supportedGenerationMethods") ?: JSONArray()
-                            val hasGenContent = (0 until methods.length()).any {
-                                methods.optString(it) == "generateContent"
-                            }
-
-                            if (hasGenContent &&
-                                lower.contains("flash") &&
-                                !lower.contains("live") &&
-                                !lower.contains("image") &&
-                                !lower.contains("tts")
-                            ) {
-                                val cleanName = rawName.removePrefix("models/")
-                                cachedModelName.set(cleanName)
-                                return@withContext cleanName
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (_: Exception) {
-            // Network or parse issue; fallback smoothly
-        }
-
-        val fallback = DEFAULT_FALLBACK_MODEL
-        cachedModelName.set(fallback)
-        fallback
+        val candidates = com.jarvis.assistant.network.GeminiModelResolver.fetchCandidates(apiKey)
+        val selected = candidates.firstOrNull() ?: com.jarvis.assistant.network.GeminiModelResolver.KNOWN_GOOD_FLASH
+        selected
     }
 
     /**
      * Streams website HTML generation from Gemini with auto-retry and chunk emission.
+     * Automatically falls back to next candidate model if a model is deprecated (404 / NOT_FOUND).
      */
     fun streamGenerateSite(
         prompt: String,
@@ -124,40 +84,68 @@ class WebsiteForgeClient(
             ?: prefs.apiKey.ifBlank { null }
             ?: throw IllegalStateException("Gemini API key is not configured")
 
-        val model = resolveModel(apiKey)
         val systemPrompt = if (isEdit) {
             ForgeSystemPrompt.forEdit(existingHtml, prompt)
         } else {
             ForgeSystemPrompt.forNewSite(prompt)
         }
 
-        var attempt = 0
-        var succeeded = false
-        var lastError: Exception? = null
+        val candidates = com.jarvis.assistant.network.GeminiModelResolver.fetchCandidates(apiKey).toMutableList()
+        var candidateIdx = 0
+        var streamSucceeded = false
+        var lastError: Throwable? = null
 
-        while (attempt < 2 && !succeeded) {
-            attempt++
-            try {
-                executeStream(model, apiKey, systemPrompt).collect { chunk ->
-                    emit(chunk)
+        while (candidateIdx < candidates.size && !streamSucceeded) {
+            val model = candidates[candidateIdx]
+            var attempt = 0
+            var modelSucceeded = false
+
+            while (attempt < 2 && !modelSucceeded) {
+                attempt++
+                try {
+                    executeStream(model, apiKey, systemPrompt).collect { chunk ->
+                        emit(chunk)
+                    }
+                    modelSucceeded = true
+                    streamSucceeded = true
+                    com.jarvis.assistant.network.GeminiModelResolver.setCachedModel(model)
+                } catch (e: GeminiOverloadedException) {
+                    lastError = e
+                    if (attempt < 2) {
+                        delay(4000) // Wait 4s before 503 retry
+                    } else {
+                        throw mapError(e)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    lastError = e
+                    val errorMsg = e.message.orEmpty()
+                    val isModelIssue = errorMsg.contains("404") ||
+                            errorMsg.contains("NOT_FOUND", ignoreCase = true) ||
+                            errorMsg.contains("no longer available", ignoreCase = true) ||
+                            errorMsg.contains("403") ||
+                            errorMsg.contains("PERMISSION_DENIED", ignoreCase = true)
+
+                    if (isModelIssue) {
+                        com.jarvis.assistant.network.GeminiModelResolver.invalidateCache(model)
+                        val hint = com.jarvis.assistant.network.GeminiModelResolver.extractReplacementHint(errorMsg)
+                        if (hint != null && !candidates.contains(hint)) {
+                            candidates.add(candidateIdx + 1, hint)
+                        }
+                        break // Break inner attempt loop to try next model candidate
+                    } else {
+                        throw mapError(e)
+                    }
                 }
-                succeeded = true
-            } catch (e: GeminiOverloadedException) {
-                lastError = e
-                if (attempt < 2) {
-                    delay(4000) // Wait 4s before 503 retry
-                } else {
-                    throw mapError(e)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                lastError = e
-                throw mapError(e)
+            }
+
+            if (!modelSucceeded) {
+                candidateIdx++
             }
         }
 
-        if (!succeeded && lastError != null) {
+        if (!streamSucceeded && lastError != null) {
             throw mapError(lastError)
         }
     }.flowOn(Dispatchers.IO)
@@ -245,21 +233,37 @@ class WebsiteForgeClient(
     }
 
     /**
+     * Extracts readable human message from raw JSON error bodies, preventing raw JSON display in HUD.
+     */
+    fun extractCleanMessage(raw: String): String {
+        return try {
+            val obj = com.google.gson.JsonParser.parseString(raw).asJsonObject
+            val err = obj.getAsJsonObject("error")
+            err?.get("message")?.asString ?: raw
+        } catch (_: Throwable) {
+            raw
+        }
+    }
+
+    /**
      * Maps technical HTTP and API exceptions to friendly user-facing messages.
      */
     fun mapError(t: Throwable): Exception {
-        val msg = t.message ?: ""
+        val rawMsg = t.message ?: ""
+        val cleanMsg = extractCleanMessage(rawMsg)
         return when {
-            t is GeminiOverloadedException || msg.contains("503") || msg.contains("overloaded", ignoreCase = true) ->
+            t is GeminiOverloadedException || cleanMsg.contains("503") || cleanMsg.contains("overloaded", ignoreCase = true) ->
                 Exception("Gemini servers are currently overloaded. Please try again shortly.")
-            t is GeminiApiException && (t.code == 400 || t.code == 403 || msg.contains("API_KEY_INVALID", ignoreCase = true)) ->
-                Exception("Gemini API key is invalid or not authorized.")
-            t is GeminiApiException && (t.code == 429 || msg.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) ->
+            cleanMsg.contains("404") || cleanMsg.contains("NOT_FOUND", ignoreCase = true) || cleanMsg.contains("no longer available", ignoreCase = true) ->
+                Exception("Requested AI model is no longer available. Please retry with updated model.")
+            t is GeminiApiException && (t.code == 400 || t.code == 403 || cleanMsg.contains("API_KEY_INVALID", ignoreCase = true)) ->
+                Exception("Gemini API key is invalid or unauthorized. Please check your key in Settings.")
+            t is GeminiApiException && (t.code == 429 || cleanMsg.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) ->
                 Exception("Gemini quota or rate limit exceeded. Please wait a moment.")
-            msg.contains("Unable to resolve host", ignoreCase = true) || msg.contains("Failed to connect", ignoreCase = true) ->
+            cleanMsg.contains("Unable to resolve host", ignoreCase = true) || cleanMsg.contains("Failed to connect", ignoreCase = true) ->
                 Exception("Network connection failed. Please check your internet connection.")
             else ->
-                Exception(if (msg.isNotBlank()) msg else "An unexpected error occurred during website generation.")
+                Exception(if (cleanMsg.isNotBlank()) cleanMsg else "An unexpected error occurred during website generation.")
         }
     }
 

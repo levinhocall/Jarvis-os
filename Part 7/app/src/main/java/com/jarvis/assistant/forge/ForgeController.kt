@@ -303,9 +303,12 @@ object ForgeController {
                 )
             } catch (e: Exception) {
                 val mapped = getClient().mapError(e)
+                val raw = (e as? GeminiApiException)?.let { "HTTP ${it.code}: ${getClient().extractCleanMessage(it.message ?: "")}" }
+                    ?: e.message
                 _uiState.value = _uiState.value.copy(
                     phase = ForgePhase.FAILED,
-                    error = mapped.message ?: "Website build failed."
+                    error = mapped.message ?: "Website build failed.",
+                    rawError = raw
                 )
             }
         }

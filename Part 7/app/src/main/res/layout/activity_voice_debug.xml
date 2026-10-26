@@ -507,6 +507,94 @@
                     android:background="@drawable/bg_glass_card" />
             </LinearLayout>
 
+            <!-- Diagnostics & Self-Test Hub -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="DIAGNOSTICS &amp; SELF-TESTS"
+                android:textColor="#60A5FA"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:letterSpacing="0.08"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_glass_card"
+                android:padding="16dp"
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/btn_copy_a11y_doctor"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Copy Accessibility Doctor Report"
+                    android:textSize="13sp"
+                    android:textColor="#F9FAFB"
+                    android:background="@drawable/bg_glass_card" />
+
+                <Button
+                    android:id="@+id/btn_open_a11y_fix"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="8dp"
+                    android:text="Open Accessibility Repair Guide"
+                    android:textSize="13sp"
+                    android:textColor="#F9FAFB"
+                    android:background="@drawable/bg_glass_card" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_forge_self_test"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="Forge Self-Test"
+                        android:textSize="12sp"
+                        android:textColor="#F9FAFB"
+                        android:background="@drawable/bg_glass_card" />
+
+                    <Button
+                        android:id="@+id/btn_forge_mini_build"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:text="Forge Mini Build"
+                        android:textSize="12sp"
+                        android:textColor="#F9FAFB"
+                        android:background="@drawable/bg_glass_card" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tv_forge_self_test_result"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Forge test idle. Tap above to execute on-device verification."
+                    android:textColor="#9CA3AF"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Build Stamp -->
+            <TextView
+                android:id="@+id/tv_build_stamp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="12dp"
+                android:gravity="center"
+                android:textColor="#6B7280"
+                android:textSize="12sp" />
+
         </LinearLayout>
     </ScrollView>
 </LinearLayout>
