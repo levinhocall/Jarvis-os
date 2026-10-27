@@ -1134,6 +1134,34 @@
                     android:contentDescription="YouTube" />
             </LinearLayout>
 
+            <!-- Additive Maya Phase-0 diagnostic entry; existing settings remain unchanged. -->
+            <LinearLayout
+                android:id="@+id/rowMayaSmokeTest"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_jarvis_action_card"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Open Maya Smoke Test">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Maya Smoke Test (Beta)"
+                    android:textColor="?attr/themeTextPrimary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Overlay, app intents, screen capture, Gemini and voice diagnostics"
+                    android:textColor="?attr/themeTextMuted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
             <!-- Footer: Executive Signature -->
             <TextView
                 android:id="@+id/tvFooterCredit"
