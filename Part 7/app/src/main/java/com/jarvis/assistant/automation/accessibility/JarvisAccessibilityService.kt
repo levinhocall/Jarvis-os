@@ -280,15 +280,39 @@ class JarvisAccessibilityService : AccessibilityService() {
     private fun applyDynamicConfigSafely() {
         try {
             val currentInfo = serviceInfo ?: return
+
+            // Keep the XML configuration and the live service configuration aligned.
+            // Some OEM builds restore a reduced event mask after the service reconnects;
+            // without view events, actions can launch an app but fail to observe its controls.
+            val requiredEventTypes =
+                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                AccessibilityEvent.TYPE_WINDOWS_CHANGED or
+                AccessibilityEvent.TYPE_VIEW_SCROLLED or
+                AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED or
+                AccessibilityEvent.TYPE_VIEW_CLICKED or
+                AccessibilityEvent.TYPE_VIEW_LONG_CLICKED or
+                AccessibilityEvent.TYPE_VIEW_SELECTED or
+                AccessibilityEvent.TYPE_VIEW_FOCUSED or
+                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED or
+                AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED or
+                AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED or
+                AccessibilityEvent.TYPE_ANNOUNCEMENT
+
+            val updatedEventTypes = currentInfo.eventTypes or requiredEventTypes
             val updatedFlags = currentInfo.flags or
                 android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                 android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
                 android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
-            if (currentInfo.flags != updatedFlags) {
+
+            if (currentInfo.eventTypes != updatedEventTypes || currentInfo.flags != updatedFlags) {
+                currentInfo.eventTypes = updatedEventTypes
                 currentInfo.flags = updatedFlags
                 serviceInfo = currentInfo
+                Log.i(TAG, "Accessibility config refreshed: eventTypes=0x${updatedEventTypes.toString(16)}, flags=0x${updatedFlags.toString(16)}")
             }
         } catch (t: Throwable) {
+            AccessibilityBreadcrumbs.recordException(t, "applyDynamicConfigSafely")
             Log.w(TAG, "Dynamic AccessibilityServiceInfo update skipped or failed safely: ${t.message}")
         }
     }
