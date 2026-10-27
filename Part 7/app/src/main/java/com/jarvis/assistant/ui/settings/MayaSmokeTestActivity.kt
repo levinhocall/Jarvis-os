@@ -155,7 +155,7 @@ class MayaSmokeTestActivity : AppCompatActivity() {
                 }
             }
             val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+                else WindowManager.LayoutParams.TYPE_PHONE
             val params = WindowManager.LayoutParams(dp(100), dp(100), type,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.END; x = dp(16); y = dp(120) }
