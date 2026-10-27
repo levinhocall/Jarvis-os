@@ -141,7 +141,6 @@ class MayaSmokeTestActivity : AppCompatActivity() {
             runCatching { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) }
             return
         }
-        var view: TextView? = null
         try {
             val wm = getSystemService(WINDOW_SERVICE) as WindowManager
             val circle = TextView(this).apply {
@@ -161,9 +160,8 @@ class MayaSmokeTestActivity : AppCompatActivity() {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.END; x = dp(16); y = dp(120) }
             wm.addView(circle, params)
-            view = circle
             record("Overlay", "PASS — 100dp circle shown for 3 seconds")
-            handler.postDelayed({ runCatching { wm.removeView(view) } }, 3000L)
+            handler.postDelayed({ runCatching { wm.removeView(circle) } }, 3000L)
         } catch (e: Exception) {
             record("Overlay", "FAIL — " + e.javaClass.simpleName + ": " + e.message)
         }
@@ -207,7 +205,7 @@ class MayaSmokeTestActivity : AppCompatActivity() {
                         else "Describe this screen in one short sentence."))
                     if (imageBytes != null) parts.put(JSONObject().put("inline_data",
                         JSONObject().put("mime_type", "image/jpeg")
-                            .put("data", Base64.getEncoder().encodeToString(imageBytes)))
+                            .put("data", Base64.getEncoder().encodeToString(imageBytes))))
                     val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", parts)))
                         .toString().toRequestBody("application/json; charset=utf-8".toMediaType())
                     val request = Request.Builder()
