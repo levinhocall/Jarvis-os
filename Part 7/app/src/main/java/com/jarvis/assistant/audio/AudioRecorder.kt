@@ -218,6 +218,45 @@ class AudioRecorder(
             }
             true
         } catch (e: Exception) {
+            // startRecording() can fail after AudioRecord and audio effects have
+            // already been created. Release every partially initialized resource
+            // so a later start() does not inherit a stale session or leak effects.
+            isRecording.set(false)
+            try {
+                echoCanceler?.release()
+            } catch (cleanup: Exception) {
+                Log.w(TAG, "AEC cleanup after start failure failed: ${cleanup.message}")
+            } finally {
+                echoCanceler = null
+            }
+            try {
+                noiseSuppressor?.release()
+            } catch (cleanup: Exception) {
+                Log.w(TAG, "NoiseSuppressor cleanup after start failure failed: ${cleanup.message}")
+            } finally {
+                noiseSuppressor = null
+            }
+            try {
+                automaticGainControl?.release()
+            } catch (cleanup: Exception) {
+                Log.w(TAG, "AGC cleanup after start failure failed: ${cleanup.message}")
+            } finally {
+                automaticGainControl = null
+            }
+            try {
+                audioRecord?.let { recorder ->
+                    if (recorder.state == AudioRecord.STATE_INITIALIZED &&
+                        recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING
+                    ) {
+                        recorder.stop()
+                    }
+                    recorder.release()
+                }
+            } catch (cleanup: Exception) {
+                Log.w(TAG, "AudioRecord cleanup after start failure failed: ${cleanup.message}")
+            } finally {
+                audioRecord = null
+            }
             Log.e(TAG, "Error starting AudioRecord: ${e.message}", e)
             false
         }
