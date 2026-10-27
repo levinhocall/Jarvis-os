@@ -186,17 +186,30 @@ class JarvisAccessibilityService : AccessibilityService() {
                     screenshotExecutor,
                     object : AccessibilityService.TakeScreenshotCallback {
                         override fun onSuccess(screenshotResult: AccessibilityService.ScreenshotResult) {
+                            val buffer = screenshotResult.hardwareBuffer
+                            var hardwareBitmap: Bitmap? = null
+                            var softwareBitmap: Bitmap? = null
                             try {
-                                val buffer = screenshotResult.hardwareBuffer
-                                val colorSpace = screenshotResult.colorSpace
-                                val hwBitmap = Bitmap.wrapHardwareBuffer(buffer, colorSpace)
-                                val softBitmap = hwBitmap?.copy(Bitmap.Config.ARGB_8888, false)
-                                buffer.close()
-                                hwBitmap?.recycle()
-                                callback(softBitmap)
+                                hardwareBitmap = Bitmap.wrapHardwareBuffer(buffer, screenshotResult.colorSpace)
+                                softwareBitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                                if (softwareBitmap == null) {
+                                    Log.w(TAG, "Screenshot buffer could not be converted to a software bitmap")
+                                    callback(null)
+                                } else {
+                                    // Transfer ownership to the caller only after callback succeeds.
+                                    callback(softwareBitmap)
+                                    softwareBitmap = null
+                                }
                             } catch (e: Exception) {
+                                softwareBitmap?.recycle()
                                 Log.e(TAG, "Error wrapping hardware buffer screenshot: ${e.message}")
                                 callback(null)
+                            } finally {
+                                try { buffer.close() } catch (e: Exception) {
+                                    Log.w(TAG, "Could not close screenshot hardware buffer: ${e.message}")
+                                }
+                                try { hardwareBitmap?.recycle() } catch (_: Exception) {}
+                                try { softwareBitmap?.recycle() } catch (_: Exception) {}
                             }
                         }
 
@@ -340,7 +353,7 @@ class JarvisAccessibilityService : AccessibilityService() {
                             if (match != null) {
                                 val code = match.groupValues.lastOrNull { it.isNotBlank() && it.all { c -> c.isDigit() } }
                                 if (code != null && code.length in 4..8) {
-                                    Log.i(TAG, "Auto-detected incoming OTP/code from notification ($pkg): $code")
+                                    Log.i(TAG, "Auto-detected incoming OTP/code from notification ($pkg); value withheld from logs")
                                     latestExtractedOtp = ExtractedOtp(code, System.currentTimeMillis(), pkg)
                                 }
                             }
