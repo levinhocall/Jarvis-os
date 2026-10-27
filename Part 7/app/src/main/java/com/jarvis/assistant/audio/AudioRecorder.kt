@@ -144,7 +144,16 @@ class AudioRecorder(
                                 }
                             }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Exception during AudioRecord read loop: ${e.message}", e)
+                            consecutiveErrors++
+                            Log.e(
+                                TAG,
+                                "Exception during AudioRecord read loop (error count: $consecutiveErrors): ${e.message}",
+                                e
+                            )
+                            if (consecutiveErrors > 10 && isRecording.get()) {
+                                Log.e(TAG, "Repeated AudioRecord read exceptions exceeded limit. Attempting auto-recovery...")
+                                break
+                            }
                             delay(50)
                         }
                     }
