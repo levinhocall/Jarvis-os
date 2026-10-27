@@ -108,8 +108,10 @@ class AudioRecorder(
                 }
             }
 
-            record.startRecording()
+            // Publish the recorder before starting it so the failure path can
+            // release it if startRecording() throws.
             audioRecord = record
+            record.startRecording()
             isRecording.set(true)
 
             recordingJob = scope.launch(Dispatchers.IO) {
