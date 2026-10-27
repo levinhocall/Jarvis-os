@@ -123,6 +123,10 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupClickListeners() {
+        binding.rowMayaSmokeTest.setOnClickListener {
+            startActivity(Intent(requireContext(), MayaSmokeTestActivity::class.java))
+        }
+
         // Profile Card -> Change Name
         binding.cardProfile.setOnClickListener {
             showEditNameDialog()
