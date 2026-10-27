@@ -169,49 +169,61 @@ class AudioRecorder(
                         try {
                             currentRecord?.release()
                         } catch (_: Exception) {}
+                        currentRecord = null
+                        audioRecord = null
 
+                        var replacementRecord: AudioRecord? = null
                         try {
-                            val newRecord = AudioRecord(
+                            val candidate = AudioRecord(
                                 MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                                 SAMPLE_RATE,
                                 CHANNEL_CONFIG,
                                 AUDIO_FORMAT,
                                 bufferSize
                             )
-                            if (newRecord.state == AudioRecord.STATE_INITIALIZED) {
-                                val newSessionId = newRecord.audioSessionId
-
-                                if (AcousticEchoCanceler.isAvailable()) {
-                                    try {
-                                        echoCanceler = AcousticEchoCanceler.create(newSessionId)?.apply { enabled = true }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "AEC rebind failed: ${e.message}")
-                                    }
-                                }
-                                if (NoiseSuppressor.isAvailable()) {
-                                    try {
-                                        noiseSuppressor = NoiseSuppressor.create(newSessionId)?.apply { enabled = true }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "NoiseSuppressor rebind failed: ${e.message}")
-                                    }
-                                }
-                                if (AutomaticGainControl.isAvailable()) {
-                                    try {
-                                        automaticGainControl = AutomaticGainControl.create(newSessionId)?.apply { enabled = true }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "AGC rebind failed: ${e.message}")
-                                    }
-                                }
-
-                                newRecord.startRecording()
-                                currentRecord = newRecord
-                                audioRecord = newRecord
-                                Log.i(TAG, "AudioRecord recovered with effects rebound to session $newSessionId")
-                            } else {
-                                newRecord.release()
-                                delay(1000)
+                            replacementRecord = candidate
+                            if (candidate.state != AudioRecord.STATE_INITIALIZED) {
+                                throw IllegalStateException("Replacement AudioRecord failed to initialize")
                             }
+
+                            val newSessionId = candidate.audioSessionId
+                            if (AcousticEchoCanceler.isAvailable()) {
+                                try {
+                                    echoCanceler = AcousticEchoCanceler.create(newSessionId)?.apply { enabled = true }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "AEC rebind failed: ${e.message}")
+                                }
+                            }
+                            if (NoiseSuppressor.isAvailable()) {
+                                try {
+                                    noiseSuppressor = NoiseSuppressor.create(newSessionId)?.apply { enabled = true }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "NoiseSuppressor rebind failed: ${e.message}")
+                                }
+                            }
+                            if (AutomaticGainControl.isAvailable()) {
+                                try {
+                                    automaticGainControl = AutomaticGainControl.create(newSessionId)?.apply { enabled = true }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "AGC rebind failed: ${e.message}")
+                                }
+                            }
+
+                            candidate.startRecording()
+                            currentRecord = candidate
+                            audioRecord = candidate
+                            replacementRecord = null // Ownership transferred to the active recording loop.
+                            Log.i(TAG, "AudioRecord recovered with effects rebound to session $newSessionId")
                         } catch (reInitEx: Exception) {
+                            try { replacementRecord?.release() } catch (_: Exception) {}
+                            try { echoCanceler?.release() } catch (_: Exception) {}
+                            try { noiseSuppressor?.release() } catch (_: Exception) {}
+                            try { automaticGainControl?.release() } catch (_: Exception) {}
+                            echoCanceler = null
+                            noiseSuppressor = null
+                            automaticGainControl = null
+                            audioRecord = null
+                            currentRecord = null
                             Log.e(TAG, "AudioRecord auto-recovery failed: ${reInitEx.message}", reInitEx)
                             delay(1000)
                         }
@@ -281,17 +293,24 @@ class AudioRecorder(
             automaticGainControl = null
         }
 
-        try {
-            audioRecord?.let {
-                if (it.state == AudioRecord.STATE_INITIALIZED) {
-                    it.stop()
+        val recorderToRelease = audioRecord
+        audioRecord = null
+        if (recorderToRelease != null) {
+            try {
+                if (recorderToRelease.state == AudioRecord.STATE_INITIALIZED &&
+                    recorderToRelease.recordingState == AudioRecord.RECORDSTATE_RECORDING
+                ) {
+                    recorderToRelease.stop()
                 }
-                it.release()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error stopping AudioRecord cleanly: ${e.message}")
+            } finally {
+                try {
+                    recorderToRelease.release()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error releasing AudioRecord: ${e.message}")
+                }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping AudioRecord: ${e.message}")
-        } finally {
-            audioRecord = null
         }
     }
 
