@@ -117,6 +117,7 @@ class AudioPlayer(
 
                             VoiceFlightRecorder.recordFirstAudioFrame()
                             writeToTrack(firstChunk)
+                            VoiceInterruptionCoordinator.onPlaybackBufferCompleted()
                             val amplitude = AudioUtils.calculateRmsNormalized(firstChunk, firstChunk.size)
                             onPlaybackAmplitude(amplitude)
                         }
@@ -131,6 +132,7 @@ class AudioPlayer(
                         onPlaybackAmplitude(amplitude)
 
                         writeToTrack(chunk)
+                        VoiceInterruptionCoordinator.onPlaybackBufferCompleted()
                     } else {
                         silenceCounter++
                         // Clean turn completion:
@@ -169,6 +171,7 @@ class AudioPlayer(
         if (pcmData.size >= 16) {
             val validLen = pcmData.size and 1.inv()
             val aligned = if (validLen == pcmData.size) pcmData else pcmData.copyOf(validLen)
+            VoiceInterruptionCoordinator.onPlaybackBufferEnqueued()
             audioQueue.offer(aligned)
         }
     }
@@ -179,6 +182,7 @@ class AudioPlayer(
     fun flush(newEpoch: Long = activeEpoch.incrementAndGet()) {
         activeEpoch.set(newEpoch)
         audioQueue.clear()
+        VoiceInterruptionCoordinator.onPlaybackStopped()
         isTurnComplete.set(true)
         synchronized(trackLock) {
             try {
@@ -206,6 +210,7 @@ class AudioPlayer(
         playbackThread?.interrupt()
         playbackThread = null
         audioQueue.clear()
+        VoiceInterruptionCoordinator.onPlaybackStopped()
 
         synchronized(trackLock) {
             try {

@@ -89,6 +89,17 @@ class HomeFragment : Fragment() {
 
         setupOrbWebView()
 
+        binding.liaOrb3DView.setOnClickListener {
+            (activity as? MainActivity)?.handleMicOrOrbClick()
+        }
+        binding.liaOrb3DView.setOnLongClickListener {
+            (activity as? MainActivity)?.handleHoldMicOrOrb()
+            true
+        }
+        if (preferences.isNewLookBetaEnabled && !com.jarvis.assistant.ui.fx.LiaSplash3D.played) {
+            binding.liaSplashView.startIntro()
+        }
+
         binding.btnScreenShareQuick.setOnClickListener {
             val isSharing = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value
             if (isSharing) {
@@ -199,6 +210,15 @@ class HomeFragment : Fragment() {
 
     fun setOrbState(state: String) {
         pendingOrbState = state
+        _binding?.liaOrb3DView?.let { orb3d ->
+            val convState = when (state.lowercase()) {
+                "listening" -> ConversationState.LISTENING
+                "speaking" -> ConversationState.SPEAKING
+                "thinking" -> ConversationState.THINKING
+                else -> ConversationState.IDLE
+            }
+            orb3d.updateState(convState)
+        }
         if (!isPageLoaded) return
         activity?.runOnUiThread {
             _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$state');", null)
@@ -225,6 +245,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun pushExternalAudio(amp: Float, bass: Float, high: Float) {
+        _binding?.liaOrb3DView?.setAudioAmplitude(amp)
         if (!isPageLoaded) return
         val now = System.currentTimeMillis()
         if (now - lastAudioPushTime < 33L) return // ~30 calls per second throttle
@@ -237,8 +258,25 @@ class HomeFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
-        binding.orbWebView.onResume()
-        binding.orbWebView.resumeTimers()
+
+        if (com.jarvis.assistant.forge.ForgeController.consumePendingOpen()) {
+            startActivity(Intent(requireContext(), com.jarvis.assistant.ui.forge.ForgeActivity::class.java))
+        }
+
+        val use3dShader = preferences.isNewLookBetaEnabled &&
+                preferences.orbAnimation in listOf("shader_3d", "3d_shader") &&
+                android.os.Build.VERSION.SDK_INT >= 33 &&
+                !preferences.isReduceMotionEnabled
+
+        if (use3dShader) {
+            binding.liaOrb3DView.visibility = View.VISIBLE
+            binding.orbWebView.visibility = View.GONE
+        } else {
+            binding.liaOrb3DView.visibility = View.GONE
+            binding.orbWebView.visibility = View.VISIBLE
+            binding.orbWebView.onResume()
+            binding.orbWebView.resumeTimers()
+        }
         renderTaskFallback(com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.value)
 
         // Sync theme with settings
@@ -254,7 +292,7 @@ class HomeFragment : Fragment() {
         if (err != null) {
             when (err.errorCode) {
                 "ACCESSIBILITY_DISABLED" -> {
-                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational()) {
+                    if (com.jarvis.assistant.util.PermissionHelper.isAccessibilityServiceWorking(requireContext())) {
                         com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
                         hideLiveErrorOverlay()
                     }
@@ -309,7 +347,7 @@ class HomeFragment : Fragment() {
         if (err != null) {
             when (err.errorCode) {
                 "ACCESSIBILITY_DISABLED" -> {
-                    if (com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational()) {
+                    if (com.jarvis.assistant.util.PermissionHelper.isAccessibilityServiceWorking(requireContext())) {
                         com.jarvis.assistant.background.JarvisConversationService.clearLiveError()
                         hideLiveErrorOverlay()
                     }
@@ -357,14 +395,14 @@ class HomeFragment : Fragment() {
     private fun updateHomeHeaderAndVoiceStatus() {
         if (_binding == null) return
         val userName = preferences.userName.ifBlank { "NAZIB" }
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        val timeGreeting = when (hour) {
-            in 4..11 -> "Good morning"
-            in 12..16 -> "Good afternoon"
-            in 17..21 -> "Good evening"
-            else -> "Welcome back"
+        binding.tvGreeting.text = com.jarvis.assistant.util.TimeGreetingHelper.getFullGreeting(userName)
+        if (preferences.isNewLookBetaEnabled) {
+            try {
+                val serifFont = androidx.core.content.res.ResourcesCompat.getFont(requireContext(), R.font.instrument_serif)
+                binding.tvGreeting.typeface = serifFont
+                binding.tvGreeting.textSize = 20f
+            } catch (_: Exception) {}
         }
-        binding.tvGreeting.text = "$timeGreeting, $userName"
 
         val currentLang = preferences.language.ifBlank { "Auto" }
         binding.tvQuickLanguageStatus.text = if (currentLang.contains("Auto", ignoreCase = true)) "Auto" else currentLang
@@ -562,18 +600,17 @@ class HomeFragment : Fragment() {
                                     binding.ivLiveErrorIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
                                     binding.tvLiveErrorTitle.setTextColor(Color.parseColor("#F59E0B"))
 
-                                    if (a11yState == com.jarvis.assistant.automation.accessibility.AccessibilityState.ENABLED) {
+                                    val truthfulStatus = com.jarvis.assistant.util.PermissionHelper.getTruthfulAccessibilityStatus(requireContext())
+                                    if (truthfulStatus == com.jarvis.assistant.automation.accessibility.TruthfulA11yStatus.ENABLED_NOT_CONNECTED) {
                                         binding.tvLiveErrorTitle.text = "ACCESSIBILITY NOT CONNECTED"
-                                        binding.tvLiveErrorMessage.text = "Service is enabled in Settings, but the background binder was killed or hasn't connected. Tap FIX to toggle Off and On in Settings."
+                                        binding.tvLiveErrorMessage.text = "Service is ON in Settings, but background binder is disconnected. Tap FIX for guided repair."
                                     } else {
                                         binding.tvLiveErrorTitle.text = "ACCESSIBILITY REQUIRED"
                                         binding.tvLiveErrorMessage.text = "Jarvis requires Accessibility to complete actions and navigate your phone. Tap FIX to enable."
                                     }
 
                                     binding.btnFixLiveError.setOnClickListener {
-                                        activity?.let { act ->
-                                            PermissionHelper.requestAccessibilityWithRestrictedGuidance(act)
-                                        } ?: PermissionHelper.openAccessibilitySettings(requireContext())
+                                        startActivity(Intent(requireContext(), com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
                                     }
                                 }
                                 "PERMISSIONS_MISSING" -> {

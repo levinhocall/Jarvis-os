@@ -40,6 +40,20 @@
         <item name="themeAccent3">#06B6D4</item>
         <item name="themeAccent">#2F6BFF</item>
         <item name="themeAccentLight">#E0E7FF</item>
+
+        <!-- LIA Theme Attributes (Light) -->
+        <item name="liaBackground">#F3F0FB</item>
+        <item name="liaGradientTop">#E5DFF4</item>
+        <item name="liaSurface">#FFFFFF</item>
+        <item name="liaSurfaceRaised">#E9E4F5</item>
+        <item name="liaAccent">#9A5500</item>
+        <item name="liaAccentSecondary">#D97706</item>
+        <item name="liaTextPrimary">#15112E</item>
+        <item name="liaTextSecondary">#554F70</item>
+        <item name="liaLotus">#FF6FAE</item>
+        <item name="liaLagoon">#3FE0D0</item>
+        <item name="liaRimLight">#20000000</item>
+        <item name="liaDepthShadow">#1A000000</item>
     </style>
 
     <!-- 2. DARK THEME - LIQUID OBSIDIAN GLASS EDITION -->
@@ -79,6 +93,20 @@
         <item name="themeAccent3">#22D3EE</item>
         <item name="themeAccent">#5B8CFF</item>
         <item name="themeAccentLight">#1E2858</item>
+
+        <!-- LIA Theme Attributes (Dark) -->
+        <item name="liaBackground">#06050E</item>
+        <item name="liaGradientTop">#15113A</item>
+        <item name="liaSurface">#17143A</item>
+        <item name="liaSurfaceRaised">#221E4D</item>
+        <item name="liaAccent">#FFB547</item>
+        <item name="liaAccentSecondary">#FF8A3D</item>
+        <item name="liaTextPrimary">#EEE9FF</item>
+        <item name="liaTextSecondary">#A7A0CC</item>
+        <item name="liaLotus">#FF6FAE</item>
+        <item name="liaLagoon">#3FE0D0</item>
+        <item name="liaRimLight">#33FFFFFF</item>
+        <item name="liaDepthShadow">#80000000</item>
     </style>
 
     <!-- 3. RED THEME - LIQUID RUBY GLASS EDITION -->
@@ -197,6 +225,20 @@
         <item name="themeAccent3">#06B6D4</item>
         <item name="themeAccent">#2F6BFF</item>
         <item name="themeAccentLight">#E0E7FF</item>
+
+        <!-- LIA Theme Attributes (Light) -->
+        <item name="liaBackground">#F3F0FB</item>
+        <item name="liaGradientTop">#E5DFF4</item>
+        <item name="liaSurface">#FFFFFF</item>
+        <item name="liaSurfaceRaised">#E9E4F5</item>
+        <item name="liaAccent">#9A5500</item>
+        <item name="liaAccentSecondary">#D97706</item>
+        <item name="liaTextPrimary">#15112E</item>
+        <item name="liaTextSecondary">#554F70</item>
+        <item name="liaLotus">#FF6FAE</item>
+        <item name="liaLagoon">#3FE0D0</item>
+        <item name="liaRimLight">#20000000</item>
+        <item name="liaDepthShadow">#1A000000</item>
     </style>
 
     <!-- 6. CUSTOM DARK - LIQUID GLASS -->
@@ -237,6 +279,20 @@
         <item name="themeAccent3">#22D3EE</item>
         <item name="themeAccent">#5B8CFF</item>
         <item name="themeAccentLight">#1E2858</item>
+
+        <!-- LIA Theme Attributes (Dark) -->
+        <item name="liaBackground">#06050E</item>
+        <item name="liaGradientTop">#15113A</item>
+        <item name="liaSurface">#17143A</item>
+        <item name="liaSurfaceRaised">#221E4D</item>
+        <item name="liaAccent">#FFB547</item>
+        <item name="liaAccentSecondary">#FF8A3D</item>
+        <item name="liaTextPrimary">#EEE9FF</item>
+        <item name="liaTextSecondary">#A7A0CC</item>
+        <item name="liaLotus">#FF6FAE</item>
+        <item name="liaLagoon">#3FE0D0</item>
+        <item name="liaRimLight">#33FFFFFF</item>
+        <item name="liaDepthShadow">#80000000</item>
     </style>
 
     <!-- Legacy style aliases -->
@@ -245,4 +301,59 @@
     <style name="Theme.JarvisAssistant.CyberpunkNeon" parent="Theme.JarvisAssistant.Dark" />
     <style name="Theme.JarvisAssistant.EmeraldObsidian" parent="Theme.JarvisAssistant.Dark" />
     <style name="Theme.JarvisAssistant.RoseGold" parent="Theme.JarvisAssistant.Sunset" />
+
+    <!-- 7. LIA 3D PEARL THEME - "A Pearl of Light in the Night" -->
+    <style name="Theme.JarvisAssistant.Lia" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">#06050E</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">#06050E</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">#06050E</item>
+        <item name="colorPrimary">#FFB547</item>
+        <item name="colorOnPrimary">#06050E</item>
+        <item name="colorSurface">#17143A</item>
+        <item name="colorOnSurface">#EEE9FF</item>
+
+        <item name="themeBg">#06050E</item>
+        <item name="themeSurface">#17143A</item>
+        <item name="themeCardBg">#17143A</item>
+        <item name="themeCardBorder">#33FFFFFF</item>
+        <item name="themeCardGlassStart">#4D221E4D</item>
+        <item name="themeCardGlassEnd">#1A15113A</item>
+        <item name="themeDockBg">#8017143A</item>
+        <item name="themeDockGlassStart">#99221E4D</item>
+        <item name="themeDockGlassEnd">#6615113A</item>
+        <item name="themeDockBorder">#33FFFFFF</item>
+        <item name="themeGlassSpecular">#33FFFFFF</item>
+        <item name="themeChipBg">#33221E4D</item>
+        <item name="themeInputBg">#17143A</item>
+        <item name="themeGlowBlob1">@drawable/bg_liquid_glow_dark_1</item>
+        <item name="themeGlowBlob2">@drawable/bg_liquid_glow_dark_2</item>
+        <item name="themeGlowBlob3">@drawable/bg_liquid_glow_dark_3</item>
+
+        <item name="themeTextPrimary">#EEE9FF</item>
+        <item name="themeTextSecondary">#A7A0CC</item>
+        <item name="themeTextMuted">#A7A0CC</item>
+        <item name="themeAccent1">#FFB547</item>
+        <item name="themeAccent2">#FF8A3D</item>
+        <item name="themeAccent3">#FF6FAE</item>
+        <item name="themeAccent">#FFB547</item>
+        <item name="themeAccentLight">#33FFB547</item>
+
+        <!-- LIA Theme Attributes -->
+        <item name="liaBackground">#06050E</item>
+        <item name="liaGradientTop">#15113A</item>
+        <item name="liaSurface">#17143A</item>
+        <item name="liaSurfaceRaised">#221E4D</item>
+        <item name="liaAccent">#FFB547</item>
+        <item name="liaAccentSecondary">#FF8A3D</item>
+        <item name="liaTextPrimary">#EEE9FF</item>
+        <item name="liaTextSecondary">#A7A0CC</item>
+        <item name="liaLotus">#FF6FAE</item>
+        <item name="liaLagoon">#3FE0D0</item>
+        <item name="liaRimLight">#33FFFFFF</item>
+        <item name="liaDepthShadow">#80000000</item>
+    </style>
+
+    <style name="Theme.JarvisAssistant.Pearl" parent="Theme.JarvisAssistant.Lia" />
 </resources>

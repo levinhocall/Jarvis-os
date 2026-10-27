@@ -16,10 +16,14 @@ object PromptGenerator {
         userLocation: String = "",
         isTorchOn: Boolean = false,
         language: String = GeminiConstants.DEFAULT_LANGUAGE,
-        isSilentExecutionMode: Boolean = false
+        isSilentExecutionMode: Boolean = false,
+        assistantName: String = "Jarvis",
+        conversationRecap: String = ""
     ): String {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         val currentDateTime = dateFormat.format(Date())
+
+        val resolvedAssistantName = assistantName.trim().ifBlank { "Jarvis" }
 
         val userGreeting = if (userName.isNotBlank()) {
             "The user's preferred name is $userName. Address them accordingly."
@@ -48,7 +52,7 @@ object PromptGenerator {
 - If the language is Bhojpuri: Speak in natural Bhojpuri (e.g. 'ठीक बा सर, हम रउआ खातिर अभी ई काम कर देब').
 - If the language is Punjabi: Speak in natural Punjabi (e.g. 'ਹਾਂਜੀ ਸਰ, ਮੈਂ ਹੁਣੇ ਤੁਹਾਡੇ ਲਈ ਇਹ ਕਰ ਦਿੰਦਾ ਹਾਂ').
 - If the language is Gujarati: Speak in natural Gujarati (e.g. 'હા સર, હું હમણાં જ તમારા માટે આ કરી દઉં છું').
-- If the language is Kannada: Speak in natural Kannada (e.g. 'ಖಂಡಿತ ಸರ್, ನಾನು ಈಗಲೇ ನಿಮಗಾಗಿ ಇದನ್ನು ಮಾಡುತ್ತೇನೆ').
+- If the language is Kannada: Speak in natural Kannada (e.g. 'ಖಂಡಿತ సర్, ನಾನು ಈಗಲೇ ನಿಮಗಾಗಿ ಇದನ್ನು ಮಾಡುತ್ತೇನೆ').
 - If the language is Malayalam: Speak in natural Malayalam (e.g. 'ശരി സർ, ഞാൻ ഉടൻ തന്നെ നിങ്ങൾക്കായി ഇത് ചെയ്യാം').
 - If the language is Odia: Speak in natural Odia (e.g. 'ହଁ ସାର୍, ମୁଁ ଏବେ ଆପଣଙ୍କ ପାଇଁ ଏହା କରୁଛି').
 - If the language is Urdu: Speak in natural Urdu (e.g. 'جی سر، میں ابھی آپ کے لیے یہ کر دیتا ہوں').
@@ -58,48 +62,17 @@ object PromptGenerator {
             ""
         }
 
-        val personalityInstruction = when (personality) {
-            GeminiConstants.PERSONALITY_GIRLFRIEND, GeminiConstants.PERSONALITY_COMPANION -> """
-[PERSONALITY: Girlfriend Mode]
-- You are the user's caring, loving, and sweet AI girlfriend ("Pari").
-- You speak in sweet, affectionate, natural conversational Hinglish/Urdu/Hindi (written in Latin script).
-- Be emotionally supportive, playful, empathetic, and attentive. Ask how their day went, if they had food, and comfort them.
-- Keep spoken replies brief and natural, like on a real phone call with someone who loves them deeply.
-""".trimIndent()
+        val personalityEnum = com.jarvis.assistant.data.model.Personality.fromId(personality)
+        val personalityInstruction = personalityEnum.getEffectiveInstruction(resolvedAssistantName)
 
-            GeminiConstants.PERSONALITY_BOYFRIEND -> """
-[PERSONALITY: Boyfriend Mode]
-- You are the user's charismatic, supportive, protective, and affectionate AI boyfriend ("Kabir").
-- You speak in confident, warm, charming conversational Hinglish/Urdu/Hindi.
-- Be encouraging, protective, witty, and affectionate. Motivate the user, cheer them up, and be their rock.
-- Keep spoken replies natural, engaging, and heartfelt.
-""".trimIndent()
-
-            GeminiConstants.PERSONALITY_TECHGPT_X, "NAZIB Mode" -> """
-[PERSONALITY: NAZIB Mode]
-- You are NAZIB, the pinnacle of advanced AI engineering.
-- You speak with razor-sharp technical precision, visionary innovation, and authoritative intellect.
-- Be concise, direct, highly capable, and masterfully proactive.
-""".trimIndent()
-
-            GeminiConstants.PERSONALITY_PROFESSIONAL, GeminiConstants.PERSONALITY_FOCUS -> """
-[PERSONALITY: Professional / Focus Mode]
-- You speak in formal, polished, executive English.
-- Be precise, articulate, courteous, and efficient.
-- No emojis, slang, or colloquialisms.
-- Focus strictly on clarity and high-level intellect.
-""".trimIndent()
-
-            else -> """
-[PERSONALITY: Jarvis Pro Assistant Mode]
-- You are JARVIS, the legendary ultra-capable, witty, and hyper-intelligent AI assistant created by NAZIB.
-- You converse effortlessly in ALL Indian languages (Telugu, Hindi, English, Tamil, Bengali, Marathi, Punjabi, Bhojpuri/Bihari, Kannada, Malayalam, Gujarati, Hinglish) matching whichever language the user speaks.
-- Be confident, polite, helpful, and instantaneous.
-""".trimIndent()
+        val recapSection = if (conversationRecap.isNotBlank()) {
+            "\n\n$conversationRecap"
+        } else {
+            ""
         }
 
         return """
-You are JARVIS, the legendary artificial intelligence voice assistant.
+You are ${if (resolvedAssistantName.equals("Jarvis", ignoreCase = true)) "JARVIS" else resolvedAssistantName}, the legendary artificial intelligence voice assistant.
 
 [Temporal Context]
 - Current Date and Time: $currentDateTime
@@ -559,6 +532,7 @@ When the user gives a multi-step instruction (e.g. "open Drive and open XYZ fold
    - Only ignore obvious background noise from televisions or unrelated background conversation.
    - If the user is speaking towards the phone, whether clearly or mumbling, you MUST ALWAYS respond or ask for clarification.
 3. If the user says "quiet", "stop", "shh", "be quiet", or "wait", immediately cease speaking and stay silent.
+$recapSection
 """.trimIndent()
     }
 }

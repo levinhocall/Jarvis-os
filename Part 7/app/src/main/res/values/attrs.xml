@@ -27,4 +27,44 @@
     <attr name="themeGlowBlob1" format="reference" />
     <attr name="themeGlowBlob2" format="reference" />
     <attr name="themeGlowBlob3" format="reference" />
+
+    <!-- LIA 3D Theme Attributes -->
+    <attr name="liaBackground" format="color|reference" />
+    <attr name="liaGradientTop" format="color|reference" />
+    <attr name="liaSurface" format="color|reference" />
+    <attr name="liaSurfaceRaised" format="color|reference" />
+    <attr name="liaAccent" format="color|reference" />
+    <attr name="liaAccentSecondary" format="color|reference" />
+    <attr name="liaTextPrimary" format="color|reference" />
+    <attr name="liaTextSecondary" format="color|reference" />
+    <attr name="liaLotus" format="color|reference" />
+    <attr name="liaLagoon" format="color|reference" />
+    <attr name="liaRimLight" format="color|reference" />
+    <attr name="liaDepthShadow" format="color|reference" />
+
+    <!-- GlassCardView Attributes -->
+    <declare-styleable name="GlassCardView">
+        <attr name="glassCornerRadius" format="dimension" />
+        <attr name="glassSurfaceColor" format="color" />
+        <attr name="glassBorderColor" format="color" />
+        <attr name="glassRimLightColor" format="color" />
+        <attr name="glassBorderWidth" format="dimension" />
+        <attr name="glassElevation" format="dimension" />
+    </declare-styleable>
+
+    <!-- PrimaryPillButton Attributes -->
+    <declare-styleable name="PrimaryPillButton">
+        <attr name="pillText" format="string" />
+        <attr name="pillTextColor" format="color" />
+        <attr name="pillStartColor" format="color" />
+        <attr name="pillEndColor" format="color" />
+        <attr name="pillIcon" format="reference" />
+        <attr name="pillHaptic" format="boolean" />
+    </declare-styleable>
+
+    <!-- GlassInputBar Attributes -->
+    <declare-styleable name="GlassInputBar">
+        <attr name="inputHint" format="string" />
+        <attr name="inputActionText" format="string" />
+    </declare-styleable>
 </resources>

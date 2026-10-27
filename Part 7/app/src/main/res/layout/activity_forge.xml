@@ -1,0 +1,336 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/forgeRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:keepScreenOn="true">
+
+    <!-- 1. 3D WebGL Three.js Scene -->
+    <com.jarvis.assistant.ui.forge.ForgeWebGlScene
+        android:id="@+id/forgeWebGlScene"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- 2. Canvas 2D Fallback Scene (Shown if WebGL fails or low-RAM) -->
+    <com.jarvis.assistant.ui.forge.ForgeFallbackScene
+        android:id="@+id/forgeFallbackScene"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- 3. Generated Site WebView (Revealed upon build completion) -->
+    <com.jarvis.assistant.ui.forge.GeneratedSiteView
+        android:id="@+id/generatedSiteView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.0"
+        android:visibility="gone" />
+
+    <!-- 4. Immersive Live Build HUD -->
+    <RelativeLayout
+        android:id="@+id/forgeHudContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="20dp"
+        android:accessibilityLiveRegion="polite">
+
+        <!-- Top Header & Prompt Chip -->
+        <LinearLayout
+            android:id="@+id/llTopInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:layout_marginTop="24dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvPromptChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_glass_card"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="6dp"
+                android:textColor="@color/accent_cyan"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="Coffee Shop Landing Page" />
+
+            <TextView
+                android:id="@+id/tvStageLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:textColor="@color/lia_text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                tools:text="Stage 1: BLUEPRINT" />
+
+            <TextView
+                android:id="@+id/tvStageDesc"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/lia_text_secondary"
+                android:textSize="13sp"
+                tools:text="Synthesizing metadata, viewport, and document head" />
+        </LinearLayout>
+
+        <!-- Center: Big Serif Percent & 6-segment Stage Track -->
+        <LinearLayout
+            android:id="@+id/llCenterProgress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvPercent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="serif"
+                android:textStyle="italic"
+                android:textColor="@color/lia_text_primary"
+                android:textSize="72sp"
+                tools:text="48%" />
+
+            <!-- 6-segment Stage Track -->
+            <LinearLayout
+                android:id="@+id/llStageTrack"
+                android:layout_width="220dp"
+                android:layout_height="6dp"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:weightSum="6">
+
+                <View android:id="@+id/trackSeg1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@color/accent_purple" />
+                <View android:id="@+id/trackSeg2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@color/bg_secondary" />
+                <View android:id="@+id/trackSeg3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@color/bg_secondary" />
+                <View android:id="@+id/trackSeg4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@color/bg_secondary" />
+                <View android:id="@+id/trackSeg5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@color/bg_secondary" />
+                <View android:id="@+id/trackSeg6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:background="@color/bg_secondary" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Bottom: Telemetry Stats & Cancel Button -->
+        <LinearLayout
+            android:id="@+id/llBottomHud"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_marginBottom="16dp"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <LinearLayout
+                android:id="@+id/llStats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingBottom="16dp">
+
+                <TextView
+                    android:id="@+id/tvStatKb"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    tools:text="14 KB" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="8dp"
+                    android:text="•"
+                    android:textColor="@color/text_tertiary" />
+
+                <TextView
+                    android:id="@+id/tvStatSections"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    tools:text="4 sections" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="8dp"
+                    android:text="•"
+                    android:textColor="@color/text_tertiary" />
+
+                <TextView
+                    android:id="@+id/tvStatSpeed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    tools:text="112 tok/s" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="8dp"
+                    android:text="•"
+                    android:textColor="@color/text_tertiary" />
+
+                <TextView
+                    android:id="@+id/tvStatElapsed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    tools:text="12s" />
+            </LinearLayout>
+
+            <!-- Collapsible Error Details -->
+            <TextView
+                android:id="@+id/tvErrorDetails"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:gravity="center"
+                android:textColor="#94A3B8"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="Details: 404 NOT_FOUND" />
+
+            <!-- Buttons: Cancel / Close and Retry (Minimum touch target >= 48dp) -->
+            <LinearLayout
+                android:id="@+id/llHudButtons"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+
+                <Button
+                    android:id="@+id/btnCancel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:minWidth="120dp"
+                    android:background="@drawable/bg_glass_card"
+                    android:text="Cancel"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/btnRetry"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:minWidth="120dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/bg_glass_card"
+                    android:text="Retry"
+                    android:textColor="#60A5FA"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+    </RelativeLayout>
+
+    <!-- 5. Result Toolbar Handle (Always visible when toolbar is auto-hidden) -->
+    <ImageButton
+        android:id="@+id/btnToolbarHandle"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/bg_glass_card"
+        android:src="@drawable/ic_search"
+        android:tint="@color/text_primary"
+        android:contentDescription="Show website toolbar"
+        android:visibility="gone" />
+
+    <!-- 6. Result Toolbar (Auto-hides after 4s) -->
+    <LinearLayout
+        android:id="@+id/forgeToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_glass_card"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/btnToolbarBack"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_back"
+            android:tint="@color/text_primary"
+            android:contentDescription="Back" />
+
+        <ImageButton
+            android:id="@+id/btnToolbarShare"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_share"
+            android:tint="@color/text_primary"
+            android:contentDescription="Share website" />
+
+        <ImageButton
+            android:id="@+id/btnToolbarSave"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_download"
+            android:tint="@color/text_primary"
+            android:contentDescription="Save website" />
+
+        <ImageButton
+            android:id="@+id/btnToolbarBrowser"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_open_in_new"
+            android:tint="@color/text_primary"
+            android:contentDescription="Open in browser" />
+
+        <ImageButton
+            android:id="@+id/btnToolbarEdit"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_edit"
+            android:tint="@color/text_primary"
+            android:contentDescription="Edit website" />
+
+        <ImageButton
+            android:id="@+id/btnToolbarRebuild"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_refresh"
+            android:tint="@color/text_primary"
+            android:contentDescription="Rebuild website" />
+
+        <ImageButton
+            android:id="@+id/btnToolbarDelete"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_delete"
+            android:tint="@color/error_red"
+            android:contentDescription="Delete website" />
+    </LinearLayout>
+
+</FrameLayout>

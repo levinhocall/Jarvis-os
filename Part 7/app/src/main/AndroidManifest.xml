@@ -30,6 +30,8 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
 
     <queries>
         <package android:name="com.termux" />
@@ -112,6 +114,12 @@
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".ui.settings.MayaSmokeTestActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".background.JarvisConversationService"
             android:exported="false"
@@ -123,7 +131,6 @@
             android:label="@string/app_name"
             android:description="@string/accessibility_service_desc"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:directBootAware="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -160,6 +167,47 @@
                 <action android:name="com.jarvis.assistant.TERMUX_COMMAND_RESULT" />
             </intent-filter>
         </receiver>
+
+        <!-- Website Forge (Live 3D Website Builder) -->
+        <activity
+            android:name=".ui.forge.ForgeActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.JarvisAssistant" />
+
+        <!-- Voice Pipeline Diagnostics & Telemetry HUD -->
+        <activity
+            android:name=".ui.debug.VoiceDebugActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.JarvisAssistant" />
+
+        <!-- Accessibility Guided Fix & Repair -->
+        <activity
+            android:name=".ui.accessibility.AccessibilityFixActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.JarvisAssistant" />
+
+        <!-- Accessibility Watchdog Boot & Package Replace Receiver -->
+        <receiver
+            android:name=".automation.accessibility.A11yWatchdog$BootAndPackageReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.forge.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/forge_file_paths" />
+        </provider>
 
     </application>
 

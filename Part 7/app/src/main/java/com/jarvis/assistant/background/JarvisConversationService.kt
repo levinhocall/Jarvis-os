@@ -123,6 +123,25 @@ class JarvisConversationService : Service() {
         private val _connectionStatus = MutableStateFlow("READY")
         val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
 
+        private val _reconnectCount = MutableStateFlow(0)
+        val reconnectCount: StateFlow<Int> = _reconnectCount.asStateFlow()
+
+        fun incrementReconnectCount() {
+            _reconnectCount.value++
+        }
+
+        private val _detectedLanguage = MutableStateFlow("UNKNOWN")
+        val detectedLanguage: StateFlow<String> = _detectedLanguage.asStateFlow()
+
+        fun updateDetectedLanguage(text: String?) {
+            if (!text.isNullOrBlank()) {
+                val detected = com.jarvis.assistant.data.model.LanguageDetector.detect(text)
+                if (detected != com.jarvis.assistant.data.model.DetectedLanguage.UNKNOWN) {
+                    _detectedLanguage.value = detected.name
+                }
+            }
+        }
+
         private val _audioLevel = MutableStateFlow(0f)
         val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
 
@@ -263,6 +282,7 @@ class JarvisConversationService : Service() {
     private var taskProgressOverlay: com.jarvis.assistant.ui.agent.TaskProgressOverlay? = null
     private var taskProgressOverlayJob: Job? = null
     private var overlayPermissionWarningTaskId: String? = null
+    private var edgeGlow: com.jarvis.assistant.ui.fx.ListeningEdgeGlow? = null
     private val preferences by lazy { (applicationContext as JarvisApp).preferences }
     val deviceActionDispatcher by lazy { DeviceActionDispatcher(this) }
 
@@ -474,6 +494,7 @@ class JarvisConversationService : Service() {
         if (_conversationState.value != state) {
             _conversationState.value = state
             updateNotification()
+            edgeGlow?.updateState(state)
         }
     }
 
@@ -616,6 +637,7 @@ class JarvisConversationService : Service() {
         com.jarvis.assistant.automation.offline.OfflineIntelligenceRouter.init(applicationContext)
         headsetAudioRouter = com.jarvis.assistant.audio.HeadsetAudioRouter(applicationContext)
         taskProgressOverlay = com.jarvis.assistant.ui.agent.TaskProgressOverlay(this)
+        edgeGlow = com.jarvis.assistant.ui.fx.ListeningEdgeGlow(this)
         taskProgressOverlayJob = serviceScope.launch(Dispatchers.Main.immediate) {
             combine(
                 com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState,
@@ -737,49 +759,54 @@ class JarvisConversationService : Service() {
     private fun ensureMicrophoneForegroundService() {
         val notification = buildNotification()
         val hasMicPerm = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
-        var combinedTypes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            val base = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            if (hasMicPerm) {
-                base or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            } else {
-                base
-            }
-        } else {
-            0
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q &&
-            com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value) {
-            combinedTypes = combinedTypes or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-        }
+        val hasProjection = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value
+        val selectedTypes = ForegroundTypeSelector.selectTypes(
+            sdkInt = android.os.Build.VERSION.SDK_INT,
+            hasMicPermission = hasMicPerm,
+            hasActiveMediaProjection = hasProjection
+        )
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             try {
-                startForeground(NOTIFICATION_ID, notification, combinedTypes)
-                Log.d("JarvisService", "startForeground elevated to types=$combinedTypes")
+                startForeground(NOTIFICATION_ID, notification, selectedTypes)
+                Log.d("JarvisService", "startForeground elevated to types=$selectedTypes")
             } catch (e: Exception) {
+                com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(e, "startForeground:primary_failed")
                 Log.w("JarvisService", "startForeground with combined types failed: ${e.message}")
+                val fallbackType = ForegroundTypeSelector.getSafeFallbackType(android.os.Build.VERSION.SDK_INT)
                 try {
-                    startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                    startForeground(NOTIFICATION_ID, notification, fallbackType)
+                    Log.i("JarvisService", "startForeground fallback succeeded with type=$fallbackType")
                 } catch (fallbackEx: Exception) {
+                    com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(fallbackEx, "startForeground:fallback_failed")
                     Log.w("JarvisService", "startForeground fallback failed: ${fallbackEx.message}")
                 }
             }
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            try {
+                startForeground(NOTIFICATION_ID, notification)
+            } catch (e: Exception) {
+                com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(e, "startForeground:legacy_failed")
+                Log.w("JarvisService", "Legacy startForeground failed: ${e.message}")
+            }
         }
     }
 
     fun elevateToMediaProjection(): Boolean {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val notification = buildNotification()
-            val types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            val hasMicPerm = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+            val types = ForegroundTypeSelector.selectTypes(
+                sdkInt = android.os.Build.VERSION.SDK_INT,
+                hasMicPermission = hasMicPerm,
+                hasActiveMediaProjection = true
+            )
             try {
                 startForeground(NOTIFICATION_ID, notification, types)
-                Log.i("JarvisService", "Foreground service elevated to include MEDIA_PROJECTION")
+                Log.i("JarvisService", "Foreground service elevated to include MEDIA_PROJECTION (types=$types)")
                 return true
             } catch (e: Exception) {
+                com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(e, "elevateToMediaProjection")
                 Log.w("JarvisService", "Failed to elevate to MEDIA_PROJECTION: ${e.message}")
                 return false
             }
@@ -790,12 +817,17 @@ class JarvisConversationService : Service() {
     fun demoteFromMediaProjection() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val notification = buildNotification()
-            val types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            val hasMicPerm = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+            val types = ForegroundTypeSelector.selectTypes(
+                sdkInt = android.os.Build.VERSION.SDK_INT,
+                hasMicPermission = hasMicPerm,
+                hasActiveMediaProjection = false
+            )
             try {
                 startForeground(NOTIFICATION_ID, notification, types)
-                Log.i("JarvisService", "Foreground service demoted from MEDIA_PROJECTION")
+                Log.i("JarvisService", "Foreground service demoted from MEDIA_PROJECTION to types=$types")
             } catch (e: Exception) {
+                com.jarvis.assistant.automation.accessibility.AccessibilityBreadcrumbs.recordException(e, "demoteFromMediaProjection")
                 Log.w("JarvisService", "Failed to demote from MEDIA_PROJECTION: ${e.message}")
             }
         }
@@ -839,6 +871,7 @@ class JarvisConversationService : Service() {
         return withContext(Dispatchers.IO) {
             val memoryContext = app.memoryManager.getSystemPromptContext()
             val favSong = app.memoryManager.resolveSongQuery("my favorite song")
+            val conversationRecap = com.jarvis.assistant.data.memory.ConversationMemory.instance.recap()
             com.jarvis.assistant.util.PromptGenerator.generateSystemPrompt(
                 personality = preferences.personality,
                 userName = preferences.userName,
@@ -848,7 +881,9 @@ class JarvisConversationService : Service() {
                 userLocation = preferences.userLocation,
                 isTorchOn = app.phoneControlManager.isTorchOn,
                 language = preferences.language,
-                isSilentExecutionMode = preferences.isSilentExecutionMode
+                isSilentExecutionMode = preferences.isSilentExecutionMode,
+                assistantName = preferences.assistantName,
+                conversationRecap = conversationRecap
             )
         }
     }
@@ -899,6 +934,7 @@ class JarvisConversationService : Service() {
         _liveError.value = null
 
         _isSessionOn.value = true
+        edgeGlow?.start()
         _isStandby.value = false
         acquireWifiLock()
         lastResponseTimedOut = false
@@ -1117,6 +1153,7 @@ class JarvisConversationService : Service() {
                                 }
                                 currentTurnUserText.append(trimmed)
                                 _liveUserTranscript.value = currentTurnUserText.toString().trim()
+                                updateDetectedLanguage(_liveUserTranscript.value)
                                 if (_conversationState.value == ConversationState.SPEAKING) {
                                     triggerVoiceBargeIn("user_text_received")
                                 } else if (_conversationState.value == ConversationState.IDLE) {
@@ -1496,10 +1533,9 @@ class JarvisConversationService : Service() {
             if (_isSessionOn.value) {
                 val now = System.currentTimeMillis()
 
-                // Acoustic Echo Decay Protection (AEDP):
-                // For 150ms after speaker audio stops, discard mic chunks so room reverberation
-                // does not bounce into Gemini Live and cause false self-interruption.
-                if (now - lastPlaybackEndTime < 150L) {
+                // Acoustic Echo Decay & Echo Guard Protection:
+                // Mutes microphone while assistant audio plays and for 450ms tail after playback stops
+                if (com.jarvis.assistant.audio.VoiceInterruptionCoordinator.isEchoGuardMuted()) {
                     consecutiveVoicedFrames = 0
                     return@AudioRecorder
                 }
@@ -2566,6 +2602,22 @@ class JarvisConversationService : Service() {
                         result.put("message", "Screen inspected successfully.")
                     }
 
+                    "build_website" -> {
+                        val prompt = args.optString("prompt", "")
+                        val mode = args.optString("mode", "new")
+                        val isEdit = mode.equals("edit", ignoreCase = true)
+                        com.jarvis.assistant.forge.ForgeController.init(applicationContext)
+                        com.jarvis.assistant.forge.ForgeController.start(prompt, isEdit)
+                        val forgeIntent = Intent(applicationContext, com.jarvis.assistant.ui.forge.ForgeActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            putExtra(com.jarvis.assistant.ui.forge.ForgeActivity.EXTRA_PROMPT, prompt)
+                        }
+                        startActivity(forgeIntent)
+                        result.put("result", "forge_started")
+                        result.put("success", true)
+                        result.put("message", "Website Forge started building the website in background.")
+                    }
+
 
                     else -> {
                         Log.w("JarvisService", "Unknown toolCall name: $name")
@@ -3143,6 +3195,14 @@ class JarvisConversationService : Service() {
                     userText = query.ifEmpty { "Spoken user query" },
                     jarvisText = reply
                 )
+                com.jarvis.assistant.data.memory.ConversationMemory.instance.addTurn(
+                    role = "User",
+                    content = query.ifEmpty { "Spoken user query" }
+                )
+                com.jarvis.assistant.data.memory.ConversationMemory.instance.addTurn(
+                    role = preferences.assistantName,
+                    content = reply
+                )
             }
         }
         currentTurnAssistantText.clear()
@@ -3170,6 +3230,7 @@ class JarvisConversationService : Service() {
         cancelAllActiveTools()
         com.jarvis.assistant.automation.agent.AgentTaskEngine.resetForSession()
         _isSessionOn.value = false
+        edgeGlow?.stop()
         finalizeTurn()
 
 
@@ -3605,6 +3666,8 @@ class JarvisConversationService : Service() {
     }
 
     override fun onDestroy() {
+        edgeGlow?.stop()
+        edgeGlow = null
         taskProgressOverlayJob?.cancel()
         taskProgressOverlayJob = null
         taskProgressOverlay?.destroy()

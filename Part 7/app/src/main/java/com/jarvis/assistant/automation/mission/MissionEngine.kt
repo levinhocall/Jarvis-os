@@ -1,6 +1,7 @@
 package com.jarvis.assistant.automation.mission
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
 import com.jarvis.assistant.automation.command.JarvisCommand
@@ -766,6 +767,21 @@ object MissionEngine {
                 } else {
                     Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Home navigation unavailable"))
                 }
+            }
+            "build_website" -> {
+                val prompt = step.parameters["prompt"] as? String ?: ""
+                val mode = step.parameters["mode"] as? String ?: "new"
+                val isEdit = mode.equals("edit", ignoreCase = true)
+                com.jarvis.assistant.forge.ForgeController.init(context)
+                com.jarvis.assistant.forge.ForgeController.start(prompt, isEdit)
+                try {
+                    val intent = Intent(context, com.jarvis.assistant.ui.forge.ForgeActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        putExtra(com.jarvis.assistant.ui.forge.ForgeActivity.EXTRA_PROMPT, prompt)
+                    }
+                    context.startActivity(intent)
+                } catch (_: Exception) {}
+                Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, "{\"result\":\"forge_started\"}"))
             }
             else -> {
                 Pair(true, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Action dispatched without deep closed-loop sensor"))

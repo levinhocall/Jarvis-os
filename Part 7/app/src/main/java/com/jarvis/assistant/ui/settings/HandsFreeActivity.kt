@@ -66,18 +66,38 @@ class HandsFreeActivity : AppCompatActivity() {
     }
 
     private fun updateServiceStatus(state: AccessibilityState) {
+        val isWorking = PermissionHelper.isAccessibilityServiceWorking(this)
         when (state) {
             AccessibilityState.CONNECTED -> {
-                binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
-                    ContextCompat.getColor(this, R.color.status_green)
-                )
-                binding.tvAccessibilityStatus.text = "HANDS-FREE SERVICE: ACTIVE"
-                binding.tvAccessibilityStatus.setTextColor(
-                    ContextCompat.getColor(this, R.color.status_green)
-                )
-                binding.btnToggleAccessibility.text = "Accessibility Service is Active"
-                binding.btnToggleAccessibility.isEnabled = true
-                binding.btnToggleAccessibility.alpha = 1.0f
+                if (isWorking) {
+                    binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
+                        ContextCompat.getColor(this, R.color.status_green)
+                    )
+                    binding.tvAccessibilityStatus.text = "HANDS-FREE SERVICE: ACTIVE"
+                    binding.tvAccessibilityStatus.setTextColor(
+                        ContextCompat.getColor(this, R.color.status_green)
+                    )
+                    binding.btnToggleAccessibility.text = "Accessibility Service is Active"
+                    binding.btnToggleAccessibility.isEnabled = true
+                    binding.btnToggleAccessibility.alpha = 1.0f
+                    binding.btnToggleAccessibility.setOnClickListener {
+                        PermissionHelper.requestAccessibilityWithRestrictedGuidance(this)
+                    }
+                } else {
+                    binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
+                        ContextCompat.getColor(this, R.color.status_amber)
+                    )
+                    binding.tvAccessibilityStatus.text = "SERVICE CONNECTED BUT NOT WORKING • TAP TO FIX"
+                    binding.tvAccessibilityStatus.setTextColor(
+                        ContextCompat.getColor(this, R.color.status_amber)
+                    )
+                    binding.btnToggleAccessibility.text = "Open Guided Fix"
+                    binding.btnToggleAccessibility.isEnabled = true
+                    binding.btnToggleAccessibility.alpha = 1.0f
+                    binding.btnToggleAccessibility.setOnClickListener {
+                        startActivity(Intent(this, com.jarvis.assistant.ui.accessibility.AccessibilityFixActivity::class.java))
+                    }
+                }
             }
             AccessibilityState.ENABLED -> {
                 binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(

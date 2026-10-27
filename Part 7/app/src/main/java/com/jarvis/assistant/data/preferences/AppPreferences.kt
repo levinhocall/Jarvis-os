@@ -2,6 +2,7 @@ package com.jarvis.assistant.data.preferences
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.provider.Settings
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -11,6 +12,7 @@ import com.jarvis.assistant.data.model.ChatTurn
 import com.jarvis.assistant.data.model.GeminiConstants
 
 class AppPreferences(context: Context) {
+    private val appContext: Context = context.applicationContext
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
     private val secureApiPrefs: SharedPreferences? = try {
         val masterKey = MasterKey.Builder(context.applicationContext)
@@ -77,6 +79,11 @@ class AppPreferences(context: Context) {
         private const val KEY_ORB_SCALE = "key_orb_scale"
         private const val KEY_ORB_HUE = "key_orb_hue"
         private const val KEY_CUSTOM_ENDPOINT = "key_custom_endpoint"
+        const val KEY_ASSISTANT_NAME = "key_assistant_name"
+        const val KEY_REDUCE_MOTION = "key_reduce_motion"
+        const val KEY_NEW_LOOK_BETA = "key_new_look_beta"
+        const val KEY_LISTENING_EDGE_GLOW = "key_listening_edge_glow"
+        const val KEY_A11Y_AUTO_REPAIR = "key_a11y_auto_repair"
     }
 
     var isOwnerVoiceEnabled: Boolean
@@ -245,6 +252,40 @@ class AppPreferences(context: Context) {
             prefs.edit().putString(KEY_USER_NAME, value.trim()).apply()
         }
 
+    var assistantName: String
+        get() = prefs.getString(KEY_ASSISTANT_NAME, "Jarvis")?.trim().takeUnless { it.isNullOrBlank() } ?: "Jarvis"
+        set(value) = prefs.edit().putString(KEY_ASSISTANT_NAME, value.trim().ifBlank { "Jarvis" }).apply()
+
+    var isReduceMotionEnabled: Boolean
+        get() {
+            if (prefs.contains(KEY_REDUCE_MOTION)) {
+                return prefs.getBoolean(KEY_REDUCE_MOTION, false)
+            }
+            return try {
+                val scale = Settings.Global.getFloat(
+                    appContext.contentResolver,
+                    Settings.Global.ANIMATOR_DURATION_SCALE,
+                    1.0f
+                )
+                scale == 0.0f
+            } catch (_: Exception) {
+                false
+            }
+        }
+        set(value) = prefs.edit().putBoolean(KEY_REDUCE_MOTION, value).apply()
+
+    var isNewLookBetaEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NEW_LOOK_BETA, false)
+        set(value) = prefs.edit().putBoolean(KEY_NEW_LOOK_BETA, value).apply()
+
+    var isListeningEdgeGlowEnabled: Boolean
+        get() = prefs.getBoolean(KEY_LISTENING_EDGE_GLOW, true)
+        set(value) = prefs.edit().putBoolean(KEY_LISTENING_EDGE_GLOW, value).apply()
+
+    var isA11yAutoRepairEnabled: Boolean
+        get() = prefs.getBoolean(KEY_A11Y_AUTO_REPAIR, false)
+        set(value) = prefs.edit().putBoolean(KEY_A11Y_AUTO_REPAIR, value).apply()
+
     var appTheme: String
         get() {
             val stored = prefs.getString(KEY_APP_THEME, "sunset") ?: "sunset"
@@ -253,6 +294,7 @@ class AppPreferences(context: Context) {
                 "dark", "midnight_onyx", "cyberpunk_neon", "emerald_obsidian" -> "dark"
                 "red" -> "red"
                 "sunset", "rose_gold" -> "sunset"
+                "lia", "pearl" -> "lia"
                 "custom" -> "custom"
                 else -> "light"
             }
@@ -265,7 +307,7 @@ class AppPreferences(context: Context) {
 
     var orbAnimation: String
         get() {
-            val valid = listOf("holographic_plasma", "cosmic_pulsar", "quantum_core", "cyber_ring", "siri_glow")
+            val valid = listOf("holographic_plasma", "cosmic_pulsar", "quantum_core", "cyber_ring", "siri_glow", "shader_3d", "3d_shader")
             val stored = prefs.getString(KEY_ORB_ANIMATION, "holographic_plasma") ?: "holographic_plasma"
             return if (stored in valid) stored else "holographic_plasma"
         }

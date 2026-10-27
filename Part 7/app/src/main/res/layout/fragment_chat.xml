@@ -35,6 +35,13 @@
         app:layout_constraintStart_toEndOf="@id/btnChatMenu"
         app:layout_constraintEnd_toStartOf="@id/btnChatNew">
 
+        <com.jarvis.assistant.ui.fx.LiaOrb3DView
+            android:id="@+id/chatHeaderOrb"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_marginBottom="2dp"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/tvChatTitle"
             android:layout_width="wrap_content"

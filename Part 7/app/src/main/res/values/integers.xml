@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Motion Duration Tokens (Milliseconds) -->
+    <integer name="motion_duration_fast">150</integer>
+    <integer name="motion_duration_medium">300</integer>
+    <integer name="motion_duration_slow">500</integer>
+</resources>

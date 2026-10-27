@@ -1,5 +1,6 @@
 package com.jarvis.assistant.ui.chat
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -110,6 +111,20 @@ class ChatFragment : Fragment() {
             }
         }
 
+        val prefs = (activity?.applicationContext as? JarvisApp)?.preferences
+        val assistantName = prefs?.assistantName ?: "Jarvis"
+        binding.tvChatTitle.text = assistantName
+        binding.etMessageInput.hint = "Message $assistantName..."
+
+        if (prefs?.isNewLookBetaEnabled == true && android.os.Build.VERSION.SDK_INT >= 33 && !prefs.isReduceMotionEnabled) {
+            binding.chatHeaderOrb.visibility = View.VISIBLE
+            viewLifecycleOwner.lifecycleScope.launch {
+                com.jarvis.assistant.background.JarvisConversationService.conversationState.collect { state ->
+                    binding.chatHeaderOrb.updateState(state)
+                }
+            }
+        }
+
         observeChatTurns()
     }
 
@@ -128,6 +143,20 @@ class ChatFragment : Fragment() {
             "[FILE: ${att.fileName}]\n${att.summary}\n\n$text".trim()
         } else {
             text
+        }
+
+        // Direct Forge Intent recognition
+        if (com.jarvis.assistant.forge.ForgeIntent.matches(fullMessage)) {
+            val forgePrompt = com.jarvis.assistant.forge.ForgeIntent.extractPrompt(fullMessage)
+            val ctx = requireContext()
+            com.jarvis.assistant.forge.ForgeController.init(ctx)
+            com.jarvis.assistant.forge.ForgeController.start(forgePrompt)
+            val intent = Intent(ctx, com.jarvis.assistant.ui.forge.ForgeActivity::class.java).apply {
+                putExtra(com.jarvis.assistant.ui.forge.ForgeActivity.EXTRA_PROMPT, forgePrompt)
+            }
+            startActivity(intent)
+            binding.etMessageInput.text?.clear()
+            return
         }
 
         JarvisConversationService.sendTextMessage(fullMessage)

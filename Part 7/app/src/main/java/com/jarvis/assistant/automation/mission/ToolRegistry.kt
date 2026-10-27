@@ -218,6 +218,141 @@ object ToolRegistry {
 
         register(
             ToolDefinition(
+                name = "open_website",
+                description = "Opens one or more websites/URLs in Google Chrome in separate tabs",
+                parameters = listOf(
+                    ToolParameter("urls", "List<String>", "Array of website URLs or domain names", required = false),
+                    ToolParameter("query", "String", "Optional URL or query", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "search_in_chrome",
+                description = "Searches for a topic or opens a URL in Google Chrome",
+                parameters = listOf(
+                    ToolParameter("query", "String", "Query or URL to search in Chrome", required = true)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "make_direct_phone_call",
+                description = "Places a direct cellular phone call to a phone number",
+                parameters = listOf(
+                    ToolParameter("phone_number", "String", "Direct phone number to dial", required = true)
+                ),
+                requiredPermissions = listOf(android.Manifest.permission.CALL_PHONE),
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "take_photo",
+                description = "Opens camera and captures a photo",
+                parameters = listOf(
+                    ToolParameter("camera", "String", "Camera to use: 'front' or 'back'", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "set_alarm",
+                description = "Sets a system clock alarm",
+                parameters = listOf(
+                    ToolParameter("hour", "Int", "Hour in 24h format (0-23)", required = true),
+                    ToolParameter("minute", "Int", "Minute (0-59)", required = true),
+                    ToolParameter("message", "String", "Alarm label or description", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "set_timer",
+                description = "Sets a countdown timer",
+                parameters = listOf(
+                    ToolParameter("seconds", "Int", "Timer duration in seconds", required = true),
+                    ToolParameter("message", "String", "Timer label", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "search_wikipedia",
+                description = "Searches Wikipedia for encyclopedic information",
+                parameters = listOf(
+                    ToolParameter("query", "String", "Topic or entity to search", required = true)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "get_weather",
+                description = "Gets current live weather for a city",
+                parameters = listOf(
+                    ToolParameter("city", "String", "City or locality name", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "create_calendar_event",
+                description = "Creates an event in the user's calendar",
+                parameters = listOf(
+                    ToolParameter("title", "String", "Event title", required = true),
+                    ToolParameter("begin_time", "String", "Start time description", required = false)
+                ),
+                riskLevel = MissionRisk.MEDIUM,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "go_to_background",
+                description = "Minimizes JARVIS to background standby mode",
+                parameters = emptyList(),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "inspect_screen",
+                description = "Reads accessible screen content and visible elements",
+                parameters = emptyList(),
+                requiresAccessibility = true,
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
+
+        register(
+            ToolDefinition(
                 name = "read_unread_notifications",
                 description = "Reads unread incoming WhatsApp or messaging notifications",
                 parameters = emptyList(),
@@ -309,6 +444,51 @@ object ToolRegistry {
                     ToolParameter("subcommand", "String", "Git subcommand (e.g. status, diff, commit)", required = true)
                 ),
                 riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "execute_social_media_task",
+                description = "Automates social media tasks on Instagram, Facebook, and WhatsApp",
+                parameters = listOf(
+                    ToolParameter("platform", "String", "Target platform: 'INSTAGRAM', 'FACEBOOK', or 'WHATSAPP'", required = true),
+                    ToolParameter("action", "String", "Social action e.g. 'CREATE_POST', 'CREATE_REEL', 'CREATE_STORY', 'TEXT_POST', 'SEND_MESSAGE'", required = true),
+                    ToolParameter("media_uri", "String", "Safe content:// URI of image/video to upload", required = false),
+                    ToolParameter("caption", "String", "Caption, post text, or message text", required = false),
+                    ToolParameter("mode", "String", "Task mode: 'PUBLISH' or 'DRAFT'", required = false),
+                    ToolParameter("target_account", "String", "Target recipient or account name", required = false)
+                ),
+                requiresAccessibility = true,
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
+                name = "social_media_task_control",
+                description = "Controls an active social media task (CONFIRM, REJECT, RESUME, CANCEL, STATUS)",
+                parameters = listOf(
+                    ToolParameter("command", "String", "Control command: 'CONFIRM', 'REJECT', 'RESUME', 'CANCEL', or 'STATUS'", required = true),
+                    ToolParameter("task_id", "String", "Active task identifier", required = true)
+                ),
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                isIdempotent = false
+            )
+        )
+
+        // Website Forge 3D live builder capability
+        register(
+            ToolDefinition(
+                name = "build_website",
+                description = "Builds a complete, modern responsive website or landing page using Website Forge live 3D builder",
+                parameters = listOf(
+                    ToolParameter("prompt", "String", "Description or specification of the website to build", required = true),
+                    ToolParameter("mode", "String", "Generation mode: 'new' or 'edit'", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
                 isIdempotent = false
             )
         )

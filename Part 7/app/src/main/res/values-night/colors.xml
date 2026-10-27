@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme-aware Glass Semantic Tokens (Night) -->
+    <color name="glass_surface">#17143A</color>
+    <color name="glass_surface_raised">#221E4D</color>
+    <color name="glass_border">#33FFFFFF</color>
+    <color name="glass_rim_light">#33FFFFFF</color>
+    <color name="glass_glow">#40FFB547</color>
+    <color name="glass_text_primary">#EEE9FF</color>
+    <color name="glass_text_secondary">#A7A0CC</color>
+    <color name="glass_text_muted">#A7A0CC</color>
+    <color name="accent_pill_start">#FFB547</color>
+    <color name="accent_pill_end">#FF8A3D</color>
+    <color name="accent_pill_text">#06050E</color>
+</resources>

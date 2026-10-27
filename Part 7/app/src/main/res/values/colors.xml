@@ -57,4 +57,56 @@
     <color name="naira_avatar_bg">#EFF6FF</color>
     <color name="naira_input_bg">#FFFFFF</color>
     <color name="naira_chip_bg">#F1F5F9</color>
+
+    <!-- LIA 3D Design Tokens ("A Pearl of Light in the Night") -->
+    <!-- Website Forge & 3D Tokens -->
+    <color name="bg_primary">#070709</color>
+    <color name="bg_secondary">#121218</color>
+    <color name="accent_purple">#8B5CF6</color>
+    <color name="accent_cyan">#06B6D4</color>
+    <color name="accent_gold">#F59E0B</color>
+    <color name="error_red">#EF4444</color>
+    <color name="text_tertiary">#64748B</color>
+
+    <!-- Base Dark Semantic Tokens -->
+    <color name="lia_background">#06050E</color>
+    <color name="lia_gradient_top">#15113A</color>
+    <color name="lia_surface">#17143A</color>
+    <color name="lia_surface_raised">#221E4D</color>
+    <color name="lia_accent">#FFB547</color>
+    <color name="lia_accent_secondary">#FF8A3D</color>
+    <color name="lia_text_primary">#EEE9FF</color>
+    <color name="lia_text_secondary">#A7A0CC</color>
+    <color name="lia_lotus">#FF6FAE</color>
+    <color name="lia_lagoon">#3FE0D0</color>
+    <color name="lia_success">#2ECC71</color>
+    <color name="lia_warning">#F39C12</color>
+    <color name="lia_error">#E74C3C</color>
+    <color name="lia_rim_light">#33FFFFFF</color>
+    <color name="lia_depth_shadow">#80000000</color>
+
+    <!-- Light Scheme Explicit Tokens (contrast >= 4.5:1) -->
+    <color name="lia_light_background">#F3F0FB</color>
+    <color name="lia_light_surface">#FFFFFF</color>
+    <color name="lia_light_surface_raised">#E9E4F5</color>
+    <color name="lia_light_gradient_top">#E5DFF4</color>
+    <color name="lia_light_accent">#9A5500</color>
+    <color name="lia_light_accent_secondary">#D97706</color>
+    <color name="lia_light_text_primary">#15112E</color>
+    <color name="lia_light_text_secondary">#554F70</color>
+    <color name="lia_light_rim_light">#20000000</color>
+    <color name="lia_light_depth_shadow">#1A000000</color>
+
+    <!-- Theme-aware Glass Semantic Tokens (Default / Light) -->
+    <color name="glass_surface">#FFFFFF</color>
+    <color name="glass_surface_raised">#E9E4F5</color>
+    <color name="glass_border">#CBD5E1</color>
+    <color name="glass_rim_light">#20000000</color>
+    <color name="glass_glow">#40B86A00</color>
+    <color name="glass_text_primary">#15112E</color>
+    <color name="glass_text_secondary">#554F70</color>
+    <color name="glass_text_muted">#554F70</color>
+    <color name="accent_pill_start">#FFB547</color>
+    <color name="accent_pill_end">#FF8A3D</color>
+    <color name="accent_pill_text">#06050E</color>
 </resources>

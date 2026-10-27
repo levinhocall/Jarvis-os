@@ -245,10 +245,17 @@ class JarvisAccessibilityService : AccessibilityService() {
     private var isWaitingForOemSetupAutoClick = false
     private var oemSetupArmTime = 0L
 
+    override fun onCreate() {
+        super.onCreate()
+        AccessibilityBreadcrumbs.init(this)
+        AccessibilityBreadcrumbs.recordLifecycle("JarvisAccessibilityService", "onCreate")
+    }
+
     override fun onServiceConnected() {
         try {
             super.onServiceConnected()
             instance = this
+            AccessibilityBreadcrumbs.recordLifecycle("JarvisAccessibilityService", "onServiceConnected")
             AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
             applyDynamicConfigSafely()
             Log.i(TAG, "JarvisAccessibilityService connected and active")
@@ -259,10 +266,12 @@ class JarvisAccessibilityService : AccessibilityService() {
                 try {
                     ensureJarvisServiceActive()
                 } catch (t: Throwable) {
+                    AccessibilityBreadcrumbs.recordException(t, "onServiceConnected:ensureJarvisServiceActive")
                     Log.w(TAG, "Asynchronous ensureJarvisServiceActive caught safely: ${t.message}")
                 }
             }, 1000L)
         } catch (t: Throwable) {
+            AccessibilityBreadcrumbs.recordException(t, "onServiceConnected:fatal")
             Log.e(TAG, "Fatal-safe guard caught error in onServiceConnected: ${t.message}", t)
             AccessibilityHealthModel.updateState(AccessibilityState.ERROR, t.message)
         }
@@ -288,13 +297,24 @@ class JarvisAccessibilityService : AccessibilityService() {
         try {
             val isSessionActive = com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value
             val isStandbyActive = com.jarvis.assistant.background.JarvisConversationService.isStandby.value
-            if (isSessionActive || isStandbyActive) return
+            if (isSessionActive || isStandbyActive) {
+                AccessibilityBreadcrumbs.recordServiceActiveOutcome(false, "Already active (session=$isSessionActive, standby=$isStandbyActive)")
+                return
+            }
 
             // STRICT GUARD: Never call startForegroundService from background on API 26+ (Android 8.0+)
             // to avoid IllegalStateException and ForegroundServiceStartNotAllowedException.
             val isForeground = com.jarvis.assistant.JarvisApp.isAppForeground.value
             if (!isForeground) {
+                AccessibilityBreadcrumbs.recordServiceActiveOutcome(false, "App is backgrounded, skipping FGS start")
                 Log.d(TAG, "Skipping standby start: app is backgrounded, avoiding FGS start restrictions")
+                return
+            }
+
+            val hasRecordAudio = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+            if (!hasRecordAudio) {
+                AccessibilityBreadcrumbs.recordServiceActiveOutcome(false, "RECORD_AUDIO missing, skipping FGS start")
+                Log.d(TAG, "Skipping standby start: RECORD_AUDIO permission missing")
                 return
             }
 
@@ -302,13 +322,16 @@ class JarvisAccessibilityService : AccessibilityService() {
                 action = com.jarvis.assistant.background.JarvisConversationService.ACTION_ENTER_STANDBY
             }
             androidx.core.content.ContextCompat.startForegroundService(this, intent)
+            AccessibilityBreadcrumbs.recordServiceActiveOutcome(true, "startForegroundService intent dispatched")
             Log.i(TAG, "JarvisAccessibilityService ensured JarvisConversationService is running in standby")
         } catch (t: Throwable) {
+            AccessibilityBreadcrumbs.recordException(t, "ensureJarvisServiceActive")
             Log.w(TAG, "Could not start JarvisConversationService from accessibility service: ${t.message}")
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        val eventStartMs = android.os.SystemClock.elapsedRealtime()
         try {
             event ?: return
             AccessibilityHealthModel.recordEventReceived()
@@ -438,24 +461,34 @@ class JarvisAccessibilityService : AccessibilityService() {
         } catch (t: Throwable) {
             // CRITICAL: Prevent ANY uncaught exception from escaping onAccessibilityEvent,
             // which would trigger an unhandled crash and cause Android to permanently disable the service.
+            AccessibilityBreadcrumbs.recordException(t, "onAccessibilityEvent")
             Log.e(TAG, "Fatal-safe guard caught unhandled exception in onAccessibilityEvent: ${t.message}", t)
+        } finally {
+            val eventDurationMs = android.os.SystemClock.elapsedRealtime() - eventStartMs
+            if (eventDurationMs > 50L) {
+                AccessibilityBreadcrumbs.record("SLOW_EVENT", "onAccessibilityEvent took ${eventDurationMs}ms (pkg=${event?.packageName}, type=${event?.eventType})")
+            }
         }
     }
 
     override fun onInterrupt() {
         try {
+            AccessibilityBreadcrumbs.recordLifecycle("JarvisAccessibilityService", "onInterrupt")
             Log.w(TAG, "JarvisAccessibilityService interrupted")
             AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED, "Service interrupted by system")
         } catch (t: Throwable) {
+            AccessibilityBreadcrumbs.recordException(t, "onInterrupt")
             Log.w(TAG, "onInterrupt suppressed error: ${t.message}")
         }
     }
 
     override fun onDestroy() {
         try {
+            AccessibilityBreadcrumbs.recordLifecycle("JarvisAccessibilityService", "onDestroy")
             if (instance === this) instance = null
             AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service destroyed")
         } catch (t: Throwable) {
+            AccessibilityBreadcrumbs.recordException(t, "onDestroy")
             Log.w(TAG, "onDestroy suppressed error: ${t.message}")
         } finally {
             super.onDestroy()
@@ -464,18 +497,21 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         try {
+            AccessibilityBreadcrumbs.recordLifecycle("JarvisAccessibilityService", "onUnbind")
             if (instance === this) instance = null
             AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
         } catch (t: Throwable) {
+            AccessibilityBreadcrumbs.recordException(t, "onUnbind")
             Log.w(TAG, "onUnbind suppressed error: ${t.message}")
         }
-        return true // Allows onRebind to be invoked when system reconnects without destroying service
+        return super.onUnbind(intent)
     }
 
     override fun onRebind(intent: Intent?) {
         try {
             super.onRebind(intent)
             instance = this
+            AccessibilityBreadcrumbs.recordLifecycle("JarvisAccessibilityService", "onRebind")
             AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
             applyDynamicConfigSafely()
             Log.i(TAG, "JarvisAccessibilityService rebound and active")
@@ -483,10 +519,12 @@ class JarvisAccessibilityService : AccessibilityService() {
                 try {
                     ensureJarvisServiceActive()
                 } catch (t: Throwable) {
+                    AccessibilityBreadcrumbs.recordException(t, "onRebind:ensureJarvisServiceActive")
                     Log.w(TAG, "Asynchronous onRebind ensureJarvisServiceActive caught safely: ${t.message}")
                 }
             }, 1000L)
         } catch (t: Throwable) {
+            AccessibilityBreadcrumbs.recordException(t, "onRebind:fatal")
             Log.e(TAG, "Fatal-safe guard caught error in onRebind: ${t.message}", t)
         }
     }
