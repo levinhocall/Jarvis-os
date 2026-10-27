@@ -147,12 +147,27 @@ class AudioRecorder(
                         }
                     }
 
-                    // Auto-recovery if broken but still meant to be recording:
+                    // Auto-recovery if broken but still meant to be recording.
+                    // Audio effects belong to an AudioRecord session ID, so they must be
+                    // rebound when a replacement recorder is created.
                     if (isActive && isRecording.get()) {
                         delay(400)
                         try {
+                            echoCanceler?.release()
+                            noiseSuppressor?.release()
+                            automaticGainControl?.release()
+                        } catch (effectReleaseEx: Exception) {
+                            Log.w(TAG, "Could not release effects before audio recovery: ${effectReleaseEx.message}")
+                        } finally {
+                            echoCanceler = null
+                            noiseSuppressor = null
+                            automaticGainControl = null
+                        }
+
+                        try {
                             currentRecord?.release()
                         } catch (_: Exception) {}
+
                         try {
                             val newRecord = AudioRecord(
                                 MediaRecorder.AudioSource.VOICE_COMMUNICATION,
@@ -162,16 +177,40 @@ class AudioRecorder(
                                 bufferSize
                             )
                             if (newRecord.state == AudioRecord.STATE_INITIALIZED) {
+                                val newSessionId = newRecord.audioSessionId
+
+                                if (AcousticEchoCanceler.isAvailable()) {
+                                    try {
+                                        echoCanceler = AcousticEchoCanceler.create(newSessionId)?.apply { enabled = true }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "AEC rebind failed: ${e.message}")
+                                    }
+                                }
+                                if (NoiseSuppressor.isAvailable()) {
+                                    try {
+                                        noiseSuppressor = NoiseSuppressor.create(newSessionId)?.apply { enabled = true }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "NoiseSuppressor rebind failed: ${e.message}")
+                                    }
+                                }
+                                if (AutomaticGainControl.isAvailable()) {
+                                    try {
+                                        automaticGainControl = AutomaticGainControl.create(newSessionId)?.apply { enabled = true }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "AGC rebind failed: ${e.message}")
+                                    }
+                                }
+
                                 newRecord.startRecording()
                                 currentRecord = newRecord
                                 audioRecord = newRecord
-                                Log.i(TAG, "AudioRecord successfully auto-recovered and restarted!")
+                                Log.i(TAG, "AudioRecord recovered with effects rebound to session $newSessionId")
                             } else {
                                 newRecord.release()
                                 delay(1000)
                             }
                         } catch (reInitEx: Exception) {
-                            Log.e(TAG, "AudioRecord auto-recovery failed: ${reInitEx.message}")
+                            Log.e(TAG, "AudioRecord auto-recovery failed: ${reInitEx.message}", reInitEx)
                             delay(1000)
                         }
                     }
