@@ -257,19 +257,24 @@ class AudioRecorder(
             } finally {
                 automaticGainControl = null
             }
-            try {
-                audioRecord?.let { recorder ->
-                    if (recorder.state == AudioRecord.STATE_INITIALIZED &&
-                        recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING
+            val failedRecorder = audioRecord
+            audioRecord = null
+            if (failedRecorder != null) {
+                try {
+                    if (failedRecorder.state == AudioRecord.STATE_INITIALIZED &&
+                        failedRecorder.recordingState == AudioRecord.RECORDSTATE_RECORDING
                     ) {
-                        recorder.stop()
+                        failedRecorder.stop()
                     }
-                    recorder.release()
+                } catch (cleanup: Exception) {
+                    Log.w(TAG, "AudioRecord stop after start failure failed: ${cleanup.message}")
+                } finally {
+                    try {
+                        failedRecorder.release()
+                    } catch (cleanup: Exception) {
+                        Log.w(TAG, "AudioRecord release after start failure failed: ${cleanup.message}")
+                    }
                 }
-            } catch (cleanup: Exception) {
-                Log.w(TAG, "AudioRecord cleanup after start failure failed: ${cleanup.message}")
-            } finally {
-                audioRecord = null
             }
             Log.e(TAG, "Error starting AudioRecord: ${e.message}", e)
             false
