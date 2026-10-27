@@ -148,25 +148,32 @@ class JarvisAccessibilityService : AccessibilityService() {
 
             val bmp = captureScreenBitmap()
             if (bmp != null) {
+                var scaledBmp: Bitmap? = null
                 try {
                     val maxDim = 640f
                     val scale = (maxDim / maxOf(bmp.width, bmp.height)).coerceAtMost(1.0f)
-                    val targetW = (bmp.width * scale).toInt() and 1.inv()
-                    val targetH = (bmp.height * scale).toInt() and 1.inv()
-                    val scaledBmp = if (scale < 1.0f && targetW > 0 && targetH > 0) {
-                        Bitmap.createScaledBitmap(bmp, targetW, targetH, true)
+                    val targetW = (bmp.width * scale).toInt().coerceAtLeast(1)
+                    val targetH = (bmp.height * scale).toInt().coerceAtLeast(1)
+                    val outputBitmap = if (scale < 1.0f && targetW > 0 && targetH > 0) {
+                        Bitmap.createScaledBitmap(bmp, targetW, targetH, true).also { scaledBmp = it }
                     } else {
                         bmp
                     }
                     val stream = ByteArrayOutputStream()
-                    scaledBmp.compress(Bitmap.CompressFormat.JPEG, quality, stream)
-                    if (scaledBmp != bmp) scaledBmp.recycle()
-                    bmp.recycle()
+                    if (!outputBitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), stream)) {
+                        Log.w(TAG, "Screenshot JPEG compression returned false")
+                        return null
+                    }
                     val bytes = stream.toByteArray()
-                    Log.d(TAG, "Captured native accessibility screenshot: ${bytes.size / 1024} KB (${targetW}x${targetH})")
+                    Log.d(TAG, "Captured native accessibility screenshot: ${bytes.size / 1024} KB (${outputBitmap.width}x${outputBitmap.height})")
                     return bytes
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed encoding accessibility screenshot to JPEG: ${e.message}")
+                } finally {
+                    if (scaledBmp !== bmp) {
+                        try { scaledBmp?.recycle() } catch (_: Exception) {}
+                    }
+                    try { bmp.recycle() } catch (_: Exception) {}
                 }
             }
             // Fallback to ScreenCaptureManager if active
