@@ -3378,18 +3378,37 @@ class JarvisConversationService : Service() {
         }
 
         override fun onError(exception: Exception?) {
-            Log.e("JarvisService", "Vosk error: ${exception?.message}")
-            if (_isStandby.value) {
-                serviceScope.launch(Dispatchers.Main) {
-                    delay(1500)
-                    if (_isStandby.value && voskSpeechService == null) {
-                        startWakeListening()
-                    }
-                }
-            }
+            Log.e("JarvisService", "Vosk wake listener error: ${exception?.message}")
+            restartWakeListeningAfterFailure("recognizer error: ${exception?.message ?: "unknown"}")
         }
 
         override fun onTimeout() {
+            restartWakeListeningAfterFailure("recognizer timeout")
+        }
+    }
+
+    /**
+     * Vosk's SpeechService can stop delivering results after an error/timeout while the
+     * SpeechService reference remains non-null. Clear and release that stale instance
+     * before retrying, otherwise standby wake listening can silently die after one attempt.
+     */
+    private fun restartWakeListeningAfterFailure(reason: String) {
+        if (!_isStandby.value) return
+
+        val failedService = voskSpeechService
+        voskSpeechService = null
+        Log.w("JarvisService", "Restarting standby wake listener after $reason")
+
+        try {
+            failedService?.cancel()
+            failedService?.stop()
+            failedService?.shutdown()
+        } catch (cleanupError: Exception) {
+            Log.d("JarvisService", "Wake listener cleanup completed with: ${cleanupError.message}")
+        }
+
+        serviceScope.launch(Dispatchers.Main) {
+            delay(900L)
             if (_isStandby.value && voskSpeechService == null) {
                 startWakeListening()
             }
@@ -3597,7 +3616,7 @@ class JarvisConversationService : Service() {
         com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(wakeGreeting)
         VoiceFlightRecorder.recordWakeAckSpoken()
 
-        beginActiveConversation(wakeTriggered = false)
+        beginActiveConversation(wakeTriggered = true)
     }
 
     private fun vibrateBriefly() {
