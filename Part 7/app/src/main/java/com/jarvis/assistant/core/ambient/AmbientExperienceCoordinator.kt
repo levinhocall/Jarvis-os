@@ -140,9 +140,7 @@ object AmbientExperienceCoordinator {
         // Invoke external cancellation code after releasing internal locks.
         callback?.invoke()
 
-        if (activeLockTag == missionId) {
-            releaseExecutionLock(missionId)
-        }
+        releaseExecutionLock(missionId)
 
         if (mission != null) {
             Log.i(TAG, "Mission cancelled: $missionId ('${mission.title}')")
