@@ -483,6 +483,8 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         try {
+            // Prevent delayed lifecycle work from retaining this service after teardown.
+            handler.removeCallbacksAndMessages(null)
             if (instance === this) instance = null
             AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service destroyed")
         } catch (t: Throwable) {
@@ -494,6 +496,8 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         try {
+            // A service may later rebind; onRebind schedules only the work it still needs.
+            handler.removeCallbacksAndMessages(null)
             if (instance === this) instance = null
             AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
         } catch (t: Throwable) {
