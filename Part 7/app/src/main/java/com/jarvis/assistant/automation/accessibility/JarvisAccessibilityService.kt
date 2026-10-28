@@ -199,24 +199,34 @@ class JarvisAccessibilityService : AccessibilityService() {
                             try {
                                 hardwareBitmap = Bitmap.wrapHardwareBuffer(buffer, screenshotResult.colorSpace)
                                 softwareBitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, false)
-                                if (softwareBitmap == null) {
-                                    Log.w(TAG, "Screenshot buffer could not be converted to a software bitmap")
-                                    callback(null)
-                                } else {
-                                    // Transfer ownership to the caller only after callback succeeds.
-                                    callback(softwareBitmap)
-                                    softwareBitmap = null
-                                }
                             } catch (e: Exception) {
-                                softwareBitmap?.recycle()
                                 Log.e(TAG, "Error wrapping hardware buffer screenshot: ${e.message}")
-                                callback(null)
                             } finally {
                                 try { buffer.close() } catch (e: Exception) {
                                     Log.w(TAG, "Could not close screenshot hardware buffer: ${e.message}")
                                 }
                                 try { hardwareBitmap?.recycle() } catch (_: Exception) {}
-                                try { softwareBitmap?.recycle() } catch (_: Exception) {}
+                            }
+
+                            // Invoke the consumer exactly once, outside bitmap processing. If the
+                            // consumer throws, do not misreport it as a second screenshot failure.
+                            val resultBitmap = softwareBitmap
+                            if (resultBitmap == null) {
+                                Log.w(TAG, "Screenshot buffer could not be converted to a software bitmap")
+                                try {
+                                    callback(null)
+                                } catch (callbackError: Exception) {
+                                    Log.w(TAG, "Screenshot failure callback threw: ${callbackError.message}")
+                                }
+                            } else {
+                                try {
+                                    callback(resultBitmap)
+                                    softwareBitmap = null // Ownership transferred to the caller.
+                                } catch (callbackError: Exception) {
+                                    Log.w(TAG, "Screenshot consumer callback threw: ${callbackError.message}")
+                                } finally {
+                                    try { softwareBitmap?.recycle() } catch (_: Exception) {}
+                                }
                             }
                         }
 
