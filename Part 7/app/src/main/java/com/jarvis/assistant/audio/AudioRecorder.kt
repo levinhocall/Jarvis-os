@@ -65,8 +65,20 @@ class AudioRecorder(
                     break
                 }
                 candidate.release()
-                Log.w(TAG, "AudioRecord initialization attempt $initAttempts failed, retrying in 150ms...")
-                try { Thread.sleep(150) } catch (_: Exception) {}
+                // start() is currently invoked from a foreground Service lifecycle path,
+                // which may run on the main thread. Never sleep there: five retries would
+                // otherwise block the service/UI thread for up to 750ms.
+                val isMainThread = android.os.Looper.myLooper() == android.os.Looper.getMainLooper()
+                Log.w(TAG, "AudioRecord initialization attempt $initAttempts failed; retrying" +
+                    if (isMainThread) " immediately on main thread" else " in 150ms")
+                if (!isMainThread) {
+                    try {
+                        Thread.sleep(150)
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        break
+                    }
+                }
             }
 
             if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
