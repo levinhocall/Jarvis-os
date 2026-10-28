@@ -425,7 +425,7 @@ class AppPreferences(context: Context) {
     private val roundRobinIndices = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
 
     fun getApiKeyPool(providerId: String = "gemini"): List<ApiKeyRecord> {
-        val storage = secureApiPrefs ?: return
+        val storage = secureApiPrefs ?: return emptyList()
         val json = storage.getString("key_pool_$providerId", null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<ApiKeyRecord>>() {}.type
