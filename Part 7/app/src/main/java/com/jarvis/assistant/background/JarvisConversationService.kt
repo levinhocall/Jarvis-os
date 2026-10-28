@@ -1928,8 +1928,11 @@ class JarvisConversationService : Service() {
                             }
                             if (launched) {
                                 Log.i("JarvisService", "open_app: launched native app '$appName'")
+                                // A successful launch request is not proof that the target app reached
+                                // the foreground. Keep the existing flow, but avoid reporting an
+                                // unverified launch as definitely opened.
                                 result.put("success", true)
-                                result.put("message", "Opened $appName app.")
+                                result.put("message", "Launch requested for $appName.")
                                 val orchestrator = com.jarvis.assistant.vision.VisualTaskOrchestrator.getInstance()
                                 val startupWait = orchestrator.waitForUiState(
                                     expectedPackage = expectedPackageForTask(autonomousTaskGoal),
@@ -1947,6 +1950,14 @@ class JarvisConversationService : Service() {
                                 val appVerified = startupWait.ready &&
                                     (expectedPackage?.let { foregroundPackage.contains(it, ignoreCase = true) } ?: foregroundPackage.isNotBlank())
                                 result.put("verified", appVerified)
+                                if (appVerified) {
+                                    result.put("message", "Opened $appName app and verified its foreground UI.")
+                                } else {
+                                    result.put(
+                                        "message",
+                                        "Launch was requested for $appName, but its foreground UI could not be verified. Check Accessibility permission or confirm the app manually before continuing."
+                                    )
+                                }
                                 val spotifyPlaybackRequest = expectedPackageForTask(autonomousTaskGoal) == "spotify" &&
                                     listOf("play", "bajao", "chalao", "gaana chala", "gana chala")
                                         .any { autonomousTaskGoal.contains(it, ignoreCase = true) }
