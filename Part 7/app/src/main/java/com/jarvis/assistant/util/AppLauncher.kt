@@ -272,10 +272,16 @@ object AppLauncher {
     }
 
     fun launchApp(context: Context, appName: String, appNumber: Int? = null): Boolean {
-        return when (openAppResult(context, appName, appNumber)) {
+        return when (val result = openAppResult(context, appName, appNumber)) {
             is OpenAppResult.Success -> true
-            is OpenAppResult.MultipleFound -> true
-            else -> false
+            is OpenAppResult.MultipleFound -> {
+                // A successful return must mean an activity launch was actually requested.
+                // Previously this branch returned true without launching anything, causing
+                // voice commands to report success while the app remained closed.
+                val primaryMatch = result.matches.firstOrNull() ?: return false
+                launchInstalledApp(context, primaryMatch, 1)
+            }
+            is OpenAppResult.NotFound, OpenAppResult.Failure -> false
         }
     }
 
