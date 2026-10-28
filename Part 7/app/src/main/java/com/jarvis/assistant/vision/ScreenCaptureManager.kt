@@ -85,6 +85,9 @@ class ScreenCaptureManager private constructor() {
         this.mediaProjection = projection
         this.onFrameCallback = frameListener
         this.framesSent = 0
+        lastFrameTime = 0L
+        lastBitmapTime = 0L
+        _hasReceivedFrame.value = false
 
         val originalWidth = metrics.widthPixels
         val originalHeight = metrics.heightPixels
@@ -157,6 +160,16 @@ class ScreenCaptureManager private constructor() {
     }
 
     private fun handleImageAvailable(reader: ImageReader, width: Int, height: Int) {
+        // ImageReader may have queued a callback when projection is stopped.
+        // Drain it without publishing stale frames or reviving the sharing state.
+        if (!_isSharing.value) {
+            try {
+                reader.acquireLatestImage()?.close()
+            } catch (_: Exception) {
+                // Reader may already be closed during teardown.
+            }
+            return
+        }
         val now = System.currentTimeMillis()
         // Throttle bitmap creation to at most 2 FPS (500ms) to eliminate GC churn on 90Hz/120Hz displays
         if (now - lastBitmapTime < 500L && latestBitmap != null) {
@@ -214,7 +227,13 @@ class ScreenCaptureManager private constructor() {
                 if (framesSent % 10 == 1) {
                     Log.i(TAG, "Streamed frame #$framesSent to Gemini (${jpegBytes.size / 1024} KB, ${cleanBitmap.width}x${cleanBitmap.height})")
                 }
-                onFrameCallback?.invoke(jpegBytes)
+                if (_isSharing.value) {
+                try {
+                    onFrameCallback?.invoke(jpegBytes)
+                } catch (callbackError: Exception) {
+                    Log.w(TAG, "Screen frame consumer rejected a frame: ${callbackError.message}")
+                }
+            }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error acquiring image frame: ${e.message}", e)
