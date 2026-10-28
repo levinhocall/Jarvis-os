@@ -129,7 +129,7 @@ object VoiceInterruptionCoordinator {
         force: Boolean = false,
         onExecuteInterruption: (newEpoch: Long) -> Unit
     ): Boolean {
-        val now = SystemClock.elapsedRealtime()
+        val now = SystemClock.elapsedRealtime().coerceAtLeast(1L)
 
         // Atomically arbitrate concurrent recognizer/server/manual callbacks.
         // elapsedRealtime is monotonic and cannot jump when the wall clock changes.
