@@ -181,6 +181,10 @@ class AudioRecorder(
                     // rebound when a replacement recorder is created.
                     if (isActive && isRecording.get()) {
                         delay(400)
+                        // stop() may be requested while recovery is waiting. Re-check
+                        // after the suspension so a stopped session does not recreate
+                        // microphone hardware in the background.
+                        if (!isActive || !isRecording.get()) break
                         try {
                             echoCanceler?.release()
                             noiseSuppressor?.release()
