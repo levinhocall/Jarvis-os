@@ -1602,7 +1602,7 @@ class JarvisAccessibilityService : AccessibilityService() {
      * Stops polling immediately after clicking to avoid clicking the microphone icon.
      */
     fun scheduleWhatsAppAutoSend() {
-        val mainHandler = Handler(Looper.getMainLooper())
+        val mainHandler = handler
         mainHandler.postDelayed(object : Runnable {
             var attempts = 0
             override fun run() {
@@ -1643,7 +1643,7 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     fun scheduleWhatsAppCallAutoTap(callType: String) {
         val isVideo = callType.lowercase().contains("video")
-        val mainHandler = Handler(Looper.getMainLooper())
+        val mainHandler = handler
         mainHandler.postDelayed(object : Runnable {
             var attempts = 0
             var callButtonTapped = false
