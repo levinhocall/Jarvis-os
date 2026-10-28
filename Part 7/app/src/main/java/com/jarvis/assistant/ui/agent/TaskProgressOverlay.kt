@@ -68,6 +68,9 @@ class TaskProgressOverlay(private val context: Context) {
     }
     private val avatar = WebView(context).apply {
         setBackgroundColor(Color.TRANSPARENT)
+        // Keep the existing avatar visuals while making the floating control
+        // discoverable to Android accessibility services.
+        contentDescription = "Floating JARVIS avatar. Drag to move; double-tap to switch between avatar and task status."
         settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
