@@ -2,6 +2,7 @@ package com.jarvis.assistant.core.runtime
 
 import android.content.Context
 import android.os.SystemClock
+import android.util.Log
 import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
 import com.jarvis.assistant.automation.dev.SoftwareEngineeringAgent
 import com.jarvis.assistant.automation.mission.LongHorizonMissionCoordinator
@@ -21,6 +22,7 @@ import com.jarvis.assistant.core.world.WorldModelCoordinator
 import com.jarvis.assistant.data.model.ConversationState
 import com.jarvis.assistant.security.sandbox.CapabilitySandbox
 import com.jarvis.assistant.security.sandbox.SandboxCheckResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -304,7 +306,10 @@ class JarvisUnifiedRuntime(
                     provenanceRecordId = record.id
                 )
             }
-        } catch (t: Throwable) {
+        } catch (cancelled: CancellationException) {
+            // Cancellation is control flow, not a runtime failure. Preserve structured concurrency.
+            throw cancelled
+        } catch (t: Exception) {
             recoverFromCrash(t)
         }
     }
@@ -313,9 +318,13 @@ class JarvisUnifiedRuntime(
      * Uncaught crash recovery: safe forensics capture and state machine reset.
      */
     fun recoverFromCrash(t: Throwable): UnifiedExecutionResult.RecoveredCrash {
-        ambientCoordinator.transitionTo(ConversationState.IDLE)
-        val errorSummary = "Recovered from unexpected error: ${t.javaClass.simpleName} - ${t.message}"
-        return UnifiedExecutionResult.RecoveredCrash(errorSummary)
+        Log.e("JarvisUnifiedRuntime", "Request execution failed; returning runtime to a safe state.", t)
+        ambientCoordinator.transitionTo(ConversationState.RECOVERING, "request_recovery")
+        ambientCoordinator.transitionTo(ConversationState.IDLE, "recovery_complete")
+        // Keep exception messages and possible prompt/provider payloads out of user-visible responses.
+        return UnifiedExecutionResult.RecoveredCrash(
+            "The request could not be completed because of an internal error. Please try again."
+        )
     }
 
     fun getLastBootReport(): SystemBootReport? = lastBootReport
