@@ -621,11 +621,16 @@ class JarvisConversationService : Service() {
                 com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState,
                 JarvisApp.isAppForeground,
                 _isSessionOn,
-                _isStandby
-            ) { snapshot, appForeground, sessionOn, standbyOn ->
-                snapshot to (JarvisApp.instance.preferences.taskOverlayMode == "always" || (!appForeground && (sessionOn || standbyOn)))
-            }.collect { (snapshot, showIdleAvatar) ->
-                val shown = taskProgressOverlay?.update(snapshot, showIdleAvatar) == true
+                _isStandby,
+                conversationState
+            ) { snapshot, appForeground, sessionOn, standbyOn, state ->
+                Triple(
+                    snapshot,
+                    JarvisApp.instance.preferences.taskOverlayMode == "always" || (!appForeground && (sessionOn || standbyOn)),
+                    state
+                )
+            }.collect { (snapshot, showIdleAvatar, state) ->
+                val shown = taskProgressOverlay?.update(snapshot, showIdleAvatar, state) == true
                 if (snapshot != null && !shown && overlayPermissionWarningTaskId != snapshot.taskId) {
                     overlayPermissionWarningTaskId = snapshot.taskId
                     _events.emit("Task progress is shown inside JARVIS Home. Allow Display over other apps if you want the floating task panel over Instagram, Spotify, and Chrome.")
@@ -661,11 +666,12 @@ class JarvisConversationService : Service() {
                     prefs.taskOverlayEdge,
                     appForeground,
                     _isSessionOn.value,
-                    _isStandby.value
+                    _isStandby.value,
+                    conversationState.value
                 )
                 if (availability != previousAvailability) {
                     previousAvailability = availability
-                    taskProgressOverlay?.update(snapshot, showIdleAvatar)
+                    taskProgressOverlay?.update(snapshot, showIdleAvatar, conversationState.value)
                 }
             }
         }
