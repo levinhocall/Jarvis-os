@@ -1,5 +1,7 @@
 package com.jarvis.assistant.core.runtime
 
+import com.jarvis.assistant.core.ambient.AmbientExperienceCoordinator
+import com.jarvis.assistant.data.model.ConversationState
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -98,4 +100,48 @@ class JarvisUnifiedRuntimeTest {
             runtime.ambientCoordinator.conversationState.value
         )
     }
+    @Test
+    fun `ambient state transitions are ordered and no-op transitions are ignored`() {
+        AmbientExperienceCoordinator.resetForTest()
+        AmbientExperienceCoordinator.transitionTo(ConversationState.LISTENING, "voice-start")
+        AmbientExperienceCoordinator.transitionTo(ConversationState.LISTENING, "duplicate")
+        AmbientExperienceCoordinator.transitionTo(ConversationState.THINKING, "speech-recognized")
+
+        val history = AmbientExperienceCoordinator.transitionHistory.value
+        assertEquals(2, history.size)
+        assertEquals(1L, history[0].sequence)
+        assertEquals(ConversationState.IDLE, history[0].from)
+        assertEquals(ConversationState.LISTENING, history[0].to)
+        assertEquals("voice-start", history[0].reason)
+        assertEquals(2L, history[1].sequence)
+        assertEquals(ConversationState.THINKING, history[1].to)
+    }
+
+    @Test
+    fun `ambient transition history is bounded and reasons are truncated`() {
+        AmbientExperienceCoordinator.resetForTest()
+        AmbientExperienceCoordinator.transitionTo(ConversationState.LISTENING, "x".repeat(300))
+        assertEquals(120, AmbientExperienceCoordinator.transitionHistory.value.single().reason.length)
+
+        repeat(140) { index ->
+            AmbientExperienceCoordinator.transitionTo(
+                if (index % 2 == 0) ConversationState.THINKING else ConversationState.LISTENING,
+                "test-transition"
+            )
+        }
+        val history = AmbientExperienceCoordinator.transitionHistory.value
+        assertEquals(100, history.size)
+        assertTrue(history.zipWithNext().all { (a, b) -> b.sequence > a.sequence })
+    }
+
+    @Test
+    fun `ambient execution lock rejects competing mission`() {
+        AmbientExperienceCoordinator.resetForTest()
+        assertTrue(AmbientExperienceCoordinator.acquireExecutionLock("mission-a"))
+        assertFalse(AmbientExperienceCoordinator.acquireExecutionLock("mission-b"))
+        AmbientExperienceCoordinator.releaseExecutionLock("mission-a")
+        assertEquals(ConversationState.IDLE, AmbientExperienceCoordinator.conversationState.value)
+        AmbientExperienceCoordinator.resetForTest()
+    }
+
 }
