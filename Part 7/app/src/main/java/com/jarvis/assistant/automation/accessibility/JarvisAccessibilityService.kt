@@ -1370,41 +1370,75 @@ class JarvisAccessibilityService : AccessibilityService() {
     // -------------------------------------------------------------
 
     fun clickNodeAndTap(node: AccessibilityNodeInfo): Boolean {
-        // Step 1: Attempt programmatic accessibility click on the node directly
-        if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-            Log.d(TAG, "Programmatic ACTION_CLICK succeeded on node")
-            return true
-        }
+        // Reject stale, disabled, invisible, or off-screen targets before acting.
+        // This reduces accidental taps when an app redraws between discovery and execution.
+        try {
+            if (!node.isEnabled || !node.isVisibleToUser) {
+                Log.d(TAG, "Refusing click on disabled or invisible accessibility node")
+                return false
+            }
 
-        // Step 2: Attempt programmatic accessibility click on clickable parent hierarchy
-        var parent = node.parent
-        var depth = 0
-        while (parent != null && depth < 3) {
-            if (parent.isClickable && parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                Log.d(TAG, "Programmatic ACTION_CLICK succeeded on parent at depth $depth")
+            val rect = Rect()
+            node.getBoundsInScreen(rect)
+            val metrics = resources.displayMetrics
+            if (rect.isEmpty || rect.right <= 0 || rect.bottom <= 0 ||
+                rect.left >= metrics.widthPixels || rect.top >= metrics.heightPixels) {
+                Log.d(TAG, "Refusing click on node outside visible display bounds: $rect")
+                return false
+            }
+
+            // Prefer semantic actions. Walk only a small parent chain to avoid clicking
+            // a broad container unrelated to the selected element.
+            if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                Log.d(TAG, "Programmatic ACTION_CLICK succeeded on node")
                 return true
             }
-            parent = parent.parent
-            depth++
-        }
 
-        // Step 3: ONLY fallback to coordinate gesture tap if programmatic clicks failed or were not clickable
-        val rect = Rect()
-        node.getBoundsInScreen(rect)
-        if (rect.width() > 0 && rect.height() > 0) {
-            Log.d(TAG, "Falling back to coordinate gesture tap at center: (${rect.centerX()}, ${rect.centerY()})")
-            return clickAt(rect.centerX().toFloat(), rect.centerY().toFloat())
-        }
+            var parent = node.parent
+            var depth = 0
+            while (parent != null && depth < 3) {
+                try {
+                    if (parent.isEnabled && parent.isVisibleToUser && parent.isClickable &&
+                        parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                        Log.d(TAG, "Programmatic ACTION_CLICK succeeded on parent at depth $depth")
+                        return true
+                    }
+                    parent = parent.parent
+                } catch (e: Exception) {
+                    Log.d(TAG, "Parent click traversal stopped safely: ${e.message}")
+                    break
+                }
+                depth++
+            }
 
+            // Coordinate fallback is restricted to the already validated visible bounds.
+            val freshRect = Rect()
+            node.getBoundsInScreen(freshRect)
+            if (!freshRect.isEmpty && freshRect.left >= 0 && freshRect.top >= 0 &&
+                freshRect.right <= metrics.widthPixels && freshRect.bottom <= metrics.heightPixels) {
+                return clickAt(freshRect.exactCenterX(), freshRect.exactCenterY())
+            }
+        } catch (e: Exception) {
+            // Accessibility nodes can become stale while the target app redraws.
+            Log.w(TAG, "Accessibility click failed safely; target may have changed: ${e.message}")
+            AccessibilityHealthModel.recordActionFailure("clickNodeAndTap", e.message ?: "Stale accessibility node")
+        }
         return false
     }
 
     fun clickAt(x: Float, y: Float): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val metrics = resources.displayMetrics
+            if (!x.isFinite() || !y.isFinite() || x < 0f || y < 0f ||
+                x >= metrics.widthPixels.toFloat() || y >= metrics.heightPixels.toFloat()) {
+                Log.w(TAG, "Refusing out-of-display gesture at ($x, $y)")
+                AccessibilityHealthModel.recordActionFailure("clickAt", "Coordinates outside visible display")
+                return false
+            }
             try {
                 val path = Path().apply {
                     moveTo(x, y)
-                    lineTo(x + 1f, y + 1f)
+                    lineTo((x + 1f).coerceAtMost(metrics.widthPixels - 1f), (y + 1f).coerceAtMost(metrics.heightPixels - 1f))
                 }
                 val gesture = GestureDescription.Builder()
                     .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
