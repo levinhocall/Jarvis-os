@@ -200,7 +200,9 @@ class AppPreferences(context: Context) {
             }
             if (!secure.getString(KEY_API_KEY, null).isNullOrEmpty()) prefs.edit().remove(KEY_API_KEY).apply()
         } catch (e: Exception) {
-            Log.e(TAG, "Legacy API-key migration to encrypted storage failed", e)
+            // Do not leave a plaintext credential behind if encryption/migration fails.
+            prefs.edit().remove(KEY_API_KEY).commit()
+            Log.e(TAG, "Legacy API-key migration failed; plaintext copy removed.")
         }
     }
 
