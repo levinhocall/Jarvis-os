@@ -9,6 +9,14 @@ import java.util.ArrayDeque
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 
+data class ConversationStateTransition(
+    val sequence: Long,
+    val from: ConversationState,
+    val to: ConversationState,
+    val timestampEpochMs: Long,
+    val reason: String
+)
+
 object AmbientExperienceCoordinator {
     private const val TAG = "AmbientExperienceCoord"
 
@@ -94,12 +102,11 @@ object AmbientExperienceCoordinator {
         info: OngoingMissionInfo,
         onCancel: (() -> Unit)? = null
     ) {
-        val current = _activeMissions.value.toMutableMap()
-        current[info.missionId] = info
-        _activeMissions.value = current
-
-        if (onCancel != null) {
-            cancellationCallbacks[info.missionId] = onCancel
+        synchronized(missionMutex) {
+            val current = _activeMissions.value.toMutableMap()
+            current[info.missionId] = info
+            _activeMissions.value = current
+            if (onCancel != null) cancellationCallbacks[info.missionId] = onCancel
         }
         Log.i(TAG, "Mission registered: ${info.missionId} ('${info.title}')")
     }
@@ -109,24 +116,28 @@ object AmbientExperienceCoordinator {
         currentStepDescription: String,
         progressFraction: Float
     ) {
-        val current = _activeMissions.value.toMutableMap()
-        val existing = current[missionId] ?: return
-        current[missionId] = existing.copy(
-            currentStepDescription = currentStepDescription,
-            progressFraction = progressFraction.coerceIn(0.0f, 1.0f)
-        )
-        _activeMissions.value = current
+        synchronized(missionMutex) {
+            val current = _activeMissions.value.toMutableMap()
+            val existing = current[missionId] ?: return
+            current[missionId] = existing.copy(
+                currentStepDescription = currentStepDescription,
+                progressFraction = progressFraction.coerceIn(0.0f, 1.0f)
+            )
+            _activeMissions.value = current
+        }
     }
 
     /**
      * Cancels an ongoing mission, invokes its cancellation hook, and removes it from active list.
      */
     fun cancelMission(missionId: String): Boolean {
-        val current = _activeMissions.value.toMutableMap()
-        val mission = current.remove(missionId)
-        _activeMissions.value = current
-
-        val callback = cancellationCallbacks.remove(missionId)
+        val (mission, callback) = synchronized(missionMutex) {
+            val current = _activeMissions.value.toMutableMap()
+            val removed = current.remove(missionId)
+            _activeMissions.value = current
+            removed to cancellationCallbacks.remove(missionId)
+        }
+        // Invoke external cancellation code after releasing internal locks.
         callback?.invoke()
 
         if (activeLockTag == missionId) {
@@ -149,7 +160,9 @@ object AmbientExperienceCoordinator {
         transitionTo(ConversationState.INTERRUPTED)
 
         // Cancel all cancellable missions
-        val missionsToCancel = _activeMissions.value.values.filter { it.isCancellable }.map { it.missionId }
+        val missionsToCancel = synchronized(missionMutex) {
+            _activeMissions.value.values.filter { it.isCancellable }.map { it.missionId }
+        }
         missionsToCancel.forEach { cancelMission(it) }
 
         synchronized(lockMutex) {
@@ -170,11 +183,16 @@ object AmbientExperienceCoordinator {
     }
 
     fun resetForTest() {
-        _conversationState.value = ConversationState.IDLE
-        _activeMissions.value = emptyMap()
-        cancellationCallbacks.clear()
-        synchronized(lockMutex) {
-            activeLockTag = null
+        synchronized(stateMutex) {
+            _conversationState.value = ConversationState.IDLE
+            transitionBuffer.clear()
+            transitionSequence.set(0L)
+            _transitionHistory.value = emptyList()
         }
+        synchronized(missionMutex) {
+            _activeMissions.value = emptyMap()
+            cancellationCallbacks.clear()
+        }
+        synchronized(lockMutex) { activeLockTag = null }
     }
 }
