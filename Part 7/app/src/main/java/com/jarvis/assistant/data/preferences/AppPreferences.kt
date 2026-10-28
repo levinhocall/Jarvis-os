@@ -171,17 +171,16 @@ class AppPreferences(context: Context) {
     }
 
     var apiKey: String
-        get() = secureApiPrefs?.getString(KEY_API_KEY, "")?.trim() ?: prefs.getString(KEY_API_KEY, "")?.trim() ?: ""
+        get() = secureApiPrefs?.getString(KEY_API_KEY, "")?.trim().orEmpty()
         set(value) {
-            val clean = value.trim()
             val secure = secureApiPrefs
-            if (secure != null) {
-                if (clean.isEmpty()) secure.edit().remove(KEY_API_KEY).apply()
-                else secure.edit().putString(KEY_API_KEY, clean).apply()
-            } else {
-                if (clean.isEmpty()) prefs.edit().remove(KEY_API_KEY).apply()
-                else prefs.edit().putString(KEY_API_KEY, clean).apply()
+            if (secure == null) {
+                Log.e(TAG, "API key was not saved because encrypted storage is unavailable.")
+                return
             }
+            val clean = value.trim()
+            if (clean.isEmpty()) secure.edit().remove(KEY_API_KEY).apply()
+            else secure.edit().putString(KEY_API_KEY, clean).apply()
         }
 
     val canStoreApiKeySecurely: Boolean get() = secureApiPrefs != null
@@ -190,7 +189,8 @@ class AppPreferences(context: Context) {
         val legacyKey = prefs.getString(KEY_API_KEY, null)?.trim().orEmpty()
         if (legacyKey.isEmpty()) return
         val secure = secureApiPrefs ?: run {
-            Log.w(TAG, "Secure storage unavailable; retaining key in standard preferences.")
+            prefs.edit().remove(KEY_API_KEY).commit()
+            Log.w(TAG, "Secure storage unavailable; removed legacy plaintext API key.")
             return
         }
         try {
@@ -425,7 +425,7 @@ class AppPreferences(context: Context) {
     private val roundRobinIndices = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
 
     fun getApiKeyPool(providerId: String = "gemini"): List<ApiKeyRecord> {
-        val storage = secureApiPrefs ?: prefs
+        val storage = secureApiPrefs ?: return
         val json = storage.getString("key_pool_$providerId", null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<ApiKeyRecord>>() {}.type
@@ -441,7 +441,7 @@ class AppPreferences(context: Context) {
         val currentList = getApiKeyPool(providerId).toMutableList()
         if (currentList.none { it.key == cleanKey }) {
             currentList.add(ApiKeyRecord(key = cleanKey, providerId = providerId))
-            val storage = secureApiPrefs ?: prefs
+            val storage = secureApiPrefs ?: return
             storage.edit().putString("key_pool_$providerId", gson.toJson(currentList)).apply()
         }
     }
@@ -450,7 +450,7 @@ class AppPreferences(context: Context) {
         val cleanKey = rawKey.trim()
         val currentList = getApiKeyPool(providerId).toMutableList()
         currentList.removeAll { it.key == cleanKey }
-        val storage = secureApiPrefs ?: prefs
+        val storage = secureApiPrefs ?: return
         storage.edit().putString("key_pool_$providerId", gson.toJson(currentList)).apply()
     }
 
@@ -493,7 +493,7 @@ class AppPreferences(context: Context) {
         record.state = ApiKeyState.COOLDOWN
         record.cooldownUntilTimestamp = System.currentTimeMillis() + baseMs + jitterMs
 
-        val storage = secureApiPrefs ?: prefs
+        val storage = secureApiPrefs ?: return
         storage.edit().putString("key_pool_$providerId", gson.toJson(list)).apply()
     }
 
@@ -503,7 +503,7 @@ class AppPreferences(context: Context) {
         val record = list.find { it.key == key } ?: return
         record.state = ApiKeyState.INVALID
 
-        val storage = secureApiPrefs ?: prefs
+        val storage = secureApiPrefs ?: return
         storage.edit().putString("key_pool_$providerId", gson.toJson(list)).apply()
     }
 
