@@ -128,11 +128,17 @@ class AudioRecorder(
                             if (readBytes > 0) {
                                 consecutiveErrors = 0
                                 val freq = AudioUtils.analyzeFrequency(buffer, readBytes, SAMPLE_RATE)
-                                if (!isMuted.get()) {
-                                    val chunkCopy = buffer.copyOf(readBytes)
-                                    onAudioChunk(chunkCopy, freq.amplitude, freq)
-                                } else {
-                                    onAudioChunk(ByteArray(0), 0f, AudioFrequencyData())
+                                // Consumer code may throw (for example, during voice-engine
+                                // teardown). Keep that failure from terminating the capture job.
+                                try {
+                                    if (!isMuted.get()) {
+                                        val chunkCopy = buffer.copyOf(readBytes)
+                                        onAudioChunk(chunkCopy, freq.amplitude, freq)
+                                    } else {
+                                        onAudioChunk(ByteArray(0), 0f, AudioFrequencyData())
+                                    }
+                                } catch (callbackError: Exception) {
+                                    Log.w(TAG, "Audio chunk callback failed; capture will continue: ${callbackError.message}", callbackError)
                                 }
                             } else if (readBytes < 0) {
                                 consecutiveErrors++
