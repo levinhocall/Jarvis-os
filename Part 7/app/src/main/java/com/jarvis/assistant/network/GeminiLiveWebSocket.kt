@@ -11,6 +11,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.LinkedHashSet
 
 class GeminiLiveWebSocket(
     private val apiKey: String,
@@ -57,6 +58,37 @@ class GeminiLiveWebSocket(
     private val isManuallyStopped = AtomicBoolean(false)
     private var coroutineScope: CoroutineScope? = null
 
+    // A repeated server toolCall frame must never execute a phone action twice.
+    // Keep a bounded per-connection set so memory remains stable for long sessions.
+    private val processedToolCallIds = LinkedHashSet<String>()
+    private val toolCallIdLock = Any()
+    private val maxRememberedToolCallIds = 512
+
+    private fun shouldDispatchToolCall(callId: String): Boolean {
+        if (callId.isBlank()) {
+            Log.w(TAG, "Ignoring tool call without an id")
+            return false
+        }
+        synchronized(toolCallIdLock) {
+            if (!processedToolCallIds.add(callId)) {
+                Log.w(TAG, "Ignoring duplicate tool call id=$callId")
+                return false
+            }
+            while (processedToolCallIds.size > maxRememberedToolCallIds) {
+                val oldest = processedToolCallIds.iterator()
+                if (oldest.hasNext()) {
+                    oldest.next()
+                    oldest.remove()
+                } else break
+            }
+            return true
+        }
+    }
+
+    private fun resetToolCallDeduplication() {
+        synchronized(toolCallIdLock) { processedToolCallIds.clear() }
+    }
+
     private var sessionRenewalJob: Job? = null
     private var reconnectJob: Job? = null
     var promptProvider: (() -> String)? = null
@@ -88,6 +120,7 @@ class GeminiLiveWebSocket(
             webSocket = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     Log.d(TAG, "WebSocket connected to Gemini Live. Sending BidiSetup...")
+                    resetToolCallDeduplication()
                     isConnected.set(true)
                     isSetupComplete.set(false)
                     listener.onConnectionStateChanged("CONFIGURING...")
@@ -716,7 +749,9 @@ class GeminiLiveWebSocket(
                         val name = call.optString("name", "")
                         val id = call.optString("id", "")
                         val args = call.optJSONObject("args") ?: JSONObject()
-                        if (name.isNotEmpty()) {
+                        if (name.isNotEmpty() && shouldDispatchToolCall(id)) {
+                            // Never log tool arguments or returned data: these can contain
+                            // private message text, contact details, or other user content.
                             Log.i(TAG, "Gemini invoked toolCall: $name (id=$id)")
                             listener.onToolCall(id, name, args)
                         }
@@ -856,7 +891,7 @@ class GeminiLiveWebSocket(
                 })
             }
             webSocket?.send(msg.toString())
-            Log.d(TAG, "Sent tool_response for $functionName: $result")
+            Log.d(TAG, "Sent tool_response for $functionName")
         } catch (e: Exception) {
             Log.e(TAG, "sendToolResponse failed: ${e.message}", e)
         }
