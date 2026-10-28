@@ -1884,6 +1884,24 @@ class JarvisConversationService : Service() {
                 when (name) {
                     "open_app" -> {
                         val appName = args.optString("app_name", "")
+                        val normalizedTarget = appName.trim().lowercase(Locale.ROOT)
+                        if (normalizedTarget in setOf("whiteboard", "jarvis whiteboard", "drawing board", "sketch board")) {
+                            try {
+                                startActivity(Intent(this@JarvisConversationService, com.jarvis.assistant.ui.whiteboard.WhiteboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                liveWebSocket?.sendToolResponse(callId, name, JSONObject().apply {
+                                    put("success", true)
+                                    put("verified", true)
+                                    put("message", "Opened the local whiteboard. The user can draw, undo, clear, save, or share the drawing.")
+                                })
+                            } catch (e: Exception) {
+                                liveWebSocket?.sendToolResponse(callId, name, JSONObject().apply {
+                                    put("success", false)
+                                    put("verified", false)
+                                    put("message", "Could not open the whiteboard: ${e.message ?: "unknown error"}")
+                                })
+                            }
+                            return@withTimeout
+                        }
                         val appNumber = if (args.has("app_number")) args.optInt("app_number", 1) else null
 
                         // 1. FAST PATH: Web platform tools (Google Flow, Runway, etc.) -> open directly in Chrome without scanning apps!
