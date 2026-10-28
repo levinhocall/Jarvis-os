@@ -110,6 +110,7 @@ class TaskProgressOverlay(private val context: Context) {
     private var attached = false
     private var avatarMode = true
     private var loadedAvatar = ""
+    private var lastReactionState: com.jarvis.assistant.data.model.ConversationState? = null
     private var displayedTaskId: String? = null
     private var downRawX = 0f
     private var downRawY = 0f
@@ -137,7 +138,12 @@ class TaskProgressOverlay(private val context: Context) {
         activeInstance = this
     }
 
-    fun update(snapshot: AgentTaskSnapshot?, showIdleAvatar: Boolean = false): Boolean {
+    fun update(
+        snapshot: AgentTaskSnapshot?,
+        showIdleAvatar: Boolean = false,
+        conversationState: com.jarvis.assistant.data.model.ConversationState =
+            com.jarvis.assistant.background.JarvisConversationService.conversationState.value
+    ): Boolean {
         if (!Settings.canDrawOverlays(context)) {
             remove()
             return false
@@ -182,7 +188,35 @@ class TaskProgressOverlay(private val context: Context) {
         if (snapshot == null) renderIdle() else render(snapshot)
         activeInstance = this
         applyMode()
+        applyAvatarReaction(conversationState)
         return true
+    }
+
+    /**
+     * Reacts to the existing conversation state with a restrained scale/alpha cue.
+     * This only animates the floating avatar WebView; the home-screen voice orb
+     * and the avatar artwork/assets remain unchanged.
+     */
+    private fun applyAvatarReaction(state: com.jarvis.assistant.data.model.ConversationState) {
+        if (lastReactionState == state) return
+        lastReactionState = state
+        avatar.animate().cancel()
+        val (scale, alpha) = when (state) {
+            com.jarvis.assistant.data.model.ConversationState.LISTENING,
+            com.jarvis.assistant.data.model.ConversationState.INTERRUPTED -> 1.035f to 1f
+            com.jarvis.assistant.data.model.ConversationState.THINKING,
+            com.jarvis.assistant.data.model.ConversationState.EXECUTING,
+            com.jarvis.assistant.data.model.ConversationState.RECOVERING -> 0.97f to 0.92f
+            com.jarvis.assistant.data.model.ConversationState.SPEAKING -> 1.06f to 1f
+            com.jarvis.assistant.data.model.ConversationState.FAILED -> 0.96f to 0.82f
+            else -> 1f to 1f
+        }
+        avatar.animate()
+            .scaleX(scale)
+            .scaleY(scale)
+            .alpha(alpha)
+            .setDuration(180L)
+            .start()
     }
 
     fun remove() {
