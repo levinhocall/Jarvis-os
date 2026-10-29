@@ -139,12 +139,12 @@ class GeminiLiveWebSocket(
                 }
 
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                    Log.d(TAG, "WebSocket closing: $code / $reason")
+                    Log.d(TAG, "WebSocket closing: code=$code")
                     webSocket.close(1000, null)
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                    Log.d(TAG, "WebSocket closed: $code / $reason")
+                    Log.d(TAG, "WebSocket closed: code=$code")
                     isConnected.set(false)
                     isSetupComplete.set(false)
                     stopTimers()
@@ -182,7 +182,7 @@ class GeminiLiveWebSocket(
                                 return
                             }
                         }
-                        listener.onError("Gemini setup was rejected: $reason", isFatal = true, errorCode = "SETUP_REJECTED")
+                        listener.onError("Gemini setup was rejected. Check the selected model and API access.", isFatal = true, errorCode = "SETUP_REJECTED")
                         listener.onConnectionStateChanged("OFFLINE")
                     } else if (!isManuallyStopped.get()) {
                         listener.onConnectionStateChanged("RECONNECTING...")
@@ -229,7 +229,7 @@ class GeminiLiveWebSocket(
                     }
 
                     if (!isManuallyStopped.get()) {
-                        listener.onError("Connection lost: $errorMsg. Retrying...", isFatal = false, errorCode = "CONNECTION_ERROR")
+                        listener.onError("Connection lost. Retrying...", isFatal = false, errorCode = "CONNECTION_ERROR")
                         scheduleReconnect()
                     } else {
                         listener.onConnectionStateChanged("OFFLINE")
@@ -238,7 +238,7 @@ class GeminiLiveWebSocket(
             })
         } catch (e: Exception) {
             Log.e(TAG, "Error initiating WebSocket connection: ${e.javaClass.simpleName}")
-            listener.onError("Connection failed: ${e.message}", isFatal = true, errorCode = "CONNECTION_FAILED")
+            listener.onError("Connection could not be started. Check network access and settings.", isFatal = true, errorCode = "CONNECTION_FAILED")
             listener.onConnectionStateChanged("OFFLINE")
         }
     }
