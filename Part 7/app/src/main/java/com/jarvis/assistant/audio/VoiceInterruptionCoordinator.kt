@@ -1,6 +1,7 @@
 package com.jarvis.assistant.audio
 
 import android.media.audiofx.AcousticEchoCanceler
+import android.os.SystemClock
 import android.util.Log
 import com.jarvis.assistant.data.model.ConversationState
 import java.util.Locale
@@ -128,22 +129,27 @@ object VoiceInterruptionCoordinator {
         force: Boolean = false,
         onExecuteInterruption: (newEpoch: Long) -> Unit
     ): Boolean {
-        val now = System.currentTimeMillis()
-        val last = lastInterruptionTime.get()
+        val now = SystemClock.elapsedRealtime().coerceAtLeast(1L)
 
-        // Debounce fast duplicate callbacks within DEBOUNCE_WINDOW_MS unless force=true
-        if (!force && (now - last < DEBOUNCE_WINDOW_MS)) {
-            Log.d(TAG, "Barge-in request from '$source' debounced (within window)")
-            return false
+        // Atomically arbitrate concurrent recognizer/server/manual callbacks.
+        // elapsedRealtime is monotonic and cannot jump when the wall clock changes.
+        while (true) {
+            val last = lastInterruptionTime.get()
+            if (!force && last != 0L && now - last < DEBOUNCE_WINDOW_MS) {
+                Log.d(TAG, "Barge-in request from '$source' debounced (within window)")
+                return false
+            }
+            if (lastInterruptionTime.compareAndSet(last, now)) break
         }
 
-        lastInterruptionTime.set(now)
         val newEpoch = activeEpoch.incrementAndGet()
         isInterruptionActive.set(true)
         Log.i(TAG, "Barge-in triggered successfully from '$source' (epoch=$newEpoch)")
 
         try {
             onExecuteInterruption(newEpoch)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Barge-in callback failed for source '$source'", t)
         } finally {
             isInterruptionActive.set(false)
         }
