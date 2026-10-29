@@ -1448,7 +1448,7 @@ class VisualTaskOrchestrator(
         }
 
         if (root == null && elements.isEmpty()) {
-            return@withContext "Screen context unavailable: Screen is blank or inaccessible."
+            return@withContext "Screen context unavailable: I could not read the active app through Accessibility. This does not confirm the screen is blank. Keep the target app in the foreground, enable Jarvis Accessibility access, and try again."
         }
 
         dispatchImmediateScreenFrame()
