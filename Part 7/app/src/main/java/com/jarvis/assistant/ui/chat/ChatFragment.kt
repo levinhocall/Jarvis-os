@@ -117,8 +117,16 @@ class ChatFragment : Fragment() {
         val text = binding.etMessageInput.text?.toString()?.trim() ?: ""
         if (text.isBlank() && pendingAttachment == null) return
 
-        if (!JarvisConversationService.isServiceRunning()) {
-            (activity as? MainActivity)?.handleMicOrOrbClick()
+        // Chat navigation and text submission must never start the microphone session
+        // implicitly. Voice is started only by the explicit mic/orb action on Home.
+        if (!JarvisConversationService.isServiceRunning() ||
+            JarvisConversationService.connectionStatus.value != "LIVE") {
+            Toast.makeText(
+                requireContext(),
+                "Start a Jarvis session from the Home microphone before sending a message.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
         }
 
         val fullMessage = if (pendingAttachment != null) {
