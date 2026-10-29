@@ -112,9 +112,11 @@ class GeminiLiveWebSocket(
         listener.onConnectionStateChanged("CONNECTING...")
 
         try {
-            val url = "${GeminiConstants.WS_BASE_URL}?key=$apiKey"
+            // Keep the API key out of the URL: URLs may be retained in proxy/server
+            // access logs. Gemini accepts the key through the x-goog-api-key header.
             val request = Request.Builder()
-                .url(url)
+                .url(GeminiConstants.WS_BASE_URL)
+                .header("x-goog-api-key", apiKey)
                 .build()
 
             webSocket = client.newWebSocket(request, object : WebSocketListener() {
@@ -152,7 +154,7 @@ class GeminiLiveWebSocket(
                                        reason.contains("API key", ignoreCase = true) ||
                                        reason.contains("key invalid", ignoreCase = true)
                     if (isApiKeyError) {
-                        Log.e(TAG, "Gemini rejected session due to invalid API key (code=$code, reason=$reason)")
+                        Log.e(TAG, "Gemini rejected session due to invalid API key (code=$code)")
                         listener.onError("Invalid API Key: Google rejected the key. Please verify your Gemini API key in Settings.", isFatal = true, errorCode = "API_KEY_INVALID")
                         listener.onConnectionStateChanged("ERROR • INVALID KEY")
                         return
@@ -161,7 +163,7 @@ class GeminiLiveWebSocket(
                     val isQuotaError = reason.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
                                        reason.contains("quota", ignoreCase = true)
                     if (isQuotaError) {
-                        Log.w(TAG, "Gemini rate-limited or connection collision (code=$code, reason=$reason). Retrying in cooldown...")
+                        Log.w(TAG, "Gemini rate-limited or connection collision (code=$code). Retrying in cooldown...")
                         listener.onConnectionStateChanged("COOLDOWN • RETRYING")
                         scheduleReconnect()
                         return
@@ -173,7 +175,7 @@ class GeminiLiveWebSocket(
                                            reason.contains("not supported", ignoreCase = true)
                         if (isModelError) {
                             if (activeModel != GeminiConstants.MODEL_3_8_LIVE) {
-                                Log.w(TAG, "Model $activeModel rejected by Gemini ($reason). Auto-falling back to ${GeminiConstants.MODEL_3_8_LIVE}")
+                                Log.w(TAG, "Model rejected by Gemini (code=$code). Auto-falling back to ${GeminiConstants.MODEL_3_8_LIVE}")
                                 activeModel = GeminiConstants.MODEL_3_8_LIVE
                                 listener.onConnectionStateChanged("RECONNECTING...")
                                 scheduleReconnect()
@@ -213,14 +215,14 @@ class GeminiLiveWebSocket(
                             (responseBody?.contains("RESOURCE_EXHAUSTED", ignoreCase = true) == true)
 
                     if (isApiKeyError) {
-                        Log.e(TAG, "Fatal failure: Invalid API Key (HTTP $code: $errorMsg)")
+                        Log.e(TAG, "Fatal failure: Invalid API Key (HTTP $code)")
                         listener.onError("Invalid API Key: Google rejected the key. Please verify your Gemini API key in Settings.", isFatal = true, errorCode = "API_KEY_INVALID")
                         listener.onConnectionStateChanged("ERROR • INVALID KEY")
                         return
                     }
 
                     if (isQuotaError) {
-                        Log.w(TAG, "Quota / rate limit hit (HTTP $code: $errorMsg). Retrying in cooldown...")
+                        Log.w(TAG, "Quota / rate limit hit (HTTP $code). Retrying in cooldown...")
                         listener.onConnectionStateChanged("COOLDOWN • RETRYING")
                         scheduleReconnect()
                         return
@@ -235,7 +237,7 @@ class GeminiLiveWebSocket(
                 }
             })
         } catch (e: Exception) {
-            Log.e(TAG, "Error initiating WebSocket connection: ${e.message}", e)
+            Log.e(TAG, "Error initiating WebSocket connection: ${e.javaClass.simpleName}")
             listener.onError("Connection failed: ${e.message}", isFatal = true, errorCode = "CONNECTION_FAILED")
             listener.onConnectionStateChanged("OFFLINE")
         }
