@@ -194,7 +194,7 @@ class GeminiLiveWebSocket(
                     val code = response?.code ?: 0
                     val responseBody = try { response?.body?.string() } catch (_: Exception) { null }
                     val errorMsg = t.message ?: "WebSocket connection failure"
-                    Log.e(TAG, "WebSocket failure: code=$code, errorMsg=$errorMsg, body=$responseBody", t)
+                    Log.e(TAG, "WebSocket failure: httpStatus=$code, errorType=${t.javaClass.simpleName}")
                     isConnected.set(false)
                     isSetupComplete.set(false)
                     stopTimers()
