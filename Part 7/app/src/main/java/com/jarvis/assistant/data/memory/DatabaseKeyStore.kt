@@ -15,6 +15,7 @@ import javax.crypto.spec.GCMParameterSpec
 /** Wraps a random SQLCipher passphrase with a non-exportable Android Keystore AES key. */
 internal class DatabaseKeyStore(context: Context) {
     private val keyFile = File(context.applicationContext.noBackupFilesDir, "jarvis_room_database_key.bin")
+    private val pendingFile = File(context.applicationContext.noBackupFilesDir, "jarvis_room_database_init.pending")
 
     companion object {
         private const val ALIAS = "jarvis_room_database_key_v1"
@@ -26,6 +27,9 @@ internal class DatabaseKeyStore(context: Context) {
 
     @Synchronized
     fun hasWrappedPassphrase(): Boolean = keyFile.isFile && keyFile.length() > 0
+
+    @Synchronized
+    fun hasPendingInitialization(): Boolean = pendingFile.isFile
 
     @Synchronized
     fun loadExistingPassphrase(): ByteArray {
@@ -45,8 +49,12 @@ internal class DatabaseKeyStore(context: Context) {
     fun createPassphraseForNewDatabase(): ByteArray {
         check(!hasWrappedPassphrase()) { "A database passphrase already exists." }
         val store = keyStore()
-        check(!store.containsAlias(ALIAS)) {
-            "Database Keystore key exists but its wrapped passphrase is missing."
+        if (!pendingFile.exists()) {
+            FileOutputStream(pendingFile).use { it.fd.sync() }
+        }
+        if (store.containsAlias(ALIAS)) {
+            check(pendingFile.exists()) { "Database Keystore key exists but its wrapped passphrase is missing." }
+            store.deleteEntry(ALIAS)
         }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, STORE)
         generator.init(
@@ -81,6 +89,13 @@ internal class DatabaseKeyStore(context: Context) {
             runCatching { store.deleteEntry(ALIAS) }
             passphrase.fill(0)
             throw error
+        }
+    }
+
+    @Synchronized
+    fun markInitializationComplete() {
+        if (pendingFile.exists()) check(pendingFile.delete()) {
+            "Could not finalize secure database initialization marker."
         }
     }
 
