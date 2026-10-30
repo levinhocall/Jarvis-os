@@ -112,7 +112,8 @@ internal object DatabaseEncryption {
     private fun roomFactory(passphrase: ByteArray): SupportOpenHelperFactory {
         val cipherPassphrase = rawPassphraseForCipher(passphrase)
         passphrase.fill(0)
-        return SupportOpenHelperFactory(cipherPassphrase, null, true)
+        // Keep SQLCipher helper WAL behavior consistent with Room's existing defaults.
+        return SupportOpenHelperFactory(cipherPassphrase, null, false)
     }
 
     private fun isValidPlaintextDatabase(file: File): Boolean {
