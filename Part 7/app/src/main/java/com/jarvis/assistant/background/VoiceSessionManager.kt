@@ -162,18 +162,28 @@ class VoiceSessionManager(
 
         Log.d(TAG, "Scheduling reconnect #$attempts in ${totalDelay}ms")
         reconnectJob?.cancel()
+        val generation = sessionGeneration.get()
         reconnectJob = scope.launch(Dispatchers.IO) {
             delay(totalDelay)
-            if (_sessionState.value == SessionLifecycleState.RECONNECTING) {
-                try {
-                    val reconnected = onConnectRequest()
-                    if (reconnected) {
-                        transitionState(SessionLifecycleState.LIVE, "LIVE")
-                        consecutiveFailures.set(0)
-                    } else {
-                        handleConnectionFailure("Reconnect attempt #$attempts failed")
-                    }
-                } catch (e: Exception) {
+            if (generation != sessionGeneration.get() ||
+                _sessionState.value != SessionLifecycleState.RECONNECTING
+            ) return@launch
+
+            try {
+                val reconnected = onConnectRequest()
+                if (generation != sessionGeneration.get()) {
+                    // The connection completed after a stop/restart. Do not publish LIVE.
+                    if (reconnected) runCatching { onDisconnectRequest() }
+                    return@launch
+                }
+                if (reconnected) {
+                    transitionState(SessionLifecycleState.LIVE, "LIVE")
+                    consecutiveFailures.set(0)
+                } else {
+                    handleConnectionFailure("Reconnect attempt #$attempts failed")
+                }
+            } catch (e: Exception) {
+                if (generation == sessionGeneration.get()) {
                     handleConnectionFailure(e.message ?: "Reconnect exception")
                 }
             }
