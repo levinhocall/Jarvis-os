@@ -327,9 +327,12 @@ object AccessibilityHealthModel {
             AccessibilityState.DISABLED ->
                 "Jarvis Accessibility Service is disabled. Please enable it in " +
                 "Settings → Accessibility → Installed services → Jarvis."
-            AccessibilityState.ENABLED ->
-                "The service is enabled but hasn't connected yet. " +
-                "Try toggling it off and on, or restart the app."
+            AccessibilityState.ENABLED -> buildString {
+                append("The service is enabled but hasn't connected yet. Try toggling it off and on, or restart the app.")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    append(" If this app was installed from outside an app store and Android blocks the service, open App info → ⋮ → Allow restricted settings, then enable Accessibility again.")
+                }
+            }
             AccessibilityState.DISCONNECTED ->
                 "The Accessibility Service was disconnected. " +
                 "Please re-enable it in Settings → Accessibility → Jarvis."
