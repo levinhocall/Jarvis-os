@@ -150,9 +150,10 @@ internal object DatabaseEncryption {
         val passphraseBytes = passphrase.toByteArray(StandardCharsets.UTF_8)
         val cipherSource = CipherDatabase.openDatabase(
             original.absolutePath,
+            ByteArray(0),
             null,
-            null,
-            CipherDatabase.OPEN_READWRITE
+            CipherDatabase.OPEN_READWRITE,
+            null
         )
         try {
             cipherSource.execSQL(
