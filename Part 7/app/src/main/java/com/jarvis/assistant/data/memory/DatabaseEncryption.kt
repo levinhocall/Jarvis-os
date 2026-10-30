@@ -112,7 +112,7 @@ internal object DatabaseEncryption {
     private fun roomFactory(passphrase: ByteArray): SupportOpenHelperFactory {
         val cipherPassphrase = rawPassphraseForCipher(passphrase)
         passphrase.fill(0)
-        return SupportOpenHelperFactory(cipherPassphrase, null, false)
+        return SupportOpenHelperFactory(cipherPassphrase, null, true)
     }
 
     private fun isValidPlaintextDatabase(file: File): Boolean {
@@ -210,8 +210,11 @@ internal object DatabaseEncryption {
                 "ATTACH DATABASE ? AS encrypted KEY ?",
                 arrayOf(staging.absolutePath, passphrase)
             )
-            // sqlcipher_export is a SELECT function; rawExecSQL executes it in SQLCipher's API.
-            cipherSource.rawExecSQL("SELECT sqlcipher_export('encrypted');")
+            // sqlcipher_export is a SELECT function. Consume its result cursor so SQLite
+            // actually steps the export statement before the attached database is detached.
+            cipherSource.rawQuery("SELECT sqlcipher_export('encrypted')", emptyArray()).use { cursor ->
+                check(cursor.moveToFirst()) { "SQLCipher export did not return a completion result." }
+            }
             cipherSource.execSQL("DETACH DATABASE encrypted")
         } finally {
             cipherSource.close()
