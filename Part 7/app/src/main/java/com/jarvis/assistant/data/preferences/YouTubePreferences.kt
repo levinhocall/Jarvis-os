@@ -55,18 +55,27 @@ class YouTubePreferences(context: Context) {
         val legacy = legacyPrefs.getString(KEY_YOUTUBE_API_KEY, null)?.trim().orEmpty()
         if (legacy.isEmpty()) return
         val secure = securePrefs ?: run {
-            legacyPrefs.edit().remove(KEY_YOUTUBE_API_KEY).commit()
+            // Keep the only credential copy if Keystore-backed storage is unavailable.
+            Log.e(TAG, "Secure storage unavailable; legacy YouTube API key retained for retry.")
             return
         }
         try {
-            if (secure.getString(KEY_YOUTUBE_API_KEY, null).isNullOrEmpty()) {
-                check(secure.edit().putString(KEY_YOUTUBE_API_KEY, legacy).commit())
+            val existing = secure.getString(KEY_YOUTUBE_API_KEY, null)
+            if (existing.isNullOrEmpty()) {
+                check(secure.edit().putString(KEY_YOUTUBE_API_KEY, legacy).commit()) {
+                    "Encrypted YouTube API-key write was not committed."
+                }
             }
-            if (!secure.getString(KEY_YOUTUBE_API_KEY, null).isNullOrEmpty()) {
-                legacyPrefs.edit().remove(KEY_YOUTUBE_API_KEY).commit()
+            // Never delete the plaintext source unless the encrypted destination is an exact match.
+            check(secure.getString(KEY_YOUTUBE_API_KEY, null) == legacy) {
+                "Encrypted YouTube API-key migration could not be verified."
+            }
+            check(legacyPrefs.edit().remove(KEY_YOUTUBE_API_KEY).commit()) {
+                "Legacy YouTube API-key cleanup was not committed after verification."
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Legacy YouTube API-key migration failed", e)
+            // A later launch can retry without losing the only copy of the credential.
+            Log.e(TAG, "Legacy YouTube API-key migration failed; original credential was preserved.", e)
         }
     }
 }
