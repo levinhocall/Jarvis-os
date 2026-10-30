@@ -2,6 +2,7 @@ package com.jarvis.assistant.data.memory
 
 import android.content.Context
 import android.database.Cursor
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase as FrameworkSQLiteDatabase
 import android.util.Base64
 import android.util.Log
@@ -9,6 +10,8 @@ import androidx.room.Room
 import net.zetetic.database.sqlcipher.SQLiteDatabase as CipherDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
+import java.nio.ByteBuffer
+import java.security.MessageDigest
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 
@@ -251,6 +254,11 @@ internal object DatabaseEncryption {
                     check(sourceCount == targetCount) {
                         "Database migration row-count verification failed for table $table."
                     }
+                    val sourceDigest = plain.rawQuery("SELECT * FROM $quoted ORDER BY rowid", null).use(::digestCursor)
+                    val encryptedDigest = encrypted.rawQuery("SELECT * FROM $quoted ORDER BY rowid", emptyArray()).use(::digestCursor)
+                    check(MessageDigest.isEqual(sourceDigest, encryptedDigest)) {
+                        "Database migration content verification failed for table $table."
+                    }
                 }
             }
             encrypted.rawQuery("PRAGMA integrity_check", emptyArray()).use { cursor ->
@@ -261,5 +269,34 @@ internal object DatabaseEncryption {
         } finally {
             plain.close()
         }
+    }
+    /** Streams typed row values into SHA-256 without buffering the full table in memory. */
+    private fun digestCursor(cursor: Cursor): ByteArray {
+        val digest = MessageDigest.getInstance("SHA-256")
+        cursor.columnNames.forEach { name ->
+            val bytes = name.toByteArray(Charsets.UTF_8)
+            digest.update(ByteBuffer.allocate(4).putInt(bytes.size).array())
+            digest.update(bytes)
+        }
+        var rows = 0L
+        while (cursor.moveToNext()) {
+            for (column in 0 until cursor.columnCount) {
+                val type = cursor.getType(column)
+                digest.update(type.toByte())
+                val value = when (type) {
+                    Cursor.FIELD_TYPE_NULL -> ByteArray(0)
+                    Cursor.FIELD_TYPE_INTEGER -> cursor.getLong(column).toString().toByteArray(Charsets.UTF_8)
+                    Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(column).toString().toByteArray(Charsets.UTF_8)
+                    Cursor.FIELD_TYPE_BLOB -> cursor.getBlob(column) ?: ByteArray(0)
+                    else -> (cursor.getString(column) ?: "").toByteArray(Charsets.UTF_8)
+                }
+                digest.update(ByteBuffer.allocate(4).putInt(value.size).array())
+                digest.update(value)
+            }
+            digest.update(0xFF.toByte())
+            rows++
+        }
+        digest.update(ByteBuffer.allocate(8).putLong(rows).array())
+        return digest.digest()
     }
 }
