@@ -162,7 +162,11 @@ abstract class MemoryDatabase : RoomDatabase() {
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()
-                    .also { instance = it }
+                    .also { database ->
+                        database.openHelper.writableDatabase
+                        DatabaseKeyStore(context.applicationContext).markInitializationComplete()
+                        instance = database
+                    }
                 }
             }
         }
