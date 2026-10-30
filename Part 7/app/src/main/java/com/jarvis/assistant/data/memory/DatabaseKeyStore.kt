@@ -49,13 +49,14 @@ internal class DatabaseKeyStore(context: Context) {
     fun createPassphraseForNewDatabase(): ByteArray {
         check(!hasWrappedPassphrase()) { "A database passphrase already exists." }
         val store = keyStore()
-        if (!pendingFile.exists()) {
+        val initializationWasPending = pendingFile.exists()
+        if (store.containsAlias(ALIAS) && !initializationWasPending) {
+            error("Database Keystore key exists without a pending first-open marker; refusing to replace it.")
+        }
+        if (!initializationWasPending) {
             FileOutputStream(pendingFile).use { it.fd.sync() }
         }
-        if (store.containsAlias(ALIAS)) {
-            check(pendingFile.exists()) { "Database Keystore key exists but its wrapped passphrase is missing." }
-            store.deleteEntry(ALIAS)
-        }
+        if (store.containsAlias(ALIAS)) store.deleteEntry(ALIAS)
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, STORE)
         generator.init(
             KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
