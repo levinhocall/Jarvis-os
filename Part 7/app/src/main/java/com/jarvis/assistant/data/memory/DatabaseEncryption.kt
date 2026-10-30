@@ -9,6 +9,8 @@ import androidx.room.Room
 import net.zetetic.database.sqlcipher.SQLiteDatabase as CipherDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
+import java.nio.ByteBuffer
+import java.security.MessageDigest
 
 /**
  * Prepares the Room database before Room opens it. Existing plaintext databases are exported
@@ -133,7 +135,11 @@ internal object DatabaseEncryption {
         )
         val oldVersion: Int
         try {
-            source.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { it.moveToFirst() }
+            source.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { cursor ->
+                check(cursor.moveToFirst() && cursor.getInt(0) == 0) {
+                    "SQLite WAL checkpoint was busy; encryption migration was not started."
+                }
+            }
             source.rawQuery("PRAGMA integrity_check", null).use { cursor ->
                 check(cursor.moveToFirst() && cursor.getString(0) == "ok") {
                     "Plaintext database integrity check failed; migration was not started."
