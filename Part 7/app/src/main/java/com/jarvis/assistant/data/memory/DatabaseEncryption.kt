@@ -31,10 +31,33 @@ internal object DatabaseEncryption {
         val backup = File(database.parentFile, BACKUP_NAME)
         val keyStore = DatabaseKeyStore(app)
 
-        // Recover the only interrupted swap window: original moved to backup, staging not yet moved.
+        // Recover either side of an interrupted two-rename swap before deciding whether
+        // migration is needed. If the encrypted staging file verifies, finish the swap;
+        // otherwise restore the untouched plaintext backup. Never discard both copies.
         if (!database.exists() && backup.exists()) {
-            check(backup.renameTo(database)) {
-                "Could not restore the preserved database after an interrupted encryption swap."
+            val canPromoteStaging = staging.isFile &&
+                keyStore.hasWrappedPassphrase() &&
+                runCatching {
+                    val recoveryKey = keyStore.loadExistingPassphrase()
+                    try { isValidEncryptedDatabase(staging, recoveryKey) }
+                    finally { recoveryKey.fill(0) }
+                }.getOrDefault(false)
+
+            if (canPromoteStaging) {
+                check(staging.renameTo(database)) {
+                    "Could not finish the encrypted database swap; the plaintext backup remains recoverable."
+                }
+            } else {
+                check(backup.renameTo(database)) {
+                    "Could not restore the preserved database after an interrupted encryption swap."
+                }
+                // Only remove the incomplete staging copy after the original has been restored.
+                listOf("", "-wal", "-shm").forEach { suffix ->
+                    val incomplete = File(staging.absolutePath + suffix)
+                    if (incomplete.exists()) check(incomplete.delete()) {
+                        "Could not remove an incomplete staging file after restoring the original database."
+                    }
+                }
             }
         }
 
