@@ -66,17 +66,24 @@ class Phase6To10UpgradeTest {
     fun testPhase9SecurityGuardAuthorization() {
         assertFalse(SecurityGuardManager.isSessionElevated())
 
-        // Elevated session grant and revoke
-        SecurityGuardManager.grantElevatedAccess(5000L)
-        assertTrue(SecurityGuardManager.isSessionElevated())
-        assertTrue(SecurityGuardManager.isActionPermitted(SecurityAction.UNLOCK_LOCKDOWN, null))
-
+        // Elevated access cannot be granted by arbitrary callers; only successful PIN
+        // verification inside SecurityGuardManager can issue a session.
+        assertFalse(SecurityGuardManager.isActionPermitted(SecurityAction.UNLOCK_LOCKDOWN, null))
         SecurityGuardManager.revokeElevatedAccess()
         assertFalse(SecurityGuardManager.isSessionElevated())
 
-        // Command parsing for Security Authorization
+        // Identity phrases may be parsed, but they are never authorization credentials.
         val authCmd = CommandParser.parse("authorize nazib").command
         assertTrue(authCmd is JarvisCommand.SecurityAuthorize)
+        assertFalse(SecurityGuardManager.isValidPinFormat("1024"))
+        assertFalse(SecurityGuardManager.isValidPinFormat("1234567890123"))
+        assertTrue(SecurityGuardManager.isValidPinFormat("123456"))
+        assertEquals("123456", SecurityGuardManager.extractPinCandidate("123456"))
+        assertEquals("123456", SecurityGuardManager.extractPinCandidate("enter security pin 123456"))
+        assertEquals("123456", SecurityGuardManager.extractPinCandidate("security authorization 123456"))
+        assertEquals(null, SecurityGuardManager.extractPinCandidate("authorize nazib"))
+        assertEquals(null, SecurityGuardManager.extractPinCandidate("please authorize me 123456 now"))
+        assertEquals(null, SecurityGuardManager.extractPinCandidate("my pin is 123456"))
     }
 
     // --- PHASE 10 TESTS: Smart Call Screening & Expense Ledger ---

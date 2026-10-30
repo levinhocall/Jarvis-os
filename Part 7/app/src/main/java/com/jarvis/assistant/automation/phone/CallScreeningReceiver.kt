@@ -86,11 +86,11 @@ class CallScreeningReceiver : BroadcastReceiver() {
                     val smsManager: SmsManager = context.getSystemService(SmsManager::class.java)
                         ?: SmsManager.getDefault()
                     smsManager.sendTextMessage(number, null, messageToSend, null, null)
-                    Log.i(TAG, "Sent automated SMS response to $number: '$messageToSend'")
+                    Log.i(TAG, "Automated SMS response dispatched.")
                     VoiceSynthesisRouter.speak("Call silenced and auto-reply sent to $number, Sir.")
                     return true
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to send auto-reply SMS: ${e.message}")
+                    Log.e(TAG, "Failed to send auto-reply SMS.")
                     VoiceSynthesisRouter.speak("Call silenced. Could not send SMS, Sir.")
                     return false
                 }
@@ -107,7 +107,7 @@ class CallScreeningReceiver : BroadcastReceiver() {
         val stateStr = intent.getStringExtra(TelephonyManager.EXTRA_STATE) ?: return
         val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER) ?: ""
 
-        Log.i(TAG, "Phone state changed: $stateStr | incoming: $incomingNumber")
+        Log.i(TAG, "Phone state changed: $stateStr")
 
         when (stateStr) {
             TelephonyManager.EXTRA_STATE_RINGING -> {

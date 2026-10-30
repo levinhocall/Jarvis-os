@@ -635,7 +635,7 @@ class CodingDevFragment : Fragment() {
             }
 
             appendLog("[AGENT] Executing plan stages...")
-            val report = devLoop.executePlan(project, plan, isApprovedByUser = true) { step ->
+            val report = devLoop.executePlan(project, plan, isApprovedByUser = false) { step ->
                 appendLog(">> Phase [${step.phase}] Status: ${step.status} (${step.title})")
             }
 

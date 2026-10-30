@@ -84,6 +84,7 @@ class AutonomousDevLoop(
         project: DevProject,
         plan: DevTaskPlan,
         isApprovedByUser: Boolean = false,
+        approvedAction: String? = null,
         onStepProgress: ((DevTaskStep) -> Unit)? = null
     ): DevExecutionReport {
         plan.status = DevStepStatus.IN_PROGRESS
@@ -109,6 +110,9 @@ class AutonomousDevLoop(
         }
 
         for (step in plan.steps) {
+            // Completed stages are immutable on resume; only the explicitly approved
+            // pending action may run again.
+            if (step.status == DevStepStatus.COMPLETED) continue
             if (_isCancelled.value) {
                 step.status = DevStepStatus.FAILED
                 step.error = "Execution cancelled by user"
@@ -155,7 +159,10 @@ class AutonomousDevLoop(
                         val toolName = step.toolName ?: "edit_file"
                         val tool = DevToolRegistry.getTool(toolName)
                         if (tool != null && step.toolParams != null) {
-                            val result = tool.execute(project, step.toolParams!!, sandbox, devAgent, isApprovedByUser)
+                            val actionText = step.toolParams!!["command"] as? String
+                            val actionApproved = isApprovedByUser && actionText != null && actionText == approvedAction
+                            val executionParams = if (actionApproved) step.toolParams!! + mapOf("approvedCommand" to actionText) else step.toolParams!!
+                            val result = tool.execute(project, executionParams, sandbox, devAgent, actionApproved)
                             when (result) {
                                 is DevToolResult.Success -> {
                                     step.status = DevStepStatus.COMPLETED
@@ -192,16 +199,26 @@ class AutonomousDevLoop(
                             val testCmd = step.toolParams?.get("command") as? String ?: "echo 'Running unit test verification...'"
                             val result = cmdTool?.execute(
                                 project,
-                                mapOf("command" to testCmd, "timeoutSeconds" to 120),
+                                buildMap {
+                                    put("command", testCmd)
+                                    put("timeoutSeconds", 120)
+                                    if (isApprovedByUser && testCmd == approvedAction) put("approvedCommand", testCmd)
+                                },
                                 sandbox,
                                 devAgent,
-                                isApprovedByUser
+                                isApprovedByUser && testCmd == approvedAction
                             )
 
                             if (result is DevToolResult.Success) {
                                 step.status = DevStepStatus.COMPLETED
                                 step.outputSummary = result.output.take(500)
                                 testSummary = "Tests passed: 0 failures"
+                            } else if (result is DevToolResult.AwaitingApproval) {
+                                step.status = DevStepStatus.AWAITING_APPROVAL
+                                step.outputSummary = result.proposedAction
+                                step.error = result.reason
+                                overallSuccess = false
+                                break
                             } else if (result is DevToolResult.Failure) {
                                 // Trigger bounded repair loop if repairs remain
                                 if (plan.repairAttempts < plan.maxRepairAttempts) {

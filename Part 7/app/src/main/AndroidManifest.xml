@@ -166,13 +166,10 @@
             </intent-filter>
         </receiver>
 
+        <!-- Result delivery is through the explicit PendingIntent passed to Termux. -->
         <receiver
             android:name=".automation.dev.TermuxCommandResultReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.jarvis.assistant.TERMUX_COMMAND_RESULT" />
-            </intent-filter>
-        </receiver>
+            android:exported="false" />
 
     </application>
 

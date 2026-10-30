@@ -215,7 +215,7 @@ class AutonomousSoftwareEngineeringAgentTest {
         val approval = result as DevToolResult.AwaitingApproval
         assertTrue(approval.reason.contains("Force push rewrites remote history"))
 
-        // Non-destructive command without approval -> Proceed (or succeed with echo)
+        // Even non-destructive shell commands require an explicit approval event.
         val safeResult = cmdTool.execute(
             project,
             mapOf("command" to "echo 'Safe build step'"),
@@ -223,7 +223,31 @@ class AutonomousSoftwareEngineeringAgentTest {
             devAgent,
             isApprovedByUser = false
         )
-        assertTrue(safeResult is DevToolResult.Success)
+        assertTrue(safeResult is DevToolResult.AwaitingApproval)
+
+        val approvedSafeResult = cmdTool.execute(
+            project,
+            mapOf(
+                "command" to "echo 'Safe build step'",
+                "approvedCommand" to "echo 'Safe build step'"
+            ),
+            sandbox,
+            devAgent,
+            isApprovedByUser = true
+        )
+        assertTrue(approvedSafeResult is DevToolResult.Success)
+
+        val mismatchedApproval = cmdTool.execute(
+            project,
+            mapOf(
+                "command" to "echo 'Different command'",
+                "approvedCommand" to "echo 'Safe build step'"
+            ),
+            sandbox,
+            devAgent,
+            isApprovedByUser = true
+        )
+        assertTrue("Approval for another command must not authorize this command", mismatchedApproval is DevToolResult.AwaitingApproval)
     }
 
     @Test
@@ -297,7 +321,12 @@ class AutonomousSoftwareEngineeringAgentTest {
             "replacementSnippet" to "val appName = \"Jarvis\""
         )
 
-        val report = devLoop.executePlan(project, plan, isApprovedByUser = true)
+        val report = devLoop.executePlan(
+            project = project,
+            plan = plan,
+            isApprovedByUser = true,
+            approvedAction = "echo 'Running unit test verification...'"
+        )
         assertTrue(report.success)
         assertEquals(DevStepStatus.COMPLETED, plan.status)
         assertEquals("class MainActivity { val appName = \"Jarvis\" }", srcFile.readText())

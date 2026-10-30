@@ -115,7 +115,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
-                    .fallbackToDestructiveMigration()
+                    // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()
                     .also { instance = it }
             }

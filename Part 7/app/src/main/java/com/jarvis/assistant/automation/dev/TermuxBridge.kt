@@ -252,7 +252,7 @@ object TermuxBridge {
             pendingExecutions.remove(executionId)
             return DevToolResult.Failure(
                 toolName = "termux_execute",
-                error = "Failed dispatching command to Termux service: ${e.message}"
+                error = "Failed dispatching command to Termux service."
             )
         }
 
