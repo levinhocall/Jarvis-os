@@ -29,7 +29,7 @@ object RecallCoreManager {
             key = productName.lowercase(Locale.ROOT),
             value = "$price ($platform)"
         )
-        Log.i(TAG, "Logged to Recall Core: $raw")
+        Log.i(TAG, "Product research saved to Recall Core.")
         "Saved $productName at $price on $platform to Recall Core, $user."
     }
 
