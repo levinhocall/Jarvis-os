@@ -208,6 +208,12 @@ class AutonomousDevLoop(
                                 step.status = DevStepStatus.COMPLETED
                                 step.outputSummary = result.output.take(500)
                                 testSummary = "Tests passed: 0 failures"
+                            } else if (result is DevToolResult.AwaitingApproval) {
+                                step.status = DevStepStatus.AWAITING_APPROVAL
+                                step.outputSummary = result.proposedAction
+                                step.error = result.reason
+                                overallSuccess = false
+                                break
                             } else if (result is DevToolResult.Failure) {
                                 // Trigger bounded repair loop if repairs remain
                                 if (plan.repairAttempts < plan.maxRepairAttempts) {
