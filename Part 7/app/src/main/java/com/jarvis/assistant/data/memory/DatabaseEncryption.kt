@@ -148,17 +148,26 @@ internal object DatabaseEncryption {
     private fun isValidEncryptedDatabase(file: File, passphrase: ByteArray): Boolean {
         if (!file.isFile || file.length() == 0L) return false
         return try {
-            val db = CipherDatabase.openDatabase(
-                file.absolutePath,
-                rawPassphraseForCipher(passphrase),
-                null,
-                CipherDatabase.OPEN_READWRITE,
-                null
-            )
+            val cipherKey = rawPassphraseForCipher(passphrase)
+            val db = try {
+                CipherDatabase.openDatabase(
+                    file.absolutePath,
+                    cipherKey,
+                    null,
+                    CipherDatabase.OPEN_READWRITE,
+                    null
+                )
+            } finally {
+                cipherKey.fill(0)
+            }
             try {
-                db.rawQuery("PRAGMA integrity_check", emptyArray()).use { cursor ->
+                val cipherEnabled = db.rawQuery("PRAGMA cipher_status", emptyArray()).use { cursor ->
+                    cursor.moveToFirst() && cursor.getInt(0) == 1
+                }
+                val integrityOk = db.rawQuery("PRAGMA integrity_check", emptyArray()).use { cursor ->
                     cursor.moveToFirst() && cursor.getString(0) == "ok"
                 }
+                cipherEnabled && integrityOk
             } finally {
                 db.close()
             }
