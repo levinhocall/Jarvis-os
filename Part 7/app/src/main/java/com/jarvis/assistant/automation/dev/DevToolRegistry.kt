@@ -277,16 +277,21 @@ class ExecuteApprovedCommandDevTool(private val contextProvider: () -> android.c
             return@withContext DevToolResult.Failure(name, "Security check blocked command: ${textCheck.reason}", isRecoverable = false)
         }
 
+        // Approval is bound to the exact command text. A caller-supplied Boolean alone
+        // is not proof that this specific command was shown to and approved by the user.
+        val explicitlyApproved = isApprovedByUser &&
+            (params["approvedCommand"] as? String) == command
+
         // 2. Destructive Git Check
         val gitRisk = devAgent.auditGitOperation(command)
-        if (gitRisk.isDestructive && !isApprovedByUser) {
+        if (gitRisk.isDestructive && !explicitlyApproved) {
             return@withContext DevToolResult.AwaitingApproval(
                 toolName = name,
                 reason = "Potentially destructive command requires explicit user approval: ${gitRisk.warningMessage}",
                 proposedAction = command
             )
         }
-        if (!isApprovedByUser) {
+        if (!explicitlyApproved) {
             return@withContext DevToolResult.AwaitingApproval(
                 toolName = name,
                 reason = "Shell execution requires explicit approval for this exact command.",
@@ -367,15 +372,18 @@ class TermuxBridgeDevTool(private val contextProvider: () -> android.content.Con
             return DevToolResult.Failure(name, "Security check blocked command: ${textCheck.reason}", isRecoverable = false)
         }
 
+        val explicitlyApproved = isApprovedByUser &&
+            (params["approvedCommand"] as? String) == command
+
         val gitRisk = devAgent.auditGitOperation(command)
-        if (gitRisk.isDestructive && !isApprovedByUser) {
+        if (gitRisk.isDestructive && !explicitlyApproved) {
             return DevToolResult.AwaitingApproval(
                 toolName = name,
                 reason = "Potentially destructive command requires approval in Termux: ${gitRisk.warningMessage}",
                 proposedAction = command
             )
         }
-        if (!isApprovedByUser) {
+        if (!explicitlyApproved) {
             return DevToolResult.AwaitingApproval(
                 toolName = name,
                 reason = "Termux shell execution requires explicit approval for this exact command.",
