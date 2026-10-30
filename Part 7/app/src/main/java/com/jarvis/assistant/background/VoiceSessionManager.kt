@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Represents the granular lifecycle state of the AI conversation session.
@@ -50,6 +51,8 @@ class VoiceSessionManager(
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
     private val consecutiveFailures = AtomicInteger(0)
+    // Invalidates in-flight connect/reconnect callbacks when the user stops or restarts a session.
+    private val sessionGeneration = AtomicLong(0L)
     private var reconnectJob: Job? = null
     private var lastStateChangeTimestamp = SystemClock.elapsedRealtime()
 
@@ -74,13 +77,20 @@ class VoiceSessionManager(
         }
 
         reconnectJob?.cancel()
+        val generation = sessionGeneration.incrementAndGet()
         consecutiveFailures.set(0)
         _lastError.value = null
         transitionState(SessionLifecycleState.CONNECTING, "STARTING")
 
-        scope.launch(Dispatchers.IO) {
+        reconnectJob = scope.launch(Dispatchers.IO) {
             try {
                 val success = onConnectRequest()
+                if (generation != sessionGeneration.get()) {
+                    // A stop/restart happened while the handshake was suspended.
+                    // Tear down any late connection instead of resurrecting the old session.
+                    if (success) runCatching { onDisconnectRequest() }
+                    return@launch
+                }
                 if (success) {
                     transitionState(SessionLifecycleState.LIVE, "LIVE")
                     consecutiveFailures.set(0)
@@ -88,8 +98,10 @@ class VoiceSessionManager(
                     handleConnectionFailure("Initial connection handshake failed")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error starting voice session", e)
-                handleConnectionFailure(e.message ?: "Unknown connection error")
+                if (generation == sessionGeneration.get()) {
+                    Log.e(TAG, "Error starting voice session", e)
+                    handleConnectionFailure(e.message ?: "Unknown connection error")
+                }
             }
         }
     }
@@ -98,14 +110,16 @@ class VoiceSessionManager(
      * Stops the conversation session and cancels scheduled reconnects.
      */
     fun stopSession() {
+        // Invalidate pending handshakes immediately, before asynchronous disconnect starts.
+        sessionGeneration.incrementAndGet()
         reconnectJob?.cancel()
+        reconnectJob = null
+        transitionState(SessionLifecycleState.DISCONNECTED, "OFFLINE")
         scope.launch(Dispatchers.IO) {
             try {
                 onDisconnectRequest()
             } catch (e: Exception) {
                 Log.w(TAG, "Error disconnecting session", e)
-            } finally {
-                transitionState(SessionLifecycleState.DISCONNECTED, "OFFLINE")
             }
         }
     }
