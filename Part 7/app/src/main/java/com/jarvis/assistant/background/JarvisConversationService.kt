@@ -512,20 +512,28 @@ class JarvisConversationService : Service() {
         Log.i("JarvisService", "triggerHardBargeIn invoked from source='$source' (wasSpeaking=$wasSpeaking)")
         VoiceFlightRecorder.recordBargeIn(source)
 
-        com.jarvis.assistant.audio.VoiceInterruptionCoordinator.requestBargeIn(source) { newEpoch ->
-            // 1. Advance generation counter and suppress late streaming audio chunks
-            activePlaybackGeneration.set(newEpoch)
-            suppressAudioUntilTurnComplete = true
+        val interruptionAccepted =
+            com.jarvis.assistant.audio.VoiceInterruptionCoordinator.requestBargeIn(source) { newEpoch ->
+                // 1. Advance generation counter and suppress late streaming audio chunks
+                activePlaybackGeneration.set(newEpoch)
+                suppressAudioUntilTurnComplete = true
 
-            // 2. Instantly pause and flush AudioPlayer with new epoch so speaker audio stops with <10ms latency
-            audioPlayer?.pause()
-            audioPlayer?.flush(newEpoch)
-            lastPlaybackEndTime = 0L
-            try { tts?.stop() } catch (_: Exception) {}
-            try { com.jarvis.assistant.audio.VoiceSynthesisRouter.stop() } catch (_: Exception) {}
+                // 2. Instantly pause and flush AudioPlayer with new epoch so speaker audio stops with <10ms latency
+                audioPlayer?.pause()
+                audioPlayer?.flush(newEpoch)
+                lastPlaybackEndTime = 0L
+                try { tts?.stop() } catch (_: Exception) {}
+                try { com.jarvis.assistant.audio.VoiceSynthesisRouter.stop() } catch (_: Exception) {}
 
-            // 3. Set INTERRUPTED state
-            setConversationState(ConversationState.INTERRUPTED)
+                // 3. Set INTERRUPTED state
+                setConversationState(ConversationState.INTERRUPTED)
+            }
+
+        // A debounced duplicate signal must not clear the active turn, cancel tools,
+        // or force the state back to LISTENING. Only the winning interruption owns cleanup.
+        if (!interruptionAccepted) {
+            Log.d("JarvisService", "Ignoring duplicate/debounced barge-in from '$source'")
+            return
         }
 
         // 4. Cancel active automation tools and coroutines
