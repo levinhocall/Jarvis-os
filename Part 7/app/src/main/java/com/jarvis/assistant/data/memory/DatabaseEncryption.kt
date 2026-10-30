@@ -104,7 +104,8 @@ internal object DatabaseEncryption {
                 file.absolutePath,
                 rawPassphraseForCipher(passphrase),
                 null,
-                CipherDatabase.OPEN_READWRITE
+                CipherDatabase.OPEN_READWRITE,
+                null
             )
             try {
                 db.rawQuery("PRAGMA integrity_check", emptyArray()).use { cursor ->
