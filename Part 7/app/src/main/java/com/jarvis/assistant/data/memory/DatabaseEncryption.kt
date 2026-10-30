@@ -71,8 +71,11 @@ internal object DatabaseEncryption {
         }
     }
 
-    private fun roomFactory(passphrase: ByteArray): SupportOpenHelperFactory =
-        SupportOpenHelperFactory(rawPassphraseForCipher(passphrase), null, false)
+    private fun roomFactory(passphrase: ByteArray): SupportOpenHelperFactory {
+        val cipherPassphrase = rawPassphraseForCipher(passphrase)
+        passphrase.fill(0)
+        return SupportOpenHelperFactory(cipherPassphrase, null, false)
+    }
 
     private fun isValidPlaintextDatabase(file: File): Boolean {
         if (!file.isFile || file.length() == 0L) return false
