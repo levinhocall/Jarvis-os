@@ -161,7 +161,8 @@ class AutonomousDevLoop(
                         if (tool != null && step.toolParams != null) {
                             val actionText = step.toolParams!!["command"] as? String
                             val actionApproved = isApprovedByUser && actionText != null && actionText == approvedAction
-                            val result = tool.execute(project, step.toolParams!!, sandbox, devAgent, actionApproved)
+                            val executionParams = if (actionApproved) step.toolParams!! + mapOf("approvedCommand" to actionText) else step.toolParams!!
+                            val result = tool.execute(project, executionParams, sandbox, devAgent, actionApproved)
                             when (result) {
                                 is DevToolResult.Success -> {
                                     step.status = DevStepStatus.COMPLETED
@@ -198,7 +199,11 @@ class AutonomousDevLoop(
                             val testCmd = step.toolParams?.get("command") as? String ?: "echo 'Running unit test verification...'"
                             val result = cmdTool?.execute(
                                 project,
-                                mapOf("command" to testCmd, "timeoutSeconds" to 120),
+                                buildMap {
+                                    put("command", testCmd)
+                                    put("timeoutSeconds", 120)
+                                    if (isApprovedByUser && testCmd == approvedAction) put("approvedCommand", testCmd)
+                                },
                                 sandbox,
                                 devAgent,
                                 isApprovedByUser && testCmd == approvedAction
