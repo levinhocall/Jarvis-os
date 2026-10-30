@@ -30,6 +30,9 @@ object SecurityGuardManager {
     private const val KEY_LOCKED_UNTIL = "locked_until"
     private const val MAX_FAILED_ATTEMPTS = 5
     private const val LOCKOUT_DURATION_MS = 5 * 60 * 1000L
+    private val pinPattern = Regex("\\d{6,12}")
+    private val authorizationPattern =
+        Regex("^(?:enter security pin|security authorization|authorize me)\\s+(\\d{6,12})$")
 
     @Volatile
     private var elevatedSessionExpiryTime: Long = 0L
@@ -42,15 +45,15 @@ object SecurityGuardManager {
         val masterKey = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
-        EncryptedSharedPreferences.create(
+        val secure = EncryptedSharedPreferences.create(
             appContext,
             SECURE_PREFS_NAME,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        ).also { secure ->
-            migrateLegacyPin(appContext, secure)
-        }
+        )
+        migrateLegacyPin(appContext, secure)
+        secure
     } catch (error: Exception) {
         Log.e(TAG, "Encrypted security storage unavailable; authorization fails closed.", error)
         null
@@ -58,7 +61,12 @@ object SecurityGuardManager {
 
     private fun migrateLegacyPin(context: Context, secure: SharedPreferences) {
         val legacy = getLegacyPrefs(context)
-        val oldPin = legacy.getString(KEY_SECURITY_PIN, null)?.trim().orEmpty()
+        val oldPin = try {
+            legacy.getString(KEY_SECURITY_PIN, null)?.trim().orEmpty()
+        } catch (error: Exception) {
+            Log.e(TAG, "Legacy security preference could not be read.", error)
+            return
+        }
         if (oldPin.isEmpty()) return
 
         // The old built-in default is public knowledge, not a user credential.
@@ -68,14 +76,13 @@ object SecurityGuardManager {
         }
 
         try {
-            if (secure.getString(KEY_SECURITY_PIN, null).isNullOrEmpty() &&
-                oldPin.matches(Regex("\\d{6,12}"))) {
+            if (secure.getString(KEY_SECURITY_PIN, null).isNullOrEmpty() && pinPattern.matches(oldPin)) {
                 check(secure.edit().putString(KEY_SECURITY_PIN, oldPin).commit())
             }
             // Remove plaintext even when migration cannot be completed. Fail closed.
-            legacy.edit().remove(KEY_SECURITY_PIN).commit()
+            check(legacy.edit().remove(KEY_SECURITY_PIN).commit())
         } catch (error: Exception) {
-            Log.e(TAG, "Security PIN migration failed; plaintext value removed.", error)
+            Log.e(TAG, "Security PIN migration failed; authorization fails closed.", error)
             legacy.edit().remove(KEY_SECURITY_PIN).commit()
         }
     }
@@ -83,7 +90,7 @@ object SecurityGuardManager {
     /** Configure a user-owned 6–12 digit PIN. There is deliberately no default PIN. */
     fun configureSecurityPin(context: Context, pin: String): Boolean {
         val cleanPin = pin.trim()
-        if (!cleanPin.matches(Regex("\\d{6,12}"))) return false
+        if (!pinPattern.matches(cleanPin)) return false
         val secure = getSecurePrefs(context) ?: return false
         return try {
             secure.edit()
@@ -97,16 +104,20 @@ object SecurityGuardManager {
         }
     }
 
-    fun hasConfiguredSecurityPin(context: Context): Boolean {
+    fun hasConfiguredSecurityPin(context: Context): Boolean = try {
         val secure = getSecurePrefs(context) ?: return false
-        return !secure.getString(KEY_SECURITY_PIN, null).isNullOrBlank()
+        !secure.getString(KEY_SECURITY_PIN, null).isNullOrBlank()
+    } catch (error: Exception) {
+        Log.e(TAG, "Could not read configured security PIN state.", error)
+        false
     }
 
     fun isSessionElevated(): Boolean =
         System.currentTimeMillis() < elevatedSessionExpiryTime
 
     fun grantElevatedAccess(durationMillis: Long = 60_000L) {
-        elevatedSessionExpiryTime = System.currentTimeMillis() + durationMillis.coerceIn(1_000L, 60_000L)
+        elevatedSessionExpiryTime =
+            System.currentTimeMillis() + durationMillis.coerceIn(1_000L, 60_000L)
         Log.i(TAG, "Elevated security session granted for a limited duration.")
     }
 
@@ -116,46 +127,68 @@ object SecurityGuardManager {
     }
 
     /**
-     * Accepts only a configured PIN, either alone or in the explicit
-     * "enter security pin <digits>" command. Identity phrases are not credentials.
+     * Verifies a configured PIN and grants a short elevated session on success.
+     * Identity phrases and substring matches are never accepted as credentials.
      */
-    fun verifyPassphrase(input: String, context: Context): Boolean {
-        val clean = input.trim().lowercase(Locale.ROOT)
-        val suppliedPin = when {
-            clean.matches(Regex("\\d{6,12}")) -> clean
-            else -> Regex("^(?:enter security pin|security authorization|authorize me)\\s+(\\d{6,12})$")
-                .matchEntire(clean)?.groupValues?.getOrNull(1)
-        }
+    fun verifyPassphrase(input: String, context: Context): Boolean =
+        verifyConfiguredPin(input, context, grantSession = true)
 
+    /** Verifies the PIN for Settings changes without granting an elevated command session. */
+    fun verifySecurityPinForSettings(input: String, context: Context): Boolean =
+        verifyConfiguredPin(input, context, grantSession = false)
+
+    private fun verifyConfiguredPin(
+        input: String,
+        context: Context,
+        grantSession: Boolean
+    ): Boolean {
+        val clean = input.trim().lowercase(Locale.ROOT)
+        val suppliedPin = if (pinPattern.matches(clean)) {
+            clean
+        } else {
+            authorizationPattern.matchEntire(clean)?.groupValues?.getOrNull(1)
+        }
         val secure = getSecurePrefs(context)
-        val configuredPin = secure?.getString(KEY_SECURITY_PIN, null)
         val now = System.currentTimeMillis()
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
-        if (secure == null || configuredPin.isNullOrBlank() || suppliedPin == null) {
-            recordFailedAttempt(context, secure, now, timeStr)
+        if (secure == null) {
+            recordFailedAttempt(context, null, now, timeStr)
             return false
         }
 
-        val isLocked = secure.getLong(KEY_LOCKED_UNTIL, 0L) > now
-        if (isLocked) {
-            Log.w(TAG, "Security authorization rejected during temporary lockout at $timeStr")
-            return false
-        }
+        return try {
+            val configuredPin = secure.getString(KEY_SECURITY_PIN, null)
+            if (configuredPin.isNullOrBlank() || suppliedPin == null) {
+                recordFailedAttempt(context, secure, now, timeStr)
+                return false
+            }
 
-        val matches = MessageDigest.isEqual(
-            configuredPin.toByteArray(Charsets.UTF_8),
-            suppliedPin.toByteArray(Charsets.UTF_8)
-        )
-        if (matches) {
-            secure.edit().putInt(KEY_FAILED_ATTEMPTS, 0).putLong(KEY_LOCKED_UNTIL, 0L).apply()
-            grantElevatedAccess()
-            Log.i(TAG, "PIN authorization successful at $timeStr")
-            return true
-        }
+            if (secure.getLong(KEY_LOCKED_UNTIL, 0L) > now) {
+                Log.w(TAG, "Security authorization rejected during temporary lockout.")
+                return false
+            }
 
-        recordFailedAttempt(context, secure, now, timeStr)
-        return false
+            val matches = MessageDigest.isEqual(
+                configuredPin.toByteArray(Charsets.UTF_8),
+                suppliedPin.toByteArray(Charsets.UTF_8)
+            )
+            if (!matches) {
+                recordFailedAttempt(context, secure, now, timeStr)
+                return false
+            }
+
+            secure.edit()
+                .putInt(KEY_FAILED_ATTEMPTS, 0)
+                .putLong(KEY_LOCKED_UNTIL, 0L)
+                .apply()
+            if (grantSession) grantElevatedAccess()
+            Log.i(TAG, "PIN verification successful.")
+            true
+        } catch (error: Exception) {
+            Log.e(TAG, "PIN verification failed because secure storage is unavailable.", error)
+            false
+        }
     }
 
     private fun recordFailedAttempt(
@@ -164,19 +197,30 @@ object SecurityGuardManager {
         now: Long,
         timeStr: String
     ) {
-        if (secure != null) {
-            val attempts = secure.getInt(KEY_FAILED_ATTEMPTS, 0) + 1
-            val editor = secure.edit().putInt(KEY_FAILED_ATTEMPTS, attempts)
-            if (attempts >= MAX_FAILED_ATTEMPTS) {
-                editor.putLong(KEY_LOCKED_UNTIL, now + LOCKOUT_DURATION_MS)
-                    .putInt(KEY_FAILED_ATTEMPTS, 0)
+        try {
+            if (secure != null) {
+                val attempts = secure.getInt(KEY_FAILED_ATTEMPTS, 0) + 1
+                val editor = secure.edit().putInt(KEY_FAILED_ATTEMPTS, attempts)
+                if (attempts >= MAX_FAILED_ATTEMPTS) {
+                    editor.putLong(KEY_LOCKED_UNTIL, now + LOCKOUT_DURATION_MS)
+                        .putInt(KEY_FAILED_ATTEMPTS, 0)
+                }
+                editor.apply()
             }
-            editor.apply()
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not persist authorization failure counter.", error)
         }
         // Never persist or log the supplied phrase/PIN.
         Log.w(TAG, "Security authorization failed at $timeStr")
         CoroutineScope(Dispatchers.IO).launch {
-            RecallCoreManager.saveFact(context, "[SECURITY ALERT: Failed authorization attempt at $timeStr]")
+            try {
+                RecallCoreManager.saveFact(
+                    context,
+                    "[SECURITY ALERT: Failed authorization attempt at $timeStr]"
+                )
+            } catch (error: Exception) {
+                Log.w(TAG, "Could not persist security alert.")
+            }
         }
     }
 
@@ -196,7 +240,11 @@ object SecurityGuardManager {
         // Do not persist arbitrary command text, which may contain credentials or private data.
         Log.w(TAG, "Security intruder alert at $timeStr")
         CoroutineScope(Dispatchers.IO).launch {
-            RecallCoreManager.saveFact(context, "[SECURITY INTRUDER ALERT at $timeStr]")
+            try {
+                RecallCoreManager.saveFact(context, "[SECURITY INTRUDER ALERT at $timeStr]")
+            } catch (error: Exception) {
+                Log.w(TAG, "Could not persist security alert.")
+            }
         }
     }
 }
