@@ -113,7 +113,7 @@ class OrbHelper(
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(message: android.webkit.ConsoleMessage?): Boolean {
-                android.util.Log.d("JarvisHudWebView", "${message?.message()} -- line ${message?.lineNumber()}")
+                // WebView console output may contain user transcripts or private app data.
                 return true
             }
         }
