@@ -37,7 +37,11 @@ class JarvisAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_SCROLLED
+            AccessibilityEvent.TYPE_VIEW_SCROLLED,
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_SELECTED
         )
 
         private val _uiChanges = MutableStateFlow(UiChange(0L, "", 0, 0L))
@@ -305,8 +309,14 @@ class JarvisAccessibilityService : AccessibilityService() {
                 android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                 android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
                 android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
-            if (currentInfo.flags != updatedFlags) {
+            val requiredEvents = AccessibilityEvent.TYPE_VIEW_CLICKED or
+                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED or
+                AccessibilityEvent.TYPE_VIEW_FOCUSED or
+                AccessibilityEvent.TYPE_VIEW_SELECTED
+            val updatedEvents = currentInfo.eventTypes or requiredEvents
+            if (currentInfo.flags != updatedFlags || currentInfo.eventTypes != updatedEvents) {
                 currentInfo.flags = updatedFlags
+                currentInfo.eventTypes = updatedEvents
                 serviceInfo = currentInfo
             }
         } catch (t: Throwable) {
@@ -481,10 +491,23 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun clearPendingAutomation() {
+        isWaitingForWhatsAppSend = false
+        pendingWhatsAppMessage = null
+        isWaitingForWhatsAppCall = false
+        isWaitingForYouTubePlay = false
+        isWaitingForYouTubeSubscribe = false
+        isWaitingForYouTubeFullscreen = false
+        isWaitingForWhatsAppDelete = false
+        isWaitingForOemSetupAutoClick = false
+        latestExtractedOtp = null
+    }
+
     override fun onDestroy() {
         try {
-            // Prevent delayed lifecycle work from retaining this service after teardown.
+            // Prevent delayed lifecycle work and armed actions retaining this service after teardown.
             handler.removeCallbacksAndMessages(null)
+            clearPendingAutomation()
             if (instance === this) instance = null
             AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service destroyed")
         } catch (t: Throwable) {
@@ -498,6 +521,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         try {
             // A service may later rebind; onRebind schedules only the work it still needs.
             handler.removeCallbacksAndMessages(null)
+            clearPendingAutomation()
             if (instance === this) instance = null
             AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
         } catch (t: Throwable) {
