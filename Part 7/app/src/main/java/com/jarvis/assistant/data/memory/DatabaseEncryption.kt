@@ -73,6 +73,14 @@ internal object DatabaseEncryption {
         }
     }
 
+    private fun deleteVerifiedPlaintextBackup(backup: File) {
+        if (!backup.exists()) return
+        listOf("", "-wal", "-shm").forEach { suffix ->
+            val file = File(backup.absolutePath + suffix)
+            if (file.exists()) check(file.delete()) { "Plaintext backup could not be removed after encrypted verification." }
+        }
+    }
+
     private fun roomFactory(passphrase: ByteArray): SupportOpenHelperFactory {
         val cipherPassphrase = rawPassphraseForCipher(passphrase)
         passphrase.fill(0)
