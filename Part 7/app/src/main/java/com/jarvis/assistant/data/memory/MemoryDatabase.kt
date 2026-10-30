@@ -13,6 +13,8 @@ import com.jarvis.assistant.data.chat.ChatMessageEntity
 import com.jarvis.assistant.data.chat.ChatSessionEntity
 import com.jarvis.assistant.data.mission.MissionDao
 import com.jarvis.assistant.data.mission.MissionEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 
 @Database(
     entities = [
@@ -111,6 +113,11 @@ abstract class MemoryDatabase : RoomDatabase() {
 
         private fun corruptionRecoveryCallback(context: Context): RoomDatabase.Callback =
             object : RoomDatabase.Callback() {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    DatabaseKeyStore(context.applicationContext).markInitializationComplete()
+                }
+
                 override fun onCorruption(db: SupportSQLiteDatabase) {
                     // Room will close and remove the corrupt database after this callback.
                     // Preserve the original bytes and SQLite sidecars inside app-private,
@@ -151,7 +158,9 @@ abstract class MemoryDatabase : RoomDatabase() {
             return instance ?: synchronized(this) {
                 instance ?: run {
                     // Complete/recover encryption before Room opens the database file.
-                    val encryptedOpenHelperFactory = DatabaseEncryption.prepare(context.applicationContext)
+                    val encryptedOpenHelperFactory = runBlocking(Dispatchers.IO) {
+                        DatabaseEncryption.prepare(context.applicationContext)
+                    }
                     Room.databaseBuilder(
                         context.applicationContext,
                         MemoryDatabase::class.java,
