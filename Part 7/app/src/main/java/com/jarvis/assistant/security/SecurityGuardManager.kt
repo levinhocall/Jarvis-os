@@ -104,12 +104,22 @@ object SecurityGuardManager {
         }
     }
 
-    fun hasConfiguredSecurityPin(context: Context): Boolean = try {
-        val secure = getSecurePrefs(context) ?: return false
-        !secure.getString(KEY_SECURITY_PIN, null).isNullOrBlank()
-    } catch (error: Exception) {
-        Log.e(TAG, "Could not read configured security PIN state.", error)
-        false
+    fun hasConfiguredSecurityPin(context: Context): Boolean {
+        return try {
+            val secure = getSecurePrefs(context) ?: return false
+            !secure.getString(KEY_SECURITY_PIN, null).isNullOrBlank()
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not read configured security PIN state.", error)
+            false
+        }
+    }
+
+    internal fun isValidPinFormat(pin: String): Boolean = pinPattern.matches(pin)
+
+    internal fun extractPinCandidate(input: String): String? {
+        val clean = input.trim().lowercase(Locale.ROOT)
+        return if (pinPattern.matches(clean)) clean
+        else authorizationPattern.matchEntire(clean)?.groupValues?.getOrNull(1)
     }
 
     fun isSessionElevated(): Boolean =
@@ -142,12 +152,7 @@ object SecurityGuardManager {
         context: Context,
         grantSession: Boolean
     ): Boolean {
-        val clean = input.trim().lowercase(Locale.ROOT)
-        val suppliedPin = if (pinPattern.matches(clean)) {
-            clean
-        } else {
-            authorizationPattern.matchEntire(clean)?.groupValues?.getOrNull(1)
-        }
+        val suppliedPin = extractPinCandidate(input)
         val secure = getSecurePrefs(context)
         val now = System.currentTimeMillis()
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
