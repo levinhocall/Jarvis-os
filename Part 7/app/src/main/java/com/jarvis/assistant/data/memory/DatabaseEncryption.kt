@@ -53,6 +53,7 @@ internal object DatabaseEncryption {
         try {
             if (database.exists()) {
                 if (isValidEncryptedDatabase(database, passphrase)) {
+                    deleteVerifiedPlaintextBackup(backup)
                     return roomFactory(passphrase)
                 }
                 check(isValidPlaintextDatabase(database)) {
@@ -62,6 +63,7 @@ internal object DatabaseEncryption {
                 check(isValidEncryptedDatabase(database, passphrase)) {
                     "Encrypted database failed post-swap verification; the plaintext backup is retained."
                 }
+                deleteVerifiedPlaintextBackup(backup)
             }
             return roomFactory(passphrase)
         } catch (error: Exception) {
