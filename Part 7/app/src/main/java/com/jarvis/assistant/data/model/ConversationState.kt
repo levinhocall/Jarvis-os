@@ -39,6 +39,7 @@ enum class ConversationState(val displayName: String, val orbKey: String) {
             return when {
                 normalized in setOf("CONNECTING...", "CONFIGURING...", "RECONNECTING...") -> CONNECTING
                 normalized == "LIVE" || normalized == "CONNECTED" -> CONNECTED
+                normalized.startsWith("COOLDOWN") -> RECOVERING
                 normalized.startsWith("ERROR") -> ERROR
                 else -> null
             }
