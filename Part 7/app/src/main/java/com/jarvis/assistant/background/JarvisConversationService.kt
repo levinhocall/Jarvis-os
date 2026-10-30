@@ -1794,7 +1794,22 @@ class JarvisConversationService : Service() {
             }
         }.apply {
             setMuted(preferences.isMicMuted)
-            start(serviceScope)
+            val microphoneStarted = start(serviceScope)
+            if (!microphoneStarted) {
+                Log.e("JarvisService", "Microphone capture could not be started; ending the incomplete live session.")
+                _liveError.value = JarvisLiveError(
+                    title = "MICROPHONE UNAVAILABLE",
+                    message = "Android could not initialize microphone capture. Check microphone permission and close other apps using the microphone, then retry.",
+                    errorCode = "MICROPHONE_START_FAILED",
+                    actionText = "RETRY"
+                )
+                stopActiveConversation()
+                setConversationState(ConversationState.ERROR)
+                updateNotification()
+                serviceScope.launch {
+                    _events.emit("Microphone could not start. Check permission and other apps using the microphone, then retry.")
+                }
+            }
         }
     }
 
