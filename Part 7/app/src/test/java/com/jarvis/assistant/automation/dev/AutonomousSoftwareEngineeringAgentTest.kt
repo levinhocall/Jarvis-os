@@ -227,12 +227,27 @@ class AutonomousSoftwareEngineeringAgentTest {
 
         val approvedSafeResult = cmdTool.execute(
             project,
-            mapOf("command" to "echo 'Safe build step'"),
+            mapOf(
+                "command" to "echo 'Safe build step'",
+                "approvedCommand" to "echo 'Safe build step'"
+            ),
             sandbox,
             devAgent,
             isApprovedByUser = true
         )
         assertTrue(approvedSafeResult is DevToolResult.Success)
+
+        val mismatchedApproval = cmdTool.execute(
+            project,
+            mapOf(
+                "command" to "echo 'Different command'",
+                "approvedCommand" to "echo 'Safe build step'"
+            ),
+            sandbox,
+            devAgent,
+            isApprovedByUser = true
+        )
+        assertTrue("Approval for another command must not authorize this command", mismatchedApproval is DevToolResult.AwaitingApproval)
     }
 
     @Test
