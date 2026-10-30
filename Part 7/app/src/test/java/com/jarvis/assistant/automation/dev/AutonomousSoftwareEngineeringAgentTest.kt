@@ -215,7 +215,7 @@ class AutonomousSoftwareEngineeringAgentTest {
         val approval = result as DevToolResult.AwaitingApproval
         assertTrue(approval.reason.contains("Force push rewrites remote history"))
 
-        // Non-destructive command without approval -> Proceed (or succeed with echo)
+        // Even non-destructive shell commands require an explicit approval event.
         val safeResult = cmdTool.execute(
             project,
             mapOf("command" to "echo 'Safe build step'"),
@@ -223,7 +223,16 @@ class AutonomousSoftwareEngineeringAgentTest {
             devAgent,
             isApprovedByUser = false
         )
-        assertTrue(safeResult is DevToolResult.Success)
+        assertTrue(safeResult is DevToolResult.AwaitingApproval)
+
+        val approvedSafeResult = cmdTool.execute(
+            project,
+            mapOf("command" to "echo 'Safe build step'"),
+            sandbox,
+            devAgent,
+            isApprovedByUser = true
+        )
+        assertTrue(approvedSafeResult is DevToolResult.Success)
     }
 
     @Test
