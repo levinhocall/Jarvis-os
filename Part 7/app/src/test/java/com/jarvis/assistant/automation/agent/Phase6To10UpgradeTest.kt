@@ -66,11 +66,9 @@ class Phase6To10UpgradeTest {
     fun testPhase9SecurityGuardAuthorization() {
         assertFalse(SecurityGuardManager.isSessionElevated())
 
-        // Elevated session grant and revoke
-        SecurityGuardManager.grantElevatedAccess(5000L)
-        assertTrue(SecurityGuardManager.isSessionElevated())
-        assertTrue(SecurityGuardManager.isActionPermitted(SecurityAction.UNLOCK_LOCKDOWN, null))
-
+        // Elevated access cannot be granted by arbitrary callers; only successful PIN
+        // verification inside SecurityGuardManager can issue a session.
+        assertFalse(SecurityGuardManager.isActionPermitted(SecurityAction.UNLOCK_LOCKDOWN, null))
         SecurityGuardManager.revokeElevatedAccess()
         assertFalse(SecurityGuardManager.isSessionElevated())
 
