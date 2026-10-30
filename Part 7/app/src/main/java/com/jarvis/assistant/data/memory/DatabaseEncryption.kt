@@ -163,9 +163,18 @@ internal object DatabaseEncryption {
         } finally {
             source.close()
         }
+        // WAL checkpoint completed and the source handle is closed; do not let plaintext sidecars
+        // attach to the encrypted replacement at the original database path.
+        listOf("-wal", "-shm").forEach { suffix ->
+            val sidecar = File(original.absolutePath + suffix)
+            if (sidecar.exists()) check(sidecar.delete()) { "Could not clear a closed SQLite sidecar." }
+        }
 
         // This is an app-owned staging filename. The original remains untouched throughout export.
-        if (staging.exists()) check(staging.delete()) { "Could not clear an incomplete encryption staging file." }
+        listOf("", "-wal", "-shm").forEach { suffix ->
+            val stale = File(staging.absolutePath + suffix)
+            if (stale.exists()) check(stale.delete()) { "Could not clear an incomplete encryption staging file." }
+        }
         val passphrase = Base64.encodeToString(rawPassphrase, Base64.NO_WRAP)
         val cipherSource = CipherDatabase.openDatabase(
             original.absolutePath,
