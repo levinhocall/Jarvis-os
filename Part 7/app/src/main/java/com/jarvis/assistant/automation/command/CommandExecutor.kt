@@ -19,7 +19,8 @@ class CommandExecutor(
     }
 
     suspend fun execute(command: JarvisCommand): String = withContext(Dispatchers.Main) {
-        Log.i(TAG, "Executing command: $command")
+        // Log only the command type; command data may contain PINs, messages, or other private input.
+        Log.i(TAG, "Executing command type: ${command::class.simpleName ?: "Unknown"}")
         when (command) {
             // YouTube
             is JarvisCommand.PlayYouTube -> {
