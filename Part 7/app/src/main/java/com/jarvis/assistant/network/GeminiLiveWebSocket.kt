@@ -836,7 +836,7 @@ class GeminiLiveWebSocket(
                             // Filter out internal thinking/reasoning parts (Gemini 2.5 thinking tokens)
                             val isThought = part.optBoolean("thought", false)
                             if (isThought) {
-                                Log.d(TAG, "Suppressed model thought part: ${part.optString("text").take(40)}")
+                                Log.d(TAG, "Suppressed model thought part.")
                                 continue
                             }
                             val text = part.optString("text", "")
@@ -966,7 +966,7 @@ class GeminiLiveWebSocket(
                 })
             }
             webSocket?.send(msg.toString())
-            Log.d(TAG, "Sent client_content: $text")
+            Log.d(TAG, "Sent client_content turn.")
         } catch (e: Exception) {
             Log.e(TAG, "sendClientContent failed: ${e.message}", e)
         }
