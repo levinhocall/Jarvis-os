@@ -149,16 +149,21 @@ abstract class MemoryDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): MemoryDatabase {
             return instance ?: synchronized(this) {
-                instance ?: Room.databaseBuilder(
-                    context.applicationContext,
-                    MemoryDatabase::class.java,
-                    DATABASE_NAME
-                )
+                instance ?: run {
+                    // Complete/recover encryption before Room opens the database file.
+                    val encryptedOpenHelperFactory = DatabaseEncryption.prepare(context.applicationContext)
+                    Room.databaseBuilder(
+                        context.applicationContext,
+                        MemoryDatabase::class.java,
+                        DATABASE_NAME
+                    )
+                    .openHelperFactory(encryptedOpenHelperFactory)
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()
                     .also { instance = it }
+                }
             }
         }
     }
