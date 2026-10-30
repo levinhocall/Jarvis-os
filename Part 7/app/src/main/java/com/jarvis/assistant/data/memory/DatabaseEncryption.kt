@@ -40,6 +40,10 @@ internal object DatabaseEncryption {
         }
 
         val passphrase = when {
+            !database.exists() && keyStore.hasWrappedPassphrase() && keyStore.hasPendingInitialization() ->
+                keyStore.loadExistingPassphrase()
+            !database.exists() && keyStore.hasWrappedPassphrase() ->
+                error("Database file is missing while a completed database key exists; refusing silent data loss.")
             !database.exists() -> keyStore.createPassphraseForNewDatabase()
             keyStore.hasWrappedPassphrase() -> keyStore.loadExistingPassphrase()
             else -> {
