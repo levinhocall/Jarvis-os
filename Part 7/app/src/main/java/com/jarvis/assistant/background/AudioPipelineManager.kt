@@ -45,6 +45,7 @@ class AudioPipelineManager(
      * Initializes and starts continuous audio recording.
      */
     @SuppressLint("MissingPermission")
+    @Synchronized
     fun startRecording(): Boolean {
         if (isRecording.get()) {
             Log.d(TAG, "Audio recording already in progress.")
@@ -115,6 +116,7 @@ class AudioPipelineManager(
     /**
      * Stops audio capture and frees hardware resources.
      */
+    @Synchronized
     fun stopRecording() {
         isRecording.set(false)
         recordingJob?.cancel()
@@ -164,24 +166,31 @@ class AudioPipelineManager(
                 val bytesRead = record.read(buffer, 0, buffer.size)
 
                 if (bytesRead > 0) {
-                    if (isMuted.get()) {
-                        // Deliver zeroed buffer to keep WebSocket pipeline timing intact
-                        buffer.fill(0)
-                        onAudioChunkReady(buffer, bytesRead)
-                    } else if (isBargeInSuppressed.get()) {
-                        // Assistant is actively speaking: check RMS energy
-                        val rms = calculateRms(buffer, bytesRead)
-                        if (rms > 2200.0) {
-                            // User is actively breaking in / shouting stop!
-                            onAudioChunkReady(buffer, bytesRead)
-                        } else {
-                            // Subdue playback leakage
+                    try {
+                        if (isMuted.get()) {
+                            // Deliver zeroed buffer to keep WebSocket pipeline timing intact.
                             buffer.fill(0)
                             onAudioChunkReady(buffer, bytesRead)
+                        } else if (isBargeInSuppressed.get()) {
+                            // Assistant is actively speaking: only forward likely user speech.
+                            if (calculateRms(buffer, bytesRead) > 2200.0) {
+                                onAudioChunkReady(buffer, bytesRead)
+                            } else {
+                                buffer.fill(0)
+                                onAudioChunkReady(buffer, bytesRead)
+                            }
+                        } else {
+                            onAudioChunkReady(buffer, bytesRead)
                         }
-                    } else {
-                        onAudioChunkReady(buffer, bytesRead)
+                    } catch (callbackError: Exception) {
+                        // A downstream WebSocket/voice callback must not silently kill mic capture.
+                        Log.w(TAG, "Audio chunk callback failed; capture remains active.", callbackError)
                     }
+                } else if (bytesRead < 0) {
+                    // AudioRecord error codes are negative. Avoid a hot spin if the device
+                    // temporarily revokes or resets the input route.
+                    Log.w(TAG, "AudioRecord.read failed with code $bytesRead")
+                    kotlinx.coroutines.delay(40L)
                 }
             }
         }
