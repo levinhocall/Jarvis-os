@@ -208,13 +208,20 @@ object SecurityGuardManager {
     ) {
         try {
             if (secure != null) {
-                val attempts = secure.getInt(KEY_FAILED_ATTEMPTS, 0) + 1
+                val attempts = secure.getInt(KEY_FAILED_ATTEMPTS, 0).coerceAtLeast(0) + 1
                 val editor = secure.edit().putInt(KEY_FAILED_ATTEMPTS, attempts)
-                if (attempts >= MAX_FAILED_ATTEMPTS) {
+                val persisted = if (attempts >= MAX_FAILED_ATTEMPTS) {
                     editor.putLong(KEY_LOCKED_UNTIL, now + LOCKOUT_DURATION_MS)
                         .putInt(KEY_FAILED_ATTEMPTS, 0)
+                        .commit()
+                } else {
+                    editor.commit()
                 }
-                editor.apply()
+                if (!persisted) {
+                    // A failed write must never be treated as a successfully recorded attempt.
+                    // Authorization still fails closed; this diagnostic contains no user input.
+                    Log.e(TAG, "Could not durably persist authorization lockout state.")
+                }
             }
         } catch (error: Exception) {
             Log.e(TAG, "Could not persist authorization failure counter.", error)
