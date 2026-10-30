@@ -919,7 +919,7 @@ class JarvisConversationService : Service() {
         currentTurnAssistantText.clear()
         currentTurnUserText.clear()
         startInactivityTimer()
-        setConversationState(ConversationState.IDLE)
+        setConversationState(ConversationState.CONNECTING)
         updateNotification()
         headsetAudioRouter?.start()
 
@@ -973,6 +973,13 @@ class JarvisConversationService : Service() {
                     listener = object : GeminiLiveWebSocket.Listener {
                         override fun onConnectionStateChanged(status: String) {
                             _connectionStatus.value = status
+                            ConversationState.fromConnectionStatus(status)?.let { lifecycleState ->
+                                if (lifecycleState == ConversationState.ERROR ||
+                                    _conversationState.value !in setOf(ConversationState.SPEAKING, ConversationState.THINKING)
+                                ) {
+                                    setConversationState(lifecycleState)
+                                }
+                            }
                             updateNotification()
                             if (status == "LIVE") {
                                 _liveError.value = null
@@ -1430,6 +1437,7 @@ class JarvisConversationService : Service() {
                         override fun onError(message: String, isFatal: Boolean, errorCode: String?) {
                             Log.e("JarvisService", "GeminiLive onError: fatal=$isFatal, code=$errorCode, msg=$message")
                             VoiceFlightRecorder.recordError(errorCode ?: if (isFatal) "FATAL_ERROR" else "WARNING", message)
+                            if (isFatal) setConversationState(ConversationState.ERROR)
                             updateNotification()
                             serviceScope.launch { _events.emit(message) }
                             when (errorCode) {
