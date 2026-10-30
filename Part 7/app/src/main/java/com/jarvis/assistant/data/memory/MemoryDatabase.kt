@@ -1,6 +1,8 @@
 package com.jarvis.assistant.data.memory
 
 import android.content.Context
+import android.util.Log
+import java.io.File
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -107,6 +109,44 @@ abstract class MemoryDatabase : RoomDatabase() {
         @Volatile
         private var instance: MemoryDatabase? = null
 
+        private fun corruptionRecoveryCallback(context: Context): RoomDatabase.Callback =
+            object : RoomDatabase.Callback() {
+                override fun onCorruption(db: SupportSQLiteDatabase) {
+                    // Room will close and remove the corrupt database after this callback.
+                    // Preserve the original bytes and SQLite sidecars inside app-private,
+                    // non-backed-up storage so support tooling can attempt a later salvage.
+                    val source = context.getDatabasePath(DATABASE_NAME)
+                    if (!source.exists()) {
+                        Log.e("MemoryDatabase", "Corruption reported but database file was not present.")
+                        return
+                    }
+
+                    val recoveryDirectory = File(context.noBackupFilesDir, "database-recovery")
+                    if (!recoveryDirectory.exists() && !recoveryDirectory.mkdirs()) {
+                        Log.e("MemoryDatabase", "Could not create private database recovery directory.")
+                        return
+                    }
+
+                    val backup = File(
+                        recoveryDirectory,
+                        "jarvis_memory_corrupt_${System.currentTimeMillis()}.db"
+                    )
+                    try {
+                        source.copyTo(backup, overwrite = false)
+                        listOf("-wal", "-shm").forEach { suffix ->
+                            val sidecar = File(source.absolutePath + suffix)
+                            if (sidecar.exists()) {
+                                sidecar.copyTo(File(backup.absolutePath + suffix), overwrite = false)
+                            }
+                        }
+                        Log.e("MemoryDatabase", "Corrupt database snapshot preserved in app-private recovery storage.")
+                    } catch (error: Exception) {
+                        Log.e("MemoryDatabase", "Could not preserve corrupt database snapshot.", error)
+                        backup.delete()
+                    }
+                }
+            }
+
         fun getInstance(context: Context): MemoryDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -115,6 +155,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()
                     .also { instance = it }

@@ -512,20 +512,28 @@ class JarvisConversationService : Service() {
         Log.i("JarvisService", "triggerHardBargeIn invoked from source='$source' (wasSpeaking=$wasSpeaking)")
         VoiceFlightRecorder.recordBargeIn(source)
 
-        com.jarvis.assistant.audio.VoiceInterruptionCoordinator.requestBargeIn(source) { newEpoch ->
-            // 1. Advance generation counter and suppress late streaming audio chunks
-            activePlaybackGeneration.set(newEpoch)
-            suppressAudioUntilTurnComplete = true
+        val interruptionAccepted =
+            com.jarvis.assistant.audio.VoiceInterruptionCoordinator.requestBargeIn(source) { newEpoch ->
+                // 1. Advance generation counter and suppress late streaming audio chunks
+                activePlaybackGeneration.set(newEpoch)
+                suppressAudioUntilTurnComplete = true
 
-            // 2. Instantly pause and flush AudioPlayer with new epoch so speaker audio stops with <10ms latency
-            audioPlayer?.pause()
-            audioPlayer?.flush(newEpoch)
-            lastPlaybackEndTime = 0L
-            try { tts?.stop() } catch (_: Exception) {}
-            try { com.jarvis.assistant.audio.VoiceSynthesisRouter.stop() } catch (_: Exception) {}
+                // 2. Instantly pause and flush AudioPlayer with new epoch so speaker audio stops with <10ms latency
+                audioPlayer?.pause()
+                audioPlayer?.flush(newEpoch)
+                lastPlaybackEndTime = 0L
+                try { tts?.stop() } catch (_: Exception) {}
+                try { com.jarvis.assistant.audio.VoiceSynthesisRouter.stop() } catch (_: Exception) {}
 
-            // 3. Set INTERRUPTED state
-            setConversationState(ConversationState.INTERRUPTED)
+                // 3. Set INTERRUPTED state
+                setConversationState(ConversationState.INTERRUPTED)
+            }
+
+        // A debounced duplicate signal must not clear the active turn, cancel tools,
+        // or force the state back to LISTENING. Only the winning interruption owns cleanup.
+        if (!interruptionAccepted) {
+            Log.d("JarvisService", "Ignoring duplicate/debounced barge-in from '$source'")
+            return
         }
 
         // 4. Cancel active automation tools and coroutines
@@ -919,7 +927,7 @@ class JarvisConversationService : Service() {
         currentTurnAssistantText.clear()
         currentTurnUserText.clear()
         startInactivityTimer()
-        setConversationState(ConversationState.IDLE)
+        setConversationState(ConversationState.CONNECTING)
         updateNotification()
         headsetAudioRouter?.start()
 
@@ -973,6 +981,13 @@ class JarvisConversationService : Service() {
                     listener = object : GeminiLiveWebSocket.Listener {
                         override fun onConnectionStateChanged(status: String) {
                             _connectionStatus.value = status
+                            ConversationState.fromConnectionStatus(status)?.let { lifecycleState ->
+                                if (lifecycleState == ConversationState.ERROR ||
+                                    _conversationState.value !in setOf(ConversationState.SPEAKING, ConversationState.THINKING)
+                                ) {
+                                    setConversationState(lifecycleState)
+                                }
+                            }
                             updateNotification()
                             if (status == "LIVE") {
                                 _liveError.value = null
@@ -1430,6 +1445,7 @@ class JarvisConversationService : Service() {
                         override fun onError(message: String, isFatal: Boolean, errorCode: String?) {
                             Log.e("JarvisService", "GeminiLive onError: fatal=$isFatal, code=$errorCode, msg=$message")
                             VoiceFlightRecorder.recordError(errorCode ?: if (isFatal) "FATAL_ERROR" else "WARNING", message)
+                            if (isFatal) setConversationState(ConversationState.ERROR)
                             updateNotification()
                             serviceScope.launch { _events.emit(message) }
                             when (errorCode) {
@@ -1778,7 +1794,22 @@ class JarvisConversationService : Service() {
             }
         }.apply {
             setMuted(preferences.isMicMuted)
-            start(serviceScope)
+            val microphoneStarted = start(serviceScope)
+            if (!microphoneStarted) {
+                Log.e("JarvisService", "Microphone capture could not be started; ending the incomplete live session.")
+                _liveError.value = JarvisLiveError(
+                    title = "MICROPHONE UNAVAILABLE",
+                    message = "Android could not initialize microphone capture. Check microphone permission and close other apps using the microphone, then retry.",
+                    errorCode = "MICROPHONE_START_FAILED",
+                    actionText = "RETRY"
+                )
+                stopActiveConversation()
+                setConversationState(ConversationState.ERROR)
+                updateNotification()
+                serviceScope.launch {
+                    _events.emit("Microphone could not start. Check permission and other apps using the microphone, then retry.")
+                }
+            }
         }
     }
 
@@ -3271,6 +3302,7 @@ class JarvisConversationService : Service() {
         hasSignalledUtteranceEnd = false
         adaptiveVad.reset()
         _isStandby.value = true
+        setConversationState(ConversationState.STANDBY)
         standbyActivatedTime = System.currentTimeMillis()
         updateNotification()
 

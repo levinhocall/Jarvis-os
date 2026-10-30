@@ -180,6 +180,10 @@ class ApiConnectionActivity : AppCompatActivity() {
             .setPositiveButton("Add") { _, _ ->
                 val newKey = input.text.toString().trim()
                 if (newKey.isNotBlank()) {
+                    if (!preferences.canStoreApiKeySecurely) {
+                        Snackbar.make(binding.root, "Encrypted storage is unavailable. The key was not added.", Snackbar.LENGTH_LONG).show()
+                        return@setPositiveButton
+                    }
                     preferences.addApiKeyToPool("gemini", newKey)
                     loadKeyPool()
                     Toast.makeText(this, "Key added to rotation pool", Toast.LENGTH_SHORT).show()
@@ -233,8 +237,11 @@ class ApiConnectionActivity : AppCompatActivity() {
             val startTime = System.currentTimeMillis()
             val result = withContext(Dispatchers.IO) {
                 try {
-                    val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
-                    val request = Request.Builder().url(url).build()
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models"
+                    val request = Request.Builder()
+                        .url(url)
+                        .header("x-goog-api-key", apiKey)
+                        .build()
                     testHttpClient.newCall(request).execute().use { response ->
                         val duration = System.currentTimeMillis() - startTime
                         if (response.isSuccessful) {
@@ -273,6 +280,11 @@ class ApiConnectionActivity : AppCompatActivity() {
             binding.rbModelFlash20.id -> GeminiConstants.MODEL_3_8_LIVE
             binding.rbModelFlash15.id -> GeminiConstants.MODEL_3_1_FLASH_AGENT
             else -> GeminiConstants.MODEL_3_1_FLASH
+        }
+
+        if (key.isNotEmpty() && !preferences.canStoreApiKeySecurely) {
+            Snackbar.make(binding.root, "Encrypted API-key storage is unavailable. The key was not saved.", Snackbar.LENGTH_LONG).show()
+            return
         }
 
         try {
