@@ -189,20 +189,28 @@ class AppPreferences(context: Context) {
         val legacyKey = prefs.getString(KEY_API_KEY, null)?.trim().orEmpty()
         if (legacyKey.isEmpty()) return
         val secure = secureApiPrefs ?: run {
-            prefs.edit().remove(KEY_API_KEY).commit()
-            Log.w(TAG, "Secure storage unavailable; removed legacy plaintext API key.")
+            // Preserve the only existing credential when encrypted storage cannot be opened.
+            // The app must not silently destroy user data to satisfy a security fallback.
+            Log.e(TAG, "Secure storage unavailable; legacy API key retained for a later migration attempt.")
             return
         }
         try {
             val existing = secure.getString(KEY_API_KEY, null)
             if (existing.isNullOrEmpty()) {
-                check(secure.edit().putString(KEY_API_KEY, legacyKey).commit())
+                check(secure.edit().putString(KEY_API_KEY, legacyKey).commit()) {
+                    "Encrypted API-key write was not committed."
+                }
             }
-            if (!secure.getString(KEY_API_KEY, null).isNullOrEmpty()) prefs.edit().remove(KEY_API_KEY).apply()
+            // Remove the legacy copy only after reading back the exact encrypted value.
+            check(secure.getString(KEY_API_KEY, null) == legacyKey) {
+                "Encrypted API-key migration could not be verified."
+            }
+            check(prefs.edit().remove(KEY_API_KEY).commit()) {
+                "Legacy API-key cleanup was not committed after verification."
+            }
         } catch (e: Exception) {
-            // Do not leave a plaintext credential behind if encryption/migration fails.
-            prefs.edit().remove(KEY_API_KEY).commit()
-            Log.e(TAG, "Legacy API-key migration failed; plaintext copy removed.")
+            // Keep the legacy value intact: a later launch can retry without losing the key.
+            Log.e(TAG, "Legacy API-key migration failed; original credential was preserved.", e)
         }
     }
 
