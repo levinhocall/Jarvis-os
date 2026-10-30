@@ -35,7 +35,7 @@ internal object DatabaseEncryption {
         // migration is needed. If the encrypted staging file verifies, finish the swap;
         // otherwise restore the untouched plaintext backup. Never discard both copies.
         if (!database.exists() && backup.exists()) {
-            val canPromoteStaging = staging.isFile &&
+            val stagingVerified = staging.isFile &&
                 keyStore.hasWrappedPassphrase() &&
                 runCatching {
                     val recoveryKey = keyStore.loadExistingPassphrase()
@@ -43,21 +43,30 @@ internal object DatabaseEncryption {
                     finally { recoveryKey.fill(0) }
                 }.getOrDefault(false)
 
-            if (canPromoteStaging) {
-                check(staging.renameTo(database)) {
-                    "Could not finish the encrypted database swap; the plaintext backup remains recoverable."
-                }
-            } else {
-                check(backup.renameTo(database)) {
-                    "Could not restore the preserved database after an interrupted encryption swap."
-                }
-                // Only remove the incomplete staging copy after the original has been restored.
-                listOf("", "-wal", "-shm").forEach { suffix ->
-                    val incomplete = File(staging.absolutePath + suffix)
-                    if (incomplete.exists()) check(incomplete.delete()) {
-                        "Could not remove an incomplete staging file after restoring the original database."
+            when (DatabaseSwapRecoveryPolicy.decide(
+                databaseExists = database.exists(),
+                backupExists = backup.exists(),
+                stagingExists = staging.exists(),
+                stagingVerified = stagingVerified
+            )) {
+                DatabaseSwapRecoveryAction.PROMOTE_VERIFIED_ENCRYPTED_STAGING -> {
+                    check(staging.renameTo(database)) {
+                        "Could not finish the encrypted database swap; the plaintext backup remains recoverable."
                     }
                 }
+                DatabaseSwapRecoveryAction.RESTORE_PLAINTEXT_BACKUP -> {
+                    check(backup.renameTo(database)) {
+                        "Could not restore the preserved database after an interrupted encryption swap."
+                    }
+                    // Only remove the incomplete staging copy after the original has been restored.
+                    listOf("", "-wal", "-shm").forEach { suffix ->
+                        val incomplete = File(staging.absolutePath + suffix)
+                        if (incomplete.exists()) check(incomplete.delete()) {
+                            "Could not remove an incomplete staging file after restoring the original database."
+                        }
+                    }
+                }
+                DatabaseSwapRecoveryAction.NONE -> Unit
             }
         }
 
