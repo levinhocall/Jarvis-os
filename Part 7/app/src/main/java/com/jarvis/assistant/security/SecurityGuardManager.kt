@@ -147,6 +147,7 @@ object SecurityGuardManager {
     fun verifySecurityPinForSettings(input: String, context: Context): Boolean =
         verifyConfiguredPin(input, context, grantSession = false)
 
+    @Synchronized
     private fun verifyConfiguredPin(
         input: String,
         context: Context,
@@ -163,14 +164,16 @@ object SecurityGuardManager {
         }
 
         return try {
-            val configuredPin = secure.getString(KEY_SECURITY_PIN, null)
-            if (configuredPin.isNullOrBlank() || suppliedPin == null) {
-                recordFailedAttempt(context, secure, now, timeStr)
+            // Check lockout before parsing/validating input so malformed attempts cannot
+            // bypass the lockout gate or keep mutating the failure counter during lockout.
+            if (secure.getLong(KEY_LOCKED_UNTIL, 0L) > now) {
+                Log.w(TAG, "Security authorization rejected during temporary lockout.")
                 return false
             }
 
-            if (secure.getLong(KEY_LOCKED_UNTIL, 0L) > now) {
-                Log.w(TAG, "Security authorization rejected during temporary lockout.")
+            val configuredPin = secure.getString(KEY_SECURITY_PIN, null)
+            if (configuredPin.isNullOrBlank() || suppliedPin == null) {
+                recordFailedAttempt(context, secure, now, timeStr)
                 return false
             }
 
