@@ -54,7 +54,7 @@ class SoftwareEngineerWorkspaceCoordinator(
         )
     }
 
-    fun submitTask(requirement: String, autoApproveSafe: Boolean = true) {
+    fun submitTask(requirement: String, autoApproveSafe: Boolean = false) {
         val project = _uiState.value.selectedProject ?: return
         val plan = devLoop.createPlan(project, requirement)
 
@@ -69,7 +69,8 @@ class SoftwareEngineerWorkspaceCoordinator(
             val report = devLoop.executePlan(
                 project = project,
                 plan = plan,
-                isApprovedByUser = autoApproveSafe,
+                isApprovedByUser = false,
+                approvedAction = null,
                 onStepProgress = { step ->
                     val logs = _uiState.value.consoleLog.toMutableList()
                     logs.add("[${step.phase}] ${step.title} -> ${step.status}")
@@ -105,6 +106,7 @@ class SoftwareEngineerWorkspaceCoordinator(
                 project = project,
                 plan = plan,
                 isApprovedByUser = true,
+                approvedAction = pending.outputSummary,
                 onStepProgress = { step ->
                     val logs = _uiState.value.consoleLog.toMutableList()
                     logs.add("[APPROVED] [${step.phase}] ${step.title} -> ${step.status}")
