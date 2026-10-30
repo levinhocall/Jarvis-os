@@ -248,7 +248,7 @@ class SettingsFragment : Fragment() {
             .setMessage("Choose a private numeric PIN with 6–12 digits. Your current PIN is required to change it.")
             .setView(fields)
             .setPositiveButton("Save PIN") { _, _ ->
-                val currentValid = !isChanging || SecurityGuardManager.verifyPassphrase(
+                val currentValid = !isChanging || SecurityGuardManager.verifySecurityPinForSettings(
                     currentInput?.text?.toString().orEmpty(), context
                 )
                 val pin = pinInput.text.toString()
