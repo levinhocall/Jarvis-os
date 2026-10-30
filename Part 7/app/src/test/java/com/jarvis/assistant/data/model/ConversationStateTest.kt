@@ -13,13 +13,13 @@ class ConversationStateTest {
         assertEquals(ConversationState.CONNECTING, ConversationState.fromConnectionStatus("RECONNECTING..."))
         assertEquals(ConversationState.CONNECTED, ConversationState.fromConnectionStatus("LIVE"))
         assertEquals(ConversationState.CONNECTED, ConversationState.fromConnectionStatus("connected"))
+        assertEquals(ConversationState.RECOVERING, ConversationState.fromConnectionStatus("COOLDOWN • RETRYING"))
         assertEquals(ConversationState.ERROR, ConversationState.fromConnectionStatus("ERROR • INVALID KEY"))
     }
 
     @Test
     fun unrelatedTransportStatusesDoNotOverwriteConversationState() {
         assertNull(ConversationState.fromConnectionStatus("OFFLINE"))
-        assertNull(ConversationState.fromConnectionStatus("COOLDOWN • RETRYING"))
         assertNull(ConversationState.fromConnectionStatus("unknown"))
         assertNull(ConversationState.fromConnectionStatus(""))
     }
