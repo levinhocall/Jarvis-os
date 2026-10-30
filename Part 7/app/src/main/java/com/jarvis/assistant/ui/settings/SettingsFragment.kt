@@ -226,36 +226,41 @@ class SettingsFragment : Fragment() {
 
     private fun showSecurityPinDialog() {
         val context = requireContext()
-        val pinInput = EditText(context).apply {
-            hint = "New 6–12 digit PIN"
+        val isChanging = SecurityGuardManager.hasConfiguredSecurityPin(context)
+        fun pinField(hintText: String) = EditText(context).apply {
+            hint = hintText
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
             filters = arrayOf(android.text.InputFilter.LengthFilter(12))
         }
-        val confirmInput = EditText(context).apply {
-            hint = "Confirm PIN"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            filters = arrayOf(android.text.InputFilter.LengthFilter(12))
-        }
+        val currentInput = if (isChanging) pinField("Current PIN") else null
+        val pinInput = pinField("New 6–12 digit PIN")
+        val confirmInput = pinField("Confirm new PIN")
         val fields = android.widget.LinearLayout(context).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             val side = (24 * resources.displayMetrics.density).toInt()
             setPadding(side, 0, side, 0)
+            currentInput?.let { addView(it) }
             addView(pinInput)
             addView(confirmInput)
         }
         MaterialAlertDialogBuilder(context)
-            .setTitle(if (SecurityGuardManager.hasConfiguredSecurityPin(context)) "Change Security PIN" else "Set Security PIN")
-            .setMessage("Choose a private numeric PIN with 6–12 digits. It will be stored using Android encrypted preferences.")
+            .setTitle(if (isChanging) "Change Security PIN" else "Set Security PIN")
+            .setMessage("Choose a private numeric PIN with 6–12 digits. Your current PIN is required to change it.")
             .setView(fields)
             .setPositiveButton("Save PIN") { _, _ ->
+                val currentValid = !isChanging || SecurityGuardManager.verifyPassphrase(
+                    currentInput?.text?.toString().orEmpty(), context
+                )
                 val pin = pinInput.text.toString()
                 val confirmation = confirmInput.text.toString()
                 when {
+                    !currentValid -> Toast.makeText(context, "Current PIN is incorrect", Toast.LENGTH_LONG).show()
                     !pin.matches(Regex("\\d{6,12}")) -> Toast.makeText(context, "PIN must contain 6–12 digits", Toast.LENGTH_LONG).show()
                     pin != confirmation -> Toast.makeText(context, "PINs do not match", Toast.LENGTH_LONG).show()
                     SecurityGuardManager.configureSecurityPin(context, pin) -> Toast.makeText(context, "Security PIN saved securely", Toast.LENGTH_SHORT).show()
                     else -> Toast.makeText(context, "Could not save PIN securely. Try again.", Toast.LENGTH_LONG).show()
                 }
+                currentInput?.text?.clear()
                 pinInput.text?.clear()
                 confirmInput.text?.clear()
             }
