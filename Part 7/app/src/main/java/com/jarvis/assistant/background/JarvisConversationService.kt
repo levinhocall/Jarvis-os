@@ -3279,6 +3279,7 @@ class JarvisConversationService : Service() {
         hasSignalledUtteranceEnd = false
         adaptiveVad.reset()
         _isStandby.value = true
+        setConversationState(ConversationState.STANDBY)
         standbyActivatedTime = System.currentTimeMillis()
         updateNotification()
 
