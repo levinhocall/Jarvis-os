@@ -8,7 +8,6 @@ import androidx.room.Room
 import net.zetetic.database.sqlcipher.SQLiteDatabase as CipherDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
-import java.nio.charset.StandardCharsets
 
 /**
  * Prepares the Room database before Room opens it. Existing plaintext databases are exported
@@ -147,7 +146,6 @@ internal object DatabaseEncryption {
         // This is an app-owned staging filename. The original remains untouched throughout export.
         if (staging.exists()) check(staging.delete()) { "Could not clear an incomplete encryption staging file." }
         val passphrase = Base64.encodeToString(rawPassphrase, Base64.NO_WRAP)
-        val passphraseBytes = passphrase.toByteArray(StandardCharsets.UTF_8)
         val cipherSource = CipherDatabase.openDatabase(
             original.absolutePath,
             ByteArray(0),
@@ -165,7 +163,6 @@ internal object DatabaseEncryption {
             cipherSource.execSQL("DETACH DATABASE encrypted")
         } finally {
             cipherSource.close()
-            passphraseBytes.fill(0)
         }
 
         check(staging.isFile && staging.length() > 0L) { "SQLCipher export did not create a staging database." }
@@ -173,7 +170,8 @@ internal object DatabaseEncryption {
             staging.absolutePath,
             rawPassphraseForCipher(rawPassphrase),
             null,
-            CipherDatabase.OPEN_READWRITE
+            CipherDatabase.OPEN_READWRITE,
+            null
         )
         try {
             encrypted.version = oldVersion
