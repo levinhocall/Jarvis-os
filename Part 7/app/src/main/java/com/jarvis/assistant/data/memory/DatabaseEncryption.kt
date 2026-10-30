@@ -2,15 +2,12 @@ package com.jarvis.assistant.data.memory
 
 import android.content.Context
 import android.database.Cursor
-import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase as FrameworkSQLiteDatabase
 import android.util.Base64
 import android.util.Log
 import net.zetetic.database.sqlcipher.SQLiteDatabase as CipherDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
-import java.nio.ByteBuffer
-import java.security.MessageDigest
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 
