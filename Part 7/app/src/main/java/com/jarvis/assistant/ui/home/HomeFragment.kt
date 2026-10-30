@@ -167,10 +167,10 @@ class HomeFragment : Fragment() {
 
                     // Sync State
                     val state = pendingOrbState ?: when (viewModel.conversationState.value) {
-                        ConversationState.LISTENING, ConversationState.INTERRUPTED -> "listening"
+                        ConversationState.LISTENING, ConversationState.INTERRUPTED, ConversationState.CONNECTED -> "listening"
                         ConversationState.SPEAKING -> "speaking"
-                        ConversationState.THINKING, ConversationState.EXECUTING, ConversationState.RECOVERING -> "thinking"
-                        ConversationState.IDLE, ConversationState.WAITING_FOR_APPROVAL, ConversationState.FAILED -> "idle"
+                        ConversationState.THINKING, ConversationState.EXECUTING, ConversationState.RECOVERING, ConversationState.CONNECTING -> "thinking"
+                        ConversationState.STANDBY, ConversationState.IDLE, ConversationState.WAITING_FOR_APPROVAL, ConversationState.FAILED, ConversationState.ERROR -> "idle"
                     }
                     setOrbState(state)
                 }
@@ -450,6 +450,34 @@ class HomeFragment : Fragment() {
                         } else {
                             binding.tvHoldHint.visibility = View.VISIBLE
                             when (status.state) {
+                                ConversationState.STANDBY -> {
+                                    setOrbState("idle")
+                                    binding.tvListeningStatus.text = "STANDBY • SAY 'HEY JARVIS'"
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#3B82F6"))
+                                    binding.tvHoldHint.text = "Listening for wake word • Hold mic to power off"
+                                    binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#3B82F6"))
+                                }
+                                ConversationState.CONNECTING -> {
+                                    setOrbState("thinking")
+                                    binding.tvListeningStatus.text = "CONNECTING TO GEMINI..."
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#F59E0B"))
+                                    binding.tvHoldHint.text = "Establishing secure voice session..."
+                                    binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
+                                }
+                                ConversationState.CONNECTED -> {
+                                    setOrbState("listening")
+                                    binding.tvListeningStatus.text = "CONNECTED • READY"
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#10B981"))
+                                    binding.tvHoldHint.text = "Speak now • Tap to mute • Hold to power off"
+                                    binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#10B981"))
+                                }
+                                ConversationState.ERROR -> {
+                                    setOrbState("idle")
+                                    binding.tvListeningStatus.text = "CONNECTION ERROR"
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#EF4444"))
+                                    binding.tvHoldHint.text = "Check connection settings and retry"
+                                    binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#EF4444"))
+                                }
                                 ConversationState.LISTENING, ConversationState.INTERRUPTED -> {
                                     setOrbState("listening")
                                     binding.tvListeningStatus.text = "MIC ON • LISTENING..."
