@@ -321,7 +321,12 @@ class AutonomousSoftwareEngineeringAgentTest {
             "replacementSnippet" to "val appName = \"Jarvis\""
         )
 
-        val report = devLoop.executePlan(project, plan, isApprovedByUser = true)
+        val report = devLoop.executePlan(
+            project = project,
+            plan = plan,
+            isApprovedByUser = true,
+            approvedAction = "echo 'Running unit test verification...'"
+        )
         assertTrue(report.success)
         assertEquals(DevStepStatus.COMPLETED, plan.status)
         assertEquals("class MainActivity { val appName = \"Jarvis\" }", srcFile.readText())
