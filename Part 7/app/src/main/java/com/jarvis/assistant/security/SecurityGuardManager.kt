@@ -125,7 +125,7 @@ object SecurityGuardManager {
     fun isSessionElevated(): Boolean =
         System.currentTimeMillis() < elevatedSessionExpiryTime
 
-    fun grantElevatedAccess(durationMillis: Long = 60_000L) {
+    private fun grantElevatedAccess(durationMillis: Long = 60_000L) {
         elevatedSessionExpiryTime =
             System.currentTimeMillis() + durationMillis.coerceIn(1_000L, 60_000L)
         Log.i(TAG, "Elevated security session granted for a limited duration.")
@@ -196,6 +196,7 @@ object SecurityGuardManager {
         }
     }
 
+    @Synchronized
     private fun recordFailedAttempt(
         context: Context,
         secure: SharedPreferences?,
