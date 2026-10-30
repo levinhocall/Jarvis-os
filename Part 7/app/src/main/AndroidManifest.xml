@@ -57,8 +57,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Allow users to explicitly select JARVIS as their Android Home app.
-                 Keep the regular launcher icon entry above for normal app launching. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
@@ -66,64 +64,16 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".ui.whiteboard.WhiteboardActivity"
-            android:exported="false"
-            android:screenOrientation="unspecified"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".ui.settings.SettingsActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".ui.memory.MemoryActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".ui.voice.VoiceEnrollmentActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".ui.settings.ApiConnectionActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".ui.settings.PersonaActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".ui.permission.PermissionActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".ui.settings.OverlayAvatarActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <activity
-            android:name=".ui.settings.PrivacyShieldActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".ui.settings.HandsFreeActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.whiteboard.WhiteboardActivity" android:exported="false" android:screenOrientation="unspecified" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.settings.SettingsActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.memory.MemoryActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.voice.VoiceEnrollmentActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.settings.ApiConnectionActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.settings.PersonaActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.permission.PermissionActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.settings.OverlayAvatarActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".ui.settings.PrivacyShieldActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.settings.HandsFreeActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
 
         <service
             android:name=".background.JarvisConversationService"
@@ -141,9 +91,7 @@
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
         </service>
 
         <service
@@ -166,15 +114,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- Result delivery is via the explicit, app-created PendingIntent passed to Termux.
+             Keep the receiver private so other apps cannot forge command results. -->
         <receiver
             android:name=".automation.dev.TermuxCommandResultReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.jarvis.assistant.TERMUX_COMMAND_RESULT" />
-            </intent-filter>
-        </receiver>
+            android:exported="false" />
 
     </application>
-
 </manifest>
-
