@@ -286,6 +286,13 @@ class ExecuteApprovedCommandDevTool(private val contextProvider: () -> android.c
                 proposedAction = command
             )
         }
+        if (!isApprovedByUser) {
+            return@withContext DevToolResult.AwaitingApproval(
+                toolName = name,
+                reason = "Shell execution requires explicit approval for this exact command.",
+                proposedAction = command
+            )
+        }
 
         val timeoutSec = (params["timeoutSeconds"] as? Number)?.toLong() ?: 60L
         val isHostDev = File("/root/jarvis-os-ref").exists() && File("/bin/bash").exists()
@@ -365,6 +372,13 @@ class TermuxBridgeDevTool(private val contextProvider: () -> android.content.Con
             return DevToolResult.AwaitingApproval(
                 toolName = name,
                 reason = "Potentially destructive command requires approval in Termux: ${gitRisk.warningMessage}",
+                proposedAction = command
+            )
+        }
+        if (!isApprovedByUser) {
+            return DevToolResult.AwaitingApproval(
+                toolName = name,
+                reason = "Termux shell execution requires explicit approval for this exact command.",
                 proposedAction = command
             )
         }
