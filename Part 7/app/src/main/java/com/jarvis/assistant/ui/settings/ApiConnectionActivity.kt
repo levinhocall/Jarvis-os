@@ -180,6 +180,10 @@ class ApiConnectionActivity : AppCompatActivity() {
             .setPositiveButton("Add") { _, _ ->
                 val newKey = input.text.toString().trim()
                 if (newKey.isNotBlank()) {
+                    if (!preferences.canStoreApiKeySecurely) {
+                        Snackbar.make(binding.root, "Encrypted storage is unavailable. The key was not added.", Snackbar.LENGTH_LONG).show()
+                        return@setPositiveButton
+                    }
                     preferences.addApiKeyToPool("gemini", newKey)
                     loadKeyPool()
                     Toast.makeText(this, "Key added to rotation pool", Toast.LENGTH_SHORT).show()
