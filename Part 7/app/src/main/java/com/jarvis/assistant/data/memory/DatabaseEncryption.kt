@@ -1,0 +1,232 @@
+package com.jarvis.assistant.data.memory
+
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase as FrameworkSQLiteDatabase
+import android.util.Base64
+import android.util.Log
+import androidx.room.Room
+import net.zetetic.database.sqlcipher.SQLiteDatabase as CipherDatabase
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+import java.io.File
+import java.nio.charset.StandardCharsets
+
+/**
+ * Prepares the Room database before Room opens it. Existing plaintext databases are exported
+ * into a sibling encrypted staging file, verified, then atomically swapped while retaining a
+ * recoverable plaintext backup. No destructive Room fallback is permitted.
+ */
+internal object DatabaseEncryption {
+    private const val TAG = "DatabaseEncryption"
+    private const val DATABASE_NAME = "jarvis_memory.db"
+    private const val STAGING_NAME = "jarvis_memory.db.encrypting"
+    private const val BACKUP_NAME = "jarvis_memory.db.plaintext-backup"
+
+    @Synchronized
+    fun prepare(context: Context): SupportOpenHelperFactory {
+        System.loadLibrary("sqlcipher")
+        val app = context.applicationContext
+        val database = app.getDatabasePath(DATABASE_NAME)
+        val staging = File(database.parentFile, STAGING_NAME)
+        val backup = File(database.parentFile, BACKUP_NAME)
+        val keyStore = DatabaseKeyStore(app)
+
+        // Recover the only interrupted swap window: original moved to backup, staging not yet moved.
+        if (!database.exists() && backup.exists()) {
+            check(backup.renameTo(database)) {
+                "Could not restore the preserved database after an interrupted encryption swap."
+            }
+        }
+
+        val passphrase = when {
+            !database.exists() -> keyStore.createPassphraseForNewDatabase()
+            keyStore.hasWrappedPassphrase() -> keyStore.loadExistingPassphrase()
+            else -> {
+                check(isValidPlaintextDatabase(database)) {
+                    "Database exists but its encryption key is missing. Refusing to replace or recreate it."
+                }
+                keyStore.createPassphraseForNewDatabase()
+            }
+        }
+
+        try {
+            if (database.exists()) {
+                if (isValidEncryptedDatabase(database, passphrase)) {
+                    return roomFactory(passphrase)
+                }
+                check(isValidPlaintextDatabase(database)) {
+                    "Existing database is neither readable plaintext SQLite nor readable with its stored SQLCipher key."
+                }
+                migratePlaintextDatabase(database, staging, backup, passphrase)
+                check(isValidEncryptedDatabase(database, passphrase)) {
+                    "Encrypted database failed post-swap verification; the plaintext backup is retained."
+                }
+            }
+            return roomFactory(passphrase)
+        } catch (error: Exception) {
+            passphrase.fill(0)
+            throw IllegalStateException(
+                "Secure database initialization failed. Existing database files and recovery backups were preserved.",
+                error
+            )
+        }
+    }
+
+    private fun roomFactory(passphrase: ByteArray): SupportOpenHelperFactory =
+        SupportOpenHelperFactory(passphrase.copyOf(), null, false)
+
+    private fun isValidPlaintextDatabase(file: File): Boolean {
+        if (!file.isFile || file.length() == 0L) return false
+        return try {
+            val db = FrameworkSQLiteDatabase.openDatabase(
+                file.absolutePath,
+                null,
+                FrameworkSQLiteDatabase.OPEN_READONLY
+            )
+            try {
+                db.rawQuery("PRAGMA integrity_check", null).use { cursor ->
+                    cursor.moveToFirst() && cursor.getString(0) == "ok"
+                }
+            } finally {
+                db.close()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isValidEncryptedDatabase(file: File, passphrase: ByteArray): Boolean {
+        if (!file.isFile || file.length() == 0L) return false
+        return try {
+            val db = CipherDatabase.openDatabase(
+                file.absolutePath,
+                passphrase,
+                null,
+                CipherDatabase.OPEN_READWRITE
+            )
+            try {
+                db.rawQuery("PRAGMA integrity_check", emptyArray()).use { cursor ->
+                    cursor.moveToFirst() && cursor.getString(0) == "ok"
+                }
+            } finally {
+                db.close()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun migratePlaintextDatabase(
+        original: File,
+        staging: File,
+        backup: File,
+        rawPassphrase: ByteArray
+    ) {
+        // Checkpoint and close the framework SQLite handle before exporting the file.
+        val source = FrameworkSQLiteDatabase.openDatabase(
+            original.absolutePath,
+            null,
+            FrameworkSQLiteDatabase.OPEN_READWRITE
+        )
+        val oldVersion: Int
+        try {
+            source.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { it.moveToFirst() }
+            source.rawQuery("PRAGMA integrity_check", null).use { cursor ->
+                check(cursor.moveToFirst() && cursor.getString(0) == "ok") {
+                    "Plaintext database integrity check failed; migration was not started."
+                }
+            }
+            oldVersion = source.version
+        } finally {
+            source.close()
+        }
+
+        // This is an app-owned staging filename. The original remains untouched throughout export.
+        if (staging.exists()) check(staging.delete()) { "Could not clear an incomplete encryption staging file." }
+        val passphrase = Base64.encodeToString(rawPassphrase, Base64.NO_WRAP)
+        val passphraseBytes = passphrase.toByteArray(StandardCharsets.UTF_8)
+        val cipherSource = CipherDatabase.openDatabase(
+            original.absolutePath,
+            null,
+            null,
+            CipherDatabase.OPEN_READWRITE
+        )
+        try {
+            cipherSource.execSQL(
+                "ATTACH DATABASE ? AS encrypted KEY ?",
+                arrayOf(staging.absolutePath, passphrase)
+            )
+            // sqlcipher_export is a SELECT function; rawExecSQL executes it in SQLCipher's API.
+            cipherSource.rawExecSQL("SELECT sqlcipher_export('encrypted');")
+            cipherSource.execSQL("DETACH DATABASE encrypted")
+        } finally {
+            cipherSource.close()
+            passphraseBytes.fill(0)
+        }
+
+        check(staging.isFile && staging.length() > 0L) { "SQLCipher export did not create a staging database." }
+        val encrypted = CipherDatabase.openDatabase(
+            staging.absolutePath,
+            rawPassphraseForCipher(rawPassphrase),
+            null,
+            CipherDatabase.OPEN_READWRITE
+        )
+        try {
+            encrypted.version = oldVersion
+            verifyIntegrityAndRows(original, encrypted)
+        } finally {
+            encrypted.close()
+        }
+
+        // The original is renamed (same directory/filesystem) only after the encrypted copy verifies.
+        check(!backup.exists()) {
+            "A previous plaintext recovery backup already exists. It is retained; manual reconciliation is required before another swap."
+        }
+        check(original.renameTo(backup)) { "Could not preserve the original database before the atomic swap." }
+        if (!staging.renameTo(original)) {
+            val restored = backup.renameTo(original)
+            check(restored) {
+                "Encrypted swap failed and automatic restoration failed. The original remains at the plaintext backup path."
+            }
+            error("Could not commit the encrypted staging database; original database was restored.")
+        }
+        Log.i(TAG, "Database encryption migration committed; plaintext recovery backup retained.")
+    }
+
+    private fun rawPassphraseForCipher(raw: ByteArray): ByteArray =
+        Base64.encode(raw, Base64.NO_WRAP)
+
+    private fun verifyIntegrityAndRows(original: File, encrypted: CipherDatabase) {
+        val plain = FrameworkSQLiteDatabase.openDatabase(
+            original.absolutePath,
+            null,
+            FrameworkSQLiteDatabase.OPEN_READONLY
+        )
+        try {
+            plain.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+                null
+            ).use { sourceTables ->
+                while (sourceTables.moveToNext()) {
+                    val table = sourceTables.getString(0)
+                    val quoted = "\"" + table.replace("\"", "\"\"") + "\""
+                    val sourceCount = plain.rawQuery("SELECT COUNT(*) FROM $quoted", null).use {
+                        check(it.moveToFirst()); it.getLong(0)
+                    }
+                    val targetCount = encrypted.rawQuery("SELECT COUNT(*) FROM $quoted", emptyArray()).use {
+                        check(it.moveToFirst()); it.getLong(0)
+                    }
+                    check(sourceCount == targetCount) {
+                        "Database migration row-count verification failed for table $table."
+                    }
+                }
+            }
+            encrypted.rawQuery("PRAGMA integrity_check", emptyArray()).use { cursor ->
+                check(cursor.moveToFirst() && cursor.getString(0) == "ok") {
+                    "Encrypted database integrity verification failed."
+                }
+            }
+        } finally {
+            plain.close()
+        }
+    }
+}
