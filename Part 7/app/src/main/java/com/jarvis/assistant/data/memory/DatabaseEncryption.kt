@@ -1,6 +1,7 @@
 package com.jarvis.assistant.data.memory
 
 import android.content.Context
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase as FrameworkSQLiteDatabase
 import android.util.Base64
 import android.util.Log
