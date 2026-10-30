@@ -1793,17 +1793,16 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     fun tapAtPercentage(xPercent: Float, yPercent: Float): Boolean {
+        if (!xPercent.isFinite() || !yPercent.isFinite() ||
+            xPercent !in 0f..100f || yPercent !in 0f..100f
+        ) return false
         val dm = resources.displayMetrics
         val x = (xPercent / 100f) * dm.widthPixels
         val y = (yPercent / 100f) * dm.heightPixels
-        clickAt(x, y)
-        return true
+        return clickAt(x, y)
     }
 
-    fun tapAtAbsoluteCoordinates(x: Float, y: Float): Boolean {
-        clickAt(x, y)
-        return true
-    }
+    fun tapAtAbsoluteCoordinates(x: Float, y: Float): Boolean = clickAt(x, y)
 
     val safeRootInActiveWindow: AccessibilityNodeInfo?
         get() = try {
@@ -2018,30 +2017,47 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     fun findNodeCoveringRect(root: AccessibilityNodeInfo, targetRect: Rect): AccessibilityNodeInfo? {
-        val temp = Rect()
-        fun search(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-            node.getBoundsInScreen(temp)
-            if (Rect.intersects(temp, targetRect)) {
-                for (i in (node.childCount - 1) downTo 0) {
-                    val child = node.getChild(i) ?: continue
-                    val deep = search(child)
-                    if (deep != null) return deep
+        // Accessibility trees are supplied by other apps. Bound traversal depth and node count
+        // so a malformed or exceptionally large hierarchy cannot exhaust this service's stack.
+        val bounds = Rect()
+        var visited = 0
+        fun search(node: AccessibilityNodeInfo, depth: Int): AccessibilityNodeInfo? {
+            if (depth > 50 || ++visited > 2000) return null
+            return try {
+                node.getBoundsInScreen(bounds)
+                if (!Rect.intersects(bounds, targetRect)) return null
+                for (index in (node.childCount - 1) downTo 0) {
+                    val child = node.getChild(index) ?: continue
+                    val match = search(child, depth + 1)
+                    if (match != null) return match
                 }
-                return node
+                node
+            } catch (error: Exception) {
+                Log.d(TAG, "Accessibility bounds traversal stopped safely: ${error.message}")
+                null
             }
-            return null
         }
-        return search(root)
+        return search(root, 0)
     }
 
     fun findNodeWithInputFocus(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        if (node.isFocused) return node
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val res = findNodeWithInputFocus(child)
-            if (res != null) return res
+        var visited = 0
+        fun search(current: AccessibilityNodeInfo, depth: Int): AccessibilityNodeInfo? {
+            if (depth > 50 || ++visited > 2000) return null
+            return try {
+                if (current.isFocused) return current
+                for (index in 0 until current.childCount) {
+                    val child = current.getChild(index) ?: continue
+                    val match = search(child, depth + 1)
+                    if (match != null) return match
+                }
+                null
+            } catch (error: Exception) {
+                Log.d(TAG, "Accessibility focus traversal stopped safely: ${error.message}")
+                null
+            }
         }
-        return null
+        return search(node, 0)
     }
 
     fun verifyNodeText(node: AccessibilityNodeInfo?, expectedText: String): Boolean {
