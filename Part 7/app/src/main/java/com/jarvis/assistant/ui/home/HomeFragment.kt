@@ -81,6 +81,11 @@ class HomeFragment : Fragment() {
             (activity as? MainActivity)?.selectTab(MainActivity.TAB_SETTINGS)
         }
 
+        binding.btnTopSettings.setOnLongClickListener {
+            startActivity(Intent(requireContext(), FeatureHubActivity::class.java))
+            true
+        }
+
         binding.btnDismissLiveError.setOnClickListener {
             hideLiveErrorOverlay {
                 viewModel.clearLiveError()
