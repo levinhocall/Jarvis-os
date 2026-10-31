@@ -96,7 +96,7 @@ object CameraVisionAnalyzer {
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     val detail = runCatching {
-                        JSONObject(body).optJSONArray("error")?.optJSONObject(0)?.optString("message")
+                        JSONObject(body).optJSONObject("error")?.optString("message")
                     }.getOrNull().orEmpty()
                     return@withContext CameraVisionResult(
                         success = false,
