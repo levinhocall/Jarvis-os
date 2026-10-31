@@ -10,6 +10,11 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 data class CachedNotification(
     val key: String,
@@ -21,7 +26,7 @@ data class CachedNotification(
     val remoteInput: RemoteInput? = null
 )
 
-class JarvisNotificationListenerService : NotificationListenerService() {
+class JarvisNotificationListenerService : NotificationListenerService() {\n    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         private const val TAG = "JarvisNotification"
@@ -137,7 +142,7 @@ class JarvisNotificationListenerService : NotificationListenerService() {
             remoteInput = replyRemoteInput
         )
 
-        recentNotifications[sbn.key] = cached
+        recentNotifications[sbn.key] = cached\n\n        // Notification text is sensitive: persist only after an explicit in-app opt-in.\n        if (com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {\n            persistenceScope.launch {\n                runCatching {\n                    com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext)\n                        .notificationHistoryDao().insert(\n                            com.jarvis.assistant.data.notification.NotificationHistoryEntity(\n                                id = sbn.key, packageName = pkg, sender = title, message = text,\n                                timestamp = System.currentTimeMillis()\n                            )\n                        )\n                    com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext)\n                        .notificationHistoryDao().deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)\n                }.onFailure { error -> Log.w(TAG, "Notification history persistence failed (${error.javaClass.simpleName}).") }\n            }\n        }
         notificationOrder.remove(sbn.key)
         notificationOrder.add(sbn.key)
 
@@ -161,7 +166,7 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         }
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+    override fun onDestroy() {\n        persistenceScope.cancel()\n        if (instance === this) instance = null\n        super.onDestroy()\n    }\n\n    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         if (sbn == null) return
         recentNotifications.remove(sbn.key)
         notificationOrder.remove(sbn.key)
