@@ -98,6 +98,19 @@ class AmoledMapActivity : AppCompatActivity() {
             controller.setCenter(GeoPoint(19.0760, 72.8777))
         }
         root.addView(map, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(TextView(this).apply {
+            text = "© OpenStreetMap contributors · Community geocoding/routing services may be rate-limited."
+            textSize = 10f
+            setTextColor(color(R.attr.themeTextMuted))
+            setPadding(dp(4), dp(5), dp(4), 0)
+            setOnClickListener {
+                startActivity(android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://www.openstreetmap.org/copyright")
+                ))
+            }
+            contentDescription = "OpenStreetMap attribution and licensing"
+        })
         setContentView(root)
         requestLocation()
     }
