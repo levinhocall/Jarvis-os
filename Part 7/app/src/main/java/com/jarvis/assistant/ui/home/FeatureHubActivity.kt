@@ -116,37 +116,8 @@ class FeatureHubActivity : AppCompatActivity() {
                 }
                 .show()
         }
-        entry(root, "AMOLED Map", "Search a destination and hand off live routing to an installed maps app", true) {
-            val destinationInput = android.widget.EditText(this).apply {
-                hint = "Enter destination or place"
-                setSingleLine(true)
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            }
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle("Navigate to")
-                .setMessage("Jarvis will open an installed maps app. Your device location and live route are provided by that app; Jarvis does not fabricate coordinates.")
-                .setView(destinationInput)
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Open navigation") { _, _ ->
-                    val destination = destinationInput.text?.toString()?.trim().orEmpty()
-                    if (destination.isBlank()) {
-                        android.widget.Toast.makeText(this, "Enter a destination first", android.widget.Toast.LENGTH_SHORT).show()
-                    } else {
-                        val navigationUri = android.net.Uri.parse("google.navigation:q=" + android.net.Uri.encode(destination))
-                        val navigationIntent = Intent(Intent.ACTION_VIEW, navigationUri)
-                        try {
-                            startActivity(navigationIntent)
-                        } catch (_: android.content.ActivityNotFoundException) {
-                            val searchUri = android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(destination))
-                            try {
-                                startActivity(Intent(Intent.ACTION_VIEW, searchUri))
-                            } catch (_: android.content.ActivityNotFoundException) {
-                                android.widget.Toast.makeText(this, "No compatible maps app is installed", android.widget.Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
-                }
-                .show()
+        entry(root, "AMOLED Map", "Native OpenStreetMap view, current location, destination search and route", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.map.AmoledMapActivity::class.java))
         }
         entry(root, "Video Wallpapers", "Import your own video, preview it, and request Android wallpaper activation", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.wallpaper.VideoWallpaperActivity::class.java))
