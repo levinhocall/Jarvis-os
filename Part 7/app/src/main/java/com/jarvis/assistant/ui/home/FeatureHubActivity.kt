@@ -56,9 +56,8 @@ class FeatureHubActivity : AppCompatActivity() {
         entry(root, "Security & Permissions", "Review app permissions and access status", true) {
             startActivity(Intent(this, PermissionActivity::class.java))
         }
-        entry(root, "Aura Control", "Open existing appearance and assistant settings", true) {
-            finish()
-            MainActivity.activeInstance?.selectTab(MainActivity.TAB_SETTINGS)
+        entry(root, "Aura Control", "Choose Classic, Aura, Crimson or Midnight Orb and customize appearance", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.settings.AuraControlActivity::class.java))
         }
         entry(root, "Mission Mode", "Inspect and control the active agent task", true) {
             val engine = com.jarvis.assistant.automation.agent.AgentTaskEngine
