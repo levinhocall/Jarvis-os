@@ -222,10 +222,10 @@ class HomeFragment : Fragment() {
             if (themeKey == "custom" && !customHex.isNullOrBlank()) {
                 _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setBackground('$customHex');", null)
             } else {
-                val mapped = when (themeKey) {
-                    "dark" -> "dark"
-                    "red" -> "red"
-                    "sunset" -> "sunset"
+                val mapped = when (preferences.orbPreset) {
+                    "aura" -> "dark"
+                    "crimson" -> "red"
+                    "midnight" -> "midnight"
                     else -> "light"
                 }
                 _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setTheme('$mapped');", null)
