@@ -26,7 +26,8 @@ data class CachedNotification(
     val remoteInput: RemoteInput? = null
 )
 
-class JarvisNotificationListenerService : NotificationListenerService() {\n    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+class JarvisNotificationListenerService : NotificationListenerService() {
+    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         private const val TAG = "JarvisNotification"
