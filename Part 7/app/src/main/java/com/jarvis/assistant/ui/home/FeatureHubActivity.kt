@@ -93,6 +93,29 @@ class FeatureHubActivity : AppCompatActivity() {
         entry(root, "Notification Access", "Open Android notification-listener settings", true) {
             startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
         }
+
+        entry(root, "Notification History", "View recent notifications captured by the enabled listener", true) {
+            val service = com.jarvis.assistant.automation.notification.JarvisNotificationListenerService
+            val items = service.getRecentNotifications()
+            val message = if (!service.isConnected()) {
+                "Notification access is not connected. Enable Jarvis in Android Notification Access settings."
+            } else if (items.isEmpty()) {
+                "No notifications have been captured in this session."
+            } else {
+                items.take(20).joinToString("\\n\\n") { item ->
+                    val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(item.timestamp))
+                    "$time • ${item.sender}\\n${item.message}\\n${item.packageName}"
+                }
+            }
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Recent notifications")
+                .setMessage(message)
+                .setPositiveButton("Close", null)
+                .setNeutralButton("Notification settings") { _, _ ->
+                    startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+                }
+                .show()
+        }
         entry(root, "AMOLED Map", "Search a destination and hand off live routing to an installed maps app", true) {
             val destinationInput = android.widget.EditText(this).apply {
                 hint = "Enter destination or place"
