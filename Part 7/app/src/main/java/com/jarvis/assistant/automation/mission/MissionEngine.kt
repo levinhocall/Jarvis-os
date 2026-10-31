@@ -144,6 +144,7 @@ object MissionEngine {
                 updatedAt = System.currentTimeMillis()
             )
             _activeMission.value = initialMission
+            persistMission(initialMission)
             engineScope.launch {
                 val result = planner.planAndExecute(goal, context) { toolName, args ->
                     val step = MissionStep(
@@ -177,22 +178,26 @@ object MissionEngine {
                     MissionOverallStatus.FAILED
                 }
 
-                _activeMission.value = initialMission.copy(
+                val completedMission = initialMission.copy(
                     steps = convertedSteps,
                     status = finalStatus,
                     outcomeSummary = result.summary,
                     updatedAt = System.currentTimeMillis()
                 )
+                _activeMission.value = completedMission
+                persistMission(completedMission, convertedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0))
             }
             return@withLock initialMission
         }
 
         val mission = planMission(goal, userConstraints, context)
         _activeMission.value = mission
+        persistMission(mission)
         Log.i(TAG, "Planned mission ${mission.missionId}: '${mission.goal}' with status ${mission.status}")
 
         // 1. If clarification is needed, do not execute
         if (mission.status == MissionOverallStatus.CLARIFICATION_REQUIRED) {
+            persistMission(mission)
             return@withLock mission
         }
 
@@ -203,6 +208,7 @@ object MissionEngine {
                 updatedAt = System.currentTimeMillis()
             )
             _activeMission.value = awaitingApproval
+            persistMission(awaitingApproval)
             return@withLock awaitingApproval
         }
 
@@ -398,6 +404,7 @@ object MissionEngine {
                 updatedAt = System.currentTimeMillis()
             )
             _activeMission.value = updated
+            persistMission(updated)
             engineScope.launch {
                 executeMission(context, missionId)
             }
@@ -409,6 +416,7 @@ object MissionEngine {
                 updatedAt = System.currentTimeMillis()
             )
             _activeMission.value = updated
+            persistMission(updated)
             Log.i(TAG, "Mission $missionId rejected by user.")
         }
     }
@@ -425,6 +433,7 @@ object MissionEngine {
                 updatedAt = System.currentTimeMillis()
             )
             _activeMission.value = updated
+            persistMission(updated)
             Log.i(TAG, "Mission $missionId cancelled: $reason")
         }
     }
@@ -436,10 +445,12 @@ object MissionEngine {
         var mission = _activeMission.value ?: return
         if (mission.missionId != missionId) return
 
-        _activeMission.value = mission.copy(
+        mission = mission.copy(
             status = MissionOverallStatus.EXECUTING,
             updatedAt = System.currentTimeMillis()
         )
+        _activeMission.value = mission
+        persistMission(mission)
 
         val unverifiedNotes = mutableListOf<String>()
         val updatedSteps = mission.steps.toMutableList()
@@ -531,7 +542,9 @@ object MissionEngine {
                 startedAt = System.currentTimeMillis()
             )
             updatedSteps[index] = currentStep
-            _activeMission.value = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
+            mission = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
+            _activeMission.value = mission
+            persistMission(mission, index)
 
             // 5. Execute Step with Bounded Retry and Timeout
             var stepSuccess = false
@@ -545,7 +558,9 @@ object MissionEngine {
                 if (_activeMission.value?.status == MissionOverallStatus.CANCELLED) {
                     currentStep = currentStep.copy(status = MissionStepStatus.CANCELLED)
                     updatedSteps[index] = currentStep
-                    _activeMission.value = mission.copy(steps = updatedSteps.toList())
+                    val cancelledMission = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
+                    _activeMission.value = cancelledMission
+                    persistMission(cancelledMission, index)
                     return
                 }
 
@@ -600,11 +615,14 @@ object MissionEngine {
                 unverifiedNotes.add("Step '${currentStep.title}' failed: ${evidence.details}")
 
                 finalizeFailure(mission, updatedSteps, index, evidence.details, completedCount, unverifiedNotes)
+                persistMission(_activeMission.value ?: mission, index)
                 return
             }
 
             updatedSteps[index] = currentStep
-            _activeMission.value = mission.copy(steps = updatedSteps.toList())
+            mission = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
+            _activeMission.value = mission
+            persistMission(mission, index)
         }
 
         // 7. Finalize Overall Mission Outcome Truthfully
@@ -626,13 +644,15 @@ object MissionEngine {
                 "Mission could not be completed."
         }
 
-        _activeMission.value = mission.copy(
+        val finalizedMission = mission.copy(
             steps = updatedSteps.toList(),
             status = finalStatus,
             outcomeSummary = finalSummary,
             unverifiedDisclaimers = unverifiedNotes,
             updatedAt = System.currentTimeMillis()
         )
+        _activeMission.value = finalizedMission
+        persistMission(finalizedMission, updatedSteps.size)
         Log.i(TAG, "Mission finalized: $finalStatus — $finalSummary")
     }
 
