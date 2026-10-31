@@ -45,15 +45,13 @@ class NeuralLensActivity : AppCompatActivity() {
         lifecycleScope.launch {
             status.text = "Loading selected image…"
             val bitmap = withContext(Dispatchers.IO) {
-                contentResolver.openInputStream(uri)?.use { input ->
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    contentResolver.openInputStream(uri)?.use { it2 -> BitmapFactory.decodeStream(it2, null, bounds) }
-                    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
-                    var sample = 1
-                    while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
-                    val options = BitmapFactory.Options().apply { inSampleSize = sample }
-                    BitmapFactory.decodeStream(input, null, options)
-                }
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
+                var sample = 1
+                while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
+                val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
             }
             if (bitmap == null) {
                 status.text = "Could not decode this image. Choose a supported JPEG, PNG or WebP file."
