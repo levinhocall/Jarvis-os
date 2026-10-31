@@ -60,16 +60,35 @@ class FeatureHubActivity : AppCompatActivity() {
             finish()
             MainActivity.activeInstance?.selectTab(MainActivity.TAB_SETTINGS)
         }
-        entry(root, "Mission Status", "Inspect the current agent task progress", true) {
-            val task = com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.value
+        entry(root, "Mission Mode", "Inspect and control the active agent task", true) {
+            val engine = com.jarvis.assistant.automation.agent.AgentTaskEngine
+            val task = engine.taskState.value
             val message = task?.let {
                 "${it.originalGoal}\n\n${it.progressPercentage}% • ${it.currentStatus.replace('_', ' ')}"
-            } ?: "No active agent task."
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle("Agent status")
+            } ?: "No active mission. Start a task through the assistant chat or voice command."
+            val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Mission control")
                 .setMessage(message)
                 .setPositiveButton("Close", null)
-                .show()
+            if (task != null) {
+                if (engine.isPaused.value) {
+                    dialog.setNeutralButton("Resume") { _, _ ->
+                        val resumed = engine.resumeTask()
+                        android.widget.Toast.makeText(this, if (resumed) "Mission resumed" else "Mission could not resume", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    dialog.setNeutralButton("Pause") { _, _ ->
+                        val paused = engine.pauseTask()
+                        android.widget.Toast.makeText(this, if (paused) "Mission paused" else "Mission cannot be paused", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+                dialog.setNegativeButton("Cancel mission") { _, _ -> engine.requestCancellation() }
+            }
+            dialog.show()
+        }
+
+        entry(root, "AI Personalization", "Configure assistant personality and response style", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.settings.PersonaActivity::class.java))
         }
         entry(root, "Notification Access", "Open Android notification-listener settings", true) {
             startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
