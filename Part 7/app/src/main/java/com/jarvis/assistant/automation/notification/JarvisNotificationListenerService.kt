@@ -36,6 +36,11 @@ class JarvisNotificationListenerService : NotificationListenerService() {
 
         fun isConnected(): Boolean = instance != null
 
+        /** Returns a read-only snapshot of the bounded in-memory notification cache. */
+        fun getRecentNotifications(): List<CachedNotification> =
+            notificationOrder.mapNotNull { key -> recentNotifications[key] }
+                .sortedByDescending { it.timestamp }
+
         fun getUnreadWhatsAppCount(): Int {
             return recentNotifications.values.count { it.packageName == "com.whatsapp" }
         }
