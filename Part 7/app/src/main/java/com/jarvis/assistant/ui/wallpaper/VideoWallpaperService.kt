@@ -26,7 +26,20 @@ class VideoWallpaperService : WallpaperService() {
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
-            if (visible) startIfReady(holder)
+            if (visible) {
+                val current = player
+                if (current != null) {
+                    try {
+                        current.setSurface(holder.surface)
+                    } catch (error: IllegalStateException) {
+                        Log.w(TAG, "Wallpaper surface changed; recreating player", error)
+                        releasePlayer()
+                        startIfReady(holder)
+                    }
+                } else {
+                    startIfReady(holder)
+                }
+            }
         }
 
         override fun onVisibilityChanged(isVisible: Boolean) {
@@ -64,7 +77,16 @@ class VideoWallpaperService : WallpaperService() {
                 media.isLooping = true
                 media.setVolume(0f, 0f)
                 media.setOnPreparedListener { prepared ->
-                    if (visible && player === prepared) prepared.start() else releasePlayer()
+                    if (visible && surfaceReady && player === prepared) {
+                        prepared.start()
+                    } else {
+                        // The surface or visibility may have changed while async preparation ran.
+                        prepared.setOnPreparedListener(null)
+                        prepared.setOnErrorListener(null)
+                        try { prepared.reset() } catch (_: Exception) {}
+                        try { prepared.release() } catch (_: Exception) {}
+                        if (player === prepared) player = null
+                    }
                 }
                 media.setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "Wallpaper video playback failed: $what/$extra")
