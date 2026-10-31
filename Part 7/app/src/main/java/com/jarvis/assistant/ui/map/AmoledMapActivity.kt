@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.location.LocationListener
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -43,6 +44,9 @@ class AmoledMapActivity : AppCompatActivity() {
     private var origin: GeoPoint? = null
     private var selectedDestination: GeoPoint? = null
     private var routeOverlay: Polyline? = null
+    private var locationListener: LocationListener? = null
+    private var locationUpdatesActive = false
+    private var lastLocationUiUpdate = 0L
     private val http by lazy {
         OkHttpClient.Builder()
             .connectTimeout(12, TimeUnit.SECONDS)
@@ -53,8 +57,10 @@ class AmoledMapActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true) locateUser()
-        else status.text = "Location permission denied. Search works, but route origin needs your location."
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
+            locateUser()
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) startLiveLocationTracking()
+        } else status.text = "Location permission denied. Search works, but route origin needs your location."
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -136,19 +142,93 @@ class AmoledMapActivity : AppCompatActivity() {
                 status.text = "No recent location fix. Enable device location and try again."
                 return
             }
-            origin = GeoPoint(last.latitude, last.longitude)
-            map.overlays.removeAll { it is Marker && it.title == "Your location" }
-            map.overlays.add(Marker(map).apply {
-                position = origin
-                title = "Your location"
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            })
-            map.controller.animateTo(origin)
-            status.text = "Current location acquired from Android location services."
-            map.invalidate()
+            updateUserLocation(last, moveCamera = true)
+            status.text = "Last known location acquired. Waiting for live GPS updates…"
         } catch (error: Exception) {
             status.text = "Location unavailable: ${error.localizedMessage ?: "unknown error"}"
         }
+    }
+
+    /** Requests foreground-only location updates while this map screen is visible. */
+    @Suppress("MissingPermission")
+    private fun startLiveLocationTracking() {
+        if (locationUpdatesActive) return
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) {
+            status.text = "Location permission is required for live location tracking."
+            return
+        }
+        val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                if (!isFinishing && !isDestroyed) {
+                    updateUserLocation(location, moveCamera = origin == null)
+                    val accuracy = if (location.hasAccuracy()) " ±${location.accuracy.toInt()} m" else ""
+                    status.text = "Live location updated$accuracy"
+                }
+            }
+            @Deprecated("Deprecated by Android")
+            override fun onStatusChanged(provider: String?, statusValue: Int, extras: Bundle?) = Unit
+            override fun onProviderEnabled(provider: String) {
+                if (!isFinishing && !isDestroyed) status.text = "Location provider enabled: $provider"
+            }
+            override fun onProviderDisabled(provider: String) {
+                if (!isFinishing && !isDestroyed) status.text = "Location provider disabled: $provider"
+            }
+        }
+        locationListener = listener
+        try {
+            if (fine && manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 3000L, 5f, listener, mainLooper)
+            }
+            if (manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000L, 10f, listener, mainLooper)
+            }
+            locationUpdatesActive = true
+            if (!fine) status.text = "Approximate live location enabled. Grant precise location for GPS accuracy."
+        } catch (_: SecurityException) {
+            locationListener = null
+            locationUpdatesActive = false
+            status.text = "Location permission changed. Grant location access and try again."
+        } catch (_: IllegalArgumentException) {
+            locationListener = null
+            locationUpdatesActive = false
+            status.text = "No enabled location provider is available."
+        }
+    }
+
+    private fun stopLiveLocationTracking() {
+        val listener = locationListener ?: return
+        try {
+            (getSystemService(LOCATION_SERVICE) as LocationManager).removeUpdates(listener)
+        } catch (_: SecurityException) {
+            // Permission may have been revoked while the activity was visible.
+        } finally {
+            locationListener = null
+            locationUpdatesActive = false
+        }
+    }
+
+    private fun updateUserLocation(location: Location, moveCamera: Boolean) {
+        val point = GeoPoint(location.latitude, location.longitude)
+        origin = point
+        val marker = map.overlays.firstOrNull { it is Marker && it.title == "Your location" } as? Marker
+        if (marker != null) {
+            marker.position = point
+        } else {
+            map.overlays.add(Marker(map).apply {
+                position = point
+                title = "Your location"
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            })
+        }
+        val now = System.currentTimeMillis()
+        if (moveCamera || now - lastLocationUiUpdate >= 3000L) {
+            map.controller.animateTo(point)
+            lastLocationUiUpdate = now
+        }
+        map.invalidate()
     }
 
     private fun searchDestination() {
@@ -266,7 +346,26 @@ class AmoledMapActivity : AppCompatActivity() {
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
-    override fun onResume() { super.onResume(); map.onResume() }
-    override fun onPause() { map.onPause(); super.onPause() }
-    override fun onDestroy() { map.onDetach(); http.dispatcher.cancelAll(); super.onDestroy() }
+    override fun onResume() {
+        super.onResume()
+        map.onResume()
+        if (hasLocationPermission()) startLiveLocationTracking()
+    }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    override fun onPause() {
+        stopLiveLocationTracking()
+        map.onPause()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        stopLiveLocationTracking()
+        map.onDetach()
+        http.dispatcher.cancelAll()
+        super.onDestroy()
+    }
 }
