@@ -43,15 +43,8 @@ class FeatureHubActivity : AppCompatActivity() {
             finish()
             MainActivity.activeInstance?.handleMicOrOrbClick()
         }
-        entry(root, "Neural Lens", "Run the existing on-screen OCR and tactical scanner", true) {
-            lifecycleScope.launch {
-                val result = com.jarvis.assistant.vision.TacticalScannerManager.scanCurrentScreen(this@FeatureHubActivity)
-                com.google.android.material.dialog.MaterialAlertDialogBuilder(this@FeatureHubActivity)
-                    .setTitle("Screen scan result")
-                    .setMessage(result.summary)
-                    .setPositiveButton("Close", null)
-                    .show()
-            }
+        entry(root, "Neural Lens", "Capture or select a real image, run AI analysis, or scan visible screen text", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.vision.NeuralLensActivity::class.java))
         }
         entry(root, "Security & Permissions", "Review app permissions and access status", true) {
             startActivity(Intent(this, PermissionActivity::class.java))
