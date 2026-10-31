@@ -142,7 +142,31 @@ class JarvisNotificationListenerService : NotificationListenerService() {\n    p
             remoteInput = replyRemoteInput
         )
 
-        recentNotifications[sbn.key] = cached\n\n        // Notification text is sensitive: persist only after an explicit in-app opt-in.\n        if (com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {\n            persistenceScope.launch {\n                runCatching {\n                    com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext)\n                        .notificationHistoryDao().insert(\n                            com.jarvis.assistant.data.notification.NotificationHistoryEntity(\n                                id = sbn.key, packageName = pkg, sender = title, message = text,\n                                timestamp = System.currentTimeMillis()\n                            )\n                        )\n                    com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext)\n                        .notificationHistoryDao().deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)\n                }.onFailure { error -> Log.w(TAG, "Notification history persistence failed (${error.javaClass.simpleName}).") }\n            }\n        }
+        recentNotifications[sbn.key] = cached
+
+        // Notification text is sensitive: persist only after an explicit in-app opt-in.
+        if (com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {
+            persistenceScope.launch {
+                runCatching {
+                    val database = com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext)
+                    database.notificationHistoryDao().insert(
+                        com.jarvis.assistant.data.notification.NotificationHistoryEntity(
+                            id = sbn.key,
+                            packageName = pkg,
+                            sender = title,
+                            message = text,
+                            timestamp = System.currentTimeMillis()
+                        )
+                    )
+                    database.notificationHistoryDao().deleteOlderThan(
+                        System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+                    )
+                }.onFailure { error ->
+                    Log.w(TAG, "Notification history persistence failed (${error.javaClass.simpleName}).")
+                }
+            }
+        }
+
         notificationOrder.remove(sbn.key)
         notificationOrder.add(sbn.key)
 
@@ -166,7 +190,13 @@ class JarvisNotificationListenerService : NotificationListenerService() {\n    p
         }
     }
 
-    override fun onDestroy() {\n        persistenceScope.cancel()\n        if (instance === this) instance = null\n        super.onDestroy()\n    }\n\n    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+    override fun onDestroy() {
+        persistenceScope.cancel()
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         if (sbn == null) return
         recentNotifications.remove(sbn.key)
         notificationOrder.remove(sbn.key)
