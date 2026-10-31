@@ -81,6 +81,10 @@ class HomeFragment : Fragment() {
             (activity as? MainActivity)?.selectTab(MainActivity.TAB_SETTINGS)
         }
 
+        binding.btnFeatureHub.setOnClickListener {
+            startActivity(Intent(requireContext(), FeatureHubActivity::class.java))
+        }
+
         binding.btnTopSettings.setOnLongClickListener {
             startActivity(Intent(requireContext(), FeatureHubActivity::class.java))
             true
