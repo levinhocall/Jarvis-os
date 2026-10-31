@@ -94,6 +94,23 @@
             android:textSize="11sp"
             android:fontFamily="sans-serif"
             android:layout_marginTop="3dp" />
+        <TextView
+            android:id="@+id/btnFeatureHub"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:layout_marginTop="5dp"
+            android:background="@drawable/bg_jarvis_icon_square"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="EXPLORE FEATURES  ›"
+            android:textColor="?attr/themeAccent"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.06"
+            android:contentDescription="Open Jarvis Feature Hub" />
     </LinearLayout>
 
     <ImageButton
