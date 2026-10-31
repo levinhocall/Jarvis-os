@@ -13,6 +13,8 @@ import com.jarvis.assistant.data.chat.ChatMessageEntity
 import com.jarvis.assistant.data.chat.ChatSessionEntity
 import com.jarvis.assistant.data.mission.MissionDao
 import com.jarvis.assistant.data.mission.MissionEntity
+import com.jarvis.assistant.data.notification.NotificationHistoryEntity
+import com.jarvis.assistant.data.notification.NotificationHistoryDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
@@ -21,9 +23,10 @@ import kotlinx.coroutines.runBlocking
         MemoryEntity::class,
         ChatSessionEntity::class,
         ChatMessageEntity::class,
-        MissionEntity::class
+        MissionEntity::class,
+        NotificationHistoryEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class MemoryDatabase : RoomDatabase() {
@@ -31,6 +34,7 @@ abstract class MemoryDatabase : RoomDatabase() {
     abstract fun memoryDao(): MemoryDao
     abstract fun chatDao(): ChatDao
     abstract fun missionDao(): MissionDao
+    abstract fun notificationHistoryDao(): NotificationHistoryDao
 
     companion object {
         private const val DATABASE_NAME = "jarvis_memory.db"
@@ -108,6 +112,23 @@ abstract class MemoryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS notification_history (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        packageName TEXT NOT NULL,
+                        sender TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        isRead INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_notification_history_timestamp ON notification_history(timestamp)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_notification_history_packageName ON notification_history(packageName)")
+            }
+        }
+
         @Volatile
         private var instance: MemoryDatabase? = null
 
@@ -167,7 +188,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                         DATABASE_NAME
                     )
                     .openHelperFactory(encryptedOpenHelperFactory)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()
