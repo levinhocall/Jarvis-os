@@ -76,6 +76,8 @@ class AppPreferences(context: Context) {
         private const val KEY_ORB_GLOW = "key_orb_glow"
         private const val KEY_ORB_SCALE = "key_orb_scale"
         private const val KEY_ORB_HUE = "key_orb_hue"
+        private const val KEY_ORB_PRESET = "key_orb_preset"
+        private const val KEY_HAPTIC_FEEDBACK = "key_haptic_feedback"
         private const val KEY_CUSTOM_ENDPOINT = "key_custom_endpoint"
     }
 
@@ -272,6 +274,19 @@ class AppPreferences(context: Context) {
     var customThemeColor: String
         get() = prefs.getString(KEY_CUSTOM_THEME_COLOR, "#FFFFFF") ?: "#FFFFFF"
         set(value) = prefs.edit().putString(KEY_CUSTOM_THEME_COLOR, value.trim()).apply()
+
+    var orbPreset: String
+        get() {
+            val value = prefs.getString(KEY_ORB_PRESET, "classic") ?: "classic"
+            return value.takeIf { it in setOf("classic", "aura", "crimson", "midnight") } ?: "classic"
+        }
+        set(value) = prefs.edit().putString(KEY_ORB_PRESET, value.takeIf {
+            it in setOf("classic", "aura", "crimson", "midnight")
+        } ?: "classic").apply()
+
+    var hapticFeedbackEnabled: Boolean
+        get() = prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true)
+        set(value) = prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK, value).apply()
 
     var orbAnimation: String
         get() {
