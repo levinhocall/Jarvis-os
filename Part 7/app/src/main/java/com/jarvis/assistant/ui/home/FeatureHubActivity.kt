@@ -86,27 +86,8 @@ class FeatureHubActivity : AppCompatActivity() {
             startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
         }
 
-        entry(root, "Notification History", "View recent notifications captured by the enabled listener", true) {
-            val service = com.jarvis.assistant.automation.notification.JarvisNotificationListenerService
-            val items = service.getRecentNotifications()
-            val message = if (!service.isConnected()) {
-                "Notification access is not connected. Enable Jarvis in Android Notification Access settings."
-            } else if (items.isEmpty()) {
-                "No notifications have been captured in this session."
-            } else {
-                items.take(20).joinToString("\\n\\n") { item ->
-                    val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(item.timestamp))
-                    "$time • ${item.sender}\\n${item.message}\\n${item.packageName}"
-                }
-            }
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle("Recent notifications")
-                .setMessage(message)
-                .setPositiveButton("Close", null)
-                .setNeutralButton("Notification settings") { _, _ ->
-                    startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-                }
-                .show()
+        entry(root, "Notification History", "Encrypted, opt-in history with unread filtering and clear controls", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.notification.NotificationHistoryActivity::class.java))
         }
         entry(root, "AMOLED Map", "Native OpenStreetMap view, current location, destination search and route", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.map.AmoledMapActivity::class.java))
