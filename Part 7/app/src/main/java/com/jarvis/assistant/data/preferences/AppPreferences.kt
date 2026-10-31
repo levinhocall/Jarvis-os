@@ -78,6 +78,7 @@ class AppPreferences(context: Context) {
         private const val KEY_ORB_HUE = "key_orb_hue"
         private const val KEY_ORB_PRESET = "key_orb_preset"
         private const val KEY_HAPTIC_FEEDBACK = "key_haptic_feedback"
+        private const val KEY_NOTIFICATION_HISTORY_OPT_IN = "key_notification_history_opt_in"
         private const val KEY_CUSTOM_ENDPOINT = "key_custom_endpoint"
     }
 
@@ -287,6 +288,11 @@ class AppPreferences(context: Context) {
     var hapticFeedbackEnabled: Boolean
         get() = prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true)
         set(value) = prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK, value).apply()
+
+    /** Persist notification text only after explicit opt-in; disabled by default. */
+    var notificationHistoryEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NOTIFICATION_HISTORY_OPT_IN, false)
+        set(value) = prefs.edit().putBoolean(KEY_NOTIFICATION_HISTORY_OPT_IN, value).apply()
 
     var orbAnimation: String
         get() {
