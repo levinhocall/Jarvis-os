@@ -38,7 +38,10 @@ class AmoledMapActivity : AppCompatActivity() {
     private lateinit var map: MapView
     private lateinit var status: TextView
     private lateinit var destination: EditText
+    private lateinit var actions: LinearLayout
+    private lateinit var navigationButton: Button
     private var origin: GeoPoint? = null
+    private var selectedDestination: GeoPoint? = null
     private var routeOverlay: Polyline? = null
     private val http by lazy {
         OkHttpClient.Builder()
@@ -73,11 +76,13 @@ class AmoledMapActivity : AppCompatActivity() {
             setHintTextColor(color(R.attr.themeTextMuted))
         }
         root.addView(destination, LinearLayout.LayoutParams(-1, dp(52)))
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(button("Search") { searchDestination() }, LinearLayout.LayoutParams(0, -2, 1f))
         actions.addView(button("My location") { requestLocation() }, LinearLayout.LayoutParams(0, -2, 1f))
-        actions.addView(button("Clear route") { clearRoute() }, LinearLayout.LayoutParams(0, -2, 1f))
+        actions.addView(button("Clear") { clearRoute() }, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(actions)
+        navigationButton = button("Open turn-by-turn navigation") { openNavigation() }.apply { visibility = View.GONE }
+        root.addView(navigationButton, LinearLayout.LayoutParams(-1, -2))
         status = TextView(this).apply {
             text = "Loading OpenStreetMap…"
             textSize = 12f
@@ -154,6 +159,7 @@ class AmoledMapActivity : AppCompatActivity() {
                     }
                 }
                 val (point, label) = point
+                selectedDestination = point
                 map.overlays.removeAll { it is Marker && it.title == "Destination" }
                 map.overlays.add(Marker(map).apply {
                     position = point
@@ -195,21 +201,17 @@ class AmoledMapActivity : AppCompatActivity() {
                     }
                 }
                 clearRoute()
-                routeOverlay = Polyline().apply {
+                val route = Polyline().apply {
                     setPoints(points)
                     outlinePaint.strokeWidth = dp(5).toFloat()
                 }
-                map.overlays.add(routeOverlay)
+                routeOverlay = route
+                map.overlays.add(route)
+                navigationButton.visibility = View.VISIBLE
                 map.invalidate()
-                status.text = "Route loaded from OpenStreetMap routing service. Use Navigate for turn-by-turn guidance."
+                status.text = "Route loaded from OpenStreetMap routing service. Turn-by-turn guidance opens in your navigation app."
                 val bounds = org.osmdroid.util.BoundingBox.fromGeoPoints(points)
                 map.zoomToBoundingBox(bounds, true, dp(36))
-                val nav = button("Open turn-by-turn navigation") {
-                    val uri = android.net.Uri.parse("google.navigation:q=${target.latitude},${target.longitude}")
-                    try { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri)) }
-                    catch (_: Exception) { status.text = "No compatible navigation app found." }
-                }
-                if (nav.parent == null) (map.parent as? ViewGroup)?.addView(nav)
             } catch (error: Exception) {
                 status.text = "Route unavailable: ${error.message ?: "routing service unavailable"}. Destination marker remains available."
             }
@@ -219,7 +221,23 @@ class AmoledMapActivity : AppCompatActivity() {
     private fun clearRoute() {
         routeOverlay?.let { map.overlays.remove(it) }
         routeOverlay = null
+        if (::navigationButton.isInitialized) navigationButton.visibility = View.GONE
         map.invalidate()
+    }
+
+    private fun openNavigation() {
+        val target = selectedDestination ?: run {
+            status.text = "Search for a destination first."
+            return
+        }
+        val uri = android.net.Uri.parse("google.navigation:q=${target.latitude},${target.longitude}")
+        try {
+            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri))
+        } catch (_: Exception) {
+            val webUri = android.net.Uri.parse("https://www.openstreetmap.org/?mlat=${target.latitude}&mlon=${target.longitude}#map=16/${target.latitude}/${target.longitude}")
+            try { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, webUri)) }
+            catch (_: Exception) { status.text = "No compatible navigation app found." }
+        }
     }
 
     private fun button(label: String, action: () -> Unit) = Button(this).apply {
