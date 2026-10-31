@@ -148,7 +148,9 @@ class FeatureHubActivity : AppCompatActivity() {
                 }
                 .show()
         }
-        entry(root, "Video Wallpapers", "A live wallpaper service is not configured in this build", false) {}
+        entry(root, "Video Wallpapers", "Import your own video, preview it, and request Android wallpaper activation", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.wallpaper.VideoWallpaperActivity::class.java))
+        }
 
         setContentView(android.widget.ScrollView(this).apply { addView(root) })
     }
