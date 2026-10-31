@@ -135,11 +135,13 @@ class AmoledMapActivity : AppCompatActivity() {
     private fun locateUser() {
         try {
             val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+            val now = System.currentTimeMillis()
             val last = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
                 .mapNotNull { provider -> try { manager.getLastKnownLocation(provider) } catch (_: Exception) { null } }
+                .filter { now - it.time in 0..120_000L }
                 .maxByOrNull { it.time }
             if (last == null) {
-                status.text = "No recent location fix. Enable device location and try again."
+                status.text = "No location fix from the last 2 minutes. Waiting for a fresh device location…"
                 return
             }
             updateUserLocation(last, moveCamera = true)
@@ -179,12 +181,16 @@ class AmoledMapActivity : AppCompatActivity() {
         }
         locationListener = listener
         try {
+            var registered = false
             if (fine && manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 3000L, 5f, listener, mainLooper)
+                registered = true
             }
             if (manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000L, 10f, listener, mainLooper)
+                registered = true
             }
+            if (!registered) throw IllegalArgumentException("No enabled location provider")
             locationUpdatesActive = true
             if (!fine) status.text = "Approximate live location enabled. Grant precise location for GPS accuracy."
         } catch (_: SecurityException) {
