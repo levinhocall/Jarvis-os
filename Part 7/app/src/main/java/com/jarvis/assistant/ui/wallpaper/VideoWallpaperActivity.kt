@@ -26,7 +26,15 @@ class VideoWallpaperActivity : AppCompatActivity() {
     private val videoPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
+                val previous = selectedUri()
                 contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (previous != null && previous != uri) {
+                    try {
+                        contentResolver.releasePersistableUriPermission(previous, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    } catch (_: SecurityException) {
+                        // A provider may have already revoked the previous grant.
+                    }
+                }
                 prefs.edit().putString(KEY_VIDEO_URI, uri.toString()).apply()
                 bindPreview(uri)
                 status?.text = "Video selected. Preview it, then open Android's wallpaper confirmation."
@@ -132,9 +140,14 @@ class VideoWallpaperActivity : AppCompatActivity() {
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
+    override fun onResume() {
+        super.onResume()
+        videoView?.resume()
+    }
+
     override fun onPause() {
-        super.onPause()
         videoView?.pause()
+        super.onPause()
     }
 
     override fun onDestroy() {
