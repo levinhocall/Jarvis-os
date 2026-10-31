@@ -101,11 +101,12 @@ class NotificationHistoryActivity : AppCompatActivity() {
     }
 
     private fun observeHistory() {
+        historyJob?.cancel()
         if (!JarvisApp.instance.preferences.notificationHistoryEnabled) {
             renderEmpty("History is off. Enable the switch above to save future notifications.")
             return
         }
-        lifecycleScope.launch {
+        historyJob = lifecycleScope.launch {
             val dao = withContext(Dispatchers.IO) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao() }
             val stream = if (showUnreadOnly) dao.observeUnread() else dao.observeRecent()
             stream.collect { items -> render(items) }
