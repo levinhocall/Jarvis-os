@@ -94,8 +94,8 @@ class AmoledMapActivity : AppCompatActivity() {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             setBuiltInZoomControls(true)
-            controller.setZoom(14.0)
-            controller.setCenter(GeoPoint(19.0760, 72.8777))
+            // Start zoomed out until a real device location or search result is available.
+            controller.setZoom(2.5)
         }
         root.addView(map, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(TextView(this).apply {
