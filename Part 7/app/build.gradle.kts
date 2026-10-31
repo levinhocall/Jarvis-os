@@ -115,6 +115,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("androidx.webkit:webkit:1.12.0")
+    // OpenStreetMap rendering; no embedded API key required.
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("com.alphacephei:vosk-android:0.3.75@aar")
 
