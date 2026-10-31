@@ -2,9 +2,6 @@ package com.jarvis.assistant.vision
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
 import android.util.Base64
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
@@ -27,107 +24,149 @@ data class CameraVisionResult(
     val title: String? = null
 )
 
+/**
+ * Sends an actual user-provided camera/gallery bitmap to the configured Gemini vision model.
+ * This class deliberately never fabricates a frame or reports a failed request as success.
+ */
 object CameraVisionAnalyzer {
     private const val TAG = "CameraVisionAnalyzer"
+    private const val MAX_IMAGE_DIMENSION = 1536
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(35, TimeUnit.SECONDS)
+        .callTimeout(45, TimeUnit.SECONDS)
         .build()
 
-    suspend fun analyzeSnapshot(
+    suspend fun analyzeBitmap(
         context: Context,
-        prompt: String = "Extract key details, bill totals, or product info. Keep answer strictly within 2 short sentences."
+        bitmap: Bitmap,
+        prompt: String = "Describe the image. Extract visible text and key details. Keep the answer concise."
     ): CameraVisionResult = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? JarvisApp
-        val apiKey = app?.preferences?.apiKey?.trim() ?: ""
-
+            ?: return@withContext CameraVisionResult(false, "Jarvis application context is unavailable.")
+        val apiKey = app.preferences.apiKey.trim()
         if (apiKey.isBlank()) {
             return@withContext CameraVisionResult(
                 success = false,
-                summary = "Camera vision analysis requires a configured Gemini API key in Settings, Sir."
+                summary = "Image analysis requires a configured Gemini API key in Settings."
             )
         }
+        if (bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) {
+            return@withContext CameraVisionResult(false, "The selected image is no longer available. Capture or select it again.")
+        }
 
-        // Generate synthetic or captured high-res preview frame for optical diagnosis
-        val sampleBitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888)
-        val stream = ByteArrayOutputStream()
-        sampleBitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
-        val base64Data = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
-        sampleBitmap.recycle()
-
+        var resized: Bitmap? = null
         try {
+            val scale = minOf(
+                1f,
+                MAX_IMAGE_DIMENSION.toFloat() / maxOf(bitmap.width, bitmap.height)
+            )
+            val image = if (scale < 1f) {
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * scale).toInt().coerceAtLeast(1),
+                    (bitmap.height * scale).toInt().coerceAtLeast(1),
+                    true
+                ).also { resized = it }
+            } else bitmap
+
+            val stream = ByteArrayOutputStream()
+            if (!image.compress(Bitmap.CompressFormat.JPEG, 86, stream) || stream.size() == 0) {
+                return@withContext CameraVisionResult(false, "Could not encode the selected image.")
+            }
+            val base64Data = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
             val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
             val payload = JSONObject().apply {
-                put("contents", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("parts", JSONArray().apply {
-                            put(JSONObject().apply { put("text", prompt) })
-                            put(JSONObject().apply {
-                                put("inline_data", JSONObject().apply {
-                                    put("mime_type", "image/jpeg")
-                                    put("data", base64Data)
-                                })
-                            })
-                        })
-                    })
-                })
+                put("contents", JSONArray().put(JSONObject().apply {
+                    put("parts", JSONArray()
+                        .put(JSONObject().put("text", prompt))
+                        .put(JSONObject().put("inline_data", JSONObject().apply {
+                            put("mime_type", "image/jpeg")
+                            put("data", base64Data)
+                        }))
+                    )
+                }))
             }
-
             val request = Request.Builder()
                 .url(endpoint)
                 .post(payload.toString().toRequestBody("application/json".toMediaType()))
                 .build()
 
-            val response = httpClient.newCall(request).execute()
-            val respBody = response.body?.string() ?: ""
+            httpClient.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val detail = runCatching {
+                        JSONObject(body).optJSONArray("error")?.optJSONObject(0)?.optString("message")
+                    }.getOrNull().orEmpty()
+                    return@withContext CameraVisionResult(
+                        success = false,
+                        summary = "Image analysis failed (HTTP ${response.code}). " +
+                            (detail.ifBlank { "Check the Gemini API key, quota and network connection." })
+                    )
+                }
+                if (body.isBlank()) {
+                    return@withContext CameraVisionResult(false, "Image analysis returned an empty response.")
+                }
+                val json = JSONObject(body)
+                val candidate = json.optJSONArray("candidates")?.optJSONObject(0)
+                val candidateText = candidate?.optJSONObject("content")
+                    ?.optJSONArray("parts")
+                    ?.let { parts ->
+                        (0 until parts.length()).mapNotNull { index ->
+                            parts.optJSONObject(index)?.optString("text")?.takeIf { it.isNotBlank() }
+                        }.joinToString("\n").trim()
+                    }.orEmpty()
+                if (candidateText.isBlank()) {
+                    val reason = candidate?.optString("finishReason").orEmpty()
+                    return@withContext CameraVisionResult(
+                        success = false,
+                        summary = "No image analysis text was returned" +
+                            if (reason.isNotBlank()) " (finish reason: $reason)." else "."
+                    )
+                }
 
-            if (!response.isSuccessful || respBody.isBlank()) {
-                // Graceful local offline fallback for bill/parchi calculations
-                val fallbackSummary = "Camera snapshot inspected: Document details detected. Logged to Recall Core, Sir."
-                RecallCoreManager.logProductResearch(context, "Camera Snapshot", "Inspected", "Camera Vision", fallbackSummary)
-                return@withContext CameraVisionResult(
+                val amount = Regex("(?:₹|rs\\.?|inr)\\s*([\\d,]+)", RegexOption.IGNORE_CASE)
+                    .find(candidateText)?.let { "₹" + it.groupValues[1] }
+                runCatching {
+                    RecallCoreManager.logProductResearch(
+                        context = context.applicationContext,
+                        productName = "Neural Lens Image",
+                        price = amount ?: "Not detected",
+                        platform = "Gemini Vision",
+                        extraDetails = candidateText
+                    )
+                }.onFailure { Log.w(TAG, "Could not save image analysis to Recall Core", it) }
+
+                CameraVisionResult(
                     success = true,
-                    summary = fallbackSummary,
-                    title = "Camera Vision"
+                    summary = candidateText,
+                    extractedAmount = amount,
+                    title = "Neural Lens"
                 )
             }
-
-            val json = JSONObject(respBody)
-            val candidateText = json.optJSONArray("candidates")
-                ?.optJSONObject(0)
-                ?.optJSONObject("content")
-                ?.optJSONArray("parts")
-                ?.optJSONObject(0)
-                ?.optString("text", "")
-                ?.trim() ?: "Image analyzed successfully, Sir."
-
-            // Extract any monetary sums from the model's textual analysis
-            val amountMatch = Regex("(?:₹|rs\\.?|inr)\\s*([\\d,]+)", RegexOption.IGNORE_CASE).find(candidateText)
-            val amount = amountMatch?.let { "₹" + it.groupValues[1] }
-
-            RecallCoreManager.logProductResearch(
-                context = context,
-                productName = "Bill / Item Scan",
-                price = amount ?: "Verified",
-                platform = "Camera Scan",
-                extraDetails = candidateText
+        } catch (error: Exception) {
+            Log.e(TAG, "Image analysis failed", error)
+            CameraVisionResult(
+                success = false,
+                summary = "Image analysis failed: ${error.localizedMessage ?: "network or provider error"}"
             )
-
-            Log.i(TAG, "Vision analysis complete: $candidateText")
-            return@withContext CameraVisionResult(
-                success = true,
-                summary = candidateText,
-                extractedAmount = amount,
-                title = "Camera Scan"
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Camera vision analysis error: ${e.message}")
-            val fallbackSummary = "Camera frame analyzed. Document logged into Recall Core, Nazib Sir."
-            RecallCoreManager.logProductResearch(context, "Camera Scan", "Saved", "Camera Vision", fallbackSummary)
-            return@withContext CameraVisionResult(
-                success = true,
-                summary = fallbackSummary
-            )
+        } finally {
+            resized?.takeIf { it !== bitmap }?.recycle()
         }
+    }
+
+    /**
+     * Compatibility entry point for legacy command callers. No image is available in this
+     * call path, so it must fail honestly rather than sending a generated placeholder bitmap.
+     */
+    @Deprecated("Pass a real camera/gallery Bitmap to analyzeBitmap().")
+    suspend fun analyzeSnapshot(
+        context: Context,
+        prompt: String = "Extract key details and visible text."
+    ): CameraVisionResult = withContext(Dispatchers.IO) {
+        CameraVisionResult(
+            success = false,
+            summary = "No real camera frame was supplied. Open Neural Lens and capture or select an image before analysis."
+        )
     }
 }
