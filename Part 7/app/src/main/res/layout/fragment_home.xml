@@ -84,6 +84,16 @@
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium"
             android:layout_marginTop="2dp" />
+
+        <TextView
+            android:id="@+id/tvHomeSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="How can I help you today?"
+            android:textColor="?attr/themeTextMuted"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif"
+            android:layout_marginTop="3dp" />
     </LinearLayout>
 
     <ImageButton
