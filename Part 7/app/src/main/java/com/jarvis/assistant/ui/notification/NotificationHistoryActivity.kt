@@ -14,6 +14,7 @@ import com.jarvis.assistant.data.memory.MemoryDatabase
 import com.jarvis.assistant.data.notification.NotificationHistoryEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 
 /** User-controlled, encrypted notification history. Persistence is opt-in and disabled by default. */
@@ -21,6 +22,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
     private var showUnreadOnly = false
+    private var historyJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.jarvis.assistant.util.ThemeManager.applyTheme(this)
