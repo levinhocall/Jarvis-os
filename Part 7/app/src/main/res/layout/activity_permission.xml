@@ -444,7 +444,7 @@
                 android:id="@+id/btnGrantAll"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:text="GRANT ALL PERMISSIONS"
+                android:text="CHOOSE A PERMISSION"
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:textStyle="bold"
