@@ -469,21 +469,11 @@ object DevToolRegistry {
 
         val isHostDev = File("/root/jarvis-os-ref").exists() && File("/usr/bin/git").exists()
 
-        val canRunProcess = isHostDev || try {
-            val p = ProcessBuilder("echo", "test").start()
-            p.waitFor(1, TimeUnit.SECONDS)
-            p.exitValue() == 0
-        } catch (_: Exception) {
-            false
-        }
-
-        val canRunGit = isHostDev || try {
-            val p = ProcessBuilder("git", "--version").start()
-            p.waitFor(1, TimeUnit.SECONDS)
-            p.exitValue() == 0
-        } catch (_: Exception) {
-            false
-        }
+        // Android's ability to spawn a small system utility does not imply that a usable
+        // shell, Git, compiler, or Gradle installation is available. Only the verified host
+        // toolchain or an installed + permission-enabled Termux bridge counts as execution.
+        val canRunProcess = isHostDev || termuxPermitted
+        val canRunGit = isHostDev || termuxPermitted
 
         val type = when {
             isHostDev && canRunProcess && canRunGit -> DevEnvironmentType.LOCAL_PROCESS
