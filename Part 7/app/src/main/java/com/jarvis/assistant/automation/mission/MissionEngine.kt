@@ -978,6 +978,24 @@ object MissionEngine {
 
         for (index in updatedSteps.indices) {
             mission = _activeMission.value ?: break
+            if (cancelRequestedMissions.remove(missionId)) {
+                if (updatedSteps[index].status == MissionStepStatus.PENDING) {
+                    updatedSteps[index] = updatedSteps[index].copy(
+                        status = MissionStepStatus.CANCELLED,
+                        failureReason = "Mission cancelled before this step started."
+                    )
+                }
+                val cancelled = mission.copy(
+                    steps = updatedSteps.toList(),
+                    currentStepIndex = index,
+                    status = MissionOverallStatus.CANCELLED,
+                    outcomeSummary = "Mission cancelled after the previous action reached a safe boundary.",
+                    updatedAt = System.currentTimeMillis()
+                )
+                _activeMission.value = cancelled
+                persistMission(cancelled, index)
+                return
+            }
             if (pauseRequestedMissions.remove(missionId)) {
                 val paused = mission.copy(
                     steps = updatedSteps.toList(),
@@ -1174,6 +1192,19 @@ object MissionEngine {
             mission = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
             _activeMission.value = mission
             persistMission(mission, index)
+        }
+
+        if (cancelRequestedMissions.remove(missionId)) {
+            val cancelled = (_activeMission.value ?: mission).copy(
+                steps = updatedSteps.toList(),
+                currentStepIndex = updatedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0),
+                status = MissionOverallStatus.CANCELLED,
+                outcomeSummary = "Mission cancelled after the current action returned; its recorded evidence was preserved.",
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = cancelled
+            persistMission(cancelled, cancelled.currentStepIndex)
+            return
         }
 
         if (pauseRequestedMissions.remove(missionId) && updatedSteps.any { it.status != MissionStepStatus.COMPLETED }) {
