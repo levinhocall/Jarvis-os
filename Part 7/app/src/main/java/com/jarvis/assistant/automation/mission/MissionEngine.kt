@@ -334,7 +334,14 @@ object MissionEngine {
     ): MissionDefinition = mutex.withLock {
         if (hasBlockingMission()) return@withLock blockedMission(goal)
         val planner = llmPlanner
-        if (planner != null && planner.isAvailable() && planner.isProviderReady()) {
+        val hasExactContactOrProfileConstraint = userConstraints.any {
+            it.startsWith("contact_index=") || it.startsWith("app_number=")
+        }
+        if (!hasExactContactOrProfileConstraint &&
+            planner != null &&
+            planner.isAvailable() &&
+            planner.isProviderReady()
+        ) {
             val missionId = java.util.UUID.randomUUID().toString()
             val initialMission = MissionDefinition(
                 missionId = missionId,
