@@ -273,8 +273,10 @@ object MissionEngine {
                 if (awaitingApproval && context != null) {
                     MissionApprovalNotifier.show(context, completedMission)
                 }
-                return@withLock completedMission
             }
+            // Return the running mission immediately. The background planner updates
+            // activeMission and persistence when it reaches a verified terminal state.
+            return@withLock initialMission
         }
 
         val mission = planMission(goal, userConstraints, context)
