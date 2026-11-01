@@ -5,10 +5,15 @@ import android.util.Log
 import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
 import com.jarvis.assistant.automation.command.CommandExecutor
 import com.jarvis.assistant.automation.command.JarvisCommand
-import com.jarvis.assistant.data.memory.RecallCoreManager
 import com.jarvis.assistant.vision.TacticalScannerManager
-import kotlinx.coroutines.*
-import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 data class GoalStep(
     val stepIndex: Int,
@@ -25,18 +30,21 @@ data class GoalExecutionResult(
     val totalSteps: Int
 )
 
+/**
+ * Bounded, serial autonomous goal runner. Cancellation is tied to the actual
+ * caller Job; a new goal cannot silently reset another goal's cancellation flag.
+ */
 object AutonomousGoalAgent {
     private const val TAG = "AutonomousGoalAgent"
     private const val MAX_STEPS = 6
+    private val goalMutex = Mutex()
 
-    private val isCancelled = AtomicBoolean(false)
+    @Volatile
     private var activeGoalJob: Job? = null
 
     fun cancelActiveGoal(reason: String = "User requested stop") {
-        Log.i(TAG, "Cancelling active goal execution: $reason")
-        isCancelled.set(true)
-        activeGoalJob?.cancel()
-        activeGoalJob = null
+        Log.i(TAG, "Cancelling active goal execution")
+        activeGoalJob?.cancel(CancellationException(reason))
     }
 
     suspend fun executeGoal(
@@ -44,100 +52,126 @@ object AutonomousGoalAgent {
         context: Context,
         commandExecutor: CommandExecutor,
         onProgress: ((String) -> Unit)? = null
-    ): GoalExecutionResult = withContext(Dispatchers.Default) {
-        isCancelled.set(false)
-        val cleanGoal = rawGoal.trim()
-        Log.i(TAG, "Beginning autonomous goal execution for: '$cleanGoal'")
-
-        // 1. PLAN: Decompose goal into atomic steps
-        val plan = planStepsForGoal(cleanGoal)
-        var completedSteps = 0
-
-        for (step in plan) {
-            if (isCancelled.get() || !isActive) {
-                Log.w(TAG, "Goal interrupted before step ${step.stepIndex}")
-                return@withContext GoalExecutionResult(
-                    success = false,
-                    finalVerdict = "Goal execution stopped on request, Nazib Sir.",
-                    stepsCompleted = completedSteps,
-                    totalSteps = plan.size
-                )
+    ): GoalExecutionResult = goalMutex.withLock {
+        val callerJob = currentCoroutineContext()[Job]
+        activeGoalJob = callerJob
+        try {
+            val cleanGoal = rawGoal.trim()
+            if (cleanGoal.isBlank()) {
+                return@withLock GoalExecutionResult(false, "Please provide a goal to execute.", 0, 0)
             }
 
-            onProgress?.invoke("Executing step ${step.stepIndex + 1}/${plan.size}: ${step.description}")
-
-            // 2. ACT
-            withContext(Dispatchers.Main) {
-                commandExecutor.execute(step.command)
+            // Avoid logging user-provided goals; they may contain private searches.
+            Log.i(TAG, "Beginning bounded autonomous goal execution")
+            val plan = planStepsForGoal(cleanGoal)
+            if (plan.isEmpty()) {
+                return@withLock GoalExecutionResult(false, "No safe executable steps could be planned.", 0, 0)
             }
-            step.executed = true
 
-            // Settle delay for UI transitions
-            delay(1200L)
+            var completedSteps = 0
+            for (step in plan) {
+                currentCoroutineContext().ensureActive()
+                onProgress?.invoke("Executing step ${step.stepIndex + 1}/${plan.size}: ${step.description}")
 
-            // 3. VERIFY
-            val verified = verifyStepOutcome(step)
-            step.verified = verified
-            completedSteps++
+                val commandResult = try {
+                    withContext(Dispatchers.Main) { commandExecutor.execute(step.command) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Log.w(TAG, "Goal step execution failed", error)
+                    return@withLock GoalExecutionResult(
+                        false,
+                        "Step ${step.stepIndex + 1} failed. Execution stopped without claiming the goal was completed.",
+                        completedSteps,
+                        plan.size
+                    )
+                }
+                step.executed = true
+
+                // UI transition settling is cancellable and does not block the main thread.
+                kotlinx.coroutines.delay(900L)
+                currentCoroutineContext().ensureActive()
+
+                val commandRejected = commandResult.isBlank() ||
+                    listOf("unable", "cannot", "could not", "failed", "error", "denied")
+                        .any { commandResult.contains(it, ignoreCase = true) }
+                val verified = !commandRejected && verifyStepOutcome()
+                step.verified = verified
+                if (!verified) {
+                    return@withLock GoalExecutionResult(
+                        false,
+                        "Step ${step.stepIndex + 1} could not be verified on the active screen. Remaining steps were not executed.",
+                        completedSteps,
+                        plan.size
+                    )
+                }
+                completedSteps++
+            }
+
+            currentCoroutineContext().ensureActive()
+            val scan = try {
+                TacticalScannerManager.scanCurrentScreen(context)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "Final screen scan failed", error)
+                null
+            }
+
+            val verdict = when {
+                scan?.success == true && scan.detectedPrice != null ->
+                    "All $completedSteps planned steps were verified. Found ${scan.detectedProduct} at ${scan.detectedPrice} on ${scan.platform}; saved to Recall Core."
+                scan?.success == true ->
+                    "All $completedSteps planned steps were verified. Screen content was read, but no price was detected."
+                else ->
+                    "All $completedSteps planned steps were verified. Final screen scan was unavailable; inspect the destination to confirm the requested result."
+            }
+            GoalExecutionResult(true, verdict, completedSteps, plan.size)
+        } catch (cancelled: CancellationException) {
+            Log.i(TAG, "Goal execution cancelled")
+            throw cancelled
+        } finally {
+            if (activeGoalJob === callerJob) activeGoalJob = null
         }
-
-        // 4. REPORT: Run tactical scan on destination page and format result
-        val scan = TacticalScannerManager.scanCurrentScreen(context)
-        val finalVerdict = if (scan.success && scan.detectedPrice != null) {
-            "Goal complete, Nazib Sir: Found ${scan.detectedProduct} at ${scan.detectedPrice} on ${scan.platform}. Saved to Recall Core."
-        } else {
-            "Goal finished. Reached the target destination and page is open on screen, Sir."
-        }
-
-        GoalExecutionResult(
-            success = true,
-            finalVerdict = finalVerdict,
-            stepsCompleted = completedSteps,
-            totalSteps = plan.size
-        )
     }
 
     private fun planStepsForGoal(goal: String): List<GoalStep> {
-        val steps = mutableListOf<GoalStep>()
         val lower = goal.lowercase()
-
-        // E.g., "Flipkart par Voltas 500L freezer search karke sabse sasta option batao"
         val platform = when {
             lower.contains("flipkart") -> "flipkart"
             lower.contains("amazon") -> "amazon"
             else -> "google"
         }
+        val cleanedQuery = goal.replace(
+            Regex("(?i)(flipkart|amazon|google|par|pe|search karke|search karo|sabse sasta|option batao|dikhao)"),
+            ""
+        ).trim()
+        val searchQuery = cleanedQuery.ifBlank { goal }
 
-        val cleanedQuery = goal
-            .replace(Regex("(?i)(flipkart|amazon|google|par|pe|search karke|search karo|sabse sasta|option batao|dikhao)"), "")
-            .trim()
-
-        val searchQuery = if (cleanedQuery.isNotBlank()) cleanedQuery else goal
-
-        // Step 1: Open and search target platform via direct search intent
-        steps.add(
+        return listOf(
             GoalStep(
                 stepIndex = 0,
-                description = "Navigate to $platform search for $searchQuery",
+                description = "Open $platform search for $searchQuery",
                 command = JarvisCommand.ContextualSearch(query = searchQuery, platform = platform)
-            )
-        )
-
-        // Step 2: Safe scroll down to reveal price and spec list
-        steps.add(
+            ),
             GoalStep(
                 stepIndex = 1,
-                description = "Scroll results to inspect pricing",
+                description = "Scroll results to inspect additional content",
                 command = JarvisCommand.ScrollScreen(direction = "down", distance = "medium")
             )
-        )
-
-        return steps.take(MAX_STEPS)
+        ).take(MAX_STEPS)
     }
 
-    private fun verifyStepOutcome(step: GoalStep): Boolean {
-        val a11y = JarvisAccessibilityService.instance
-        val root = a11y?.getActiveRootNode() ?: return false
-        return root.childCount > 0
+    /** Reads a fresh accessibility snapshot and always releases the owned root node. */
+    private fun verifyStepOutcome(): Boolean {
+        val service = JarvisAccessibilityService.instance ?: return false
+        val root = service.getActiveRootNode() ?: return false
+        return try {
+            root.childCount > 0 ||
+                !root.text.isNullOrBlank() ||
+                !root.contentDescription.isNullOrBlank()
+        } finally {
+            root.recycle()
+        }
     }
 }
