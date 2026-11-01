@@ -190,6 +190,10 @@ object MissionEngine {
         return list
     }
 
+    private fun buildPlannerGoal(goal: String, userConstraints: List<String>): String =
+        if (userConstraints.isEmpty()) goal
+        else "$goal\\nUser constraints: ${userConstraints.joinToString("; ")}"
+
     private fun isLlmPlannedMission(mission: MissionDefinition): Boolean =
         mission.steps.any { it.title.startsWith("Step ") && it.toolName.isNotBlank() }
 
@@ -291,7 +295,7 @@ object MissionEngine {
         }
         var approvalConsumed = false
         val result = planner.planAndExecute(
-            goal = approvedMission.goal,
+            goal = buildPlannerGoal(approvedMission.goal, approvedMission.userConstraints),
             context = context,
             initialHistory = initialHistory,
             approvedToolCall = com.jarvis.assistant.automation.agent.ApprovedLlmToolCall(
@@ -344,7 +348,7 @@ object MissionEngine {
             _activeMission.value = initialMission
             persistMission(initialMission)
             engineScope.launch {
-                val result = planner.planAndExecute(goal, context) { toolName, args ->
+                val result = planner.planAndExecute(buildPlannerGoal(goal, userConstraints), context) { toolName, args ->
                     val step = MissionStep(
                         title = "LLM Step: $toolName",
                         toolName = toolName,
