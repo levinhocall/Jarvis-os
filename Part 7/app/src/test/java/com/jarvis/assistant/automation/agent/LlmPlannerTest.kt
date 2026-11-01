@@ -118,7 +118,8 @@ class LlmPlannerTest {
             }
         }
 
-        assertTrue(result.isSuccess)
+        assertFalse("A later successful step cannot erase an earlier unverified action", result.isSuccess)
+        assertEquals("UNVERIFIED_FINISH", result.abortReason)
         assertEquals(2, result.stepsExecuted)
         assertTrue("History should record failed observation", historyObservations.first().contains("not visible"))
     }
@@ -140,9 +141,10 @@ class LlmPlannerTest {
             Pair(false, "Network connection dropped during message dispatch")
         }
 
-        assertFalse("Mission should fail on unverified consequential action", result.isSuccess)
-        assertEquals("CONSEQUENTIAL_UNVERIFIED", result.abortReason)
-        assertEquals("Consequential action must NOT be retried automatically", 1, executionAttempts.get())
+        assertFalse("Consequential action must wait for explicit approval", result.isSuccess)
+        assertEquals("APPROVAL_REQUIRED", result.abortReason)
+        assertEquals("Consequential action must not execute before approval", 0, executionAttempts.get())
+        assertEquals("whatsapp_send", result.pendingApprovalTool)
     }
 
     @Test
@@ -157,12 +159,27 @@ class LlmPlannerTest {
         }
 
         val planner = LlmPlanner(provider, maxSteps = 2)
-        planner.planAndExecute("Send message to Bob") { toolName, _ ->
+        val result = planner.planAndExecute("Send message to Bob") { toolName, _ ->
             executedTool = toolName
             Pair(true, "Sent")
         }
 
-        assertEquals("send_whatsapp_message alias should resolve to whatsapp_send", "whatsapp_send", executedTool)
+        assertEquals("send_whatsapp_message alias should resolve to canonical name", "whatsapp_send", result.pendingApprovalTool)
+        assertEquals("High-risk alias must not execute before approval", "", executedTool)
+    }
+
+    @Test
+    fun testFinishWithoutVerifiedExecutionEvidenceDoesNotSucceed() = runBlocking {
+        val provider = FakeScriptedProvider { _, _ ->
+            LlmStepDecision.Finish("Everything is complete.")
+        }
+        val result = LlmPlanner(provider).planAndExecute("Do something") { _, _ ->
+            Pair(true, "This executor should not be called.")
+        }
+
+        assertFalse(result.isSuccess)
+        assertEquals("UNVERIFIED_FINISH", result.abortReason)
+        assertTrue(result.history.isEmpty())
     }
 
     @Test
