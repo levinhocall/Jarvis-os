@@ -22,7 +22,8 @@ data class UiElementInfo(
     val isCheckable: Boolean,
     val isChecked: Boolean,
     val isEditable: Boolean,
-    val isScrollable: Boolean
+    val isScrollable: Boolean,
+    val isPassword: Boolean = false
 ) {
     val center: PointF
         get() = PointF(bounds.exactCenterX(), bounds.exactCenterY())
@@ -150,7 +151,8 @@ class UiGroundingEngine {
                         isCheckable = isCheckable,
                         isChecked = node.isChecked,
                         isEditable = isEditable,
-                        isScrollable = isScrollable
+                        isScrollable = isScrollable,
+                        isPassword = node.isPassword
                     )
                 )
             }
