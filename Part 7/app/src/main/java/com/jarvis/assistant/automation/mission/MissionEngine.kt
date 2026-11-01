@@ -195,7 +195,7 @@ object MissionEngine {
         else "$goal\nUser constraints: ${userConstraints.joinToString("; ")}"
 
     private fun isLlmPlannedMission(mission: MissionDefinition): Boolean =
-        mission.steps.any { it.title.startsWith("Step ") && it.toolName.isNotBlank() }
+        mission.outcomeSummary?.startsWith("Approval required before JARVIS can execute", ignoreCase = true) == true
 
     private suspend fun persistLlmPlannerOutcome(
         baseMission: MissionDefinition,
