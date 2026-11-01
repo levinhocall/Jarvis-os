@@ -271,7 +271,7 @@ object MissionEngine {
             updatedAt = System.currentTimeMillis()
         )
         _activeMission.value = updated
-        if (!persistMission(updated, updated.steps.lastIndex)) {
+        if (!persistMission(updated, stepIndex)) {
             throw IllegalStateException("Could not persist in-flight LLM action checkpoint; action must not execute.")
         }
     }
