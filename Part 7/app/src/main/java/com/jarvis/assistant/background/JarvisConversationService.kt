@@ -2844,7 +2844,7 @@ class JarvisConversationService : Service() {
                         result.put("autonomous_status", "WAITING_FOR_USER")
                         result.put(
                             "system_directive",
-                            "CONSENT GATE: This action was blocked because it requires the user's explicit approval. Explain the exact action and its consequence, ask the user to approve or decline, and wait. Do NOT retry, click through, use another tool to bypass the prompt, or claim completion."
+                            "CONSENT GATE: This action was blocked. Explain the permission or terms prompt and ask the user to review and tap the Android/app confirmation control themselves if they consent. For credentials, ask the user to enter them privately. Wait until the user confirms the protected step is complete. Do NOT click through, retry, use another tool to bypass the prompt, or claim completion."
                         )
                     } else if (autonomousHardStop) {
                         com.jarvis.assistant.automation.agent.AgentTaskEngine.finish(
