@@ -676,7 +676,25 @@ class AppPreferences internal constructor(
         }
 
         if (usableKeys.isEmpty()) {
-            return if (providerId == "gemini") apiKey.ifBlank { null } else null
+            if (providerId != "gemini") return null
+            val fallbackKey = apiKey.ifBlank { return null }
+            val fallbackRecord = list.find { it.key == fallbackKey } ?: return fallbackKey
+            return when (fallbackRecord.state) {
+                ApiKeyState.ACTIVE -> fallbackKey
+                ApiKeyState.INVALID -> null
+                ApiKeyState.COOLDOWN -> {
+                    if (now < fallbackRecord.cooldownUntilTimestamp) {
+                        null
+                    } else {
+                        fallbackRecord.state = ApiKeyState.ACTIVE
+                        fallbackRecord.cooldownUntilTimestamp = 0L
+                        secureApiPrefs?.edit()
+                            ?.putString("key_pool_$providerId", gson.toJson(list))
+                            ?.apply()
+                        fallbackKey
+                    }
+                }
+            }
         }
 
         val atomicIdx = roundRobinIndices.getOrPut(providerId) { java.util.concurrent.atomic.AtomicInteger(0) }
