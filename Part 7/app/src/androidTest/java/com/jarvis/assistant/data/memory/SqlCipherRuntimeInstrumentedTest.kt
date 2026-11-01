@@ -63,7 +63,7 @@ class SqlCipherRuntimeInstrumentedTest {
                     wrong.close()
                 }
             }.isFailure
-            assertFalse("Wrong-key open must not expose the encrypted payload", !wrongKeyRejected)
+            assertTrue("Wrong-key open must not expose the encrypted payload", wrongKeyRejected)
         } finally {
             rawKey.fill(0)
             cipherKey.fill(0)
