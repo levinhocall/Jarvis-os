@@ -360,7 +360,7 @@ object MissionEngine {
                     else -> MissionStepStatus.UNVERIFIED
                 },
                 verificationEvidence = MissionVerificationEvidence(
-                    evidenceType = if (record.isVerified) EvidenceType.EXTERNAL_API_ACKNOWLEDGED else EvidenceType.UNVERIFIED,
+                    evidenceType = if (record.isVerified) EvidenceType.TOOL_RESULT_VERIFIED else EvidenceType.UNVERIFIED,
                     isVerified = record.isVerified,
                     details = record.observation
                 )
@@ -373,6 +373,7 @@ object MissionEngine {
                     it.verificationEvidence?.isVerified == true
             }
         val finalStatus = when {
+            result.abortReason == "CHECKPOINT_FAILED_AFTER_EXECUTION" -> MissionOverallStatus.UNVERIFIED
             (cancellationRequested || result.abortReason == "CANCELLED") && hasUnverifiedHistory -> MissionOverallStatus.UNVERIFIED
             cancellationRequested || result.abortReason == "CANCELLED" -> MissionOverallStatus.CANCELLED
             awaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
@@ -388,6 +389,7 @@ object MissionEngine {
             approvalState = if (awaitingApproval) MissionApprovalState.PENDING_APPROVAL else baseMission.approvalState,
             approvalPrompt = if (awaitingApproval) result.summary else null,
             outcomeSummary = when {
+                result.abortReason == "CHECKPOINT_FAILED_AFTER_EXECUTION" -> "An LLM action returned, but its durable result checkpoint failed. Manual review is required; no further tool was executed."
                 cancellationRequested && hasUnverifiedHistory -> "Cancellation reached a safe boundary, but an LLM action outcome is unverified. Manual review is required."
                 cancellationRequested -> "Mission cancelled after the current LLM action returned; recorded evidence was preserved."
                 result.abortReason == "CANCELLED" && hasUnverifiedHistory -> "Mission cancellation left an action outcome unverified. Manual review is required."
@@ -400,7 +402,16 @@ object MissionEngine {
         val pendingIndex = convertedSteps.indexOfFirst { it.status == MissionStepStatus.PENDING }
         val nextIndex = if (pendingIndex >= 0) pendingIndex else
             convertedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0)
-        persistMission(updated, nextIndex)
+        if (!persistMission(updated, nextIndex)) {
+            val persistenceFailure = updated.copy(
+                status = MissionOverallStatus.UNVERIFIED,
+                outcomeSummary = "Mission result could not be saved to the encrypted database. The in-memory result is shown, but durable recovery is unavailable; manual review is required.",
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = persistenceFailure
+            persistMission(persistenceFailure, nextIndex)
+            return
+        }
         if (awaitingApproval && context != null) {
             MissionApprovalNotifier.show(context, updated)
         }
