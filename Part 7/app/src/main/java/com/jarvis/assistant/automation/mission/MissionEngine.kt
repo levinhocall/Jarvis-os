@@ -134,6 +134,8 @@ object MissionEngine {
                     e.status == MissionOverallStatus.WAITING_FOR_APPROVAL.name &&
                         e.approvalState == MissionApprovalState.PENDING_APPROVAL.name
                 val wasPaused = e.status == MissionOverallStatus.PAUSED.name
+                val interruptedLlmPlanner = e.status == MissionOverallStatus.EXECUTING.name &&
+                    e.outcomeSummary == "LLM planner running"
 
                 // A pending approval is not an interrupted action. Preserve it exactly.
                 // An actually in-flight consequential/non-idempotent action becomes UNVERIFIED
@@ -157,7 +159,7 @@ object MissionEngine {
 
                 val hasUnverified = sanitizedSteps.any { it.status == MissionStepStatus.UNVERIFIED }
                 val overallStatus = when {
-                    hasUnverified -> MissionOverallStatus.UNVERIFIED
+                    hasUnverified || interruptedLlmPlanner -> MissionOverallStatus.UNVERIFIED
                     wasAwaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
                     else -> try { MissionOverallStatus.valueOf(e.status) } catch (_: Exception) { MissionOverallStatus.EXECUTING }
                 }
@@ -174,9 +176,11 @@ object MissionEngine {
                     approvalPrompt = if (wasAwaitingApproval) {
                         "Approve the pending '${pendingStep?.toolName ?: "mission"}' action for this mission?"
                     } else null,
-                    outcomeSummary = if (hasUnverified) {
-                        "Mission interrupted during an action whose real-world outcome could not be verified. No automatic retry was performed."
-                    } else e.outcomeSummary,
+                    outcomeSummary = when {
+                        interruptedLlmPlanner -> "Process died while the LLM planner was active. An in-flight action may have an unknown outcome; no automatic replay was performed."
+                        hasUnverified -> "Mission interrupted during an action whose real-world outcome could not be verified. No automatic retry was performed."
+                        else -> e.outcomeSummary
+                    },
                     createdAt = e.updatedAt,
                     updatedAt = System.currentTimeMillis()
                 )
