@@ -45,11 +45,11 @@ class OfflineIntelligenceCoordinator {
         if (lower.contains("torch") || lower.contains("flashlight") || lower.contains("volume") ||
             lower.contains("brightness")) {
             val reflex = context?.let { OfflineReflexExecutor.tryExecuteReflex(input, it, null) }
-            if (reflex?.handled == true) {
+            if (reflex?.handled == true && reflex.succeeded) {
                 return OfflineExecutionResult.ExecutedLocally(
                     actionType = "DEVICE_HARDWARE",
                     userFeedback = reflex.spokenResponse,
-                    outputData = mapOf("action" to reflex.actionName)
+                    outputData = mapOf("action" to reflex.actionName, "verified" to true)
                 )
             }
             return OfflineExecutionResult.DegradedExplanation(
