@@ -1089,6 +1089,10 @@ class VisualTaskOrchestrator(
 
         // PREFER the input's REAL accessibility bounds over model-estimated coordinates.
         // (The model was copying example numbers like x=500,y=895 instead of reading the screen.)
+        var selectedInputElement: UiElementInfo? = null
+        val focusedInputIsPassword = runCatching {
+            rootForTyping?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.isPassword == true
+        }.getOrDefault(false)
         val realInputRect: Rect? = try {
             val found = if (isGoogleFlowPage || isGoogleAiStudioPage) {
                 elementsForTyping.firstOrNull { element ->
@@ -1129,13 +1133,25 @@ class VisualTaskOrchestrator(
                     }
                 }
             } else null
-            found?.takeIf {
+            selectedInputElement = found?.takeIf {
                 (it.isEditable || it.className.contains("EditText", ignoreCase = true)) &&
                     !it.viewId.contains("url_bar", ignoreCase = true) &&
                     !it.viewId.contains("omnibox", ignoreCase = true)
-            }?.bounds
+            }
+            selectedInputElement?.bounds
         } catch (e: Exception) {
             null
+        }
+
+        val requestedSensitiveField = targetInputName?.let(::isSensitiveInputLabel) == true
+        if (focusedInputIsPassword || selectedInputElement?.let(::isSensitiveInputElement) == true || requestedSensitiveField) {
+            return@withContext TaskActionResult(
+                success = false,
+                message = "Blocked sensitive input. JARVIS will not enter passwords, passcodes, OTPs, PINs, CVVs, card/bank credentials, recovery phrases, or private keys. Please enter sensitive credentials yourself.",
+                currentStateSummary = groundingEngine.formatElementsSummary(elementsForTyping, rootForTyping),
+                requiresUserConfirmation = false,
+                verified = false
+            )
         }
 
         // A fresh frame can take a moment after Android grants MediaProjection; wait briefly
@@ -1483,6 +1499,22 @@ class VisualTaskOrchestrator(
                 lower.contains("enable") || lower.contains("disable") ||
                 lower.contains("turn on") || lower.contains("turn off")
     }
+
+    private fun isSensitiveInputLabel(label: String): Boolean {
+        val normalized = label.lowercase(Locale.ROOT)
+        val patterns = listOf(
+            Regex("\\b(password|passcode|pass phrase|passphrase|otp|one[- ]time code|verification code|security code)\\b"),
+            Regex("\\b(pin|upi pin|cvv|cvc|card number|credit card|debit card)\\b"),
+            Regex("\\b(bank account|account number|beneficiary|ifsc|recovery phrase|seed phrase|private key|wallet phrase)\\b"),
+            Regex("\\b(payment amount|transfer amount|upi id)\\b")
+        )
+        return patterns.any { it.containsMatchIn(normalized) }
+    }
+
+    private fun isSensitiveInputElement(element: UiElementInfo): Boolean =
+        element.isPassword || isSensitiveInputLabel(
+            "${element.primaryLabel} ${element.viewId} ${element.className}"
+        )
 
     private fun isSensitiveTarget(target: String, desc: String?): Boolean {
         val combined = "$target ${desc ?: ""}".lowercase(Locale.ROOT)
