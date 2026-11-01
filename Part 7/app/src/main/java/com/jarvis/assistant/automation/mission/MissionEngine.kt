@@ -887,6 +887,8 @@ object MissionEngine {
     suspend fun cancelMission(missionId: String, reason: String = "User requested cancellation") = mutex.withLock {
         val current = _activeMission.value ?: return@withLock
         if (current.missionId == missionId && !current.isFinished) {
+            pauseRequestedMissions.remove(missionId)
+            if (isLlmPlannedMission(current)) llmPlanner?.cancel()
             val updated = current.copy(
                 status = MissionOverallStatus.CANCELLED,
                 outcomeSummary = "Mission cancelled: $reason",
