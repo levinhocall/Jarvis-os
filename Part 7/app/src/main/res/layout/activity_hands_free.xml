@@ -145,6 +145,33 @@
                     app:backgroundTint="?attr/themeAccent" />
             </LinearLayout>
 
+            <!-- Explicit privacy opt-in for reading incoming notifications aloud. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_jarvis_card"
+                android:padding="16dp"
+                android:layout_marginBottom="20dp">
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchHeadsetWhisper"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Read messages aloud in headset"
+                    android:textColor="?attr/themeTextPrimary"
+                    android:textStyle="bold"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Off by default. When enabled, JARVIS may speak incoming notification content while a headset is connected."
+                    android:textColor="?attr/themeTextMuted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
             <!-- SECTION 1: HOW JARVIS WORKS (NON-DEVELOPER GUIDE) -->
             <TextView
                 android:layout_width="wrap_content"
