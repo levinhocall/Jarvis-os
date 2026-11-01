@@ -84,7 +84,7 @@ object YouTubeApiClient {
                                 val channel = snippet?.optString("channelTitle") ?: ""
 
                                 if (videoId.isNotBlank()) {
-                                    android.util.Log.d("YouTubeApiClient", "Found video via Data API: $videoId ($title)")
+                                    android.util.Log.d("YouTubeApiClient", "YouTube Data API returned a verified video result")
                                     return VideoResult(videoId, title, channel)
                                 }
                             }
@@ -179,7 +179,7 @@ object YouTubeApiClient {
                     .replace("&quot;", "\"")
                     .replace("&#39;", "'")
 
-                android.util.Log.i("YouTubeApiClient", "Direct search matched top video: $videoId ($title)")
+                android.util.Log.i("YouTubeApiClient", "Direct YouTube search returned a video result")
                 VideoResult(videoId, title, "")
             } finally {
                 response.close()
