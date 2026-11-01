@@ -31,7 +31,8 @@ data class ScheduledTrigger(
     val dailyMinute: Int = 0,
     val keywordFilter: String? = null,
     val isUnattended: Boolean = false,
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    val delayMs: Long? = null
 )
 
 /**
@@ -180,8 +181,10 @@ class TriggerRepository(
             when (trigger.triggerType) {
                 TriggerType.ONE_TIME_DELAYED -> {
                     val wm = getWorkManager() ?: throw IllegalStateException("WorkManager is unavailable.")
+                    val initialDelayMs = trigger.delayMs?.coerceAtLeast(0L)
+                        ?: TimeUnit.MINUTES.toMillis(trigger.delayMinutes.coerceAtLeast(1L))
                     val request = OneTimeWorkRequestBuilder<TriggerWorker>()
-                        .setInitialDelay(trigger.delayMinutes.coerceAtLeast(1L), TimeUnit.MINUTES)
+                        .setInitialDelay(initialDelayMs, TimeUnit.MILLISECONDS)
                         .setInputData(triggerInputData(trigger))
                         .addTag(trigger.triggerId)
                         .build()
@@ -218,11 +221,9 @@ class TriggerRepository(
         }
     }
 
-    private fun triggerInputData(trigger: ScheduledTrigger): Data = workDataOf(
-        "triggerId" to trigger.triggerId,
-        "goal" to trigger.goalOrAction,
-        "isUnattended" to trigger.isUnattended,
-        "triggerType" to trigger.triggerType.name
+    internal fun triggerInputData(trigger: ScheduledTrigger): Data = workDataOf(
+        // Reminder/mission text stays in encrypted storage; WorkManager receives only an opaque ID.
+        "triggerId" to trigger.triggerId
     )
 
     /**
