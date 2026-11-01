@@ -888,6 +888,22 @@ object MissionEngine {
         persistLlmPlannerOutcome(mission, result, context)
     }
 
+    /** Clears the execution lock after the user explicitly reviews an unverified outcome. */
+    suspend fun acknowledgeUnverifiedMission(missionId: String): Boolean = mutex.withLock {
+        val current = _activeMission.value ?: return@withLock false
+        if (current.missionId != missionId || current.status != MissionOverallStatus.UNVERIFIED) {
+            return@withLock false
+        }
+        val acknowledged = current.copy(
+            status = MissionOverallStatus.CANCELLED,
+            outcomeSummary = "User acknowledged that the final outcome could not be verified. No automatic replay was performed.",
+            updatedAt = System.currentTimeMillis()
+        )
+        _activeMission.value = acknowledged
+        persistMission(acknowledged, current.currentStepIndex)
+        true
+    }
+
     /**
      * Cancels an active mission cleanly.
      */
