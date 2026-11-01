@@ -76,7 +76,7 @@ object CameraVisionAnalyzer {
                 return@withContext CameraVisionResult(false, "Could not encode the selected image.")
             }
             val base64Data = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
             val payload = JSONObject().apply {
                 put("contents", JSONArray().put(JSONObject().apply {
                     put("parts", JSONArray()
@@ -90,6 +90,8 @@ object CameraVisionAnalyzer {
             }
             val request = Request.Builder()
                 .url(endpoint)
+                // Keep credentials out of URLs, which may be retained by proxies and logs.
+                .header("x-goog-api-key", apiKey)
                 .post(payload.toString().toRequestBody("application/json".toMediaType()))
                 .build()
 
