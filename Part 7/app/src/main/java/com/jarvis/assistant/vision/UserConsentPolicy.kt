@@ -52,16 +52,23 @@ object UserConsentPolicy {
             "com.google.android.gm", "outlook", "mail", "instagram"
         ).any(pkg::contains)
         val dispatchActions = setOf(
-            "send", "send message", "send email", "send now", "share", "share now",
-            "post", "publish", "forward", "unsend", "delete", "delete message", "remove"
+            "send", "send message", "send email", "send now", "forward"
         )
+        val communicationContext = Regex(
+            """\b(email|message|chat|recipient|conversation|direct message)\b""",
+            RegexOption.IGNORE_CASE
+        ).containsMatchIn(screen)
         val isShareOrPublish = normalizedTarget in setOf("share", "share now", "post", "publish")
         val isCommunicationDispatch = isShareOrPublish ||
-            (communicationOrSharingSurface && normalizedTarget in dispatchActions)
-        val isExplicitDataSubmission = normalizedTarget in setOf("submit", "place order", "confirm order") &&
-            Regex("""\b(payment|checkout|purchase|order|booking|transfer|subscription)\b""", RegexOption.IGNORE_CASE)
-                .containsMatchIn(screen)
+            (normalizedTarget in dispatchActions && (communicationOrSharingSurface || communicationContext))
+        val isDestructiveAction = normalizedTarget in setOf(
+            "delete", "delete file", "delete message", "remove", "erase", "unsend"
+        )
+        val isExplicitDataSubmission = normalizedTarget in setOf(
+            "submit", "place order", "confirm order", "confirm purchase", "buy now", "subscribe"
+        ) && Regex("""\b(payment|checkout|purchase|order|booking|transfer|subscription)\b""", RegexOption.IGNORE_CASE)
+            .containsMatchIn(screen)
         return isPermissionGrant || isTermsAcceptance || isCredentialAutofill ||
-            isCommunicationDispatch || isExplicitDataSubmission
+            isCommunicationDispatch || isDestructiveAction || isExplicitDataSubmission
     }
 }
