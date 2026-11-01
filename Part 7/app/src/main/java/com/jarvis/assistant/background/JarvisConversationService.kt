@@ -916,7 +916,7 @@ class JarvisConversationService : Service() {
 
         val app = application as JarvisApp
         val preferences = app.preferences
-        val apiKey = preferences.apiKey.trim()
+        val apiKey = preferences.getNextActiveKey("gemini")?.trim() ?: preferences.apiKey.trim()
         if (apiKey.isBlank()) {
             _liveError.value = JarvisLiveError(
                 title = "API KEY MISSING",
@@ -1483,7 +1483,7 @@ class JarvisConversationService : Service() {
                                 "API_KEY_INVALID" -> {
                                     _liveError.value = JarvisLiveError(
                                         title = "API KEY INVALID",
-                                        message = "Google rejected your Gemini API key (400/403). Please verify and enter a valid API key in Settings.",
+                                        message = "Google explicitly rejected this Gemini API credential. Please verify the key and project restrictions.",
                                         errorCode = "API_KEY_INVALID",
                                         actionText = "OPEN SETTINGS"
                                     )
@@ -1499,9 +1499,33 @@ class JarvisConversationService : Service() {
                                 "QUOTA_EXCEEDED" -> {
                                     _liveError.value = JarvisLiveError(
                                         title = "API QUOTA EXHAUSTED",
-                                        message = "Gemini API quota or rate limit exceeded. Please check your Google AI Studio plan.",
+                                        message = "Gemini API quota or rate limit exceeded. JARVIS will try another available key when possible.",
                                         errorCode = "QUOTA_EXCEEDED",
                                         actionText = "CHECK PLAN"
+                                    )
+                                }
+                                "API_ACCESS_DENIED" -> {
+                                    _liveError.value = JarvisLiveError(
+                                        title = "PROJECT ACCESS DENIED",
+                                        message = message,
+                                        errorCode = "API_ACCESS_DENIED",
+                                        actionText = "CHECK API ACCESS"
+                                    )
+                                }
+                                "SETUP_REJECTED" -> {
+                                    _liveError.value = JarvisLiveError(
+                                        title = "MODEL SETUP REJECTED",
+                                        message = message,
+                                        errorCode = "SETUP_REJECTED",
+                                        actionText = "CHECK MODEL"
+                                    )
+                                }
+                                "RECONNECT_EXHAUSTED" -> {
+                                    _liveError.value = JarvisLiveError(
+                                        title = "RECONNECT LIMIT REACHED",
+                                        message = message,
+                                        errorCode = "RECONNECT_EXHAUSTED",
+                                        actionText = "RETRY"
                                     )
                                 }
                                 else -> {
@@ -1536,7 +1560,11 @@ class JarvisConversationService : Service() {
                             }
                             handleToolCallExecution(callId, name, args)
                         }
-                    }
+                    },
+                    apiKeyProvider = { preferences.getNextActiveKey("gemini")?.trim() ?: preferences.apiKey.trim() },
+                    onApiKeyRateLimited = { key -> preferences.reportKeyRateLimit("gemini", key) },
+                    onApiKeyInvalid = { key -> preferences.reportKeyInvalid("gemini", key) },
+                    onApiKeySuccess = { key -> preferences.reportKeySuccess("gemini", key) }
                 ).apply {
                     // System prompt is already baked into the constructor; no need to regenerate on reconnect.
                     // promptProvider removed to eliminate double-generation latency.
