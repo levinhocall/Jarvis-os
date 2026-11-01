@@ -190,8 +190,8 @@ object MissionEngine {
                     } else null,
                     outcomeSummary = when {
                         interruptedLlmPlanner -> "Process died while the LLM planner was active. An in-flight action may have an unknown outcome; no automatic replay was performed."
-                        interruptedExecution -> "Mission interrupted by process restart. Safe pending steps are paused and require explicit resume."
                         hasUnverified -> "Mission interrupted during an action whose real-world outcome could not be verified. No automatic retry was performed."
+                        interruptedExecution -> "Mission interrupted by process restart. Safe pending steps are paused and require explicit resume."
                         else -> e.outcomeSummary
                     },
                     createdAt = e.updatedAt,
