@@ -215,7 +215,7 @@ object EpisodicVectorMemory {
         }
 
         val entityToSave = if (existing != null) {
-            Log.d(TAG, "Updating existing memory '${existing.key}' with user correction")
+            Log.d(TAG, "Updating an existing memory after user correction; key omitted")
             existing.copy(
                 value = sanitizedValue,
                 rawText = sanitizedText,
