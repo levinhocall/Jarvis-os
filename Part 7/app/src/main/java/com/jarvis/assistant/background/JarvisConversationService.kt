@@ -3009,7 +3009,50 @@ class JarvisConversationService : Service() {
             executeDetectedCommand(cmd, cleanSpeech)
         } else {
             Log.d("JarvisService", "No command match from user text (confidence=${parsed.confidence})")
+
+            // When the live cloud session is unavailable because the device has no
+            // validated internet connection, route the unparsed utterance through the
+            // same unified offline capability pipeline used by the rest of the app.
+            // Do not run this fallback while online: Gemini Live owns online dialogue
+            // and tool execution, so invoking both paths would risk duplicate actions.
+            if (!hasValidatedInternetConnection()) {
+                hasExecutedCommandInCurrentTurn = true
+                lastHandledCommandText = cleanSpeech
+                serviceScope.launch(Dispatchers.IO) {
+                    val result = runCatching {
+                        app.unifiedRuntime.processUserRequest(
+                            input = cleanSpeech,
+                            context = this@JarvisConversationService,
+                            isNetworkAvailable = false
+                        )
+                    }.getOrElse { error ->
+                        com.jarvis.assistant.core.runtime.UnifiedExecutionResult.RecoveredCrash(
+                            errorSummary = "Offline request failed safely (${error.javaClass.simpleName})."
+                        )
+                    }
+                    val response = when (result) {
+                        is com.jarvis.assistant.core.runtime.UnifiedExecutionResult.Success -> result.outputMessage
+                        is com.jarvis.assistant.core.runtime.UnifiedExecutionResult.BlockedBySecurity ->
+                            "I blocked that request for safety: ${result.threatReason}"
+                        is com.jarvis.assistant.core.runtime.UnifiedExecutionResult.Degraded -> result.fallbackMessage
+                        is com.jarvis.assistant.core.runtime.UnifiedExecutionResult.RecoveredCrash -> result.errorSummary
+                    }
+                    withContext(Dispatchers.Main.immediate) {
+                        _events.emit(response)
+                        com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(response)
+                    }
+                }
+            }
         }
+    }
+
+    private fun hasValidatedInternetConnection(): Boolean {
+        val connectivity = getSystemService(Context.CONNECTIVITY_SERVICE) as?
+            android.net.ConnectivityManager ?: return false
+        val network = connectivity.activeNetwork ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     /**
