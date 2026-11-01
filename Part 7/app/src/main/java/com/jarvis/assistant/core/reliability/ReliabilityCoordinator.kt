@@ -28,12 +28,12 @@ object ReliabilityCoordinator {
         clean = clean.replace(Regex("""(gh[opusr]_[0-9A-Za-z]{20,})"""), "[REDACTED_GITHUB_TOKEN]")
         clean = clean.replace(Regex("""(glpat-[0-9A-Za-z_-]{20,})"""), "[REDACTED_GITLAB_TOKEN]")
         clean = clean.replace(Regex("""(xox[baprs]-[0-9A-Za-z-]{20,})"""), "[REDACTED_SLACK_TOKEN]")
-        clean = clean.replace(Regex("""(Bearer\\s+)[A-Za-z0-9._~+/-]+=*""", RegexOption.IGNORE_CASE), "$1[REDACTED]")
-        clean = clean.replace(Regex("""[?&](?:key|api_key|access_token|refresh_token|token)=[^&\\s]+""", RegexOption.IGNORE_CASE)) { match ->
+        clean = clean.replace(Regex("""(Bearer\s+)[A-Za-z0-9._~+/-]+=*""", RegexOption.IGNORE_CASE), "$1[REDACTED]")
+        clean = clean.replace(Regex("""[?&](?:key|api_key|access_token|refresh_token|token)=[^&\s]+""", RegexOption.IGNORE_CASE)) { match ->
             match.value.substringBefore("=") + "=[REDACTED]"
         }
         clean = clean.replace(
-            Regex("""((?:api[_-]?key|apiKey|access[_-]?token|refresh[_-]?token|token|key|secret|password)\\s*[:=]\\s*['"]?)[^'"\\s,;&]+""", RegexOption.IGNORE_CASE),
+            Regex("""((?:api[_-]?key|apiKey|access[_-]?token|refresh[_-]?token|token|key|secret|password)\s*[:=]\s*['"]?)[^'"\s,;&]+""", RegexOption.IGNORE_CASE),
             "$1[REDACTED]"
         )
         return clean
