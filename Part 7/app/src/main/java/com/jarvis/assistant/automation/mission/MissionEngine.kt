@@ -136,6 +136,9 @@ object MissionEngine {
                 val wasPaused = e.status == MissionOverallStatus.PAUSED.name
                 val interruptedLlmPlanner = e.status == MissionOverallStatus.EXECUTING.name &&
                     e.outcomeSummary == "LLM planner running"
+                val interruptedExecution = e.status in setOf(
+                    MissionOverallStatus.EXECUTING.name, MissionOverallStatus.VERIFYING.name
+                ) && !interruptedLlmPlanner
 
                 // A pending approval is not an interrupted action. Preserve it exactly.
                 // An actually in-flight consequential/non-idempotent action becomes UNVERIFIED
@@ -149,6 +152,11 @@ object MissionEngine {
                                 status = MissionStepStatus.UNVERIFIED,
                                 failureReason = "Process died while this action was in flight. JARVIS will not replay it automatically."
                             )
+                        } else if (st.status == MissionStepStatus.RUNNING) {
+                            st.copy(
+                                status = MissionStepStatus.PENDING,
+                                failureReason = "Process restarted during an idempotent action. It may be retried only after explicit user resume."
+                            )
                         } else {
                             st
                         }
@@ -161,6 +169,7 @@ object MissionEngine {
                 val overallStatus = when {
                     hasUnverified || interruptedLlmPlanner -> MissionOverallStatus.UNVERIFIED
                     wasAwaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
+                    wasPaused || interruptedExecution -> MissionOverallStatus.PAUSED
                     else -> try { MissionOverallStatus.valueOf(e.status) } catch (_: Exception) { MissionOverallStatus.EXECUTING }
                 }
                 val approvalState = if (wasAwaitingApproval) MissionApprovalState.PENDING_APPROVAL else
@@ -178,6 +187,7 @@ object MissionEngine {
                     } else null,
                     outcomeSummary = when {
                         interruptedLlmPlanner -> "Process died while the LLM planner was active. An in-flight action may have an unknown outcome; no automatic replay was performed."
+                        interruptedExecution -> "Mission interrupted by process restart. Safe pending steps are paused and require explicit resume."
                         hasUnverified -> "Mission interrupted during an action whose real-world outcome could not be verified. No automatic retry was performed."
                         else -> e.outcomeSummary
                     },
