@@ -920,6 +920,18 @@ object MissionEngine {
 
         for (index in updatedSteps.indices) {
             mission = _activeMission.value ?: break
+            if (pauseRequestedMissions.remove(missionId)) {
+                val paused = mission.copy(
+                    steps = updatedSteps.toList(),
+                    currentStepIndex = index,
+                    status = MissionOverallStatus.PAUSED,
+                    outcomeSummary = "Mission paused after the current action reached a safe boundary.",
+                    updatedAt = System.currentTimeMillis()
+                )
+                _activeMission.value = paused
+                persistMission(paused, index)
+                return
+            }
             if (mission.status == MissionOverallStatus.CANCELLED) {
                 Log.i(TAG, "Mission execution aborted: mission is cancelled.")
                 break
@@ -1104,6 +1116,19 @@ object MissionEngine {
             mission = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
             _activeMission.value = mission
             persistMission(mission, index)
+        }
+
+        if (pauseRequestedMissions.remove(missionId) && updatedSteps.any { it.status != MissionStepStatus.COMPLETED }) {
+            val paused = (_activeMission.value ?: mission).copy(
+                steps = updatedSteps.toList(),
+                currentStepIndex = updatedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0),
+                status = MissionOverallStatus.PAUSED,
+                outcomeSummary = "Mission paused after the current action reached a safe boundary.",
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = paused
+            persistMission(paused, paused.currentStepIndex)
+            return
         }
 
         // 7. Finalize Overall Mission Outcome Truthfully
