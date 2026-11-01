@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JARVIS OS V4 Verification Report",
+  "type": "object",
+  "required": ["repository", "branch", "original_head", "verified_head", "environment", "groups", "builds", "tests", "device", "artifacts", "blockers"],
+  "properties": {
+    "repository": { "const": "levinhocall/Jarvis-os" },
+    "branch": { "const": "main" },
+    "original_head": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "verified_head": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "environment": {
+      "type": "object",
+      "required": ["os", "architecture", "java_version", "gradle_version", "android_sdk_platforms"],
+      "properties": {
+        "os": { "type": "string" },
+        "architecture": { "type": "string" },
+        "java_version": { "type": "string" },
+        "gradle_version": { "type": "string" },
+        "android_sdk_platforms": { "type": "array", "items": { "type": "string" } },
+        "device_model": { "type": "string" },
+        "android_release": { "type": "string" },
+        "android_api": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "groups": {
+      "type": "object",
+      "required": ["build_testing", "android_16", "vision_navigation", "database_security", "ui_lifecycle"],
+      "properties": {
+        "build_testing": { "$ref": "#/$defs/group" },
+        "android_16": { "$ref": "#/$defs/group" },
+        "vision_navigation": { "$ref": "#/$defs/group" },
+        "database_security": { "$ref": "#/$defs/group" },
+        "ui_lifecycle": { "$ref": "#/$defs/group" }
+      },
+      "additionalProperties": false
+    },
+    "builds": { "type": "array", "items": { "$ref": "#/$defs/command" } },
+    "tests": { "type": "array", "items": { "$ref": "#/$defs/test" } },
+    "device": {
+      "type": "object",
+      "required": ["status", "checks"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "status", "evidence"],
+            "properties": {
+              "name": { "type": "string" },
+              "status": { "$ref": "#/$defs/status" },
+              "evidence": { "type": "string" },
+              "logcat": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["variant", "path", "exists", "sha256"],
+        "properties": {
+          "variant": { "type": "string" },
+          "path": { "type": "string" },
+          "exists": { "type": "boolean" },
+          "size_bytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string" },
+          "signing_certificate_sha256": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "status": { "enum": ["IMPLEMENTED", "BUILD_VERIFIED", "TEST_VERIFIED", "DEVICE_VERIFIED", "BLOCKED", "FAILED"] },
+    "group": {
+      "type": "object",
+      "required": ["implementation", "build", "tests", "device", "evidence"],
+      "properties": {
+        "implementation": { "$ref": "#/$defs/status" },
+        "build": { "$ref": "#/$defs/status" },
+        "tests": { "$ref": "#/$defs/status" },
+        "device": { "$ref": "#/$defs/status" },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "type": "object",
+      "required": ["command", "exit_code", "stdout_log", "stderr_log"],
+      "properties": {
+        "command": { "type": "string" },
+        "exit_code": { "type": ["integer", "null"] },
+        "stdout_log": { "type": "string" },
+        "stderr_log": { "type": "string" },
+        "duration_seconds": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "test": {
+      "type": "object",
+      "required": ["suite", "status", "passed", "failed", "skipped", "failed_tests", "log"],
+      "properties": {
+        "suite": { "type": "string" },
+        "status": { "$ref": "#/$defs/status" },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "failed_tests": { "type": "array", "items": { "type": "string" } },
+        "log": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
