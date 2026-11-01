@@ -3,13 +3,10 @@ package com.jarvis.assistant.automation.phone
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.Manifest
 import android.database.Cursor
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.ContactsContract
-import android.telephony.SmsManager
 import android.telephony.TelephonyManager
 import android.util.Log
 import com.jarvis.assistant.audio.VoiceSynthesisRouter
@@ -89,26 +86,26 @@ class CallScreeningReceiver : BroadcastReceiver() {
                 return CallScreeningResult(true, false, "Incoming call silenced, but the caller number is unavailable; no SMS was sent.")
             }
 
-            if (context.checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-                VoiceSynthesisRouter.speak("Incoming call silenced. SMS permission is not granted.")
-                return CallScreeningResult(true, false, "Incoming call silenced, but SEND_SMS permission is not granted.")
-            }
-
             return try {
-                val smsManager = context.getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
-                val parts = smsManager.divideMessage(messageToSend)
-                if (parts.size > 1) {
-                    smsManager.sendMultipartTextMessage(number, null, parts, null, null)
-                } else {
-                    smsManager.sendTextMessage(number, null, messageToSend, null, null)
+                val smsIntent = Intent(
+                    Intent.ACTION_SENDTO,
+                    Uri.parse("smsto:${Uri.encode(number)}")
+                ).apply {
+                    putExtra("sms_body", messageToSend)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                Log.i(TAG, "Explicit incoming-call SMS dispatched.")
-                VoiceSynthesisRouter.speak("Incoming call silenced and your message was sent.")
-                CallScreeningResult(true, true, "Incoming call ringer silenced and the explicitly supplied SMS was dispatched.")
+                if (smsIntent.resolveActivity(context.packageManager) == null) {
+                    VoiceSynthesisRouter.speak("Incoming call silenced. No SMS app is available.")
+                    CallScreeningResult(true, false, "Incoming call silenced, but no SMS composer is available.")
+                } else {
+                    context.startActivity(smsIntent)
+                    VoiceSynthesisRouter.speak("Incoming call silenced. A draft message is open for your review; it has not been sent.")
+                    CallScreeningResult(true, true, "Incoming call silenced. Draft SMS opened for review; tap Send in your SMS app to send it.")
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Could not dispatch the explicitly requested incoming-call SMS (${e.javaClass.simpleName}).")
-                VoiceSynthesisRouter.speak("Incoming call silenced. The SMS could not be sent.")
-                CallScreeningResult(true, false, "Incoming call silenced, but SMS dispatch failed (${e.javaClass.simpleName}).")
+                Log.e(TAG, "Could not open the SMS composer (${e.javaClass.simpleName}).")
+                VoiceSynthesisRouter.speak("Incoming call silenced. The SMS draft could not be opened.")
+                CallScreeningResult(true, false, "Incoming call silenced, but the SMS draft could not be opened.")
             }
         }
 
@@ -215,6 +212,6 @@ class CallScreeningReceiver : BroadcastReceiver() {
 
 data class CallScreeningResult(
     val ringerSilenced: Boolean,
-    val smsSent: Boolean,
+    val smsComposerOpened: Boolean,
     val detail: String
 )
