@@ -2069,6 +2069,23 @@ class JarvisAccessibilityService : AccessibilityService() {
                (current.isNotEmpty() && exp.contains(current, ignoreCase = true) && current.length >= 3)
     }
 
+    private fun isSensitiveCredentialInput(node: AccessibilityNodeInfo): Boolean {
+        if (node.isPassword) return true
+        val label = listOfNotNull(
+            node.text?.toString(),
+            node.contentDescription?.toString(),
+            node.viewIdResourceName,
+            node.className?.toString()
+        ).joinToString(" ").lowercase(Locale.ROOT)
+        val sensitivePatterns = listOf(
+            Regex("\\b(password|passcode|pass phrase|passphrase|otp|one[- ]time code|verification code|security code)\\b"),
+            Regex("\\b(pin|upi pin|cvv|cvc|card number|credit card|debit card)\\b"),
+            Regex("\\b(bank account|account number|beneficiary|ifsc|recovery phrase|seed phrase|private key|wallet phrase)\\b"),
+            Regex("\\b(payment amount|transfer amount|upi id)\\b")
+        )
+        return sensitivePatterns.any { it.containsMatchIn(label) }
+    }
+
     fun smartTypeText(textToType: String, targetRect: Rect? = null, submit: Boolean = false): Boolean {
         lastTypeVerified = false
         if (textToType.isBlank()) {
@@ -2108,6 +2125,10 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
         if (target == null) {
             Log.w(TAG, "smartTypeText found no verified editable target; no text was entered")
+            return false
+        }
+        if (isSensitiveCredentialInput(target)) {
+            Log.w(TAG, "smartTypeText refused a password or sensitive financial/credential field; no text was entered")
             return false
         }
 
