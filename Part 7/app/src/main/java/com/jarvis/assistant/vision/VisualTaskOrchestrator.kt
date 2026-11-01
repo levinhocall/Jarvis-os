@@ -995,8 +995,6 @@ class VisualTaskOrchestrator(
             lastUnverifiedClickScreen = null
         }
 
-        val recentOtp = JarvisAccessibilityService.getRecentOtp()
-        val otpNotice = if (recentOtp != null) "\n[SYSTEM NOTICE: Detected incoming SMS/Notification OTP: '$recentOtp' (available for auto-entry)]" else ""
         val clickedLabelLower = target.primaryLabel.lowercase(Locale.ROOT)
         val isInstallOrDownload = clickedLabelLower == "install" || clickedLabelLower.contains("install") || clickedLabelLower == "download" || clickedLabelLower.contains("download")
         val isPlayStore = rootPkg.contains("vending", ignoreCase = true)
@@ -1026,7 +1024,7 @@ class VisualTaskOrchestrator(
             "Tapped '${target.primaryLabel}' once, but no screen change appeared after ${watchedMs / 1000.0}s. Do NOT tap it again blindly (it may be a toggle that already worked): call inspect_screen and look at the screen first."
         }
 
-        val summary = groundingEngine.formatElementsSummary(elementsAfter, rootAfter) + otpNotice
+        val summary = groundingEngine.formatElementsSummary(elementsAfter, rootAfter)
         recordObservation(service, summary)
         AgentTaskEngine.recordAction("click:${target.primaryLabel}", returnMessage, intendedResultVerified)
         AgentTaskEngine.setState(if (intendedResultVerified) AgentTaskEngine.State.CONTINUING else AgentTaskEngine.State.RECOVERING)
@@ -1468,8 +1466,6 @@ class VisualTaskOrchestrator(
         }
 
         dispatchImmediateScreenFrame()
-        val recentOtp = JarvisAccessibilityService.getRecentOtp()
-        val otpNotice = if (recentOtp != null) "\n[SYSTEM NOTICE: Detected incoming SMS/Notification OTP: '$recentOtp' (available for auto-entry)]" else ""
         val screenSource = if (screenCaptureManager.hasRecentFrame()) {
             "[Screen share active: a recent visual frame is being streamed.]\n"
         } else {
@@ -1480,7 +1476,7 @@ class VisualTaskOrchestrator(
                 "[Current accessibility labels are available. Use a unique labeled target for actions; image-only and unlabeled controls are unavailable.]\n"
             }
         }
-        val summary = screenSource + groundingEngine.formatElementsSummary(elements, root) + otpNotice
+        val summary = screenSource + groundingEngine.formatElementsSummary(elements, root)
         Log.i(TAG, "Screen inspection generated:\n$summary")
         return@withContext summary
     }
@@ -1488,9 +1484,7 @@ class VisualTaskOrchestrator(
     private fun captureCurrentStateSummary(service: JarvisAccessibilityService): String {
         val root = service.getActiveRootNode() ?: return "Screen empty or not accessible."
         val elements = groundingEngine.scanScreen(root)
-        val recentOtp = JarvisAccessibilityService.getRecentOtp()
-        val otpNotice = if (recentOtp != null) "\n[SYSTEM NOTICE: Detected incoming SMS/Notification OTP: '$recentOtp' (available for auto-entry)]" else ""
-        return groundingEngine.formatElementsSummary(elements, root) + otpNotice
+        return groundingEngine.formatElementsSummary(elements, root)
     }
 
     private fun isTogglePhrase(phrase: String): Boolean {
