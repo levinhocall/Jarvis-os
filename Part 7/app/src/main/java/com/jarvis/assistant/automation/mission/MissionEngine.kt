@@ -1306,7 +1306,7 @@ object MissionEngine {
 
         // 7. Finalize Overall Mission Outcome Truthfully
         val finalStatus = when {
-            unverifiedNotes.isNotEmpty() && completedCount == updatedSteps.size -> MissionOverallStatus.UNVERIFIED
+            unverifiedNotes.isNotEmpty() -> MissionOverallStatus.UNVERIFIED
             completedCount < updatedSteps.size && completedCount > 0 -> MissionOverallStatus.PARTIALLY_COMPLETED
             completedCount == updatedSteps.size -> MissionOverallStatus.COMPLETED
             else -> MissionOverallStatus.FAILED
