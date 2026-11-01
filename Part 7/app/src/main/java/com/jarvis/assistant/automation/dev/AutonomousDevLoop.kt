@@ -137,13 +137,34 @@ class AutonomousDevLoop(
                     DevPhase.INSPECT -> {
                         val inspectTool = DevToolRegistry.getTool("inspect_structure")
                         val result = inspectTool?.execute(project, step.toolParams ?: emptyMap(), sandbox, devAgent, isApprovedByUser)
-                        if (result is DevToolResult.Success) {
-                            step.status = DevStepStatus.COMPLETED
-                            step.outputSummary = result.output.take(500)
-                        } else if (result is DevToolResult.Failure) {
-                            step.status = DevStepStatus.FAILED
-                            step.error = result.error
-                            overallSuccess = false
+                        when (result) {
+                            is DevToolResult.Success -> {
+                                step.status = DevStepStatus.COMPLETED
+                                step.outputSummary = result.output.take(500)
+                            }
+                            is DevToolResult.Failure -> {
+                                step.status = DevStepStatus.FAILED
+                                step.error = result.error
+                                overallSuccess = false
+                            }
+                            is DevToolResult.EnvironmentUnsupported -> {
+                                step.status = DevStepStatus.BLOCKED
+                                step.error = result.reason
+                                limitations.add(result.reason)
+                                overallSuccess = false
+                            }
+                            is DevToolResult.AwaitingApproval -> {
+                                step.status = DevStepStatus.AWAITING_APPROVAL
+                                step.error = result.reason
+                                overallSuccess = false
+                                break
+                            }
+                            null -> {
+                                step.status = DevStepStatus.BLOCKED
+                                step.error = "Project inspection tool is not registered; inspection was not performed."
+                                limitations.add(step.error!!)
+                                overallSuccess = false
+                            }
                         }
                     }
 
