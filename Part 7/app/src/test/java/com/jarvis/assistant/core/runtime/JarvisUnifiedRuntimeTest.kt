@@ -62,13 +62,12 @@ class JarvisUnifiedRuntimeTest {
     }
 
     @Test
-    fun `processUserRequest routes to offline intelligence when network unavailable`() = runBlocking {
+    fun `processUserRequest never claims hardware execution without Android context`() = runBlocking {
         val result = runtime.processUserRequest("turn on flashlight", isNetworkAvailable = false)
-        assertTrue(result is UnifiedExecutionResult.Success)
-        val success = result as UnifiedExecutionResult.Success
-        assertEquals("OfflineIntelligenceCoordinator", success.specialistHandled)
-        assertTrue(success.outputMessage.contains("Flashlight turned ON"))
-        assertNotNull(success.provenanceRecordId)
+        assertTrue(result is UnifiedExecutionResult.Degraded)
+        val degraded = result as UnifiedExecutionResult.Degraded
+        assertTrue(degraded.fallbackMessage.contains("was not executed"))
+        assertFalse(degraded.fallbackMessage.contains("Flashlight turned ON"))
     }
 
     @Test
