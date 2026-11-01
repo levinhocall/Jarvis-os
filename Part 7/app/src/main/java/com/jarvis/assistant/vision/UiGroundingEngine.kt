@@ -86,9 +86,9 @@ class UiGroundingEngine {
 
     companion object {
         private const val TAG = "UiGroundingEngine"
-        private val sensitiveValuePattern = Regex("""^\\s*(?:\\d{4,8}|(?:\\d[ -]?){13,19})\\s*$""")
+        private val sensitiveValuePattern = Regex("""^\s*(?:\d{4,8}|(?:\d[ -]?){13,19})\s*$""")
         private val sensitiveLabelPattern = Regex(
-            """\\b(password|passcode|pin|otp|verification code|security code|cvv|card number|account number)\\b""",
+            """\b(password|passcode|pin|otp|verification code|security code|cvv|card number|account number)\b""",
             RegexOption.IGNORE_CASE
         )
     }
