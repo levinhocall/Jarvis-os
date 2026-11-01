@@ -269,7 +269,6 @@ object MissionEngine {
             cancellationRequested || result.abortReason == "CANCELLED" -> MissionOverallStatus.CANCELLED
             awaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
             result.abortReason == "CLARIFICATION_REQUIRED" -> MissionOverallStatus.CLARIFICATION_REQUIRED
-            result.abortReason == "CANCELLED" -> MissionOverallStatus.CANCELLED
             result.abortReason == "PAUSED" && (result.history.isEmpty() || allStepsVerified) -> MissionOverallStatus.PAUSED
             result.isSuccess && allStepsVerified -> MissionOverallStatus.COMPLETED
             result.history.any { !it.isVerified } || result.isSuccess -> MissionOverallStatus.UNVERIFIED
