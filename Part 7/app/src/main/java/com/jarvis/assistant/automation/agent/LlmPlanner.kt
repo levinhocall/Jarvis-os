@@ -146,7 +146,10 @@ class GeminiFunctionCallProvider(
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build(),
-    private val gson: Gson = Gson()
+    private val gson: Gson = Gson(),
+    private val onApiKeyRateLimited: (String) -> Unit = {},
+    private val onApiKeyInvalid: (String) -> Unit = {},
+    private val onApiKeySuccess: (String) -> Unit = {}
 ) : LlmFunctionCallProvider {
 
     override val providerId: String = "gemini_function_calling"
@@ -209,16 +212,24 @@ class GeminiFunctionCallProvider(
 
                 if (!response.isSuccessful) {
                     val reason = when (response.code) {
-                        401, 403 -> "Gemini rejected the API credentials or project access (HTTP ${response.code})."
-                        429 -> "Gemini rate limit or quota reached (HTTP 429); retry after the provider cooldown."
+                        401 -> {
+                            runCatching { onApiKeyInvalid(apiKey) }
+                            "Gemini explicitly rejected the API key (HTTP 401)."
+                        }
+                        403 -> "Gemini denied access to this API key or project (HTTP 403); this does not prove the key is invalid."
+                        429 -> {
+                            runCatching { onApiKeyRateLimited(apiKey) }
+                            "Gemini rate limit or quota reached (HTTP 429); the key was placed into cooldown."
+                        }
                         404 -> "The selected Gemini model or endpoint was not found (HTTP 404)."
                         in 500..599 -> "Gemini service is temporarily unavailable (HTTP ${response.code})."
                         else -> "Gemini API request failed with HTTP ${response.code}."
                     }
                     return@withContext LlmStepDecision.Abort(reason)
                 }
+                runCatching { onApiKeySuccess(apiKey) }
 
-            val json = gson.fromJson(respBody, JsonObject::class.java)
+                val json = gson.fromJson(respBody, JsonObject::class.java)
             val candidates = json.getAsJsonArray("candidates")
             if (candidates == null || candidates.size() == 0) {
                 return@withContext LlmStepDecision.Abort("Empty candidates from Gemini")
