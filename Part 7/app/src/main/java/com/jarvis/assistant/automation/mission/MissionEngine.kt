@@ -190,6 +190,135 @@ object MissionEngine {
         return list
     }
 
+    private fun isLlmPlannedMission(mission: MissionDefinition): Boolean =
+        mission.steps.any { it.title.startsWith("Step ") && it.toolName.isNotBlank() }
+
+    private suspend fun persistLlmPlannerOutcome(
+        baseMission: MissionDefinition,
+        result: com.jarvis.assistant.automation.agent.LlmMissionExecutionResult,
+        context: Context?
+    ) {
+        val awaitingApproval = result.abortReason == "APPROVAL_REQUIRED"
+        val convertedSteps = result.history.map { record ->
+            val isPendingApprovalStep = awaitingApproval &&
+                record.toolName == result.pendingApprovalTool &&
+                !record.isVerified
+            val registeredRisk = ToolRegistry.getTool(record.toolName)?.riskLevel ?: MissionRisk.LOW
+            MissionStep(
+                title = "Step ${record.stepIndex}: ${record.toolName}",
+                toolName = record.toolName,
+                parameters = record.arguments,
+                riskLevel = if (isPendingApprovalStep) MissionRisk.HIGH_CONSEQUENTIAL else registeredRisk,
+                status = when {
+                    record.isVerified -> MissionStepStatus.COMPLETED
+                    isPendingApprovalStep -> MissionStepStatus.PENDING
+                    else -> MissionStepStatus.UNVERIFIED
+                },
+                verificationEvidence = MissionVerificationEvidence(
+                    evidenceType = if (record.isVerified) EvidenceType.EXTERNAL_API_ACKNOWLEDGED else EvidenceType.UNVERIFIED,
+                    isVerified = record.isVerified,
+                    details = record.observation
+                )
+            )
+        }
+
+        val allStepsVerified = convertedSteps.isNotEmpty() &&
+            convertedSteps.all {
+                it.status == MissionStepStatus.COMPLETED &&
+                    it.verificationEvidence?.isVerified == true
+            }
+        val finalStatus = when {
+            awaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
+            result.abortReason == "CLARIFICATION_REQUIRED" -> MissionOverallStatus.CLARIFICATION_REQUIRED
+            result.abortReason == "CANCELLED" -> MissionOverallStatus.CANCELLED
+            result.isSuccess && allStepsVerified -> MissionOverallStatus.COMPLETED
+            result.history.any { !it.isVerified } || result.isSuccess -> MissionOverallStatus.UNVERIFIED
+            else -> MissionOverallStatus.FAILED
+        }
+        val updated = baseMission.copy(
+            steps = convertedSteps,
+            status = finalStatus,
+            approvalState = if (awaitingApproval) MissionApprovalState.PENDING_APPROVAL else baseMission.approvalState,
+            approvalPrompt = if (awaitingApproval) result.summary else null,
+            outcomeSummary = result.summary,
+            updatedAt = System.currentTimeMillis()
+        )
+        _activeMission.value = updated
+        val pendingIndex = convertedSteps.indexOfFirst { it.status == MissionStepStatus.PENDING }
+        val nextIndex = if (pendingIndex >= 0) pendingIndex else
+            convertedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0)
+        persistMission(updated, nextIndex)
+        if (awaitingApproval && context != null) {
+            MissionApprovalNotifier.show(context, updated)
+        }
+    }
+
+    private suspend fun continueApprovedLlmMission(
+        context: Context?,
+        approvedMission: MissionDefinition
+    ) {
+        val planner = llmPlanner ?: run {
+            val failed = approvedMission.copy(
+                status = MissionOverallStatus.FAILED,
+                outcomeSummary = "The LLM planner is unavailable; the approved action was not executed."
+            )
+            _activeMission.value = failed
+            persistMission(failed)
+            return
+        }
+        val pendingIndex = approvedMission.steps.indexOfFirst { it.status == MissionStepStatus.PENDING }
+        if (pendingIndex < 0) {
+            val failed = approvedMission.copy(
+                status = MissionOverallStatus.FAILED,
+                outcomeSummary = "No pending approved action was found; nothing was executed."
+            )
+            _activeMission.value = failed
+            persistMission(failed)
+            return
+        }
+
+        val pending = approvedMission.steps[pendingIndex]
+        val canonicalToolName = ToolRegistry.resolveToolName(pending.toolName)
+        val initialHistory = approvedMission.steps.take(pendingIndex).mapIndexed { index, step ->
+            com.jarvis.assistant.automation.agent.LlmPlannerStepRecord(
+                stepIndex = index + 1,
+                toolName = ToolRegistry.resolveToolName(step.toolName),
+                arguments = step.parameters,
+                isVerified = step.status == MissionStepStatus.COMPLETED &&
+                    step.verificationEvidence?.isVerified == true,
+                observation = step.verificationEvidence?.details ?: "Previously verified mission step."
+            )
+        }
+        var approvalConsumed = false
+        val result = planner.planAndExecute(
+            goal = approvedMission.goal,
+            context = context,
+            initialHistory = initialHistory,
+            approvedToolCall = com.jarvis.assistant.automation.agent.ApprovedLlmToolCall(
+                toolName = canonicalToolName,
+                arguments = pending.parameters
+            )
+        ) { toolName, args ->
+            val exactApproval = !approvalConsumed &&
+                ToolRegistry.resolveToolName(toolName) == canonicalToolName &&
+                args == pending.parameters
+            if (exactApproval) approvalConsumed = true
+            val step = MissionStep(
+                title = "LLM Step: $toolName",
+                toolName = toolName,
+                parameters = args,
+                riskLevel = ToolRegistry.getTool(toolName)?.riskLevel ?: MissionRisk.LOW
+            )
+            val (success, evidence) = executeSingleStep(
+                step,
+                context,
+                isApprovedByUser = exactApproval
+            )
+            Pair(success && evidence.isVerified, evidence.details)
+        }
+        persistLlmPlannerOutcome(approvedMission, result, context)
+    }
+
     /**
      * Initializes and launches a mission from a user goal.
      * Tries LLM planner when available; falls back to deterministic regex planner for offline fast-path.
@@ -219,60 +348,13 @@ object MissionEngine {
                     val step = MissionStep(
                         title = "LLM Step: $toolName",
                         toolName = toolName,
-                        parameters = args
+                        parameters = args,
+                        riskLevel = ToolRegistry.getTool(toolName)?.riskLevel ?: MissionRisk.LOW
                     )
                     val (success, evidence) = executeSingleStep(step, context)
                     Pair(success && evidence.isVerified, evidence.details)
                 }
-
-                val awaitingApproval = result.abortReason == "APPROVAL_REQUIRED"
-                val convertedSteps = result.history.map { h ->
-                    val isPendingApprovalStep = awaitingApproval &&
-                        h.toolName == result.pendingApprovalTool &&
-                        !h.isVerified
-                    MissionStep(
-                        title = "Step ${h.stepIndex}: ${h.toolName}",
-                        toolName = h.toolName,
-                        parameters = h.arguments,
-                        riskLevel = if (isPendingApprovalStep) MissionRisk.HIGH_CONSEQUENTIAL else MissionRisk.LOW,
-                        status = when {
-                            h.isVerified -> MissionStepStatus.COMPLETED
-                            isPendingApprovalStep -> MissionStepStatus.PENDING
-                            else -> MissionStepStatus.UNVERIFIED
-                        },
-                        verificationEvidence = MissionVerificationEvidence(
-                            evidenceType = if (h.isVerified) EvidenceType.EXTERNAL_API_ACKNOWLEDGED else EvidenceType.UNVERIFIED,
-                            isVerified = h.isVerified,
-                            details = h.observation
-                        )
-                    )
-                }
-
-                val allStepsVerified = convertedSteps.isNotEmpty() &&
-                    convertedSteps.all { it.status == MissionStepStatus.COMPLETED && it.verificationEvidence?.isVerified == true }
-                val finalStatus = when {
-                    awaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
-                    result.isSuccess && allStepsVerified -> MissionOverallStatus.COMPLETED
-                    result.history.any { !it.isVerified } || result.isSuccess -> MissionOverallStatus.UNVERIFIED
-                    else -> MissionOverallStatus.FAILED
-                }
-
-                val completedMission = initialMission.copy(
-                    steps = convertedSteps,
-                    status = finalStatus,
-                    approvalState = if (awaitingApproval) MissionApprovalState.PENDING_APPROVAL else MissionApprovalState.NOT_REQUIRED,
-                    approvalPrompt = if (awaitingApproval) result.summary else null,
-                    outcomeSummary = result.summary,
-                    updatedAt = System.currentTimeMillis()
-                )
-                _activeMission.value = completedMission
-                val pendingIndex = convertedSteps.indexOfFirst { it.status == MissionStepStatus.PENDING }
-                val nextIndex = if (pendingIndex >= 0) pendingIndex else
-                    convertedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0)
-                persistMission(completedMission, nextIndex)
-                if (awaitingApproval && context != null) {
-                    MissionApprovalNotifier.show(context, completedMission)
-                }
+                persistLlmPlannerOutcome(initialMission, result, context)
             }
             // Return the running mission immediately. The background planner updates
             // activeMission and persistence when it reaches a verified terminal state.
@@ -583,7 +665,11 @@ object MissionEngine {
             _activeMission.value = updated
             persistMission(updated)
             engineScope.launch {
-                executeMission(context, missionId)
+                if (isLlmPlannedMission(updated)) {
+                    continueApprovedLlmMission(context, updated)
+                } else {
+                    executeMission(context, missionId)
+                }
             }
         } else {
             val updated = current.copy(
