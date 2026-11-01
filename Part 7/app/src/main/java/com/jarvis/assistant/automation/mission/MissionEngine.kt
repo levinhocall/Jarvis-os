@@ -1313,6 +1313,8 @@ object MissionEngine {
         completedCount: Int,
         unverifiedNotes: List<String>
     ) {
+        pauseRequestedMissions.remove(mission.missionId)
+        cancelRequestedMissions.remove(mission.missionId)
         val finalStatus = if (completedCount > 0) MissionOverallStatus.PARTIALLY_COMPLETED else MissionOverallStatus.FAILED
         val failedStepTitle = updatedSteps[failedIndex].title
         _activeMission.value = mission.copy(
