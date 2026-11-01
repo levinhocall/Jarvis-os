@@ -152,7 +152,9 @@ object ToolRegistry {
                     ToolParameter("command", "String", "Action description (e.g. 'turn on flashlight')", required = true)
                 ),
                 riskLevel = MissionRisk.LOW,
-                isIdempotent = true
+                // A generic natural-language device command may contain toggle/increment
+                // operations. Treat interruption as uncertain rather than replaying it.
+                isIdempotent = false
             )
         )
 
