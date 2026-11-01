@@ -126,8 +126,17 @@ class FeatureHubActivity : AppCompatActivity() {
         }
         entry(root, "Mission History", "Review persisted multi-step missions and their verified outcomes", true) {
             lifecycleScope.launch {
-                val missions = withContext(Dispatchers.IO) {
-                    com.jarvis.assistant.JarvisApp.instance.memoryDatabase.missionDao().getAllMissions()
+                val missions = try {
+                    withContext(Dispatchers.IO) {
+                        com.jarvis.assistant.JarvisApp.instance.memoryDatabase.missionDao().getAllMissions()
+                    }
+                } catch (_: Exception) {
+                    android.widget.Toast.makeText(
+                        this@FeatureHubActivity,
+                        "Mission history could not be loaded. Check database availability and try again.",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
                 }
                 val summary = if (missions.isEmpty()) {
                     "No saved missions yet."
