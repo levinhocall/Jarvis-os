@@ -96,6 +96,19 @@ class JarvisNotificationListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         instance = this
+        persistenceScope.launch(Dispatchers.IO) {
+            if (!com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) return@launch
+            runCatching {
+                val dao = com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext).notificationHistoryDao()
+                dao.getAllForPrivacyAudit().forEach { item ->
+                    if (NotificationPrivacyFilter.sanitize(item.sender, item.message).containsCredential) {
+                        dao.delete(item.id)
+                    }
+                }
+            }.onFailure { error ->
+                Log.w(TAG, "Notification privacy audit could not complete (${error.javaClass.simpleName}).")
+            }
+        }
         Log.i(TAG, "JarvisNotificationListenerService connected")
     }
 
