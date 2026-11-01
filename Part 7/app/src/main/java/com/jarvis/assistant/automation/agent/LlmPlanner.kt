@@ -339,7 +339,11 @@ class LlmPlanner(
         val history = initialHistory.toMutableList()
         val startTime = System.currentTimeMillis()
         val availableTools = ToolRegistry.getAllTools()
-        val recentCallSignatures = mutableListOf<String>()
+        val recentCallSignatures = mutableListOf<String>().apply {
+            initialHistory.forEach { record ->
+                add("${ToolRegistry.resolveToolName(record.toolName)}:${record.arguments.entries.sortedBy { it.key }}")
+            }
+        }
 
         if (isCancelled.get()) {
             return LlmMissionExecutionResult(false, "Mission cancelled before execution began.", history.size, history, "CANCELLED")
