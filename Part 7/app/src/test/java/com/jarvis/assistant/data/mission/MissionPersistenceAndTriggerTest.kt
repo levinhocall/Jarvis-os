@@ -142,7 +142,7 @@ class MissionPersistenceAndTriggerTest {
     }
 
     @Test
-    fun testTriggerRepositoryManagesScheduledTriggers() {
+    fun testTriggerRepositoryDoesNotClaimSchedulingWithoutEncryptedStorageAndWorkManager() {
         val repo = TriggerRepository(context = null, workManagerProvider = { null })
         val trigger = ScheduledTrigger(
             triggerId = "trig_morning_brief",
@@ -153,13 +153,24 @@ class MissionPersistenceAndTriggerTest {
             isUnattended = true
         )
 
-        repo.scheduleTrigger(trigger)
-        val loaded = repo.getTrigger("trig_morning_brief")
-        assertNotNull(loaded)
-        assertEquals("Read morning unread notifications", loaded?.goalOrAction)
-        assertTrue(loaded?.isUnattended == true)
-
-        repo.cancelTrigger("trig_morning_brief")
+        assertFalse(repo.scheduleTrigger(trigger))
         assertNull(repo.getTrigger("trig_morning_brief"))
+        assertFalse(repo.cancelTrigger("trig_morning_brief"))
+    }
+
+    @Test
+    fun testDailyTriggerDelayTargetsNextLocalOccurrence() {
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        val calendar = java.util.Calendar.getInstance(utc).apply {
+            set(2026, java.util.Calendar.NOVEMBER, 1, 7, 30, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val now = calendar.timeInMillis
+
+        val delay = TriggerRepository.nextDailyDelayMs(now, 8, 0, utc)
+        assertEquals(30L * 60L * 1000L, delay)
+
+        val afterTarget = TriggerRepository.nextDailyDelayMs(now + 60L * 60L * 1000L, 8, 0, utc)
+        assertEquals(23L * 60L * 60L * 1000L + 30L * 60L * 1000L, afterTarget)
     }
 }
