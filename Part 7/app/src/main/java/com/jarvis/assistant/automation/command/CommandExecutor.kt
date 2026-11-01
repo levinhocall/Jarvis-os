@@ -207,11 +207,10 @@ class CommandExecutor(
                 com.jarvis.assistant.automation.ledger.ExpenseLedgerTracker.getTodayLedgerSummary(phoneManager.context)
             }
             is JarvisCommand.CallScreeningAction -> {
-                val handled = com.jarvis.assistant.automation.phone.CallScreeningReceiver.rejectCallAndSendMessage(
+                com.jarvis.assistant.automation.phone.CallScreeningReceiver.silenceRingerAndSendMessage(
                     phoneManager.context,
                     command.message
-                )
-                if (handled) "Call rejected and auto-reply message sent, Sir." else "Call silenced, Sir."
+                ).detail
             }
         }
     }
