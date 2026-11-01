@@ -20,35 +20,56 @@ object ReliabilityCoordinator {
 
     fun sanitize(text: String): String {
         var clean = text
-        clean = clean.replace(Regex("""AIza[0-9A-Za-z-_]{30,40}"""), "[REDACTED_GEMINI_KEY]")
-        clean = clean.replace(Regex("""(?i)(?:bearer|key|token|password|secret)[=:\s]+[A-Za-z0-9_\-\.]{8,}"""), "[REDACTED_SECRET]")
+        clean = clean.replace(Regex("""(AIza[0-9A-Za-z_-]{30,})"""), "[REDACTED_GEMINI_KEY]")
+        clean = clean.replace(Regex("""(sk-or-v1-[0-9A-Za-z_-]{20,})"""), "[REDACTED_PROVIDER_KEY]")
+        clean = clean.replace(Regex("""(sk-[0-9A-Za-z_-]{32,})"""), "[REDACTED_PROVIDER_KEY]")
+        clean = clean.replace(Regex("""(gsk_[0-9A-Za-z_-]{20,})"""), "[REDACTED_PROVIDER_KEY]")
+        clean = clean.replace(Regex("""(github_pat_[0-9A-Za-z_]{20,})"""), "[REDACTED_GITHUB_TOKEN]")
+        clean = clean.replace(Regex("""(gh[opusr]_[0-9A-Za-z]{20,})"""), "[REDACTED_GITHUB_TOKEN]")
+        clean = clean.replace(Regex("""(glpat-[0-9A-Za-z_-]{20,})"""), "[REDACTED_GITLAB_TOKEN]")
+        clean = clean.replace(Regex("""(xox[baprs]-[0-9A-Za-z-]{20,})"""), "[REDACTED_SLACK_TOKEN]")
+        clean = clean.replace(Regex("""(Bearer\\s+)[A-Za-z0-9._~+/-]+=*""", RegexOption.IGNORE_CASE), "$1[REDACTED]")
+        clean = clean.replace(Regex("""[?&](?:key|api_key|access_token|refresh_token|token)=[^&\\s]+""", RegexOption.IGNORE_CASE)) { match ->
+            match.value.substringBefore("=") + "=[REDACTED]"
+        }
+        clean = clean.replace(
+            Regex("""((?:api[_-]?key|apiKey|access[_-]?token|refresh[_-]?token|token|key|secret|password)\\s*[:=]\\s*['"]?)[^'"\\s,;&]+""", RegexOption.IGNORE_CASE),
+            "$1[REDACTED]"
+        )
         return clean
     }
-
     /**
      * Reports a diagnostic event and updates component/system health.
      */
     fun reportDiagnostic(event: DiagnosticEvent) {
-        diagnosticLog.add(event)
+        // Never retain raw credentials in the diagnostic store; consumers can inspect rawMessage safely.
+        val safeEvent = event.copy(rawMessage = sanitize(event.rawMessage))
+        diagnosticLog.add(safeEvent)
         if (diagnosticLog.size > 100) {
             diagnosticLog.removeAt(0)
         }
-        Log.w(TAG, "[${event.category}] (${event.component}): ${event.sanitizedMessage}")
+        Log.w(TAG, "[${safeEvent.category}] (${safeEvent.component}): ${safeEvent.sanitizedMessage}")
 
-        // Track failures for loop breaking
-        val timestamps = failureTimestamps.getOrPut(event.component) { mutableListOf() }
+        // Non-recoverable failures are recorded and degrade the component, but do not trip
+        // the automatic retry circuit breaker.
+        if (!safeEvent.isRecoverable) {
+            componentStates[safeEvent.component] = SystemHealthState.DEGRADED
+            recomputeOverallState()
+            return
+        }
+
+        val timestamps = failureTimestamps.getOrPut(safeEvent.component) { mutableListOf() }
         val now = System.currentTimeMillis()
         synchronized(timestamps) {
             timestamps.add(now)
-            // Retain only events within the 60s sliding window
             timestamps.removeAll { now - it > LOOP_BREAKER_WINDOW_MS }
 
             if (timestamps.size >= MAX_FAILURES_BEFORE_BREAKER) {
-                componentStates[event.component] = SystemHealthState.UNAVAILABLE
+                componentStates[safeEvent.component] = SystemHealthState.UNAVAILABLE
                 recomputeOverallState()
-                Log.e(TAG, "LOOP BREAKER TRIPPED for component '${event.component}'! Switched to UNAVAILABLE.")
+                Log.e(TAG, "LOOP BREAKER TRIPPED for component '${safeEvent.component}'! Switched to UNAVAILABLE.")
             } else {
-                componentStates[event.component] = SystemHealthState.DEGRADED
+                componentStates[safeEvent.component] = SystemHealthState.DEGRADED
                 recomputeOverallState()
             }
         }
