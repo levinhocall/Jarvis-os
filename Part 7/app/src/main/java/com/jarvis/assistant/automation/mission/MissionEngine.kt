@@ -10,6 +10,7 @@ import com.jarvis.assistant.automation.notification.JarvisNotificationListenerSe
 import com.jarvis.assistant.automation.dev.TermuxBridge
 import com.jarvis.assistant.automation.dev.DevToolResult
 import com.jarvis.assistant.automation.dev.DevProjectWorkspaceRegistry
+import com.jarvis.assistant.security.sandbox.CapabilitySandbox
 import com.jarvis.assistant.security.sandbox.SandboxCheckResult
 import com.jarvis.assistant.util.AppLauncher
 import com.jarvis.assistant.vision.VisualTaskOrchestrator
@@ -57,6 +58,7 @@ object MissionEngine {
     // Persistent Room DAO for survivable missions across process death and reboots
     var missionDao: com.jarvis.assistant.data.mission.MissionDao? = null
     private val gson = com.google.gson.Gson()
+    private val sandbox = CapabilitySandbox()
 
     private fun hasBlockingMission(): Boolean {
         val current = _activeMission.value ?: return false
