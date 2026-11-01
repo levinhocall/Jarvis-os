@@ -1,6 +1,12 @@
 package com.jarvis.assistant
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.os.Build
 import com.jarvis.assistant.security.SecurityManager
 import com.jarvis.assistant.audio.VoskModelManager
 import com.jarvis.assistant.automation.command.CommandExecutor
@@ -13,6 +19,7 @@ import com.jarvis.assistant.automation.phone.PhoneControlManager
 import com.jarvis.assistant.automation.whatsapp.WhatsAppAssistant
 import com.jarvis.assistant.automation.youtube.YouTubeAutomationManager
 import com.jarvis.assistant.automation.proactive.TriggerRepository
+import com.jarvis.assistant.automation.proactive.ProactiveAssistantCoordinator
 import com.jarvis.assistant.data.memory.MemoryDatabase
 import com.jarvis.assistant.data.memory.MemoryManager
 import com.jarvis.assistant.data.memory.MemoryRepository
@@ -30,6 +37,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class JarvisApp : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var batteryLowReceiver: BroadcastReceiver? = null
 
     lateinit var preferences: AppPreferences
         private set
@@ -80,6 +88,7 @@ class JarvisApp : Application() {
         preferences = AppPreferences(this)
         chatRepository = ChatRepository(preferences)
         triggerRepository = TriggerRepository(this)
+        registerBatteryLowReceiver()
 
         // Memory System
         memoryDatabase = MemoryDatabase.getInstance(this)
@@ -153,6 +162,33 @@ class JarvisApp : Application() {
                 }
             }
         })
+    }
+
+    private fun registerBatteryLowReceiver() {
+        if (batteryLowReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action != Intent.ACTION_BATTERY_LOW) return
+                val batteryState = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                val level = batteryState?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                val scale = batteryState?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+                val status = batteryState?.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
+                    ?: BatteryManager.BATTERY_STATUS_UNKNOWN
+                if (level < 0 || scale <= 0) return
+                val batteryPct = ((level * 100f) / scale).toInt().coerceIn(0, 100)
+                val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status == BatteryManager.BATTERY_STATUS_FULL
+                ProactiveAssistantCoordinator.onLowBatteryDetected(batteryPct, isCharging)
+            }
+        }
+        batteryLowReceiver = receiver
+        val filter = IntentFilter(Intent.ACTION_BATTERY_LOW)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(receiver, filter)
+        }
     }
 
     var currentResumedActivity: android.app.Activity? = null
