@@ -72,7 +72,21 @@ class FeatureHubActivity : AppCompatActivity() {
                 .setTitle("Mission Control")
                 .setMessage(message)
                 .setPositiveButton("Close", null)
-            if (task != null) {
+            if (mission?.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING) {
+                dialog.setNeutralButton("Pause Mission") { _, _ ->
+                    lifecycleScope.launch {
+                        val paused = com.jarvis.assistant.automation.mission.MissionEngine.pauseMission(mission.missionId)
+                        android.widget.Toast.makeText(this@FeatureHubActivity, if (paused) "Mission pause requested" else "Mission could not be paused", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else if (mission?.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.PAUSED) {
+                dialog.setNeutralButton("Resume Mission") { _, _ ->
+                    lifecycleScope.launch {
+                        val resumed = com.jarvis.assistant.automation.mission.MissionEngine.resumeMission(this@FeatureHubActivity, mission.missionId)
+                        android.widget.Toast.makeText(this@FeatureHubActivity, if (resumed) "Mission resumed" else "Mission could not resume safely", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else if (task != null) {
                 if (agentEngine.isPaused.value) {
                     dialog.setNeutralButton("Resume Agent") { _, _ ->
                         val resumed = agentEngine.resumeTask()
@@ -85,7 +99,13 @@ class FeatureHubActivity : AppCompatActivity() {
                     }
                 }
             }
-            if (mission != null && mission.status !in setOf(
+            if (mission?.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.UNVERIFIED) {
+                dialog.setNegativeButton("Acknowledge & Clear") { _, _ ->
+                    lifecycleScope.launch {
+                        com.jarvis.assistant.automation.mission.MissionEngine.acknowledgeUnverifiedMission(mission.missionId)
+                    }
+                }
+            } else if (mission != null && mission.status !in setOf(
                     com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED,
                     com.jarvis.assistant.automation.mission.MissionOverallStatus.FAILED,
                     com.jarvis.assistant.automation.mission.MissionOverallStatus.CANCELLED
