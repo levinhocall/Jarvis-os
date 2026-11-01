@@ -30,7 +30,7 @@ interface MissionDao {
     @Query("SELECT * FROM missions WHERE id = :id")
     suspend fun getMissionById(id: String): MissionEntity?
 
-    @Query("SELECT * FROM missions WHERE status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED') ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM missions WHERE status NOT IN ('COMPLETED', 'PARTIALLY_COMPLETED', 'FAILED', 'CANCELLED') ORDER BY updatedAt DESC")
     suspend fun getNonTerminalMissions(): List<MissionEntity>
 
     @Query("SELECT * FROM missions ORDER BY updatedAt DESC")
