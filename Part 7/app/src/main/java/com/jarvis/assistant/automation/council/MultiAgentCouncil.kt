@@ -138,13 +138,13 @@ object MultiAgentCouncil {
         val risks = mutableListOf<String>()
         val lower = goal.lowercase()
 
-        if (lower.contains("delete") || lower.contains("remove") || lower.contains("clear")) {
+        if (Regex("\\b(delete|remove|clear)\\b").containsMatchIn(lower)) {
             risks.add("Consequential action: Irreversible data deletion detected.")
         }
-        if (lower.contains("send") || lower.contains("message") || lower.contains("call")) {
+        if (Regex("\\b(send|message|call)\\b").containsMatchIn(lower)) {
             risks.add("Consequential action: External communication will be visible to third parties.")
         }
-        if (lower.contains("pay") || lower.contains("transfer") || lower.contains("buy") || lower.contains("order")) {
+        if (Regex("\\b(pay|transfer|buy|order)\\b").containsMatchIn(lower)) {
             risks.add("Consequential action: Financial transaction requires strict user authentication.")
         }
 
