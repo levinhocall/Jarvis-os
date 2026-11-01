@@ -23,7 +23,15 @@ class TriggerWorker(
         val goal = inputData.getString("goal")?.trim().orEmpty()
         val triggerId = inputData.getString("triggerId").orEmpty()
         val triggerType = inputData.getString("triggerType").orEmpty()
+        val isUnattended = inputData.getBoolean("isUnattended", false)
         if (goal.isBlank()) return Result.failure()
+
+        // Scheduled work must not silently become autonomous execution. The creator must
+        // explicitly opt into unattended execution; otherwise no mission is started.
+        if (!isUnattended) {
+            Log.i(TAG, "Trigger $triggerId requires the user to start its mission manually; no action was executed.")
+            return Result.failure()
+        }
 
         val app = applicationContext as? JarvisApp
             ?: return Result.failure()
