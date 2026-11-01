@@ -21,6 +21,10 @@ class MultiAgentCouncilTest {
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "open_app"))
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "whatsapp_send"))
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "device_control"))
+        assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "log_recall_core"))
+        assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "task_completed"))
+        assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "youtube_play"))
+        assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "termux_execute"))
 
         // Planner, Verifier, and Lead have 0 direct mutating tool authorization
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.PLANNER, "device_control"))
@@ -30,7 +34,7 @@ class MultiAgentCouncilTest {
 
     @Test
     fun testCouncilExecution_boundedDelegationDepth() = runBlocking {
-        val outcome = MultiAgentCouncil.executeCouncilTask(
+        val outcome = MultiAgentCouncil.executeCouncilTaskForTest(
             goal = "Search quantum computing",
             simulatedExecutor = {
                 Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Search completed"))
@@ -68,7 +72,7 @@ class MultiAgentCouncilTest {
 
     @Test
     fun testIndependentVerification_detectsUnverifiedOutcomesTruthfully() = runBlocking {
-        val outcome = MultiAgentCouncil.executeCouncilTask(
+        val outcome = MultiAgentCouncil.executeCouncilTaskForTest(
             goal = "Search latest Android release notes",
             simulatedExecutor = {
                 // Action returned unverified evidence
@@ -93,5 +97,15 @@ class MultiAgentCouncilTest {
         assertFalse(outcome.isVerifiedIndependently)
         assertEquals(0, outcome.executionStepsCount)
         assertTrue(outcome.failureReason?.contains("Context unavailable", ignoreCase = true) == true)
+    }
+
+    @Test
+    fun testCouncilExecution_clarificationRequiredDoesNotBecomeZeroStepSuccess() = runBlocking {
+        val outcome = MultiAgentCouncil.executeCouncilTask(goal = "call")
+
+        assertFalse(outcome.isSuccess)
+        assertEquals(0, outcome.executionStepsCount)
+        assertTrue(outcome.failureReason?.contains("Clarification required") == true)
+        assertTrue(outcome.leadResponse.contains("who", ignoreCase = true))
     }
 }
