@@ -551,7 +551,7 @@ class VisualTaskOrchestrator(
         if (requiresConsent) {
             return@withContext TaskActionResult(
                 success = false,
-                message = "This action is behind a permission, terms, credential, or sensitive-action consent gate. Explain it and wait for the user's explicit decision.",
+                message = "This action is behind a permission, terms, credential, or sensitive-action consent gate. Ask the user to review and complete the protected step themselves; never click the confirmation control for them.",
                 currentStateSummary = groundingEngine.formatElementsSummary(
                     groundingEngine.scanScreen(initialRoot), initialRoot
                 ),
