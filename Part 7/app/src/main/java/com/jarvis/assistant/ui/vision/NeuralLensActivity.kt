@@ -2,7 +2,10 @@ package com.jarvis.assistant.ui.vision
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
+import java.io.File
 import android.view.View
 import android.widget.Button
 import android.widget.ImageView
@@ -10,6 +13,13 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CancellationException
@@ -25,17 +35,18 @@ import kotlinx.coroutines.withContext
 class NeuralLensActivity : AppCompatActivity() {
     private var selectedBitmap: Bitmap? = null
     private lateinit var preview: ImageView
+    private lateinit var livePreview: PreviewView
     private lateinit var status: TextView
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var imageCapture: ImageCapture? = null
+    private var pendingCaptureFile: File? = null
     private lateinit var result: TextView
     private lateinit var progress: ProgressBar
     private lateinit var analyzeButton: Button
 
-    private val cameraCapture = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        if (bitmap == null) {
-            status.text = "Camera capture was cancelled or no image was returned."
-        } else {
-            showImage(bitmap, "Camera image captured. Review it, then analyze.")
-        }
+    private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startCamera()
+        else if (::status.isInitialized) status.text = "Camera permission denied. Gallery image analysis remains available."
     }
 
     private val galleryPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -83,13 +94,24 @@ class NeuralLensActivity : AppCompatActivity() {
             setPadding(0, dp(6), 0, dp(12))
             setTextColor(color(R.attr.themeTextMuted))
         })
-        preview = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            contentDescription = "Selected camera or gallery image preview"
+        livePreview = PreviewView(this).apply {
+            contentDescription = "Live CameraX camera preview"
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             setBackgroundColor(0xFF080B12.toInt())
         }
-        root.addView(preview, LinearLayout.LayoutParams(-1, dp(280)))
-        root.addView(action("Open camera and capture") { cameraCapture.launch(null) })
+        preview = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "Captured or selected image preview"
+            setBackgroundColor(0xFF080B12.toInt())
+            visibility = View.GONE
+        }
+        val previewFrame = android.widget.FrameLayout(this).apply {
+            addView(livePreview, android.widget.FrameLayout.LayoutParams(-1, -1))
+            addView(preview, android.widget.FrameLayout.LayoutParams(-1, -1))
+        }
+        root.addView(previewFrame, LinearLayout.LayoutParams(-1, dp(280)))
+        root.addView(action("Start live camera") { requestCameraAndStart() })
+        root.addView(action("Capture photo") { capturePhoto() })
         root.addView(action("Choose image from gallery") { galleryPicker.launch(arrayOf("image/*")) })
         analyzeButton = action("Analyze selected image") { analyzeSelectedImage() }.apply { isEnabled = false }
         root.addView(analyzeButton)
@@ -113,9 +135,112 @@ class NeuralLensActivity : AppCompatActivity() {
         setContentView(android.widget.ScrollView(this).apply { addView(root) })
     }
 
+    private fun requestCameraAndStart() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            startCamera()
+        } else {
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun startCamera() {
+        if (isFinishing || isDestroyed) return
+        status.text = "Starting live camera…"
+        val providerFuture = ProcessCameraProvider.getInstance(this)
+        providerFuture.addListener({
+            if (isFinishing || isDestroyed) return@addListener
+            try {
+                val provider = providerFuture.get()
+                val previewUseCase = Preview.Builder().build().also {
+                    it.setSurfaceProvider(livePreview.surfaceProvider)
+                }
+                val captureUseCase = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+                provider.unbindAll()
+                provider.bindToLifecycle(
+                    this,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    previewUseCase,
+                    captureUseCase
+                )
+                cameraProvider = provider
+                imageCapture = captureUseCase
+                livePreview.visibility = View.VISIBLE
+                preview.visibility = View.GONE
+                status.text = "Live camera ready. Capture a photo when you are ready."
+            } catch (error: Exception) {
+                imageCapture = null
+                status.text = "Could not start camera: ${error.localizedMessage ?: "camera unavailable"}"
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun capturePhoto() {
+        val capture = imageCapture
+        if (capture == null) {
+            requestCameraAndStart()
+            status.text = "Start the live camera first, then capture."
+            return
+        }
+        val file = File(cacheDir, "neural-lens-${System.currentTimeMillis()}.jpg")
+        pendingCaptureFile = file
+        val options = ImageCapture.OutputFileOptions.Builder(file).build()
+        status.text = "Capturing photo…"
+        capture.takePicture(
+            options,
+            ContextCompat.getMainExecutor(this),
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    lifecycleScope.launch {
+                        try {
+                            val bitmap = withContext(Dispatchers.IO) {
+                                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                BitmapFactory.decodeFile(file.absolutePath, bounds)
+                                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
+                                var sample = 1
+                                while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
+                                BitmapFactory.decodeFile(
+                                    file.absolutePath,
+                                    BitmapFactory.Options().apply { inSampleSize = sample }
+                                )
+                            }
+                            if (bitmap == null) {
+                                status.text = "Camera photo was saved but could not be decoded."
+                            } else {
+                                cameraProvider?.unbindAll()
+                                imageCapture = null
+                                showImage(bitmap, "CameraX photo captured. Review it, then analyze.")
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Exception) {
+                            if (!isFinishing && !isDestroyed) {
+                                status.text = "Could not load captured photo: ${error.localizedMessage ?: "unknown error"}"
+                            }
+                        } finally {
+                            file.delete()
+                            if (pendingCaptureFile == file) pendingCaptureFile = null
+                        }
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    file.delete()
+                    if (pendingCaptureFile == file) pendingCaptureFile = null
+                    if (!isFinishing && !isDestroyed) {
+                        status.text = "Camera capture failed: ${exception.message ?: "unknown camera error"}"
+                    }
+                }
+            }
+        )
+    }
+
     private fun showImage(bitmap: Bitmap, message: String) {
         selectedBitmap?.takeIf { it !== bitmap }?.recycle()
         selectedBitmap = bitmap
+        livePreview.visibility = View.GONE
+        preview.visibility = View.VISIBLE
         preview.setImageBitmap(bitmap)
         analyzeButton.isEnabled = true
         status.text = message
@@ -201,7 +326,17 @@ class NeuralLensActivity : AppCompatActivity() {
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
+    override fun onStop() {
+        cameraProvider?.unbindAll()
+        imageCapture = null
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        cameraProvider?.unbindAll()
+        cameraProvider = null
+        pendingCaptureFile?.delete()
+        pendingCaptureFile = null
         preview.setImageDrawable(null)
         selectedBitmap?.recycle()
         selectedBitmap = null
