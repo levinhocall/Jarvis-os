@@ -66,11 +66,29 @@ class OfflineIntelligenceCoordinator {
             cacheFact(noteKey, noteText)
             val app = context?.applicationContext as? JarvisApp
             if (app != null) {
-                val saved = app.memoryManager.rememberFact(input)
-                return OfflineExecutionResult.ExecutedLocally(
-                    actionType = "LOCAL_NOTE",
-                    userFeedback = saved,
-                    outputData = mapOf("key" to noteKey, "content" to noteText, "persistent" to true)
+                val memoryId = runCatching {
+                    app.memoryRepository.remember(
+                        content = noteText,
+                        type = com.jarvis.assistant.data.memory.MemoryEntity.TYPE_PERSONAL_FACT,
+                        key = noteKey,
+                        importance = 0.7f,
+                        confidence = 0.9f
+                    )
+                }.getOrDefault(0L)
+                val persisted = memoryId > 0L && runCatching {
+                    app.memoryRepository.searchMemories(noteKey).any { it.id == memoryId }
+                }.getOrDefault(false)
+                if (persisted) {
+                    return OfflineExecutionResult.ExecutedLocally(
+                        actionType = "LOCAL_NOTE",
+                        userFeedback = "Note was saved to encrypted local memory and read back successfully: \"$noteText\".",
+                        outputData = mapOf("key" to noteKey, "content" to noteText, "persistent" to true, "verified" to true)
+                    )
+                }
+                return OfflineExecutionResult.DegradedExplanation(
+                    unsupportedFeature = "Persistent offline note storage",
+                    userFeedback = "The note remains only in the temporary process cache because persistent storage could not be verified. It may be lost when JARVIS stops.",
+                    availableOfflineAlternatives = listOf("Keep JARVIS running and retry saving the note.")
                 )
             }
             return OfflineExecutionResult.ExecutedLocally(
