@@ -417,12 +417,12 @@ class MemoryManager(
      * Builds the complete prompt context for Gemini Live.
      * Contains:
      * 1. Core Profile
-     * 2. All categorized Room database memories (persistent across restarts)
-     * Conversation history is loaded separately from the active Room session to preserve chat isolation.
+     * 2. Stable user profile fields. Relevant long-term memories and session history are
+     *    retrieved separately by MemoryAwareContextBuilder to avoid indiscriminate injection.
      */
     suspend fun getSystemPromptContext(): String {
         repository.cleanupExpiredMemories()
-        val all = repository.getAllMemories().filter { it.isSafeForModelContext }
+        repository.cleanupExpiredMemories()
         val favSong = resolveSongQuery("my favorite song")
         val sb = StringBuilder("\n[USER PERSONAL PROFILE & MEMORY CORE - PERMANENT STORAGE]:\n")
         sb.append("- User's Preferred Name: ${preferences.userName.ifBlank { "Sir" }}\n")
@@ -437,13 +437,6 @@ class MemoryManager(
         }
         if (preferences.dailyRoutine.isNotBlank()) {
             sb.append("- User's Daily Routine: ${preferences.dailyRoutine}\n")
-        }
-
-        if (all.isNotEmpty()) {
-            sb.append("\n[ALL PERMANENT MEMORIES FROM DATABASE]:\n")
-            all.take(40).forEach { mem ->
-                sb.append("- [${mem.category}] ${mem.rawText}\n")
-            }
         }
 
         return sb.toString()
