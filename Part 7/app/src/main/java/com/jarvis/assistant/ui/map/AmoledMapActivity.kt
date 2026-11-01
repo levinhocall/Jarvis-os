@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.jarvis.assistant.R
 import com.jarvis.assistant.util.ThemeManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -293,6 +294,8 @@ class AmoledMapActivity : AppCompatActivity() {
                 map.invalidate()
                 status.text = "Destination found. Searching for a route…"
                 requestRoute(point)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 if (searchGeneration == destinationSearchGeneration && !isFinishing && !isDestroyed) {
                     status.text = "Destination search failed: ${error.message ?: "service unavailable"}"
@@ -341,6 +344,8 @@ class AmoledMapActivity : AppCompatActivity() {
                 status.text = "Route loaded from OpenStreetMap routing service. Turn-by-turn guidance opens in your navigation app."
                 val bounds = org.osmdroid.util.BoundingBox.fromGeoPoints(points)
                 map.zoomToBoundingBox(bounds, true, dp(36))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 if (requestGeneration == routeRequestGeneration && !isFinishing && !isDestroyed) {
                     status.text = if (automaticReroute && routeOverlay != null) {
