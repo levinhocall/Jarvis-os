@@ -253,9 +253,8 @@ object AppLauncher {
     fun openApp(context: Context, spokenName: String): InstalledApp? {
         return when (val res = openAppResult(context, spokenName, null)) {
             is OpenAppResult.Success -> res.app
-            is OpenAppResult.MultipleFound -> {
-                if (launchInstalledApp(context, res.matches[0], 1)) res.matches[0] else null
-            }
+            // Ambiguous app names must be resolved by the caller; never silently open the first match.
+            is OpenAppResult.MultipleFound -> null
             else -> null
         }
     }
@@ -263,13 +262,8 @@ object AppLauncher {
     fun launchApp(context: Context, appName: String, appNumber: Int? = null): Boolean {
         return when (val result = openAppResult(context, appName, appNumber)) {
             is OpenAppResult.Success -> true
-            is OpenAppResult.MultipleFound -> {
-                // A successful return must mean an activity launch was actually requested.
-                // Previously this branch returned true without launching anything, causing
-                // voice commands to report success while the app remained closed.
-                val primaryMatch = result.matches.firstOrNull() ?: return false
-                launchInstalledApp(context, primaryMatch, 1)
-            }
+            // Do not guess when multiple installed apps/profiles match the spoken name.
+            is OpenAppResult.MultipleFound -> false
             is OpenAppResult.NotFound, OpenAppResult.Failure -> false
         }
     }
