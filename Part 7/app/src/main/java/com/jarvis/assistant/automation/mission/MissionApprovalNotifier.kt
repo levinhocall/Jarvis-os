@@ -51,11 +51,19 @@ object MissionApprovalNotifier {
         val rejectPending = PendingIntent.getBroadcast(appContext, requestBase + 1, rejectIntent, flags)
         val message = mission.approvalPrompt ?: "A consequential mission action is waiting for your approval."
 
+        val publicVersion = NotificationCompat.Builder(appContext, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("JARVIS action awaiting approval")
+            .setContentText("Unlock your device to review this private action.")
+            .build()
+
         val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle("JARVIS needs your approval")
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
