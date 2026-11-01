@@ -2822,8 +2822,6 @@ class JarvisConversationService : Service() {
                             blocked = result.optBoolean("requires_confirmation", false)
                         )
                     }
-                    val recentOtp = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.getRecentOtp()
-                    val otpNotice = if (recentOtp != null) " [SYSTEM OTP DETECTED: '$recentOtp']" else ""
                     val goalObj = com.jarvis.assistant.automation.agent.TaskGoal.fromUserUtterance(autonomousTaskGoal)
                     val bulkNotice = if (goalObj.isBulkAction) " [PERSISTENT BULK ACTION MODE: Goal involves '${goalObj.bulkKeywords.joinToString()}'. Process ALL matching items by scrolling down iteratively! Do NOT declare completion after only one screen.]" else ""
                     result.put("step_number", autonomousStepCount)
@@ -2846,11 +2844,11 @@ class JarvisConversationService : Service() {
                         result.put("system_directive", "HARD STOP: you are repeating actions or failing repeatedly. Do NOT call any more tools. Tell the user honestly, in one or two short sentences, what you actually completed and what went wrong (do NOT claim success), then wait for their next instruction.")
                     } else if (toolSuccess) {
                         result.put("autonomous_status", "EXECUTED")
-                        result.put("system_directive", "AUTONOMOUS STEP $autonomousStepCount EXECUTED. OVERARCHING GOAL: '$autonomousTaskGoal'$otpNotice$bulkNotice. MANDATE: Inspect the screen. If the OVERARCHING GOAL is not yet 100% finished on screen, you MUST IMMEDIATELY take the next concrete action (click, type, scroll, wait for install/open). NEVER ABANDON THE TASK MID-WAY! NEVER call task_completed until the ultimate goal is fully achieved on screen!")
+                        result.put("system_directive", "AUTONOMOUS STEP $autonomousStepCount EXECUTED. OVERARCHING GOAL: '$autonomousTaskGoal'$bulkNotice. MANDATE: Inspect the screen. If the OVERARCHING GOAL is not yet 100% finished on screen, you MUST IMMEDIATELY take the next concrete action (click, type, scroll, wait for install/open). NEVER ABANDON THE TASK MID-WAY! NEVER call task_completed until the ultimate goal is fully achieved on screen!")
                     } else {
                         result.put("autonomous_status", "FAILED")
                         val failMsg = result.optString("message", "Action failed")
-                        result.put("system_directive", "CRITICAL WARNING: STEP $autonomousStepCount FAILED ($failMsg)$otpNotice. You MUST NOT claim the action succeeded, do NOT say you completed it, and do NOT call task_completed! Either retry the action, tap the field to focus it first, or truthfully inform the user.")
+                        result.put("system_directive", "CRITICAL WARNING: STEP $autonomousStepCount FAILED ($failMsg). You MUST NOT claim the action succeeded, do NOT say you completed it, and do NOT call task_completed! Either retry the action, tap the field to focus it first, or truthfully inform the user.")
                     }
                 }
 
