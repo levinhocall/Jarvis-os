@@ -730,6 +730,7 @@ object MissionEngine {
             mission?.let {
                 it.missionId == missionId && it.status in setOf(
                     MissionOverallStatus.WAITING_FOR_APPROVAL,
+                    MissionOverallStatus.PAUSED,
                     MissionOverallStatus.CLARIFICATION_REQUIRED,
                     MissionOverallStatus.COMPLETED,
                     MissionOverallStatus.PARTIALLY_COMPLETED,
