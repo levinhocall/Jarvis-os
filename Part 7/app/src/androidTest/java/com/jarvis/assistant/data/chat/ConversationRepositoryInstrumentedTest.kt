@@ -6,6 +6,7 @@ import androidx.room.RoomDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -75,6 +76,6 @@ class ConversationRepositoryInstrumentedTest {
         val repository = ConversationRepository(database.chatDao())
 
         assertEquals(null, repository.appendTurn("  ", "  "))
-        assertTrue(database.chatDao().getActiveSessionsFlow() != null)
+        assertTrue(database.chatDao().getActiveSessionsFlow().first().isEmpty())
     }
 }
