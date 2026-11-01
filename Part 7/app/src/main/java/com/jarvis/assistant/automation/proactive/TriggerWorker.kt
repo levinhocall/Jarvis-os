@@ -1,84 +1,85 @@
 package com.jarvis.assistant.automation.proactive
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.jarvis.assistant.JarvisApp
+import com.jarvis.assistant.automation.mission.MissionApprovalNotifier
 import com.jarvis.assistant.automation.mission.MissionEngine
 import com.jarvis.assistant.automation.mission.MissionOverallStatus
 
-/**
- * Executes scheduled proactive missions and reminders in the background.
- * During unattended runs, consequential actions are strictly halted and surfaced for confirmation.
- */
 class TriggerWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
-) : CoroutineWorker(appContext, workerParams) {
+    context: Context,
+    params: WorkerParameters
+) : CoroutineWorker(context, params) {
 
     companion object {
         private const val TAG = "TriggerWorker"
-        private const val CHANNEL_ID = "jarvis_proactive_channel"
-        private const val NOTIFICATION_ID = 4099
+        private const val MISSION_TIMEOUT_MS = 120_000L
     }
 
     override suspend fun doWork(): Result {
-        val triggerId = inputData.getString("triggerId") ?: return Result.failure()
-        val goal = inputData.getString("goal") ?: return Result.failure()
-        val isUnattended = inputData.getBoolean("isUnattended", true)
+        val goal = inputData.getString("goal")?.trim().orEmpty()
+        val triggerId = inputData.getString("triggerId").orEmpty()
+        val triggerType = inputData.getString("triggerType").orEmpty()
+        if (goal.isBlank()) return Result.failure()
 
-        Log.i(TAG, "TriggerWorker executing trigger '$triggerId' for goal: '$goal' (unattended=$isUnattended)")
+        val app = applicationContext as? JarvisApp
+            ?: return Result.failure()
 
         return try {
-            val mission = MissionEngine.startMission(applicationContext, goal)
-
-            // For unattended runs: if the mission requires approval or involves consequential actions,
-            // notify user rather than attempting blind execution.
-            if (isUnattended && (mission.status == MissionOverallStatus.WAITING_FOR_APPROVAL ||
-                        mission.status == MissionOverallStatus.CLARIFICATION_REQUIRED)) {
-                postApprovalNotification(
-                    title = "JARVIS Proactive Task Needs Approval",
-                    message = "Task '$goal' requires confirmation before proceeding."
+            // Restore durable state before starting another mission.
+            MissionEngine.resumeNonTerminalMissions(applicationContext)
+            val started = MissionEngine.startMission(applicationContext, goal)
+            val outcome = if (started.status in setOf(
+                    MissionOverallStatus.WAITING_FOR_APPROVAL,
+                    MissionOverallStatus.CLARIFICATION_REQUIRED,
+                    MissionOverallStatus.COMPLETED,
+                    MissionOverallStatus.PARTIALLY_COMPLETED,
+                    MissionOverallStatus.FAILED,
+                    MissionOverallStatus.CANCELLED,
+                    MissionOverallStatus.UNVERIFIED
                 )
-                return Result.success()
+            ) {
+                started
+            } else {
+                MissionEngine.awaitMissionOutcome(started.missionId, MISSION_TIMEOUT_MS)
             }
 
-            Result.success()
-        } catch (e: Exception) {
-            Log.e(TAG, "TriggerWorker failed for '$triggerId': ${e.message}", e)
-            Result.retry()
-        }
-    }
+            if (outcome == null) {
+                Log.w(TAG, "Mission execution did not reach a verifiable outcome before timeout.")
+                return Result.failure()
+            }
 
-    private fun postApprovalNotification(title: String, message: String) {
-        try {
-            val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    CHANNEL_ID,
-                    "JARVIS Proactive Triggers",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Notifications for unattended missions requiring user authorization"
+            when (outcome.status) {
+                MissionOverallStatus.COMPLETED -> {
+                    if (triggerType == TriggerType.ONE_TIME_DELAYED.name && triggerId.isNotBlank()) {
+                        app.triggerRepository.cancelTrigger(triggerId)
+                    }
+                    Result.success()
                 }
-                nm.createNotificationChannel(channel)
+                MissionOverallStatus.WAITING_FOR_APPROVAL -> {
+                    MissionApprovalNotifier.show(applicationContext, outcome)
+                    // Keep the mission persisted; never execute it again until approval is received.
+                    Result.success()
+                }
+                MissionOverallStatus.CLARIFICATION_REQUIRED -> {
+                    Log.w(TAG, "Mission requires clarification; it was not reported as completed.")
+                    Result.failure()
+                }
+                MissionOverallStatus.UNVERIFIED,
+                MissionOverallStatus.PARTIALLY_COMPLETED,
+                MissionOverallStatus.FAILED -> {
+                    Log.w(TAG, "Mission ended with status ${outcome.status}; no success was reported.")
+                    Result.failure()
+                }
+                MissionOverallStatus.CANCELLED -> Result.success()
+                else -> Result.failure()
             }
-
-            val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setContentTitle(title)
-                .setContentText(message)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setAutoCancel(true)
-                .build()
-
-            nm.notify(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to post notification: ${e.message}", e)
+            Log.e(TAG, "Trigger mission failed (${e.javaClass.simpleName}).")
+            Result.failure()
         }
     }
 }
