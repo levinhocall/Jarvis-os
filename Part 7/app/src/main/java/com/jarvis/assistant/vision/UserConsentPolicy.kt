@@ -55,7 +55,9 @@ object UserConsentPolicy {
             "send", "send message", "send email", "send now", "share", "share now",
             "post", "publish", "forward", "unsend", "delete", "delete message", "remove"
         )
-        val isCommunicationDispatch = communicationOrSharingSurface && normalizedTarget in dispatchActions
+        val isShareOrPublish = normalizedTarget in setOf("share", "share now", "post", "publish")
+        val isCommunicationDispatch = isShareOrPublish ||
+            (communicationOrSharingSurface && normalizedTarget in dispatchActions)
         val isExplicitDataSubmission = normalizedTarget in setOf("submit", "place order", "confirm order") &&
             Regex("""\b(payment|checkout|purchase|order|booking|transfer|subscription)\b""", RegexOption.IGNORE_CASE)
                 .containsMatchIn(screen)
