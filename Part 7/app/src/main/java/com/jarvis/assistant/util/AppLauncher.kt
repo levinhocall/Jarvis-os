@@ -224,41 +224,30 @@ object AppLauncher {
         val matches = findMatchingApps(context, spokenName)
         if (matches.isEmpty()) return OpenAppResult.NotFound(spokenName)
 
-        var targetIndex: Int? = appNumber?.let { it - 1 }
-        if (targetIndex == null) {
+        val requestedIndex = appNumber?.let { it - 1 } ?: run {
             val rawLower = spokenName.lowercase()
-            if (rawLower.contains(Regex("\\b(2|2nd|second|dual)\\b"))) {
-                targetIndex = 1
-            } else if (rawLower.contains(Regex("\\b(1|1st|first)\\b"))) {
-                targetIndex = 0
+            when {
+                rawLower.contains(Regex("\\b(2|2nd|second|dual)\\b")) -> 1
+                rawLower.contains(Regex("\\b(1|1st|first)\\b")) -> 0
+                else -> null
             }
         }
 
-        val isDual = matches.size >= 2 || isDualAppEnabled(context, matches[0].packageName)
-
-        if (!isDual) {
-            val success = launchInstalledApp(context, matches[0], 1)
-            return if (success) OpenAppResult.Success(matches[0]) else OpenAppResult.Failure
+        if (requestedIndex != null) {
+            val selected = matches.getOrNull(requestedIndex)
+                ?: return OpenAppResult.NotFound("$spokenName (requested profile number is not installed or visible)")
+            return if (launchInstalledApp(context, selected, requestedIndex + 1)) {
+                OpenAppResult.Success(selected)
+            } else OpenAppResult.Failure
         }
 
-        if (targetIndex != null && targetIndex in matches.indices) {
-            val targetNum = targetIndex + 1
-            val selectedApp = matches[targetIndex]
-            val success = launchInstalledApp(context, selectedApp, targetNum)
-            return if (success) OpenAppResult.Success(selectedApp) else OpenAppResult.Failure
+        if (matches.size == 1) {
+            val selected = matches.single()
+            return if (launchInstalledApp(context, selected, 1)) {
+                OpenAppResult.Success(selected)
+            } else OpenAppResult.Failure
         }
-
-        if (targetIndex != null && matches.size == 1) {
-            val targetNum = targetIndex + 1
-            val success = launchInstalledApp(context, matches[0], targetNum)
-            return if (success) OpenAppResult.Success(matches[0]) else OpenAppResult.Failure
-        }
-
-        val displayMatches = if (matches.size >= 2) matches else listOf(
-            matches[0],
-            matches[0].copy(label = "${matches[0].label} 2", isDualOrWorkProfile = true)
-        )
-        return OpenAppResult.MultipleFound(spokenName, displayMatches)
+        return OpenAppResult.MultipleFound(spokenName, matches)
     }
 
     fun openApp(context: Context, spokenName: String): InstalledApp? {
@@ -288,57 +277,22 @@ object AppLauncher {
     fun launchInstalledApp(context: Context, app: InstalledApp, appNumber: Int = 1): Boolean {
         return try {
             val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? LauncherApps
-            val userManager = context.getSystemService(Context.USER_SERVICE) as? UserManager
-            val profiles = try { userManager?.userProfiles ?: emptyList() } catch (e: Exception) { emptyList() }
-            val secondaryProfile = profiles.firstOrNull { it != Process.myUserHandle() }
 
-            if (appNumber == 2 && launcherApps != null && secondaryProfile != null && app.componentName != null) {
-                launcherApps.startMainActivity(app.componentName, secondaryProfile, null, null)
+            // Profile-specific apps must use the exact UserHandle returned by discovery.
+            // Synthetic intent extras are not Android profile-routing APIs.
+            if (app.userHandle != null && app.componentName != null && launcherApps != null) {
+                launcherApps.startMainActivity(app.componentName, app.userHandle, null, null)
                 return true
             }
 
+            // PackageManager launch intents target the current user only.
+            if (app.isDualOrWorkProfile) return false
             val launchIntent = context.packageManager.getLaunchIntentForPackage(app.packageName)
                 ?: return false
-
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-
-            if (appNumber == 2) {
-                launchIntent.putExtra("multi_user_id", 999)
-                launchIntent.putExtra("userId", 999)
-                launchIntent.putExtra("clone_id", 1)
-                launchIntent.putExtra("is_clone_app", true)
-                launchIntent.putExtra("is_clone", true)
-                launchIntent.putExtra("clone_app", true)
-                launchIntent.putExtra("vivo_clone_id", 1)
-                launchIntent.putExtra("android.intent.extra.USER_HANDLE", 95)
-            } else {
-                launchIntent.putExtra("multi_user_id", 0)
-                launchIntent.putExtra("userId", 0)
-                launchIntent.putExtra("clone_id", 0)
-                launchIntent.putExtra("is_clone_app", false)
-                launchIntent.putExtra("is_clone", false)
-                launchIntent.putExtra("clone_app", false)
-                launchIntent.putExtra("vivo_clone_id", 0)
-                launchIntent.putExtra("android.intent.extra.USER_HANDLE", 0)
-            }
-
-            val launched = ActivityLauncherHelper.startActivitySafely(context, launchIntent)
-            if (launched) {
-                return true
-            }
-            if (launcherApps != null && app.userHandle != null && app.componentName != null) {
-                val targetUser = if (appNumber == 2 && secondaryProfile != null) secondaryProfile else app.userHandle
-                try {
-                    launcherApps.startMainActivity(app.componentName, targetUser, null, null)
-                    true
-                } catch (e: Exception) {
-                    false
-                }
-            } else {
-                false
-            }
+            ActivityLauncherHelper.startActivitySafely(context, launchIntent)
         } catch (e: Exception) {
-            android.util.Log.e("AppLauncher", "Failed to launch ${app.packageName} (${app.userHandle})", e)
+            android.util.Log.e("AppLauncher", "Failed to launch app: " + app.packageName, e)
             false
         }
     }
