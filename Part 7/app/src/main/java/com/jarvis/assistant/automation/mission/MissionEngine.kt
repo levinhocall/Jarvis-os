@@ -148,7 +148,14 @@ object MissionEngine {
                 // A pending approval is not an interrupted action. Preserve it exactly.
                 // An actually in-flight consequential/non-idempotent action becomes UNVERIFIED
                 // and is never replayed automatically after process death.
-                val sanitizedSteps = steps.mapIndexed { idx, st ->
+                val sanitizedSteps = steps.mapIndexed { idx, original ->
+                    val registeredTool = ToolRegistry.getTool(ToolRegistry.resolveToolName(original.toolName))
+                    val st = original.copy(
+                        isIdempotent = original.isIdempotent && registeredTool?.isIdempotent == true,
+                        riskLevel = if (registeredTool != null && registeredTool.riskLevel.ordinal > original.riskLevel.ordinal) {
+                            registeredTool.riskLevel
+                        } else original.riskLevel
+                    )
                     if (st.status == MissionStepStatus.COMPLETED && st.verificationEvidence?.isVerified != true) {
                         st.copy(
                             status = MissionStepStatus.UNVERIFIED,
