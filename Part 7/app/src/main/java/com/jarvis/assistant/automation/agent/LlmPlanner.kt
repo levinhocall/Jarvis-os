@@ -621,6 +621,21 @@ class LlmPlanner(
                         return LlmMissionExecutionResult(false, "The tool returned, but its execution checkpoint could not be persisted.", history.size, history, "CHECKPOINT_FAILED_AFTER_EXECUTION")
                     }
 
+                    // Honor stop requests immediately after the current action has been
+                    // durably recorded, including when this was the final allowed step.
+                    if (isCancelled.get()) {
+                        return LlmMissionExecutionResult(false, "Mission cancelled after the current action returned.", history.size, history, "CANCELLED")
+                    }
+                    if (pauseRequested.compareAndSet(true, false)) {
+                        return LlmMissionExecutionResult(
+                            false,
+                            "Mission paused after the current action reached a durable safe boundary.",
+                            history.size,
+                            history,
+                            "PAUSED"
+                        )
+                    }
+
                     // 7. Consequential failure guard: Never blindly retry consequential failures
                     if (!verified && toolDef.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
                         Log.w(TAG, "Consequential action '$resolvedName' failed verification. Halting automatic retries.")
