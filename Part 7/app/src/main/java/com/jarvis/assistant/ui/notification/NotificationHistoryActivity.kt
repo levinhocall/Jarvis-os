@@ -60,6 +60,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
                         .setNegativeButton("Keep enabled") { _, _ -> isChecked = true }
                         .setPositiveButton("Disable and clear") { _, _ ->
                             prefs.notificationHistoryEnabled = false
+                            historyJob?.cancel()
                             lifecycleScope.launch(Dispatchers.IO) {
                                 MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().clearAll()
                                 withContext(Dispatchers.Main) { renderEmpty("History is off. No notification text is being saved.") }
