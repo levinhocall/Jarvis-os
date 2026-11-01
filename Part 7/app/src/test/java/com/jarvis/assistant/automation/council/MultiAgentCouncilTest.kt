@@ -106,6 +106,6 @@ class MultiAgentCouncilTest {
         assertFalse(outcome.isSuccess)
         assertEquals(0, outcome.executionStepsCount)
         assertTrue(outcome.failureReason?.contains("Clarification required") == true)
-        assertTrue(outcome.leadResponse.contains("who", ignoreCase = true))
+        assertTrue(outcome.leadResponse.contains("contact", ignoreCase = true))
     }
 }
