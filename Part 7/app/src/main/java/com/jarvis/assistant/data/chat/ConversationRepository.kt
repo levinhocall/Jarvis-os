@@ -127,6 +127,7 @@ class ConversationRepository(
 
         val existingId = _currentSessionId.value
         val existing = existingId?.let { chatDao.getSessionById(it) }
+            ?: chatDao.getMostRecentActiveSession()?.also { _currentSessionId.value = it.id }
         val session = if (existing != null && !existing.isArchived) {
             existing
         } else {
