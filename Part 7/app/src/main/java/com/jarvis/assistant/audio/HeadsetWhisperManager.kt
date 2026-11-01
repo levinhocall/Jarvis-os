@@ -20,6 +20,7 @@ object HeadsetWhisperManager {
         private set
 
     private val isAwaitingVoiceReply = AtomicBoolean(false)
+    private val isAwaitingReplyContent = AtomicBoolean(false)
     private var pendingReplySender: String? = null
     private var scope: CoroutineScope? = null
     private var replyWindowJob: Job? = null
@@ -90,6 +91,7 @@ object HeadsetWhisperManager {
 
     private fun openVoiceReplyWindow(sender: String, context: Context) {
         pendingReplySender = sender
+        isAwaitingReplyContent.set(false)
         isAwaitingVoiceReply.set(true)
         Log.i(TAG, "Opened 6-second voice reply window for: $sender")
 
@@ -111,20 +113,49 @@ object HeadsetWhisperManager {
 
         val sender = pendingReplySender ?: return false
         val clean = userUtterance.trim()
+        if (clean.isBlank()) return false
+        val normalized = clean.lowercase().replace(Regex("[.!?,]+"), " ").trim().replace(Regex("\\s+"), " ")
 
-        if (clean.equals("no", ignoreCase = true) || clean.contains("nahi", ignoreCase = true) || clean.equals("cancel", ignoreCase = true)) {
+        val isNegativeConfirmation = normalized in setOf("no", "no thanks", "cancel", "nahi", "nahin", "mat bhejo", "reply mat bhejo", "don't send", "do not send")
+        if (isNegativeConfirmation) {
             isAwaitingVoiceReply.set(false)
+            isAwaitingReplyContent.set(false)
             pendingReplySender = null
+            replyWindowJob?.cancel()
             VoiceSynthesisRouter.speak("Understood, reply cancelled, Sir.")
             return true
         }
 
-        // Clean any "haan bolo" or "send" prefixes
-        val actualMessage = clean.replace(Regex("(?i)^(haan|yes|reply karo|bhejo|bolo)\\s*"), "").trim()
-        val messageToSend = if (actualMessage.isNotBlank()) actualMessage else clean
+        val isPositiveOnly = normalized in setOf("yes", "haan", "han", "ha", "send", "send it", "reply bhejo", "bhej do", "yes send")
+        if (!isAwaitingReplyContent.get() && isPositiveOnly) {
+            isAwaitingReplyContent.set(true)
+            replyWindowJob?.cancel()
+            VoiceSynthesisRouter.speak("What should I reply to $sender, Sir?")
+            replyWindowJob = scope?.launch {
+                delay(10_000L)
+                if (isAwaitingVoiceReply.compareAndSet(true, false)) {
+                    isAwaitingReplyContent.set(false)
+                    pendingReplySender = null
+                    Log.i(TAG, "Voice reply content window timed out without a message.")
+                }
+            }
+            return true
+        }
+
+        // A dictated message in response to the explicit reply question is the user's
+        // content and send intent. A bare affirmative is never sent as message text.
+        val messageToSend = if (!isAwaitingReplyContent.get()) {
+            clean.replace(Regex("(?i)^(haan|han|ha|yes|send|reply karo|bhejo|bolo)[\\s,:-]*"), "").trim()
+        } else clean
+        if (messageToSend.isBlank()) {
+            isAwaitingReplyContent.set(true)
+            VoiceSynthesisRouter.speak("Please say the message you want me to send, Sir.")
+            return true
+        }
 
         val sent = JarvisNotificationListenerService.sendSilentReply(sender, messageToSend, context)
         isAwaitingVoiceReply.set(false)
+        isAwaitingReplyContent.set(false)
         pendingReplySender = null
         replyWindowJob?.cancel()
 
