@@ -151,7 +151,10 @@ class JarvisUnifiedRuntime(
             router.isProviderHealthy("gemini_flash")
         }
         val providerConfigured = appContext?.let { app ->
-            val hasKey = runCatching { AppPreferences(app).apiKey.isNotBlank() }.getOrDefault(false)
+            val preferences = AppPreferences(app)
+            val hasKey = runCatching {
+                !preferences.getNextActiveKey("gemini").isNullOrBlank() || preferences.apiKey.isNotBlank()
+            }.getOrDefault(false)
             hasKey && MissionEngine.llmPlanner?.isAvailable() == true &&
                 router.isProviderHealthy("gemini_flash")
         } ?: false
