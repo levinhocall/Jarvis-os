@@ -159,6 +159,24 @@ class MissionPersistenceAndTriggerTest {
     }
 
     @Test
+    fun testTriggerWorkerInputIncludesTriggerTypeAndApprovalMode() {
+        val repository = TriggerRepository(context = null, workManagerProvider = { null })
+        val trigger = ScheduledTrigger(
+            triggerId = "trigger_worker_payload",
+            goalOrAction = "Read the morning brief",
+            triggerType = TriggerType.ONE_TIME_DELAYED,
+            delayMinutes = 5,
+            isUnattended = false
+        )
+        val data = repository.triggerInputData(trigger)
+
+        assertEquals(trigger.triggerId, data.getString("triggerId"))
+        assertEquals(trigger.triggerType.name, data.getString("triggerType"))
+        assertEquals(trigger.goalOrAction, data.getString("goal"))
+        assertEquals(false, data.getBoolean("isUnattended", true))
+    }
+
+    @Test
     fun testDailyTriggerDelayTargetsNextLocalOccurrence() {
         val utc = java.util.TimeZone.getTimeZone("UTC")
         val calendar = java.util.Calendar.getInstance(utc).apply {
