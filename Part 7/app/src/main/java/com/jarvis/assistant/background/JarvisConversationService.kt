@@ -917,18 +917,6 @@ class JarvisConversationService : Service() {
         val app = application as JarvisApp
         val preferences = app.preferences
         val apiKey = preferences.getNextActiveKey("gemini")?.trim() ?: preferences.apiKey.trim()
-        if (apiKey.isBlank()) {
-            _liveError.value = JarvisLiveError(
-                title = "API KEY MISSING",
-                message = "No Gemini API Key configured. Please enter your API Key in Settings to activate Jarvis.",
-                errorCode = "API_KEY_MISSING",
-                actionText = "OPEN SETTINGS"
-            )
-            serviceScope.launch { _events.emit("Please configure your Gemini API Key in Settings first.") }
-            fullStop()
-            return
-        }
-
         if (!PermissionHelper.hasAllRequiredPermissions(this)) {
             _liveError.value = JarvisLiveError(
                 title = "PERMISSIONS REQUIRED",
@@ -1000,6 +988,17 @@ class JarvisConversationService : Service() {
         ).apply { start() }
 
         serviceScope.launch(Dispatchers.IO) {
+            if (apiKey.isBlank()) {
+                withContext(Dispatchers.Main.immediate) {
+                    if (_isSessionOn.value) {
+                        _connectionStatus.value = "OFFLINE"
+                        setConversationState(ConversationState.LISTENING)
+                        updateNotification()
+                        _events.emit("No Gemini API key is configured. Local offline voice commands are available; cloud AI is disabled.")
+                    }
+                }
+                return@launch
+            }
             val systemPrompt = generateCurrentSystemPrompt()
 
             withContext(Dispatchers.Main) {
@@ -1816,6 +1815,18 @@ class JarvisConversationService : Service() {
                                 } else {
                                     if (!hasSignalledUtteranceEnd) {
                                         hasSignalledUtteranceEnd = true
+                                        // When Gemini Live is unavailable, transcribe the complete buffered utterance
+                                        // locally and route it through the same security/runtime pipeline.
+                                        if (liveWebSocket?.isSessionReady() != true) {
+                                            val offlineAudio = synchronized(currentUtteranceAudioStream) {
+                                                currentUtteranceAudioStream.toByteArray()
+                                            }
+                                            if (offlineAudio.size >= 3200) {
+                                                preConnectAudioQueue.clear()
+                                                processOfflineVoiceUtterance(offlineAudio)
+                                                return@AudioRecorder
+                                            }
+                                        }
                                         // If screen capture is active, send one fresh snapshot right with the question
                                         if (com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value) {
                                             val snapshot = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().captureSnapshotJpeg(60)
@@ -1870,6 +1881,113 @@ class JarvisConversationService : Service() {
                 }
             }
         }
+    }
+
+    /**
+     * Handles a complete microphone utterance locally whenever Gemini Live is not ready.
+     * The same unified runtime, security sandbox, offline capability checks and approval
+     * policies are used; unsupported requests are reported as unavailable, never faked.
+     */
+    private fun processOfflineVoiceUtterance(pcmAudio: ByteArray) {
+        thinkingTimeoutJob?.cancel()
+        thinkingTimeoutJob = null
+        lastResponseTimedOut = false
+        setConversationState(ConversationState.THINKING)
+        updateNotification()
+
+        serviceScope.launch(Dispatchers.IO) {
+            val transcript = transcribeOfflineVoice(pcmAudio)
+            val app = application as? JarvisApp
+            val response = when {
+                transcript.isBlank() ->
+                    "I couldn't understand that offline voice request. Please repeat it clearly in English or reconnect for cloud speech recognition."
+                app == null ->
+                    "The local assistant runtime is unavailable right now. Please try again."
+                else -> {
+                    when (val result = app.unifiedRuntime.processUserRequest(
+                        input = transcript,
+                        context = this@JarvisConversationService,
+                        isNetworkAvailable = false
+                    )) {
+                        is com.jarvis.assistant.core.runtime.UnifiedExecutionResult.Success -> result.outputMessage
+                        is com.jarvis.assistant.core.runtime.UnifiedExecutionResult.BlockedBySecurity ->
+                            "I did not execute that request. ${result.threatReason}"
+                        is com.jarvis.assistant.core.runtime.UnifiedExecutionResult.Degraded -> result.fallbackMessage
+                        is com.jarvis.assistant.core.runtime.UnifiedExecutionResult.RecoveredCrash -> result.errorSummary
+                    }
+                }
+            }
+
+            withContext(Dispatchers.Main.immediate) {
+                if (!_isSessionOn.value) return@withContext
+                if (transcript.isNotBlank()) {
+                    currentTurnUserText.setLength(0)
+                    currentTurnUserText.append(transcript)
+                    _liveUserTranscript.value = transcript
+                    app?.chatRepository?.addTurn(transcript, response)
+                }
+                synchronized(currentTurnAssistantText) {
+                    currentTurnAssistantText.setLength(0)
+                    currentTurnAssistantText.append(response)
+                }
+                _liveAssistantResponse.value = response
+                updateNotification()
+
+                if (preferences.isSilentExecutionMode) {
+                    finishOfflineVoiceTurn()
+                } else {
+                    setConversationState(ConversationState.SPEAKING)
+                    com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(response) {
+                        serviceScope.launch(Dispatchers.Main.immediate) {
+                            finishOfflineVoiceTurn()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Vosk's bundled model is 16 kHz mono. Feed bounded blocks and trailing silence
+     * so the recognizer emits a final result for short conversational commands.
+     */
+    private fun transcribeOfflineVoice(pcmAudio: ByteArray): String {
+        val model = VoskModelManager.model ?: return ""
+        var recognizer: Recognizer? = null
+        return try {
+            recognizer = Recognizer(model, 16000.0f)
+            var offset = 0
+            val blockSize = 4096
+            while (offset < pcmAudio.size) {
+                val length = minOf(blockSize, pcmAudio.size - offset)
+                recognizer.acceptWaveForm(pcmAudio.copyOfRange(offset, offset + length), length)
+                offset += length
+            }
+            val trailingSilence = ByteArray(12800)
+            recognizer.acceptWaveForm(trailingSilence, trailingSilence.size)
+            extractVoskText(recognizer.finalResult).ifBlank {
+                extractVoskText(recognizer.partialResult)
+            }
+        } catch (error: Throwable) {
+            Log.e("JarvisService", "Offline Vosk transcription failed", error)
+            ""
+        } finally {
+            try { recognizer?.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun finishOfflineVoiceTurn() {
+        if (!_isSessionOn.value) return
+        hasSpeechInCurrentUtterance = false
+        hasSignalledUtteranceEnd = false
+        consecutiveVoicedFrames = 0
+        totalVoicedFramesInCurrentUtterance = 0
+        synchronized(currentUtteranceAudioStream) {
+            currentUtteranceAudioStream.reset()
+        }
+        currentTurnUserText.setLength(0)
+        setConversationState(ConversationState.IDLE)
+        updateNotification()
     }
 
     private var lastHandledCommandText = ""
