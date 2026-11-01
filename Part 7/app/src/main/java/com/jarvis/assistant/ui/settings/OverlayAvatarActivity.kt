@@ -34,7 +34,12 @@ class OverlayAvatarActivity : AppCompatActivity() {
 
         findViewById<android.view.View>(R.id.btnBack).setOnClickListener { finish() }
         overlaySwitch = findViewById(R.id.switchOverlayEnabled)
-        overlaySwitch.isChecked = preferences.isTaskOverlayEnabled && Settings.canDrawOverlays(this)
+        val overlayPermissionGranted = Settings.canDrawOverlays(this)
+        val overlayEnabled = preferences.isTaskOverlayEnabled && overlayPermissionGranted
+        if (preferences.isTaskOverlayEnabled && !overlayPermissionGranted) {
+            preferences.isTaskOverlayEnabled = false
+        }
+        overlaySwitch.isChecked = overlayEnabled
         val modeGroup = findViewById<RadioGroup>(R.id.radioOverlayMode)
         modeGroup.check(if (preferences.taskOverlayMode == "working") R.id.rbOverlayWorking else R.id.rbOverlayAlways)
         modeGroup.setOnCheckedChangeListener { _, checkedId ->
