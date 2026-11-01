@@ -943,6 +943,16 @@ object MissionEngine {
                         isVerified = false,
                         details = "Step timed out after ${timeout}ms"
                     )
+                    if (toolExecutor == null && currentStep.isIdempotent) {
+                        ReliabilityCoordinator.reportDiagnostic(
+                            DiagnosticEvent(
+                                category = ErrorCategory.NETWORK_TIMEOUT,
+                                component = "mission_tool:${currentStep.toolName}",
+                                rawMessage = evidence.details,
+                                isRecoverable = true
+                            )
+                        )
+                    }
                 }
 
                 if (stepSuccess) {
