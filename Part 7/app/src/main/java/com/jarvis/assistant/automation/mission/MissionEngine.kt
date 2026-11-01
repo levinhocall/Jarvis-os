@@ -229,8 +229,8 @@ object MissionEngine {
                 if (awaitingApproval && context != null) {
                     MissionApprovalNotifier.show(context, completedMission)
                 }
+                return@withLock completedMission
             }
-            return@withLock initialMission
         }
 
         val mission = planMission(goal, userConstraints, context)
@@ -252,6 +252,7 @@ object MissionEngine {
             )
             _activeMission.value = awaitingApproval
             persistMission(awaitingApproval)
+            if (context != null) MissionApprovalNotifier.show(context, awaitingApproval)
             return@withLock awaitingApproval
         }
 
