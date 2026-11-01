@@ -1,7 +1,9 @@
 package com.jarvis.assistant.automation.proactive
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
+import android.provider.Settings
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -146,6 +148,21 @@ class TriggerRepository(
 
     fun getTrigger(triggerId: String): ScheduledTrigger? = triggers[triggerId]
 
+    private fun isNotificationListenerAccessEnabled(): Boolean {
+        val app = appContext ?: return false
+        val enabledListeners = Settings.Secure.getString(
+            app.contentResolver,
+            "enabled_notification_listeners"
+        ).orEmpty()
+        val expected = ComponentName(
+            app,
+            com.jarvis.assistant.automation.notification.JarvisNotificationListenerService::class.java
+        )
+        return enabledListeners.split(':').any { flattened ->
+            ComponentName.unflattenFromString(flattened) == expected
+        }
+    }
+
     @Synchronized
     fun scheduleTrigger(trigger: ScheduledTrigger): Boolean {
         if (trigger.goalOrAction.isBlank() || !trigger.isEnabled) return false
@@ -185,7 +202,11 @@ class TriggerRepository(
                     wm.enqueueUniquePeriodicWork(trigger.triggerId, ExistingPeriodicWorkPolicy.UPDATE, request)
                 }
                 TriggerType.NOTIFICATION_KEYWORD -> {
-                    // The NotificationListenerService forwards matching events to this repository.
+                    // Keyword triggers are event-driven, so they are active only when Android
+                    // has actually granted notification-listener access to this service.
+                    check(isNotificationListenerAccessEnabled()) {
+                        "Notification access is not enabled for JARVIS; keyword trigger was not activated."
+                    }
                 }
             }
             true
