@@ -147,7 +147,12 @@ object MissionEngine {
                 // An actually in-flight consequential/non-idempotent action becomes UNVERIFIED
                 // and is never replayed automatically after process death.
                 val sanitizedSteps = steps.mapIndexed { idx, st ->
-                    if (!wasAwaitingApproval && !wasPaused && idx == e.currentStepIndex &&
+                    if (st.status == MissionStepStatus.COMPLETED && st.verificationEvidence?.isVerified != true) {
+                        st.copy(
+                            status = MissionStepStatus.UNVERIFIED,
+                            failureReason = "Stored completion had no verified evidence; manual review is required."
+                        )
+                    } else if (!wasAwaitingApproval && !wasPaused && idx == e.currentStepIndex &&
                         (st.status == MissionStepStatus.RUNNING || st.status == MissionStepStatus.VERIFYING)
                     ) {
                         if (!st.isIdempotent || st.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
@@ -1009,7 +1014,9 @@ object MissionEngine {
             persistMission(failed)
             return
         }
-        var completedCount = updatedSteps.count { it.status == MissionStepStatus.COMPLETED }
+        var completedCount = updatedSteps.count {
+            it.status == MissionStepStatus.COMPLETED && it.verificationEvidence?.isVerified == true
+        }
 
         for (index in updatedSteps.indices) {
             mission = _activeMission.value ?: break
