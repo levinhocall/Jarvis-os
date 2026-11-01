@@ -783,6 +783,104 @@ object MissionEngine {
         }
     }
 
+    /** Requests a safe pause after the current tool action returns. */
+    suspend fun pauseMission(missionId: String): Boolean = mutex.withLock {
+        val current = _activeMission.value ?: return@withLock false
+        if (current.missionId != missionId ||
+            current.status !in setOf(MissionOverallStatus.EXECUTING, MissionOverallStatus.VERIFYING)
+        ) return@withLock false
+
+        if (isLlmPlannedMission(current)) {
+            val planner = llmPlanner ?: return@withLock false
+            planner.requestPause()
+            val requested = current.copy(
+                outcomeSummary = "LLM planner pause requested; waiting for the current action to reach a safe boundary.",
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = requested
+            persistMission(requested, current.currentStepIndex)
+        } else {
+            pauseRequestedMissions.add(missionId)
+            val requested = current.copy(
+                status = MissionOverallStatus.PAUSED,
+                outcomeSummary = "Pause requested; the current action will finish before execution stops.",
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = requested
+            persistMission(requested, current.currentStepIndex)
+        }
+        true
+    }
+
+    /** Resumes a paused mission from verified steps only; unverified actions are never replayed. */
+    suspend fun resumeMission(context: Context?, missionId: String): Boolean = mutex.withLock {
+        val current = _activeMission.value ?: return@withLock false
+        if (current.missionId != missionId || current.status != MissionOverallStatus.PAUSED) {
+            return@withLock false
+        }
+        if (current.steps.any { it.status == MissionStepStatus.UNVERIFIED }) {
+            Log.w(TAG, "Paused mission contains an unverified action and cannot be replayed.")
+            return@withLock false
+        }
+
+        pauseRequestedMissions.remove(missionId)
+        val resumed = current.copy(
+            status = MissionOverallStatus.EXECUTING,
+            outcomeSummary = if (isLlmPlannedMission(current)) "LLM planner resuming" else "Mission resumed by user.",
+            updatedAt = System.currentTimeMillis()
+        )
+        _activeMission.value = resumed
+        persistMission(resumed, current.currentStepIndex)
+        engineScope.launch {
+            if (isLlmPlannedMission(current)) {
+                continuePausedLlmMission(context, resumed)
+            } else {
+                executeMission(context, missionId)
+            }
+        }
+        true
+    }
+
+    private suspend fun continuePausedLlmMission(context: Context?, mission: MissionDefinition) {
+        val planner = llmPlanner ?: run {
+            persistLlmPlannerOutcome(
+                mission,
+                com.jarvis.assistant.automation.agent.LlmMissionExecutionResult(
+                    false, "LLM planner is unavailable; the paused mission was not resumed.",
+                    mission.steps.size, emptyList(), "PLANNER_UNAVAILABLE"
+                ),
+                context
+            )
+            return
+        }
+        planner.resetCancellation()
+        val history = mission.steps.mapIndexed { index, step ->
+            com.jarvis.assistant.automation.agent.LlmPlannerStepRecord(
+                stepIndex = index + 1,
+                toolName = ToolRegistry.resolveToolName(step.toolName),
+                arguments = step.parameters,
+                isVerified = step.status == MissionStepStatus.COMPLETED &&
+                    step.verificationEvidence?.isVerified == true,
+                observation = step.verificationEvidence?.details ?: "Previously verified mission step."
+            )
+        }
+        val result = planner.planAndExecute(
+            goal = buildPlannerGoal(mission.goal, mission.userConstraints),
+            context = context,
+            initialHistory = history
+        ) { toolName, args ->
+            val step = MissionStep(
+                title = "LLM Step: $toolName",
+                toolName = toolName,
+                parameters = args,
+                riskLevel = ToolRegistry.getTool(toolName)?.riskLevel ?: MissionRisk.LOW
+            )
+            val (success, evidence) = executeSingleStep(step, context)
+            Pair(success && evidence.isVerified, evidence.details)
+        }
+        persistLlmPlannerOutcome(mission, result, context)
+    }
+
     /**
      * Cancels an active mission cleanly.
      */
