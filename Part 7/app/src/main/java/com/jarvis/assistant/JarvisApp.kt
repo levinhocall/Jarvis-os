@@ -8,6 +8,7 @@ import com.jarvis.assistant.automation.contacts.ContactResolver
 import com.jarvis.assistant.automation.phone.PhoneControlManager
 import com.jarvis.assistant.automation.whatsapp.WhatsAppAssistant
 import com.jarvis.assistant.automation.youtube.YouTubeAutomationManager
+import com.jarvis.assistant.automation.proactive.TriggerRepository
 import com.jarvis.assistant.data.memory.MemoryDatabase
 import com.jarvis.assistant.data.memory.MemoryManager
 import com.jarvis.assistant.data.memory.MemoryRepository
@@ -62,6 +63,9 @@ class JarvisApp : Application() {
     lateinit var commandExecutor: CommandExecutor
         private set
 
+    lateinit var triggerRepository: TriggerRepository
+        private set
+
     lateinit var unifiedRuntime: com.jarvis.assistant.core.runtime.JarvisUnifiedRuntime
         private set
 
@@ -71,6 +75,7 @@ class JarvisApp : Application() {
         instance = this
         preferences = AppPreferences(this)
         chatRepository = ChatRepository(preferences)
+        triggerRepository = TriggerRepository(this)
 
         // Memory System
         memoryDatabase = MemoryDatabase.getInstance(this)
