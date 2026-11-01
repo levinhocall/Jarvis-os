@@ -59,7 +59,7 @@ object UserConsentPolicy {
             RegexOption.IGNORE_CASE
         ).containsMatchIn(screen)
         val isShareOrPublish = normalizedTarget in setOf(
-            "share", "share now", "share location", "share live location", "share photo", "share file",
+            "share", "share now", "share location", "share live location", "share my live location", "share photo", "share file",
             "share screen", "start sharing", "post", "publish"
         )
         val isCommunicationDispatch = isShareOrPublish ||
