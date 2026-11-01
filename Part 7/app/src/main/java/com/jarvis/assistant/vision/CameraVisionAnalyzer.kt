@@ -53,7 +53,7 @@ object CameraVisionAnalyzer {
     ): CameraVisionResult = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? JarvisApp
             ?: return@withContext CameraVisionResult(false, "Jarvis application context is unavailable.")
-        val apiKey = app.preferences.apiKey.trim()
+        val apiKey = (app.preferences.getNextActiveKey("gemini") ?: app.preferences.apiKey).trim()
         if (apiKey.isBlank()) {
             return@withContext CameraVisionResult(
                 success = false,
@@ -100,6 +100,10 @@ object CameraVisionAnalyzer {
             httpClient.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    when (response.code) {
+                        429, 503 -> app.preferences.reportKeyRateLimit("gemini", apiKey)
+                        401, 403 -> app.preferences.reportKeyInvalid("gemini", apiKey)
+                    }
                     val detail = runCatching {
                         JSONObject(body).optJSONObject("error")?.optString("message")
                     }.getOrNull().orEmpty()
@@ -112,6 +116,7 @@ object CameraVisionAnalyzer {
                 if (body.isBlank()) {
                     return@withContext CameraVisionResult(false, "Image analysis returned an empty response.")
                 }
+                app.preferences.reportKeySuccess("gemini", apiKey)
                 val json = JSONObject(body)
                 val candidate = json.optJSONArray("candidates")?.optJSONObject(0)
                 val candidateText = candidate?.optJSONObject("content")
