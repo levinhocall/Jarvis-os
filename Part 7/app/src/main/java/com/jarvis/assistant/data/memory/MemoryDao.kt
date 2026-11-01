@@ -73,6 +73,9 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE `key` = :key AND status = 'ACTIVE' LIMIT 1")
     suspend fun getActiveMemoryByKey(key: String): MemoryEntity?
 
+    @Query("SELECT * FROM memories WHERE `key` = :key ORDER BY timestamp DESC")
+    suspend fun getMemoriesByKeyIncludingInactive(key: String): List<MemoryEntity>
+
     @Query("DELETE FROM memories WHERE expiryTimeMs IS NOT NULL AND expiryTimeMs < :currentTime")
     suspend fun deleteExpiredMemories(currentTime: Long): Int
 
