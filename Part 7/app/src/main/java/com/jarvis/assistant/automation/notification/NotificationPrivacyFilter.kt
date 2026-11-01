@@ -22,7 +22,7 @@ object NotificationPrivacyFilter {
             Regex("(?i)\\b(code|otp|pin|passcode|verification|security)\\b").containsMatchIn(message)
         val sensitive = hasCredentialTerm || hasBankCodePattern || hasExplicitCredentialCode
         return if (sensitive) {
-            SanitizedNotification(sender.take(120), "[Sensitive credential notification hidden]", true)
+            SanitizedNotification("[Sensitive notification]", "[Sensitive credential notification hidden]", true)
         } else {
             SanitizedNotification(sender.take(120), message.take(2000), false)
         }
