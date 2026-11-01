@@ -1,10 +1,6 @@
 package com.jarvis.assistant.automation.proactive
 
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.os.Build
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
 import com.jarvis.assistant.automation.mission.MissionEngine
@@ -41,18 +37,39 @@ object ProactiveAssistantCoordinator {
         description: String,
         delayMs: Long,
         missionId: String? = null
-    ): ScheduledProactiveItem {
-        val triggerTime = System.currentTimeMillis() + delayMs
+    ): ScheduledProactiveItem? {
+        val cleanTitle = title.trim()
+        val cleanDescription = description.trim()
+        if (cleanTitle.isBlank() || cleanDescription.isBlank() || delayMs < 0L) {
+            Log.w(TAG, "Reminder rejected because its title, description, or delay is invalid.")
+            return null
+        }
+
+        val app = context.applicationContext as? JarvisApp ?: run {
+            Log.e(TAG, "Reminder could not be scheduled: application is not JarvisApp.")
+            return null
+        }
         val item = ScheduledProactiveItem(
-            title = title,
-            description = description,
-            triggerTimeMs = triggerTime,
+            title = cleanTitle,
+            description = cleanDescription,
+            triggerTimeMs = System.currentTimeMillis() + delayMs,
             missionId = missionId
         )
+        val trigger = ScheduledTrigger(
+            triggerId = item.id,
+            goalOrAction = "${cleanTitle}\n${cleanDescription}",
+            triggerType = TriggerType.ONE_TIME_DELAYED,
+            isUnattended = false,
+            delayMs = delayMs
+        )
+        if (!app.triggerRepository.scheduleTrigger(trigger)) {
+            Log.e(TAG, "Reminder '${item.id}' was not persisted/scheduled; no success is reported.")
+            return null
+        }
+
         scheduledItems[item.id] = item
         updateAlertsFlow()
-
-        Log.i(TAG, "Scheduled proactive reminder '${item.title}' in ${delayMs / 1000}s")
+        Log.i(TAG, "Persisted reminder '${item.title}' for ${item.triggerTimeMs}.")
         return item
     }
 
@@ -164,8 +181,11 @@ object ProactiveAssistantCoordinator {
         val item = scheduledItems[id]
         if (item != null) {
             scheduledItems[id] = item.copy(isDismissed = true)
+            runCatching { JarvisApp.instance.triggerRepository.cancelTrigger(id) }
             updateAlertsFlow()
             Log.i(TAG, "Dismissed proactive alert: $id")
+        } else {
+            runCatching { JarvisApp.instance.triggerRepository.cancelTrigger(id) }
         }
     }
 
