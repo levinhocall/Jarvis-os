@@ -20,24 +20,31 @@ class TriggerWorker(
     }
 
     override suspend fun doWork(): Result {
-        val goal = inputData.getString("goal")?.trim().orEmpty()
         val triggerId = inputData.getString("triggerId").orEmpty()
-        val inputTriggerType = inputData.getString("triggerType").orEmpty()
-        val isUnattended = inputData.getBoolean("isUnattended", false)
-        if (goal.isBlank()) return Result.failure()
+        if (triggerId.isBlank()) return Result.failure()
 
         val app = applicationContext as? JarvisApp
             ?: return Result.failure()
-        val triggerType = inputTriggerType.ifBlank {
-            app.triggerRepository.getTrigger(triggerId)?.triggerType?.name.orEmpty()
+        val trigger = app.triggerRepository.getTrigger(triggerId) ?: run {
+            Log.w(TAG, "Scheduled trigger $triggerId no longer exists in encrypted storage.")
+            return Result.failure()
         }
+        val goal = trigger.goalOrAction.trim()
+        val triggerType = trigger.triggerType.name
+        val isUnattended = trigger.isUnattended
+        if (goal.isBlank()) return Result.failure()
 
         // Scheduled work must not silently become autonomous execution. A non-unattended
         // trigger becomes a private reminder; the user opens JARVIS and starts it manually.
         if (!isUnattended) {
             val notified = TriggerReminderNotifier.show(applicationContext, triggerId, goal)
             Log.i(TAG, "Trigger $triggerId requires manual start; reminderShown=$notified. No action was executed.")
-            if (triggerType == TriggerType.ONE_TIME_DELAYED.name && triggerId.isNotBlank()) {
+            if (!notified) {
+                // Keep the encrypted trigger and retry with WorkManager backoff; never lose a reminder
+                // just because notification permission is currently unavailable.
+                return Result.retry()
+            }
+            if (triggerType == TriggerType.ONE_TIME_DELAYED.name) {
                 app.triggerRepository.cancelTrigger(triggerId)
             }
             return Result.success()
