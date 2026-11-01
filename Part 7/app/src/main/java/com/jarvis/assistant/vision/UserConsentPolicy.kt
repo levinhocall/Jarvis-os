@@ -34,7 +34,10 @@ object UserConsentPolicy {
         val targetAndDescription = "$normalizedTarget ${description.orEmpty().lowercase(Locale.ROOT)}"
         val screen = visibleScreenText.lowercase(Locale.ROOT)
 
-        val isPermissionGrant = normalizedTarget in permissionGrantActions && permissionContext.containsMatchIn(screen)
+        val isPermissionGrantAction = normalizedTarget in permissionGrantActions ||
+            normalizedTarget.startsWith("allow ") || normalizedTarget.startsWith("enable ") ||
+            normalizedTarget.startsWith("grant ")
+        val isPermissionGrant = isPermissionGrantAction && permissionContext.containsMatchIn(screen)
         val isTermsAcceptance = normalizedTarget in termsAcceptActions && termsContext.containsMatchIn(screen)
         val isCredentialAutofill = (targetAndDescription.contains("autofill") || targetAndDescription.contains("use code")) &&
             credentialContext.containsMatchIn(screen)
