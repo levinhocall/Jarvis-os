@@ -10,15 +10,19 @@ import com.google.gson.reflect.TypeToken
 import com.jarvis.assistant.data.model.ChatTurn
 import com.jarvis.assistant.data.model.GeminiConstants
 
-class AppPreferences(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+class AppPreferences internal constructor(
+    context: Context,
+    preferenceName: String = PREF_NAME,
+    encryptedPreferenceName: String = ENCRYPTED_API_PREF_NAME
+) {
+    private val prefs: SharedPreferences = context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)
     private val secureApiPrefs: SharedPreferences? = try {
         val masterKey = MasterKey.Builder(context.applicationContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
         EncryptedSharedPreferences.create(
             context.applicationContext,
-            ENCRYPTED_API_PREF_NAME,
+            encryptedPreferenceName,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
@@ -31,6 +35,7 @@ class AppPreferences(context: Context) {
 
     init {
         migrateApiKeyToEncryptedStorage()
+        migrateOwnerVoiceToEncryptedStorage()
         val current = prefs.getString(KEY_MODEL, null)
         if (current == null || current !in GeminiConstants.SUPPORTED_MODELS) {
             prefs.edit().putString(KEY_MODEL, GeminiConstants.DEFAULT_MODEL).apply()
@@ -83,38 +88,56 @@ class AppPreferences(context: Context) {
     }
 
     var isOwnerVoiceEnabled: Boolean
-        get() = prefs.getBoolean(KEY_OWNER_VOICE_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(KEY_OWNER_VOICE_ENABLED, value).apply()
+        get() = secureApiPrefs?.getBoolean(KEY_OWNER_VOICE_ENABLED, false) == true &&
+            hasOwnerVoiceProfile()
+        set(value) {
+            val secure = secureApiPrefs ?: run {
+                Log.e(TAG, "Owner voice verification remains disabled because encrypted storage is unavailable.")
+                return
+            }
+            val canEnable = value && !secure.getString(KEY_OWNER_VOICE_PROFILE, null).isNullOrBlank()
+            if (!secure.edit().putBoolean(KEY_OWNER_VOICE_ENABLED, canEnable).commit()) {
+                Log.e(TAG, "Could not persist owner voice enablement securely.")
+            }
+        }
 
     var ownerVoiceThreshold: Float
         get() {
-            val stored = prefs.getFloat(KEY_OWNER_VOICE_THRESHOLD, 0.70f)
-            // Auto-migrate older builds that saved overly strict 0.50f threshold
+            val stored = secureApiPrefs?.getFloat(KEY_OWNER_VOICE_THRESHOLD, 0.70f) ?: 0.70f
             return if (stored < 0.60f) 0.70f else stored
         }
-        set(value) = prefs.edit().putFloat(KEY_OWNER_VOICE_THRESHOLD, value).apply()
+        set(value) {
+            val secure = secureApiPrefs ?: return
+            if (!secure.edit().putFloat(KEY_OWNER_VOICE_THRESHOLD, value.coerceIn(0.50f, 0.95f)).commit()) {
+                Log.e(TAG, "Could not persist owner voice threshold securely.")
+            }
+        }
 
     var ownerVoiceSampleCount: Int
-        get() = prefs.getInt(KEY_OWNER_VOICE_SAMPLE_COUNT, 0)
-        set(value) = prefs.edit().putInt(KEY_OWNER_VOICE_SAMPLE_COUNT, value).apply()
+        get() = secureApiPrefs?.getInt(KEY_OWNER_VOICE_SAMPLE_COUNT, 0) ?: 0
+        set(value) {
+            val secure = secureApiPrefs ?: return
+            if (!secure.edit().putInt(KEY_OWNER_VOICE_SAMPLE_COUNT, value.coerceAtLeast(0)).commit()) {
+                Log.e(TAG, "Could not persist owner voice sample count securely.")
+            }
+        }
 
-    fun hasOwnerVoiceProfile(): Boolean {
-        val str = prefs.getString(KEY_OWNER_VOICE_PROFILE, null)
-        return !str.isNullOrBlank()
-    }
+    fun hasOwnerVoiceProfile(): Boolean =
+        !secureApiPrefs?.getString(KEY_OWNER_VOICE_PROFILE, null).isNullOrBlank()
 
     fun getOwnerVoiceProfile(): FloatArray? {
-        val json = prefs.getString(KEY_OWNER_VOICE_PROFILE, null) ?: return null
+        val json = secureApiPrefs?.getString(KEY_OWNER_VOICE_PROFILE, null) ?: return null
         return try {
             val arr = org.json.JSONArray(json)
             FloatArray(arr.length()) { i -> arr.getDouble(i).toFloat() }
         } catch (e: Exception) {
+            Log.e(TAG, "Encrypted owner voice profile could not be decoded.", e)
             null
         }
     }
 
     fun getOwnerVoiceSamples(): List<FloatArray> {
-        val json = prefs.getString(KEY_OWNER_VOICE_SAMPLES, null) ?: return emptyList()
+        val json = secureApiPrefs?.getString(KEY_OWNER_VOICE_SAMPLES, null) ?: return emptyList()
         return try {
             val root = org.json.JSONArray(json)
             val list = mutableListOf<FloatArray>()
@@ -125,52 +148,130 @@ class AppPreferences(context: Context) {
             }
             list
         } catch (e: Exception) {
+            Log.e(TAG, "Encrypted owner voice samples could not be decoded.", e)
             emptyList()
         }
     }
 
     fun saveOwnerVoiceProfile(masterProfile: FloatArray, sampleVectors: List<FloatArray>) {
-        val masterArr = org.json.JSONArray()
-        for (v in masterProfile) {
-            masterArr.put(v.toDouble())
+        val secure = secureApiPrefs ?: run {
+            Log.e(TAG, "Owner voice profile was not saved because encrypted storage is unavailable.")
+            return
+        }
+        if (masterProfile.isEmpty() || sampleVectors.isEmpty()) {
+            Log.e(TAG, "Owner voice profile was not saved because the enrollment vectors are empty.")
+            return
         }
 
+        val masterArr = org.json.JSONArray()
+        masterProfile.forEach { masterArr.put(it.toDouble()) }
         val samplesArr = org.json.JSONArray()
-        for (vec in sampleVectors) {
+        sampleVectors.forEach { vector ->
             val arr = org.json.JSONArray()
-            for (v in vec) {
-                arr.put(v.toDouble())
-            }
+            vector.forEach { arr.put(it.toDouble()) }
             samplesArr.put(arr)
         }
 
-        prefs.edit()
-            .putString(KEY_OWNER_VOICE_PROFILE, masterArr.toString())
-            .putString(KEY_OWNER_VOICE_SAMPLES, samplesArr.toString())
+        val masterJson = masterArr.toString()
+        val samplesJson = samplesArr.toString()
+        val committed = secure.edit()
+            .putString(KEY_OWNER_VOICE_PROFILE, masterJson)
+            .putString(KEY_OWNER_VOICE_SAMPLES, samplesJson)
             .putInt(KEY_OWNER_VOICE_SAMPLE_COUNT, sampleVectors.size)
             .putBoolean(KEY_OWNER_VOICE_ENABLED, true)
-            .apply()
+            .commit()
+        if (!committed ||
+            secure.getString(KEY_OWNER_VOICE_PROFILE, null) != masterJson ||
+            secure.getString(KEY_OWNER_VOICE_SAMPLES, null) != samplesJson
+        ) {
+            secure.edit().putBoolean(KEY_OWNER_VOICE_ENABLED, false).commit()
+            Log.e(TAG, "Owner voice enrollment could not be verified in encrypted storage; voice lock remains disabled.")
+        }
     }
 
     fun saveOwnerVoiceProfile(profile: FloatArray, sampleCount: Int) {
-        val arr = org.json.JSONArray()
-        for (v in profile) {
-            arr.put(v.toDouble())
+        val secure = secureApiPrefs ?: run {
+            Log.e(TAG, "Owner voice profile was not saved because encrypted storage is unavailable.")
+            return
         }
-        prefs.edit()
-            .putString(KEY_OWNER_VOICE_PROFILE, arr.toString())
-            .putInt(KEY_OWNER_VOICE_SAMPLE_COUNT, sampleCount)
+        if (profile.isEmpty()) {
+            Log.e(TAG, "Owner voice profile was not saved because the enrollment vector is empty.")
+            return
+        }
+        val arr = org.json.JSONArray()
+        profile.forEach { arr.put(it.toDouble()) }
+        val json = arr.toString()
+        val committed = secure.edit()
+            .putString(KEY_OWNER_VOICE_PROFILE, json)
+            .putInt(KEY_OWNER_VOICE_SAMPLE_COUNT, sampleCount.coerceAtLeast(0))
             .putBoolean(KEY_OWNER_VOICE_ENABLED, true)
-            .apply()
+            .commit()
+        if (!committed || secure.getString(KEY_OWNER_VOICE_PROFILE, null) != json) {
+            secure.edit().putBoolean(KEY_OWNER_VOICE_ENABLED, false).commit()
+            Log.e(TAG, "Owner voice enrollment could not be verified in encrypted storage; voice lock remains disabled.")
+        }
     }
 
     fun clearOwnerVoiceProfile() {
+        secureApiPrefs?.edit()
+            ?.remove(KEY_OWNER_VOICE_PROFILE)
+            ?.remove(KEY_OWNER_VOICE_SAMPLES)
+            ?.remove(KEY_OWNER_VOICE_SAMPLE_COUNT)
+            ?.putBoolean(KEY_OWNER_VOICE_ENABLED, false)
+            ?.commit()
         prefs.edit()
             .remove(KEY_OWNER_VOICE_PROFILE)
             .remove(KEY_OWNER_VOICE_SAMPLES)
             .remove(KEY_OWNER_VOICE_SAMPLE_COUNT)
-            .putBoolean(KEY_OWNER_VOICE_ENABLED, false)
-            .apply()
+            .remove(KEY_OWNER_VOICE_THRESHOLD)
+            .remove(KEY_OWNER_VOICE_ENABLED)
+            .commit()
+    }
+
+    private fun migrateOwnerVoiceToEncryptedStorage() {
+        val secure = secureApiPrefs ?: run {
+            Log.e(TAG, "Owner voice profile migration deferred: encrypted storage is unavailable; plaintext profile will not be used.")
+            return
+        }
+        val keys = listOf(
+            KEY_OWNER_VOICE_PROFILE,
+            KEY_OWNER_VOICE_SAMPLES,
+            KEY_OWNER_VOICE_SAMPLE_COUNT,
+            KEY_OWNER_VOICE_THRESHOLD,
+            KEY_OWNER_VOICE_ENABLED
+        )
+        val legacyValues = prefs.all.filterKeys { it in keys }
+        if (legacyValues.isEmpty()) return
+
+        try {
+            val editor = secure.edit()
+            val copied = mutableMapOf<String, Any>()
+            for ((key, value) in legacyValues) {
+                if (secure.contains(key)) continue
+                when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Float -> editor.putFloat(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    else -> continue
+                }
+                copied[key] = value
+            }
+            check(editor.commit()) { "Encrypted owner voice migration write failed." }
+            check(copied.all { (key, value) -> secure.all[key] == value }) {
+                "Encrypted owner voice migration verification failed."
+            }
+            // Do not remove the plaintext copy until every legacy value has an encrypted counterpart.
+            check(keys.all { key -> !prefs.contains(key) || secure.contains(key) }) {
+                "Encrypted owner voice migration is incomplete."
+            }
+            check(prefs.edit().also { legacyEditor ->
+                keys.forEach { legacyEditor.remove(it) }
+            }.commit()) { "Plaintext owner voice cleanup failed." }
+        } catch (e: Exception) {
+            Log.e(TAG, "Owner voice profile migration failed; plaintext source values were preserved for retry.", e)
+        }
     }
 
     var apiKey: String
