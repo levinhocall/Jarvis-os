@@ -42,6 +42,16 @@ interface MemoryDao {
     @Query("UPDATE memories SET status = :status WHERE id = :id")
     suspend fun updateMemoryStatus(id: Long, status: String)
 
+    @Query("UPDATE memories SET status = :status WHERE `key` = :key AND status = 'ACTIVE'")
+    suspend fun updateActiveMemoriesByKey(key: String, status: String)
+
+    /** Supersede the previous active value and insert its replacement atomically. */
+    @Transaction
+    suspend fun insertReplacingActiveMemory(memory: MemoryEntity): Long {
+        updateActiveMemoriesByKey(memory.key, MemoryEntity.STATUS_SUPERSEDED)
+        return insertMemory(memory)
+    }
+
     @Query("UPDATE memories SET status = 'DELETED' WHERE id = :id")
     suspend fun softDeleteMemory(id: Long)
 
