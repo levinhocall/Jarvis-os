@@ -876,6 +876,15 @@ class JarvisConversationService : Service() {
                     val repository = app.conversationRepository
                     val sessionId = repository.restoreMostRecentActiveSession()
                         ?: repository.createNewSession("Voice Conversation").id
+                    // One-time compatibility migration: preserve legacy DataStore chat turns
+                    // when the restored Room session has no messages yet.
+                    if (repository.getMessagesPaged(sessionId, limit = 1, offset = 0).isEmpty()) {
+                        app.chatRepository.turns.value.takeLast(15).forEach { turn ->
+                            if (turn.userTranscript.isNotBlank() && turn.jarvisResponse.isNotBlank()) {
+                                repository.appendTurn(turn.userTranscript, turn.jarvisResponse)
+                            }
+                        }
+                    }
                     repository.getMessagesPaged(sessionId, limit = 12, offset = 0)
                         .reversed()
                         .takeLast(10)
