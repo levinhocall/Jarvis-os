@@ -135,7 +135,7 @@ internal fun JsonElement.toNativeToolValue(): Any? = when {
  */
 class GeminiFunctionCallProvider(
     private val apiKeyProvider: () -> String,
-    private val modelProvider: () -> String = { "gemini-3.8-flash" },
+    private val modelProvider: () -> String = { com.jarvis.assistant.data.model.GeminiConstants.MODEL_3_1_FLASH_AGENT },
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -160,7 +160,7 @@ class GeminiFunctionCallProvider(
         }
 
         try {
-            val model = modelProvider().removePrefix("models/").ifBlank { "gemini-3.8-flash" }
+            val model = modelProvider().removePrefix("models/").ifBlank { com.jarvis.assistant.data.model.GeminiConstants.MODEL_3_1_FLASH_AGENT.removePrefix("models/") }
             val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
             val contents = mutableListOf<Map<String, Any>>()
 
