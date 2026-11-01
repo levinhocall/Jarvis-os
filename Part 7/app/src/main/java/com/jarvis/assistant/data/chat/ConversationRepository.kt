@@ -121,8 +121,8 @@ class ConversationRepository(
      * A session is restored when possible and created lazily after process restart or deletion.
      */
     suspend fun appendTurn(userText: String, assistantText: String): String? = turnWriteMutex.withLock {
-        val user = userText.trim()
-        val assistant = assistantText.trim()
+        val user = com.jarvis.assistant.data.memory.EpisodicVectorMemory.sanitizeForStorage(userText.trim())
+        val assistant = com.jarvis.assistant.data.memory.EpisodicVectorMemory.sanitizeForStorage(assistantText.trim())
         if (user.isBlank() && assistant.isBlank()) return@withLock null
 
         val existingId = _currentSessionId.value
