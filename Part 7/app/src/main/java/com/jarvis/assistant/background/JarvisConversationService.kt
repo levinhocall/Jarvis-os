@@ -1861,6 +1861,45 @@ class JarvisConversationService : Service() {
      * Executes a tool call from Gemini. Called both from the direct onToolCall path
      * (when owner is already verified) and from processPendingToolCalls (after verification completes).
      */
+    private suspend fun populateApprovalGatedMissionResult(
+        result: JSONObject,
+        goal: String,
+        userConstraints: List<String> = emptyList(),
+        actionLabel: String
+    ) {
+        val mission = com.jarvis.assistant.automation.mission.MissionEngine.startMission(
+            context = this@JarvisConversationService,
+            goal = goal,
+            userConstraints = userConstraints
+        )
+        result.put("success", mission.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED)
+        result.put("mission_id", mission.missionId)
+        result.put("mission_status", mission.status.name)
+        result.put("verified", mission.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED)
+        when (mission.status) {
+            com.jarvis.assistant.automation.mission.MissionOverallStatus.WAITING_FOR_APPROVAL -> {
+                result.put("requires_confirmation", true)
+                result.put("message", "$actionLabel is waiting for your explicit approval. Nothing has been sent or called yet.")
+            }
+            com.jarvis.assistant.automation.mission.MissionOverallStatus.CLARIFICATION_REQUIRED -> {
+                result.put("requires_clarification", true)
+                result.put("message", mission.outcomeSummary ?: "More information is required before this action can proceed.")
+            }
+            com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING,
+            com.jarvis.assistant.automation.mission.MissionOverallStatus.PLANNING,
+            com.jarvis.assistant.automation.mission.MissionOverallStatus.VERIFYING -> {
+                result.put("pending", true)
+                result.put("message", "$actionLabel mission was accepted and is still being planned. No completion or dispatch is claimed yet.")
+            }
+            com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED -> {
+                result.put("message", mission.outcomeSummary ?: "$actionLabel completed and verified.")
+            }
+            else -> {
+                result.put("message", mission.outcomeSummary ?: "$actionLabel could not be completed.")
+            }
+        }
+    }
+
     private fun handleToolCallExecution(callId: String, name: String, args: JSONObject) {
         val job = serviceScope.launch(Dispatchers.IO) {
             val thisJob = coroutineContext[Job]
@@ -2241,147 +2280,44 @@ class JarvisConversationService : Service() {
                         val recipient = args.optString("recipient_name", "").trim()
                         val message = args.optString("message", "").trim()
                         val appNumber = if (args.has("app_number")) args.optInt("app_number", 1) else null
-                        val confirmed = args.optBoolean("confirmed", true)
                         audioPlayer?.flush()
-                        val waResult = com.jarvis.assistant.util.WhatsAppMessenger.sendMessage(this@JarvisConversationService, recipient, message, appNumber, confirmed)
-                        when (waResult) {
-                            is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.Success -> {
-                                result.put("success", true) // WhatsApp opened and the send action was queued.
-                                result.put("sent", false) // The asynchronous accessibility tap is not delivery proof.
-                                result.put("message", "Opened WhatsApp for ${waResult.contactName} and queued the send action. Sending is not yet verified. Inspect the current chat; only report it sent if the outgoing message is visible, not while it remains a draft.")
-                            }
-                            is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.RequiresConfirmation -> {
-                                result.put("success", false)
-                                result.put("requires_confirmation", true)
-                                result.put("message", "Please confirm sending the WhatsApp message to ${waResult.contactName}.")
-                            }
-                            is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.MultipleAppsFound -> {
-                                result.put("success", false)
-                                result.put("message", "Multiple WhatsApp apps found. Please specify WhatsApp 1 or 2.")
-                            }
-                            is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.ContactNotFound -> {
-                                result.put("success", false)
-                                result.put("message", "Could not find contact ${waResult.name}.")
-                            }
-                            is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.MultipleContactsFound -> {
-                                result.put("success", false)
-                                result.put("message", "Multiple contacts found for ${waResult.name}.")
-                            }
-                            is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.MissingPermission -> {
-                                result.put("success", false)
-                                result.put("message", "Contacts permission not granted.")
-                            }
-                            is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.Error -> {
-                                result.put("success", false)
-                                result.put("message", waResult.reason)
-                            }
-                        }
+                        val constraints = if (appNumber != null) listOf("app_number=$appNumber") else emptyList()
+                        populateApprovalGatedMissionResult(
+                            result = result,
+                            goal = "send WhatsApp to $recipient saying $message",
+                            userConstraints = constraints,
+                            actionLabel = "WhatsApp message to $recipient"
+                        )
+                        result.put("sent", false)
                     }
 
                     "whatsapp_call" -> {
                         val recipient = args.optString("recipient_name", "").trim()
-                        val callType = args.optString("call_type", "voice").trim()
+                        val callType = args.optString("call_type", "voice").trim().ifBlank { "voice" }
                         val appNumber = if (args.has("app_number")) args.optInt("app_number", 1) else null
-                        val confirmed = args.optBoolean("confirmed", true)
                         audioPlayer?.flush()
-                        val callResult = com.jarvis.assistant.util.WhatsAppMessenger.placeCall(this@JarvisConversationService, recipient, callType, appNumber, confirmed)
-                        val (ok, msg) = when (callResult) {
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.Success -> Pair(true, "Opened WhatsApp ${callResult.callType} call interface for ${callResult.contactName}; call connection is not confirmed.")
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.RequiresConfirmation -> Pair(true, "Please confirm WhatsApp call to ${callResult.contactName}.")
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MultipleAppsFound -> Pair(false, "Multiple WhatsApp apps found. Please specify WhatsApp 1 or 2.")
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.ContactNotFound -> Pair(false, "Could not find contact ${callResult.name}.")
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MultipleContactsFound -> Pair(false, "Multiple contacts found for ${callResult.name}.")
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MissingPermission -> Pair(false, "Contacts permission not granted.")
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.Error -> Pair(false, callResult.reason)
-                        }
-                        result.put("success", ok)
-                        result.put("message", msg)
+                        val constraints = if (appNumber != null) listOf("app_number=$appNumber") else emptyList()
+                        populateApprovalGatedMissionResult(
+                            result = result,
+                            goal = "WhatsApp $callType call to $recipient",
+                            userConstraints = constraints,
+                            actionLabel = "WhatsApp $callType call to $recipient"
+                        )
+                        result.put("call_started", false)
                     }
 
                     "call_contact" -> {
                         val contact = args.optString("contact_name", "").trim()
                         val explicitIndex = if (args.has("contact_index")) args.optInt("contact_index") else null
                         audioPlayer?.flush()
-
-                        val callResult = com.jarvis.assistant.util.ContactCaller.callContact(
-                            context = this@JarvisConversationService,
-                            spokenName = contact,
-                            explicitIndex = explicitIndex
+                        val constraints = if (explicitIndex != null) listOf("contact_index=$explicitIndex") else emptyList()
+                        populateApprovalGatedMissionResult(
+                            result = result,
+                            goal = "call $contact",
+                            userConstraints = constraints,
+                            actionLabel = "Phone call to $contact"
                         )
-
-                        when (callResult) {
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> {
-                                result.put("success", true)
-                                result.put("contact_name", callResult.contact.name)
-                                result.put("phone_number", callResult.contact.number)
-                                val msg = if (callResult.indexUsed != null && callResult.totalCandidates != null) {
-                                    "Calling ${callResult.contact.name} (contact #${callResult.indexUsed} of ${callResult.totalCandidates}: ${callResult.contact.number})."
-                                } else {
-                                    "Calling ${callResult.contact.name} (${callResult.contact.number})."
-                                }
-                                result.put("message", msg)
-                            }
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.MultipleMatches -> {
-                                result.put("success", false)
-                                result.put("disambiguation_required", true)
-                                result.put("query", callResult.query)
-                                result.put("candidate_count", callResult.matches.size)
-
-                                val candidatesArray = org.json.JSONArray()
-                                val sb = StringBuilder("Found ${callResult.matches.size} contacts for \"${callResult.query}\":\n")
-                                callResult.matches.forEachIndexed { i, c ->
-                                    val idx = i + 1
-                                    candidatesArray.put(org.json.JSONObject().apply {
-                                        put("index", idx)
-                                        put("name", c.name)
-                                        put("number", c.number)
-                                        put("type", c.type)
-                                    })
-                                    sb.append("$idx. ${c.name} (${c.type}: ${c.number})\n")
-                                }
-                                sb.append("Ask the user which one they would like to call by stating the number (1 to ${callResult.matches.size}) or full name.")
-                                result.put("candidates", candidatesArray)
-                                result.put("message", sb.toString().trim())
-                            }
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.IndexOutOfBounds -> {
-                                result.put("success", false)
-                                result.put("disambiguation_required", true)
-                                result.put("index_out_of_bounds", true)
-                                result.put("requested_index", callResult.requestedIndex)
-                                result.put("candidate_count", callResult.matches.size)
-
-                                val candidatesArray = org.json.JSONArray()
-                                val sb = StringBuilder("Requested contact #${callResult.requestedIndex}, but only ${callResult.matches.size} contacts exist for \"${callResult.query}\":\n")
-                                callResult.matches.forEachIndexed { i, c ->
-                                    val idx = i + 1
-                                    candidatesArray.put(org.json.JSONObject().apply {
-                                        put("index", idx)
-                                        put("name", c.name)
-                                        put("number", c.number)
-                                    })
-                                    sb.append("$idx. ${c.name} (${c.number})\n")
-                                }
-                                sb.append("Please ask the user to pick a number between 1 and ${callResult.matches.size}.")
-                                result.put("candidates", candidatesArray)
-                                result.put("message", sb.toString().trim())
-                            }
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.NoMatch -> {
-                                result.put("success", false)
-                                result.put("message", "Could not find contact \"$contact\" in your saved contacts.")
-                            }
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.MissingContactsPermission -> {
-                                result.put("success", false)
-                                result.put("message", "Contacts permission is not granted, so JARVIS cannot look up that saved contact.")
-                            }
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.MissingCallPermission -> {
-                                result.put("success", false)
-                                result.put("message", "Phone call permission is not granted. Please grant Phone permission in Settings.")
-                            }
-                            is com.jarvis.assistant.util.ContactCaller.CallResult.CallFailed -> {
-                                result.put("success", false)
-                                result.put("message", "Could not place phone call due to a telephony error.")
-                            }
-                        }
+                        result.put("call_started", false)
                     }
 
                     "set_volume" -> {
