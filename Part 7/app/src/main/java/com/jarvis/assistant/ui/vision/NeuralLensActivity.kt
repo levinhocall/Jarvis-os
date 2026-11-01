@@ -131,6 +131,10 @@ class NeuralLensActivity : AppCompatActivity() {
         // bitmap while the provider request is still running.
         val analysisBitmap = try {
             bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                ?: run {
+                    status.text = "Could not prepare the selected image for analysis."
+                    return
+                }
         } catch (error: Exception) {
             status.text = "Could not prepare the selected image for analysis."
             return
