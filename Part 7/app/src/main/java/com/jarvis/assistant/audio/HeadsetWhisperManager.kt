@@ -79,6 +79,8 @@ object HeadsetWhisperManager {
      */
     fun whisperNotification(sender: String, message: String, context: Context) {
         if (!isWhisperModeActive) return
+        val app = context.applicationContext as? com.jarvis.assistant.JarvisApp ?: return
+        if (!app.preferences.headsetWhisperEnabled) return
 
         val whisperText = "Sir, message from $sender: '$message'. Reply bhejna hai?"
         VoiceSynthesisRouter.speak(whisperText) {
