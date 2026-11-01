@@ -183,6 +183,45 @@ class LlmPlannerTest {
     }
 
     @Test
+    fun testApprovedConsequentialCallExecutesOnceThenPlannerContinuesWithVerifiedHistory() = runBlocking {
+        val priorHistory = listOf(
+            LlmPlannerStepRecord(
+                stepIndex = 1,
+                toolName = "open_app",
+                arguments = mapOf("app_name" to "WhatsApp"),
+                isVerified = true,
+                observation = "WhatsApp foreground package verified."
+            )
+        )
+        val provider = FakeScriptedProvider { _, history ->
+            assertEquals(2, history.size)
+            assertTrue(history.all { it.isVerified })
+            LlmStepDecision.Finish("Approved action and mission verified.")
+        }
+        val attempts = AtomicInteger(0)
+        val approved = ApprovedLlmToolCall(
+            toolName = "whatsapp_send",
+            arguments = mapOf("contact" to "Asha", "message" to "On my way")
+        )
+
+        val result = LlmPlanner(provider).planAndExecute(
+            goal = "Send a WhatsApp message",
+            initialHistory = priorHistory,
+            approvedToolCall = approved
+        ) { toolName, args ->
+            assertEquals("whatsapp_send", toolName)
+            assertEquals(approved.arguments, args)
+            attempts.incrementAndGet()
+            true to "WhatsApp action acknowledged and independently verified."
+        }
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, attempts.get())
+        assertEquals(2, result.history.size)
+        assertTrue(result.history.all { it.isVerified })
+    }
+
+    @Test
     fun testCancellationViaKillSwitch() = runBlocking {
         val provider = FakeScriptedProvider { _, _ ->
             LlmStepDecision.InvokeTool("search_web", mapOf("query" to "test"))
