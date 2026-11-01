@@ -36,6 +36,7 @@ class AppPreferences internal constructor(
     init {
         migrateApiKeyToEncryptedStorage()
         migrateOwnerVoiceToEncryptedStorage()
+        migratePrivateUserDataToEncryptedStorage()
         val current = prefs.getString(KEY_MODEL, null)
         if (current == null || current !in GeminiConstants.SUPPORTED_MODELS) {
             prefs.edit().putString(KEY_MODEL, GeminiConstants.DEFAULT_MODEL).apply()
@@ -318,6 +319,68 @@ class AppPreferences internal constructor(
         }
     }
 
+    private fun migratePrivateUserDataToEncryptedStorage() {
+        val secure = secureApiPrefs ?: run {
+            Log.e(TAG, "Private profile and conversation migration deferred because encrypted storage is unavailable.")
+            return
+        }
+        val keys = listOf(
+            KEY_USER_NAME,
+            KEY_USER_BIRTHDAY,
+            KEY_USER_LOCATION,
+            KEY_USER_AGE,
+            KEY_DAILY_ROUTINE,
+            KEY_FAVORITE_SONG,
+            KEY_FAVORITE_APP,
+            KEY_SONG_COUNTS,
+            KEY_CHAT_HISTORY
+        )
+        val legacyValues = prefs.all.filterKeys { it in keys }
+        if (legacyValues.isEmpty()) return
+
+        try {
+            val editor = secure.edit()
+            val copied = mutableMapOf<String, Any>()
+            for ((key, value) in legacyValues) {
+                if (secure.contains(key)) continue
+                when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Float -> editor.putFloat(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    else -> continue
+                }
+                copied[key] = value
+            }
+            check(editor.commit()) { "Encrypted private-data migration write failed." }
+            check(copied.all { (key, value) -> secure.all[key] == value }) {
+                "Encrypted private-data migration verification failed."
+            }
+            check(keys.all { key -> !prefs.contains(key) || secure.contains(key) }) {
+                "Encrypted private-data migration is incomplete."
+            }
+            check(prefs.edit().also { legacyEditor ->
+                keys.forEach { legacyEditor.remove(it) }
+            }.commit()) { "Plaintext private-data cleanup failed." }
+        } catch (e: Exception) {
+            Log.e(TAG, "Private profile/conversation migration failed; plaintext source values were preserved for retry.", e)
+        }
+    }
+
+    private fun readSecureString(key: String, defaultValue: String = ""): String =
+        secureApiPrefs?.getString(key, null) ?: defaultValue
+
+    private fun writeSecureString(key: String, value: String) {
+        val secure = secureApiPrefs ?: run {
+            Log.e(TAG, "Private value '$key' was not saved because encrypted storage is unavailable.")
+            return
+        }
+        if (!secure.edit().putString(key, value).commit()) {
+            Log.e(TAG, "Private value '$key' could not be committed to encrypted storage.")
+        }
+    }
+
     var aiModel: String
         get() {
             val stored = prefs.getString(KEY_MODEL, GeminiConstants.DEFAULT_MODEL) ?: GeminiConstants.DEFAULT_MODEL
@@ -352,11 +415,11 @@ class AppPreferences internal constructor(
 
     var userName: String
         get() {
-            val name = prefs.getString(KEY_USER_NAME, "") ?: ""
+            val name = readSecureString(KEY_USER_NAME)
             return if (name.isBlank() || name == "Salaam" || name == "TechGPT X" || name == "Rehaan") "NAZIB" else name
         }
         set(value) {
-            prefs.edit().putString(KEY_USER_NAME, value.trim()).apply()
+            writeSecureString(KEY_USER_NAME, value.trim())
         }
 
     var appTheme: String
@@ -424,39 +487,39 @@ class AppPreferences internal constructor(
         set(value) = prefs.edit().putString(KEY_CUSTOM_ENDPOINT, value.trim()).apply()
 
     var userBirthday: String
-        get() = prefs.getString(KEY_USER_BIRTHDAY, "") ?: ""
+        get() = readSecureString(KEY_USER_BIRTHDAY)
         set(value) {
-            prefs.edit().putString(KEY_USER_BIRTHDAY, value.trim()).apply()
+            writeSecureString(KEY_USER_BIRTHDAY, value.trim())
         }
 
     var userLocation: String
-        get() = prefs.getString(KEY_USER_LOCATION, "") ?: ""
+        get() = readSecureString(KEY_USER_LOCATION)
         set(value) {
-            prefs.edit().putString(KEY_USER_LOCATION, value.trim()).apply()
+            writeSecureString(KEY_USER_LOCATION, value.trim())
         }
 
     var userAge: String
-        get() = prefs.getString(KEY_USER_AGE, "") ?: ""
+        get() = readSecureString(KEY_USER_AGE)
         set(value) {
-            prefs.edit().putString(KEY_USER_AGE, value.trim()).apply()
+            writeSecureString(KEY_USER_AGE, value.trim())
         }
 
     var dailyRoutine: String
-        get() = prefs.getString(KEY_DAILY_ROUTINE, "") ?: ""
+        get() = readSecureString(KEY_DAILY_ROUTINE)
         set(value) {
-            prefs.edit().putString(KEY_DAILY_ROUTINE, value.trim()).apply()
+            writeSecureString(KEY_DAILY_ROUTINE, value.trim())
         }
 
     var favoriteSong: String
-        get() = prefs.getString(KEY_FAVORITE_SONG, "") ?: ""
+        get() = readSecureString(KEY_FAVORITE_SONG)
         set(value) {
-            prefs.edit().putString(KEY_FAVORITE_SONG, value.trim()).apply()
+            writeSecureString(KEY_FAVORITE_SONG, value.trim())
         }
 
     var favoriteApp: String
-        get() = prefs.getString(KEY_FAVORITE_APP, "") ?: ""
+        get() = readSecureString(KEY_FAVORITE_APP)
         set(value) {
-            prefs.edit().putString(KEY_FAVORITE_APP, value.trim()).apply()
+            writeSecureString(KEY_FAVORITE_APP, value.trim())
         }
 
     var isMicMuted: Boolean
@@ -501,7 +564,7 @@ class AppPreferences internal constructor(
         set(value) = prefs.edit().putInt(KEY_TASK_OVERLAY_Y, value.coerceAtLeast(0)).apply()
 
     fun getSongPlayCounts(): MutableMap<String, Int> {
-        val json = prefs.getString(KEY_SONG_COUNTS, null) ?: return mutableMapOf()
+        val json = secureApiPrefs?.getString(KEY_SONG_COUNTS, null) ?: return mutableMapOf()
         return try {
             val type = object : TypeToken<MutableMap<String, Int>>() {}.type
             gson.fromJson(json, type) ?: mutableMapOf()
@@ -519,7 +582,7 @@ class AppPreferences internal constructor(
         counts[cleanSong.lowercase()] = currentCount
 
         // Update stored JSON
-        prefs.edit().putString(KEY_SONG_COUNTS, gson.toJson(counts)).apply()
+        secureApiPrefs?.edit()?.putString(KEY_SONG_COUNTS, gson.toJson(counts))?.commit()
 
         // Auto-promote to favorite song if played at least 2 times, or if favoriteSong is empty
         val currentFav = favoriteSong
@@ -534,7 +597,7 @@ class AppPreferences internal constructor(
     }
 
     fun loadChatHistory(): List<ChatTurn> {
-        val json = prefs.getString(KEY_CHAT_HISTORY, null) ?: return emptyList()
+        val json = secureApiPrefs?.getString(KEY_CHAT_HISTORY, null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<ChatTurn>>() {}.type
             gson.fromJson(json, type) ?: emptyList()
@@ -545,11 +608,12 @@ class AppPreferences internal constructor(
 
     fun saveChatHistory(history: List<ChatTurn>) {
         val json = gson.toJson(history)
-        prefs.edit().putString(KEY_CHAT_HISTORY, json).apply()
+        writeSecureString(KEY_CHAT_HISTORY, json)
     }
 
     fun clearChatHistory() {
-        prefs.edit().remove(KEY_CHAT_HISTORY).apply()
+        secureApiPrefs?.edit()?.remove(KEY_CHAT_HISTORY)?.commit()
+        prefs.edit().remove(KEY_CHAT_HISTORY).commit()
     }
 
     // --- Key Pool & Multi-Provider Architecture (Phase 5) ---
