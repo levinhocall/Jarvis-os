@@ -31,6 +31,7 @@
         <package android:name="com.termux" />
     </queries>
 
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
     <application
