@@ -179,8 +179,8 @@ class NeuralLensActivity : AppCompatActivity() {
     private fun capturePhoto() {
         val capture = imageCapture
         if (capture == null) {
+            status.text = "Camera is not ready. Starting the live preview…"
             requestCameraAndStart()
-            status.text = "Start the live camera first, then capture."
             return
         }
         val file = File(cacheDir, "neural-lens-${System.currentTimeMillis()}.jpg")
@@ -192,6 +192,11 @@ class NeuralLensActivity : AppCompatActivity() {
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    if (isFinishing || isDestroyed) {
+                        file.delete()
+                        if (pendingCaptureFile == file) pendingCaptureFile = null
+                        return
+                    }
                     lifecycleScope.launch {
                         try {
                             val bitmap = withContext(Dispatchers.IO) {
