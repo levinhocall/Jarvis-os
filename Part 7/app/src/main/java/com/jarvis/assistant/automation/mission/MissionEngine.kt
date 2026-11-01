@@ -234,7 +234,9 @@ object MissionEngine {
         val cancellationRequested = _activeMission.value?.let {
             it.missionId == baseMission.missionId && it.outcomeSummary?.contains("cancellation requested", ignoreCase = true) == true
         } == true
-        val hasUnverifiedHistory = result.history.any { !it.isVerified }
+        val hasUnverifiedHistory = result.history.any {
+            !it.isVerified && !it.observation.startsWith("Awaiting explicit user approval", ignoreCase = true)
+        }
         val awaitingApproval = result.abortReason == "APPROVAL_REQUIRED"
         val convertedSteps = result.history.map { record ->
             val isPendingApprovalStep = awaitingApproval &&
