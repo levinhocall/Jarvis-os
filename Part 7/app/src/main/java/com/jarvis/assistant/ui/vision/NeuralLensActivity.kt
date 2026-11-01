@@ -168,10 +168,14 @@ class NeuralLensActivity : AppCompatActivity() {
                 val scan = TacticalScannerManager.scanCurrentScreen(this@NeuralLensActivity)
                 result.text = scan.summary
                 status.text = if (scan.summary.isBlank()) "No readable text was found." else "Screen OCR scan finished."
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
-                status.text = "Screen OCR failed: ${error.localizedMessage ?: "unknown error"}"
+                if (!isFinishing && !isDestroyed) {
+                    status.text = "Screen OCR failed: ${error.localizedMessage ?: "unknown error"}"
+                }
             } finally {
-                setBusy(false)
+                if (!isFinishing && !isDestroyed) setBusy(false)
             }
         }
     }
