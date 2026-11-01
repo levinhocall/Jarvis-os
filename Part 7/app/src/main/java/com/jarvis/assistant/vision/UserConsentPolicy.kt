@@ -57,7 +57,7 @@ object UserConsentPolicy {
         )
         val isCommunicationDispatch = communicationOrSharingSurface && normalizedTarget in dispatchActions
         val isExplicitDataSubmission = normalizedTarget in setOf("submit", "place order", "confirm order") &&
-            Regex("""\\b(payment|checkout|purchase|order|booking|transfer|subscription)\\b""", RegexOption.IGNORE_CASE)
+            Regex("""\b(payment|checkout|purchase|order|booking|transfer|subscription)\b""", RegexOption.IGNORE_CASE)
                 .containsMatchIn(screen)
         return isPermissionGrant || isTermsAcceptance || isCredentialAutofill ||
             isCommunicationDispatch || isExplicitDataSubmission
