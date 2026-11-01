@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
+import com.jarvis.assistant.core.reliability.DiagnosticEvent
+import com.jarvis.assistant.core.reliability.ErrorCategory
+import com.jarvis.assistant.core.reliability.ReliabilityCoordinator
+import com.jarvis.assistant.core.reliability.SystemHealthState
 import com.jarvis.assistant.automation.command.JarvisCommand
 import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
 import com.jarvis.assistant.automation.notification.JarvisNotificationListenerService
@@ -1068,9 +1072,75 @@ object MissionEngine {
     }
 
     /**
-     * Executes a single step using registered hook or real platform tool integrations.
+     * Executes a single step with component health tracking. Only verified success resets health;
+     * transient failures are recorded, while non-idempotent actions are never replayed here.
      */
     private suspend fun executeSingleStep(
+        step: MissionStep,
+        context: Context?,
+        isApprovedByUser: Boolean = false
+    ): Pair<Boolean, MissionVerificationEvidence> {
+        val component = "mission_tool:${step.toolName}"
+        if (toolExecutor == null && ReliabilityCoordinator.getComponentState(component) == SystemHealthState.UNAVAILABLE) {
+            return Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED,
+                false,
+                "Tool '${step.toolName}' is temporarily blocked by the reliability circuit breaker after repeated recoverable failures."
+            ))
+        }
+
+        val result = try {
+            executeSingleStepInternal(step, context, isApprovedByUser)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED,
+                false,
+                "Tool execution failed (${error.javaClass.simpleName})."
+            ))
+        }
+
+        if (toolExecutor == null) {
+            if (result.first && result.second.isVerified) {
+                ReliabilityCoordinator.resetComponent(component)
+            } else if (step.isIdempotent && isRecoverableToolFailure(result.second.details)) {
+                ReliabilityCoordinator.reportDiagnostic(
+                    DiagnosticEvent(
+                        category = classifyToolFailure(result.second.details),
+                        component = component,
+                        rawMessage = result.second.details,
+                        isRecoverable = true
+                    )
+                )
+            }
+        }
+        return result
+    }
+
+    private fun isRecoverableToolFailure(details: String): Boolean {
+        val normalized = details.lowercase(Locale.ROOT)
+        return listOf(
+            "timeout", "timed out", "temporarily unavailable", "service disconnected",
+            "connection lost", "hardware unavailable", "execution threw", "exception",
+            "provider failure", "camera unavailable", "audio record", "database unavailable"
+        ).any(normalized::contains)
+    }
+
+    private fun classifyToolFailure(details: String): ErrorCategory {
+        val normalized = details.lowercase(Locale.ROOT)
+        return when {
+            "timeout" in normalized || "timed out" in normalized -> ErrorCategory.NETWORK_TIMEOUT
+            "camera" in normalized || "audio" in normalized || "hardware" in normalized -> ErrorCategory.HARDWARE_UNAVAILABLE
+            "provider" in normalized || "model" in normalized || "gemini" in normalized -> ErrorCategory.PROVIDER_FAILURE
+            else -> ErrorCategory.SERVICE_DISCONNECTED
+        }
+    }
+
+    /**
+     * Executes a single step using registered hook or real platform tool integrations.
+     */
+    private suspend fun executeSingleStepInternal(
         step: MissionStep,
         context: Context?,
         isApprovedByUser: Boolean = false
