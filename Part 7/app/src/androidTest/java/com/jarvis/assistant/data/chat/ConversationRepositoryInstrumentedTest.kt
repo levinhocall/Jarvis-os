@@ -72,6 +72,17 @@ class ConversationRepositoryInstrumentedTest {
     }
 
     @Test
+    fun startingNewSessionArchivesPreviousConversationAtomically() = runBlocking {
+        val repository = ConversationRepository(database.chatDao())
+        val previousId = repository.appendTurn("Old topic", "Old answer")
+        val nextSession = repository.startNewSession("New Chat")
+
+        assertTrue(database.chatDao().getSessionById(previousId!!)!!.isArchived)
+        assertEquals(nextSession.id, repository.currentSessionId.value)
+        assertTrue(repository.getMessages(nextSession.id).isEmpty())
+    }
+
+    @Test
     fun blankTurnDoesNotCreateAnEmptySession() = runBlocking {
         val repository = ConversationRepository(database.chatDao())
 
