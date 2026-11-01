@@ -128,6 +128,32 @@ class MissionEngineTest {
     }
 
     @Test
+    fun testPlanMission_whatsappVideoCallRequiresApprovalAndKeepsProfileChoice() {
+        val mission = MissionEngine.planMission(
+            "WhatsApp video call to Rahul",
+            userConstraints = listOf("app_number=2")
+        )
+
+        assertEquals(MissionOverallStatus.WAITING_FOR_APPROVAL, mission.status)
+        assertEquals(MissionApprovalState.PENDING_APPROVAL, mission.approvalState)
+        assertEquals("whatsapp_call", mission.steps.single().toolName)
+        assertEquals("video", mission.steps.single().parameters["call_type"])
+        assertEquals(2, mission.steps.single().parameters["app_number"])
+        assertEquals(MissionRisk.HIGH_CONSEQUENTIAL, mission.steps.single().riskLevel)
+    }
+
+    @Test
+    fun testPlanMission_phoneCallKeepsExplicitContactIndex() {
+        val mission = MissionEngine.planMission(
+            "call Rahul",
+            userConstraints = listOf("contact_index=2")
+        )
+
+        assertEquals(MissionOverallStatus.WAITING_FOR_APPROVAL, mission.status)
+        assertEquals(2, mission.steps.single().parameters["contact_index"])
+    }
+
+    @Test
     fun testPlanMission_phoneCall_requiresExplicitApproval() {
         val mission = MissionEngine.planMission("call Rahul")
 
