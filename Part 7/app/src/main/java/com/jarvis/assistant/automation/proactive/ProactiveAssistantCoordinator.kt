@@ -116,7 +116,8 @@ object ProactiveAssistantCoordinator {
      */
     fun postProactiveSuggestion(
         candidate: ProactiveCandidate,
-        currentHourOverride: Int? = null
+        currentHourOverride: Int? = null,
+        context: Context? = null
     ): GovernorDecision {
         val decision = InterruptionGovernor.evaluate(candidate, currentHourOverride)
         if (!decision.isAllowed) {
@@ -124,22 +125,36 @@ object ProactiveAssistantCoordinator {
             return decision
         }
 
-        candidateMap[candidate.id] = candidate
-        val item = ScheduledProactiveItem(
-            id = candidate.id,
-            title = candidate.title,
-            description = candidate.description,
-            triggerTimeMs = candidate.timestamp,
-            missionId = null
-        )
-        scheduledItems[item.id] = item
-
         if (candidate.deliveryType == SuggestionDeliveryType.OVERT_NOTIFICATION) {
+            val appContext = context?.applicationContext
+                ?: runCatching { JarvisApp.instance }.getOrNull()
+            if (appContext == null) {
+                return decision.copy(isAllowed = false, reason = "No application context was available; no notification was delivered.")
+            }
+            val delivered = TriggerReminderNotifier.show(
+                appContext,
+                candidate.id,
+                "${candidate.title}\n${candidate.description}"
+            )
+            if (!delivered) {
+                return decision.copy(isAllowed = false, reason = "System notification permission or channel is unavailable; suggestion was not delivered.")
+            }
             InterruptionGovernor.recordOvertDelivered(candidate.timestamp)
         }
 
-        updateAlertsFlow()
-        Log.i(TAG, "Delivered proactive suggestion: '${candidate.title}' [${candidate.category}]")
+        candidateMap[candidate.id] = candidate
+        if (candidate.deliveryType != SuggestionDeliveryType.SILENT_PREPARATION) {
+            val item = ScheduledProactiveItem(
+                id = candidate.id,
+                title = candidate.title,
+                description = candidate.description,
+                triggerTimeMs = candidate.timestamp,
+                missionId = null
+            )
+            scheduledItems[item.id] = item
+            updateAlertsFlow()
+        }
+        Log.i(TAG, "Proactive candidate accepted for ${candidate.deliveryType} delivery: '${candidate.title}' [${candidate.category}]")
         return decision
     }
 
