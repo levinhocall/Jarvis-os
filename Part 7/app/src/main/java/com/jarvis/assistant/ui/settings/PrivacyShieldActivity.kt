@@ -22,6 +22,10 @@ class PrivacyShieldActivity : AppCompatActivity() {
             finish()
         }
 
+        binding.cardSourceRepository.setOnClickListener {
+            openUrl("https://github.com/levinhocall/Jarvis-os")
+        }
+
         binding.btnJoinOfficialTelegram.setOnClickListener {
             openUrl("https://t.me/+sYana61LvHdmZmE1")
         }
