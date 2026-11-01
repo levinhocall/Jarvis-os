@@ -3984,6 +3984,8 @@ class JarvisConversationService : Service() {
     private fun buildNotification(): android.app.Notification {
         val (title, text) = when {
             _isStandby.value -> "Jarvis is in the background" to "Say \"Hey Jarvis\" to wake me up"
+            _isSessionOn.value && _connectionStatus.value.equals("OFFLINE", ignoreCase = true) ->
+                "Jarvis is in offline mode" to "Local voice commands are available. Cloud AI is paused."
             _isSessionOn.value && !_connectionStatus.value.equals("LIVE", ignoreCase = true) ->
                 "Jarvis is reconnecting" to "Connection: ${_connectionStatus.value}. Requests may not be heard yet."
             _isSessionOn.value && lastResponseTimedOut ->
