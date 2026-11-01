@@ -1511,7 +1511,7 @@ class JarvisConversationService : Service() {
                         }
 
                         override fun onError(message: String, isFatal: Boolean, errorCode: String?) {
-                            Log.e("JarvisService", "GeminiLive onError: fatal=$isFatal, code=$errorCode, msg=$message")
+                            Log.e("JarvisService", "GeminiLive error (fatal=$isFatal, code=$errorCode); server message omitted")
                             VoiceFlightRecorder.recordError(errorCode ?: if (isFatal) "FATAL_ERROR" else "WARNING", message)
                             if (isFatal) setConversationState(ConversationState.ERROR)
                             updateNotification()
@@ -2867,7 +2867,7 @@ class JarvisConversationService : Service() {
                         Log.i("JarvisService", "Tool call '$name' (callId=$callId) was cancelled.")
                         throw e
                     } catch (e: Exception) {
-                        Log.e("JarvisService", "Tool call '$name' execution failed: ${e.message}", e)
+                        Log.e("JarvisService", "Tool call '$name' execution failed; error details omitted", e)
                         val errResult = JSONObject().apply {
                             put("success", false)
                             put("message", "Error: ${e.message}")
@@ -3163,7 +3163,7 @@ class JarvisConversationService : Service() {
             }
 
             lastHandledCommandText = cleanSpeech
-            Log.i("JarvisService", "USER TEXT → Detected command [${parsed.matchedPattern}] confidence=${parsed.confidence}: $cmd")
+            Log.i("JarvisService", "User command intent detected (confidence=${parsed.confidence}); content omitted")
             executeDetectedCommand(cmd, cleanSpeech)
         } else {
             Log.d("JarvisService", "No command match from user text (confidence=${parsed.confidence})")
@@ -3423,7 +3423,7 @@ class JarvisConversationService : Service() {
                 Log.i("JarvisService", "Command execution returned; output omitted from logs (source=$source)")
                 app.memoryManager.addShortTermTurn(source, result)
             } catch (e: Exception) {
-                Log.e("JarvisService", "Command execution FAILED: ${e.message}", e)
+                Log.e("JarvisService", "Command execution failed; error details omitted", e)
             }
         }
     }
