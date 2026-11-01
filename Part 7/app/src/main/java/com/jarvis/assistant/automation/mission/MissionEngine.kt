@@ -858,6 +858,7 @@ object MissionEngine {
         }
 
         pauseRequestedMissions.remove(missionId)
+        cancelRequestedMissions.remove(missionId)
         val resumed = current.copy(
             status = MissionOverallStatus.EXECUTING,
             outcomeSummary = if (isLlmPlannedMission(current)) "LLM planner resuming" else "Mission resumed by user.",
