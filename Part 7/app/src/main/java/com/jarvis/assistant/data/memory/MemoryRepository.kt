@@ -59,7 +59,9 @@ class MemoryRepository(
         provenance: String = "EXPLICIT_USER_COMMAND",
         sensitivity: String = "PREFERENCE"
     ): Long {
-        val cleanContent = EpisodicVectorMemory.sanitizeForStorage(content)
+        val cleanContent = EpisodicVectorMemory.sanitizeForStorage(content).trim()
+        require(cleanContent.isNotBlank()) { "Memory content is empty after privacy sanitization." }
+        require(importance in 0f..1f && confidence in 0f..1f) { "Memory importance and confidence must be between 0 and 1." }
         val calculatedKey = key.ifBlank {
             cleanContent.take(30).trim()
         }.lowercase(Locale.ROOT)
