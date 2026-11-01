@@ -2278,7 +2278,12 @@ class JarvisConversationService : Service() {
                         val action = args.optString("action", "").trim()
                         val ok = com.jarvis.assistant.automation.youtube.YouTubeController.sendMediaKey(this@JarvisConversationService, action)
                         result.put("success", ok)
-                        result.put("message", "Media action '$action' performed.")
+                        result.put("verified", false)
+                        result.put(
+                            "message",
+                            if (ok) "Media command '$action' was dispatched to Android; playback state is not independently verified."
+                            else "Could not dispatch media command '$action'."
+                        )
                     }
 
                     "send_whatsapp_message" -> {
@@ -2328,26 +2333,32 @@ class JarvisConversationService : Service() {
                     "set_volume" -> {
                         val action = args.optString("action", "").trim()
                         val pct = if (args.has("percentage")) args.optInt("percentage", 50) else null
+                        val validAction = action == "increase" || action == "decrease" || (action == "set" && pct != null)
                         val msg = when {
                             action == "set" && pct != null -> app.phoneControlManager.setVolumePercent(pct)
                             action == "increase" -> app.phoneControlManager.adjustVolume(true)
                             action == "decrease" -> app.phoneControlManager.adjustVolume(false)
-                            else -> "Volume unchanged."
+                            else -> "Unsupported volume action; nothing changed."
                         }
-                        result.put("success", true)
+                        val ok = validAction && com.jarvis.assistant.automation.reflex.OfflineReflexExecutor.actionSucceeded(msg)
+                        result.put("success", ok)
+                        result.put("verified", ok)
                         result.put("message", msg)
                     }
 
                     "set_brightness" -> {
                         val action = args.optString("action", "").trim()
                         val pct = if (args.has("percentage")) args.optInt("percentage", 50) else null
+                        val validAction = action == "increase" || action == "decrease" || (action == "set" && pct != null)
                         val msg = when {
                             action == "set" && pct != null -> app.phoneControlManager.setBrightnessPercent(pct)
                             action == "increase" -> app.phoneControlManager.adjustBrightness(true)
                             action == "decrease" -> app.phoneControlManager.adjustBrightness(false)
-                            else -> "Brightness unchanged."
+                            else -> "Unsupported brightness action; nothing changed."
                         }
-                        result.put("success", true)
+                        val ok = validAction && com.jarvis.assistant.automation.reflex.OfflineReflexExecutor.actionSucceeded(msg)
+                        result.put("success", ok)
+                        result.put("verified", ok)
                         result.put("message", msg)
                     }
 
