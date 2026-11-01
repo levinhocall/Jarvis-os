@@ -105,7 +105,8 @@ class FeatureHubActivity : AppCompatActivity() {
             if (mission?.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.UNVERIFIED) {
                 dialog.setNegativeButton("Acknowledge & Clear") { _, _ ->
                     lifecycleScope.launch {
-                        com.jarvis.assistant.automation.mission.MissionEngine.acknowledgeUnverifiedMission(mission.missionId)
+                        val acknowledged = com.jarvis.assistant.automation.mission.MissionEngine.acknowledgeUnverifiedMission(mission.missionId)
+                        android.widget.Toast.makeText(this@FeatureHubActivity, if (acknowledged) "Unverified outcome acknowledged" else "Could not save acknowledgement; mission remains locked", android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             } else if (mission != null && mission.status !in setOf(
