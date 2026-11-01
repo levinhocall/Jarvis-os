@@ -265,28 +265,47 @@ object SkillForgeManager {
             )
         }
 
-        Log.i(TAG, "Executing skill '${skill.name}' via MissionEngine")
+        if (context == null && MissionEngine.toolExecutor == null) {
+            return@withContext SkillExecutionResult(
+                success = false,
+                message = "Android execution context is unavailable; the skill was not started.",
+                skillName = skill.name
+            )
+        }
 
-        // Build mission definition with bound steps and dispatch to MissionEngine
-        val mission = MissionDefinition(
+        val mission = MissionEngine.startPreparedMission(
+            context = context,
             goal = skill.name,
             userConstraints = listOf("Skill: ${skill.name}"),
             steps = dryRun.resolvedSteps,
-            status = if (dryRun.requiresApproval) MissionOverallStatus.WAITING_FOR_APPROVAL else MissionOverallStatus.PLANNING,
-            approvalState = if (dryRun.requiresApproval) MissionApprovalState.PENDING_APPROVAL else MissionApprovalState.NOT_REQUIRED,
-            approvalPrompt = if (dryRun.requiresApproval) "Skill '${skill.name}' contains consequential actions. Do you want to proceed?" else null
+            requiresApproval = dryRun.requiresApproval || dryRun.riskClassification == MissionRisk.HIGH_CONSEQUENTIAL,
+            approvalPrompt = if (dryRun.requiresApproval) {
+                "Skill '${skill.name}' contains consequential actions. Do you want to proceed?"
+            } else null
         )
+        if (mission.status == MissionOverallStatus.FAILED) {
+            return@withContext SkillExecutionResult(
+                success = false,
+                message = mission.outcomeSummary ?: "Mission could not be started.",
+                skillName = skill.name
+            )
+        }
 
-        // Update skill telemetry
-        val updated = skill.copy(
+        // Count only accepted mission submissions; completion is reported by MissionEngine's
+        // persisted mission status and verification evidence, never by this enqueue response.
+        skillRegistry[skill.id] = skill.copy(
             executionCount = skill.executionCount + 1,
             lastExecutedAt = System.currentTimeMillis()
         )
-        skillRegistry[skill.id] = updated
 
+        val message = if (mission.status == MissionOverallStatus.WAITING_FOR_APPROVAL) {
+            "Skill '${skill.name}' is awaiting explicit approval. No actions have been executed. Mission ID: ${mission.missionId}"
+        } else {
+            "Skill '${skill.name}' was submitted to MissionEngine. Execution is in progress; completion is not yet verified. Mission ID: ${mission.missionId}"
+        }
         SkillExecutionResult(
             success = true,
-            message = "Skill '${skill.name}' prepared with ${dryRun.resolvedSteps.size} bounded steps. Approval required: ${dryRun.requiresApproval}",
+            message = message,
             skillName = skill.name,
             stepResults = dryRun.resolvedSteps.map { it.title }
         )
