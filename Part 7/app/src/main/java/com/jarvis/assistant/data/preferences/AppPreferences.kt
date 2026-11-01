@@ -700,6 +700,17 @@ class AppPreferences internal constructor(
     }
 
     @Synchronized
+    fun reportKeySuccess(providerId: String, key: String) {
+        val list = getApiKeyPool(providerId)
+        val record = list.find { it.key == key } ?: return
+        record.state = ApiKeyState.ACTIVE
+        record.failureCount = 0
+        record.cooldownUntilTimestamp = 0L
+        val storage = secureApiPrefs ?: return
+        storage.edit().putString("key_pool_$providerId", gson.toJson(list)).apply()
+    }
+
+    @Synchronized
     fun reportKeyInvalid(providerId: String, key: String) {
         val list = getApiKeyPool(providerId)
         val record = list.find { it.key == key } ?: return
