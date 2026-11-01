@@ -29,7 +29,12 @@ object UserConsentPolicy {
         "agree", "i agree", "agree and continue", "accept", "i accept", "accept terms", "accept and continue", "accept all", "continue"
     )
 
-    fun requiresExplicitConfirmation(target: String, description: String?, visibleScreenText: String): Boolean {
+    fun requiresExplicitConfirmation(
+        target: String,
+        description: String?,
+        visibleScreenText: String,
+        packageName: String? = null
+    ): Boolean {
         val normalizedTarget = target.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
         val targetAndDescription = "$normalizedTarget ${description.orEmpty().lowercase(Locale.ROOT)}"
         val screen = visibleScreenText.lowercase(Locale.ROOT)
@@ -41,6 +46,20 @@ object UserConsentPolicy {
         val isTermsAcceptance = normalizedTarget in termsAcceptActions && termsContext.containsMatchIn(screen)
         val isCredentialAutofill = (targetAndDescription.contains("autofill") || targetAndDescription.contains("use code")) &&
             credentialContext.containsMatchIn(screen)
-        return isPermissionGrant || isTermsAcceptance || isCredentialAutofill
+        val pkg = packageName.orEmpty().lowercase(Locale.ROOT)
+        val communicationOrSharingSurface = listOf(
+            "whatsapp", "telegram", "messenger", "signal", "messages", "messaging",
+            "com.google.android.gm", "outlook", "mail", "instagram"
+        ).any(pkg::contains)
+        val dispatchActions = setOf(
+            "send", "send message", "send email", "send now", "share", "share now",
+            "post", "publish", "forward", "unsend", "delete", "delete message", "remove"
+        )
+        val isCommunicationDispatch = communicationOrSharingSurface && normalizedTarget in dispatchActions
+        val isExplicitDataSubmission = normalizedTarget in setOf("submit", "place order", "confirm order") &&
+            Regex("""\\b(payment|checkout|purchase|order|booking|transfer|subscription)\\b""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(screen)
+        return isPermissionGrant || isTermsAcceptance || isCredentialAutofill ||
+            isCommunicationDispatch || isExplicitDataSubmission
     }
 }
