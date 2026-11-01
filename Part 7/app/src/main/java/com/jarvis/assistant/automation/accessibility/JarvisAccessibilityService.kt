@@ -20,6 +20,7 @@ import android.graphics.Bitmap
 import android.view.Display
 import java.io.ByteArrayOutputStream
 import java.util.Locale
+import com.jarvis.assistant.vision.SensitiveInputPolicy
 import java.util.concurrent.Executors
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -2076,14 +2077,8 @@ class JarvisAccessibilityService : AccessibilityService() {
             node.contentDescription?.toString(),
             node.viewIdResourceName,
             node.className?.toString()
-        ).joinToString(" ").lowercase(Locale.ROOT)
-        val sensitivePatterns = listOf(
-            Regex("\\b(password|passcode|pass phrase|passphrase|otp|one[- ]time code|verification code|security code)\\b"),
-            Regex("\\b(pin|upi pin|cvv|cvc|card number|credit card|debit card)\\b"),
-            Regex("\\b(bank account|account number|beneficiary|ifsc|recovery phrase|seed phrase|private key|wallet phrase)\\b"),
-            Regex("\\b(amount|bank|beneficiary|upi|upi id|ifsc|routing number|sort code|swift code|payment amount|transfer amount)\\b")
-        )
-        return sensitivePatterns.any { it.containsMatchIn(label) }
+        ).joinToString(" ")
+        return SensitiveInputPolicy.isSensitiveLabel(label)
     }
 
     fun smartTypeText(textToType: String, targetRect: Rect? = null, submit: Boolean = false): Boolean {
