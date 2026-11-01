@@ -40,6 +40,43 @@ class ReliabilityTest {
     }
 
     @Test
+    fun testDiagnosticStoreNeverRetainsRawApiCredentials() {
+        val googleKey = "AIza" + "A".repeat(35)
+        val githubToken = "github_pat_" + "B".repeat(30)
+        val raw = "https://example.test/?key=$googleKey Bearer private-bearer $githubToken"
+        ReliabilityCoordinator.reportDiagnostic(
+            DiagnosticEvent(
+                category = ErrorCategory.PROVIDER_FAILURE,
+                component = "CredentialRedaction",
+                rawMessage = raw,
+                isRecoverable = false
+            )
+        )
+
+        val stored = ReliabilityCoordinator.getRecentDiagnostics().last()
+        assertFalse(stored.rawMessage.contains(googleKey))
+        assertFalse(stored.rawMessage.contains(githubToken))
+        assertFalse(stored.rawMessage.contains("private-bearer"))
+        assertTrue(stored.rawMessage.contains("[REDACTED]"))
+    }
+
+    @Test
+    fun testNonRecoverableFailuresDoNotTripAutomaticRetryCircuitBreaker() {
+        val component = "UserPermissionGate"
+        repeat(5) { index ->
+            ReliabilityCoordinator.reportDiagnostic(
+                DiagnosticEvent(
+                    category = ErrorCategory.PERMISSION_DENIED,
+                    component = component,
+                    rawMessage = "Permission missing #$index",
+                    isRecoverable = false
+                )
+            )
+        }
+        assertEquals(SystemHealthState.DEGRADED, ReliabilityCoordinator.getComponentState(component))
+    }
+
+    @Test
     fun testIdempotentActionRetriesAndRecovers() = runBlocking {
         var attemptsMade = 0
         val (result, recovery) = ReliabilityCoordinator.executeWithSelfHealing(
