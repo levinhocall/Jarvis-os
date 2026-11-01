@@ -145,7 +145,7 @@ object MissionEngine {
                 // and is never replayed automatically after process death.
                 val sanitizedSteps = steps.mapIndexed { idx, st ->
                     if (!wasAwaitingApproval && !wasPaused && idx == e.currentStepIndex &&
-                        (st.status == MissionStepStatus.RUNNING || st.status == MissionStepStatus.PENDING)
+                        (st.status == MissionStepStatus.RUNNING || st.status == MissionStepStatus.VERIFYING)
                     ) {
                         if (!st.isIdempotent || st.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
                             st.copy(
