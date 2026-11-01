@@ -542,18 +542,26 @@ class VisualTaskOrchestrator(
             )
         }
 
-        // Apply the same sensitive-action gate to visual taps as named/accessibility taps.
-        if (isSensitiveTarget(targetName, description)) {
+        // Ground consent decisions in the current accessibility screen before tapping.
+        val initialRoot = service.getActiveRootNode()
+        val visibleScreenText = groundingEngine.scanScreen(initialRoot)
+            .joinToString(" ") { it.primaryLabel }
+        val requiresConsent = isSensitiveTarget(targetName, description) ||
+            UserConsentPolicy.requiresExplicitConfirmation(targetName, description, visibleScreenText)
+        if (requiresConsent) {
             return@withContext TaskActionResult(
                 success = false,
-                message = "Sensitive action detected ('$targetName'). Please ask the user for explicit confirmation before proceeding.",
-                requiresUserConfirmation = true
+                message = "This action is behind a permission, terms, credential, or sensitive-action consent gate. Explain it and wait for the user's explicit decision.",
+                currentStateSummary = groundingEngine.formatElementsSummary(
+                    groundingEngine.scanScreen(initialRoot), initialRoot
+                ),
+                requiresUserConfirmation = true,
+                verified = false
             )
         }
 
         // A stale or confused model must not send an email just because it found a
         // button labelled Send. Require the active user task to explicitly request it.
-        val initialRoot = service.getActiveRootNode()
         val initialPackage = initialRoot?.packageName?.toString().orEmpty().lowercase(Locale.ROOT)
         val normalizedTarget = targetName.lowercase(Locale.ROOT).trim()
         val isGmailSend = initialPackage.contains("com.google.android.gm") &&
