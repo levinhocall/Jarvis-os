@@ -265,6 +265,46 @@ class LlmPlannerTest {
     }
 
     @Test
+    fun testFailedPreExecutionCheckpointPreventsToolInvocation() = runBlocking {
+        val provider = FakeScriptedProvider { _, _ ->
+            LlmStepDecision.InvokeTool("search_web", mapOf("query" to "checkpoint test"))
+        }
+        val planner = LlmPlanner(provider, maxSteps = 2)
+        var executions = 0
+        val result = planner.planAndExecute(
+            goal = "Search with durable checkpoint",
+            onStepStarted = { _, _ -> throw IllegalStateException("database unavailable") }
+        ) { _, _ ->
+            executions++
+            true to "Unexpected execution"
+        }
+
+        assertEquals("CHECKPOINT_FAILED_BEFORE_EXECUTION", result.abortReason)
+        assertEquals(0, executions)
+    }
+
+    @Test
+    fun testFailedPostExecutionCheckpointReportsUnverifiedResult() = runBlocking {
+        val provider = FakeScriptedProvider { _, _ ->
+            LlmStepDecision.InvokeTool("search_web", mapOf("query" to "checkpoint test"))
+        }
+        val planner = LlmPlanner(provider, maxSteps = 2)
+        var executions = 0
+        val result = planner.planAndExecute(
+            goal = "Search with durable checkpoint",
+            onStepRecorded = { throw IllegalStateException("database unavailable") }
+        ) { _, _ ->
+            executions++
+            true to "Search action returned"
+        }
+
+        assertEquals("CHECKPOINT_FAILED_AFTER_EXECUTION", result.abortReason)
+        assertEquals(1, executions)
+        assertEquals(1, result.history.size)
+        assertTrue(result.history.single().isVerified)
+    }
+
+    @Test
     fun testCancellationViaKillSwitch() = runBlocking {
         val provider = FakeScriptedProvider { _, _ ->
             LlmStepDecision.InvokeTool("search_web", mapOf("query" to "test"))
