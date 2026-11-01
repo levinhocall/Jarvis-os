@@ -490,6 +490,25 @@ object MissionEngine {
         mission
     }
 
+    suspend fun awaitMissionOutcome(
+        missionId: String,
+        timeoutMs: Long = 120_000L
+    ): MissionDefinition? = withTimeoutOrNull(timeoutMs) {
+        activeMission.first { mission ->
+            mission?.let {
+                it.missionId == missionId && it.status in setOf(
+                    MissionOverallStatus.WAITING_FOR_APPROVAL,
+                    MissionOverallStatus.CLARIFICATION_REQUIRED,
+                    MissionOverallStatus.COMPLETED,
+                    MissionOverallStatus.PARTIALLY_COMPLETED,
+                    MissionOverallStatus.FAILED,
+                    MissionOverallStatus.CANCELLED,
+                    MissionOverallStatus.UNVERIFIED
+                )
+            } == true
+        }
+    }
+
     /**
      * Approves or rejects a pending mission requiring user consent.
      */
