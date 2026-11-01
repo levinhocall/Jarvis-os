@@ -159,11 +159,11 @@ class MissionPersistenceAndTriggerTest {
     }
 
     @Test
-    fun testTriggerWorkerInputIncludesTriggerTypeAndApprovalMode() {
+    fun testTriggerWorkerPayloadContainsOnlyOpaqueIdNotPrivateGoalText() {
         val repository = TriggerRepository(context = null, workManagerProvider = { null })
         val trigger = ScheduledTrigger(
             triggerId = "trigger_worker_payload",
-            goalOrAction = "Read the morning brief",
+            goalOrAction = "Private morning brief details",
             triggerType = TriggerType.ONE_TIME_DELAYED,
             delayMinutes = 5,
             isUnattended = false
@@ -171,9 +171,20 @@ class MissionPersistenceAndTriggerTest {
         val data = repository.triggerInputData(trigger)
 
         assertEquals(trigger.triggerId, data.getString("triggerId"))
-        assertEquals(trigger.triggerType.name, data.getString("triggerType"))
-        assertEquals(trigger.goalOrAction, data.getString("goal"))
-        assertEquals(false, data.getBoolean("isUnattended", true))
+        assertNull("Private reminder text must stay in encrypted storage", data.getString("goal"))
+        assertNull(data.getString("triggerType"))
+        assertFalse(data.keyValueMap.containsKey("isUnattended"))
+    }
+
+    @Test
+    fun testOneTimeReminderCanPreserveSubMinuteDelay() {
+        val trigger = ScheduledTrigger(
+            triggerId = "subminute_reminder",
+            goalOrAction = "Reminder",
+            triggerType = TriggerType.ONE_TIME_DELAYED,
+            delayMs = 12_500L
+        )
+        assertEquals(12_500L, trigger.delayMs)
     }
 
     @Test
