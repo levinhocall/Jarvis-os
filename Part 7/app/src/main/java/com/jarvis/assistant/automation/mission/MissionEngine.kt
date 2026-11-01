@@ -729,7 +729,7 @@ object MissionEngine {
             "whatsapp_prepare" -> {
                 Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "WhatsApp message validated and staged"))
             }
-            "send_whatsapp" -> {
+            "send_whatsapp", "whatsapp_send" -> {
                 val contact = step.parameters["contact"] as? String ?: ""
                 val msg = step.parameters["message"] as? String ?: ""
                 val app = context.applicationContext as? JarvisApp
