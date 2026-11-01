@@ -268,6 +268,7 @@ class JarvisConversationService : Service() {
 
     // --- Active-conversation components ---
     private var audioRecorder: AudioRecorder? = null
+    @Volatile private var microphoneForegroundReady = false
     private var audioPlayer: AudioPlayer? = null
     private var liveWebSocket: GeminiLiveWebSocket? = null
     private var hotwordRecognizer: Recognizer? = null
@@ -748,9 +749,10 @@ class JarvisConversationService : Service() {
         }
     }
 
-    private fun ensureMicrophoneForegroundService() {
+    private fun ensureMicrophoneForegroundService(): Boolean {
         val notification = buildNotification()
         val hasMicPerm = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+        microphoneForegroundReady = false
         var combinedTypes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val base = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             if (hasMicPerm) {
@@ -769,17 +771,32 @@ class JarvisConversationService : Service() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             try {
                 startForeground(NOTIFICATION_ID, notification, combinedTypes)
-                Log.d("JarvisService", "startForeground elevated to types=$combinedTypes")
+                microphoneForegroundReady = hasMicPerm
+                Log.d("JarvisService", "startForeground elevated to types=$combinedTypes; microphoneReady=$microphoneForegroundReady")
+                return microphoneForegroundReady
             } catch (e: Exception) {
                 Log.w("JarvisService", "startForeground with combined types failed: ${e.message}")
                 try {
                     startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                    microphoneForegroundReady = false
+                    Log.w("JarvisService", "Playback-only foreground fallback active; microphone session is blocked until a microphone FGS start succeeds.")
+                    return false
                 } catch (fallbackEx: Exception) {
-                    Log.w("JarvisService", "startForeground fallback failed: ${fallbackEx.message}")
+                    Log.e("JarvisService", "All foreground-service startup attempts failed.", fallbackEx)
+                    microphoneForegroundReady = false
+                    return false
                 }
             }
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            try {
+                startForeground(NOTIFICATION_ID, notification)
+                microphoneForegroundReady = hasMicPerm
+                return microphoneForegroundReady
+            } catch (error: Exception) {
+                Log.e("JarvisService", "Foreground-service startup failed.", error)
+                microphoneForegroundReady = false
+                return false
+            }
         }
     }
 
@@ -869,6 +886,18 @@ class JarvisConversationService : Service() {
 
     private fun beginActiveConversation(wakeTriggered: Boolean = false) {
         if (_isSessionOn.value) return
+        if (!microphoneForegroundReady) {
+            _liveError.value = JarvisLiveError(
+                title = "MICROPHONE SERVICE UNAVAILABLE",
+                message = "Android did not allow JARVIS to start its microphone foreground-service type. Bring JARVIS to the foreground, grant microphone permission, and try again.",
+                errorCode = "MICROPHONE_FGS_UNAVAILABLE",
+                actionText = "RETRY"
+            )
+            setConversationState(ConversationState.ERROR)
+            serviceScope.launch { _events.emit("Microphone session was not started because Android did not grant microphone foreground-service access.") }
+            stopSelf()
+            return
+        }
         com.jarvis.assistant.automation.agent.AgentTaskEngine.resetForSession()
         isAutonomousContinuationTurn = false
         synchronized(autonomousAudioLock) {
@@ -3291,6 +3320,17 @@ class JarvisConversationService : Service() {
 
     private fun enterStandby(announce: Boolean = false) {
         if (_isStandby.value) return
+        if (!microphoneForegroundReady) {
+            _liveError.value = JarvisLiveError(
+                title = "MICROPHONE SERVICE UNAVAILABLE",
+                message = "Android did not allow JARVIS to start its microphone foreground-service type. Open JARVIS and retry standby listening.",
+                errorCode = "MICROPHONE_FGS_UNAVAILABLE",
+                actionText = "RETRY"
+            )
+            setConversationState(ConversationState.ERROR)
+            stopSelf()
+            return
+        }
         abandonAudioDuckFocus()
         releaseWifiLock()
         com.jarvis.assistant.audio.JarvisSoundEffects.playStandbySound()
