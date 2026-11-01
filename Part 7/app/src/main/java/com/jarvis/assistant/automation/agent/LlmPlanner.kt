@@ -301,9 +301,24 @@ class LlmPlanner(
     }
 
     private val isCancelled = AtomicBoolean(false)
+    private val pauseRequested = AtomicBoolean(false)
 
     fun cancel() {
         isCancelled.set(true)
+    }
+
+    fun resetCancellation() {
+        isCancelled.set(false)
+        pauseRequested.set(false)
+    }
+
+    /** Stops at the next safe boundary, after any in-flight tool call has returned. */
+    fun requestPause() {
+        pauseRequested.set(true)
+    }
+
+    fun clearPauseRequest() {
+        pauseRequested.set(false)
     }
 
     fun isAvailable(): Boolean = !isCancelled.get()
@@ -389,6 +404,16 @@ class LlmPlanner(
                 )
             }
 
+            if (pauseRequested.compareAndSet(true, false)) {
+                return LlmMissionExecutionResult(
+                    isSuccess = false,
+                    summary = "Mission paused at a safe step boundary. Completed tool results are preserved.",
+                    stepsExecuted = history.size,
+                    history = history,
+                    abortReason = "PAUSED"
+                )
+            }
+
             // 2. Total mission timeout check
             if (System.currentTimeMillis() - startTime > totalMissionTimeoutMs) {
                 return LlmMissionExecutionResult(
@@ -402,6 +427,15 @@ class LlmPlanner(
 
             // 3. Provider decision
             val decision = provider.predictStep(goal, history, availableTools)
+            if (pauseRequested.compareAndSet(true, false)) {
+                return LlmMissionExecutionResult(
+                    isSuccess = false,
+                    summary = "Mission paused before the next tool decision. Completed tool results are preserved.",
+                    stepsExecuted = history.size,
+                    history = history,
+                    abortReason = "PAUSED"
+                )
+            }
             when (decision) {
                 is LlmStepDecision.Finish -> {
                     val unverified = history.filterNot { it.isVerified }
