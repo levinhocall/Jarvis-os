@@ -33,7 +33,8 @@ object OfflineIntelligenceRouter {
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
     private val deferredQueue = ConcurrentLinkedQueue<DeferredAction>()
-    private var isNetworkCallbackRegistered = false
+    @Volatile private var deferredActionExecutor: ((DeferredAction) -> Boolean)? = null
+    @Volatile private var isNetworkCallbackRegistered = false
 
     fun init(context: Context) {
         if (isNetworkCallbackRegistered) return
@@ -124,22 +125,50 @@ object OfflineIntelligenceRouter {
     fun getPendingDeferredActions(): List<DeferredAction> = deferredQueue.toList()
 
     /**
-     * Resumes safe deferred operations when internet returns.
+     * Installs the real executor used to resume safe deferred operations.
+     * A missing handler means the queue is retained; items are never silently discarded.
      */
+    fun setDeferredActionExecutor(executor: ((DeferredAction) -> Boolean)?) {
+        deferredActionExecutor = executor
+    }
+
+    /**
+     * Processes only non-consequential items for which the registered executor confirms success.
+     * Consequential actions remain queued until a separate approval flow handles them.
+     */
+    fun processPendingDeferredActions(): Int {
+        val executor = deferredActionExecutor ?: return 0
+        var processed = 0
+        for (item in deferredQueue.toList()) {
+            if (item.isConsequential) {
+                continue
+            }
+            val completed = try {
+                executor(item)
+            } catch (error: Exception) {
+                Log.w(TAG, "Deferred action '${item.actionType}' failed; keeping it queued.", error)
+                false
+            }
+            if (completed && deferredQueue.remove(item)) {
+                processed++
+            }
+        }
+        return processed
+    }
+
     private fun processDeferredQueue(context: Context) {
         val count = deferredQueue.size
         if (count == 0) return
-        Log.i(TAG, "Processing $count deferred action(s) following network reconnection")
-
-        val itemsToProcess = mutableListOf<DeferredAction>()
-        while (!deferredQueue.isEmpty()) {
-            val item = deferredQueue.poll() ?: break
-            if (item.isConsequential) {
-                // Do NOT automatically replay consequential actions without user verification!
-                Log.w(TAG, "Deferred consequential action '${item.actionType}' requires fresh user approval after reconnect.")
-            } else {
-                itemsToProcess.add(item)
-            }
+        val processed = processPendingDeferredActions()
+        Log.i(TAG, "Network returned: processed $processed of $count deferred actions; remaining items stay queued.")
+        deferredQueue.filter { it.isConsequential }.forEach { item ->
+            Log.w(TAG, "Deferred consequential action '${item.actionType}' requires fresh user approval after reconnect.")
         }
+    }
+
+    internal fun clearForTest() {
+        deferredQueue.clear()
+        deferredActionExecutor = null
+        _isOnline.value = false
     }
 }
