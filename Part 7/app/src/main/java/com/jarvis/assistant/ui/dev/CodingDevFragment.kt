@@ -48,7 +48,8 @@ class CodingDevFragment : Fragment() {
     private val devLoop by lazy {
         AutonomousDevLoop(
             memoryRepo = JarvisApp.instance.memoryRepository,
-            devAgent = devAgent
+            devAgent = devAgent,
+            contextProvider = { context ?: JarvisApp.instance.applicationContext }
         )
     }
 
