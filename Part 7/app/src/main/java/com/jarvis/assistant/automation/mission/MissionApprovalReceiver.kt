@@ -25,7 +25,7 @@ class MissionApprovalReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 val appContext = context.applicationContext
-                MissionEngine.resumeNonTerminalMissions(appContext)
+                MissionEngine.resumeNonTerminalMissions(appContext, preferredMissionId = missionId)
                 MissionEngine.resolveApproval(missionId, approved, appContext)
                 MissionApprovalNotifier.cancel(appContext, missionId)
             } catch (error: Exception) {
