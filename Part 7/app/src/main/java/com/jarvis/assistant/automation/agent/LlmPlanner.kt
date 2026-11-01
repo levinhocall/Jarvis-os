@@ -362,7 +362,7 @@ class LlmPlanner(
 
                     // Consequential operations must stop for explicit user approval before execution.
                     val risk = RiskPolicy.evaluateRisk(resolvedName, decision.arguments, goal)
-                    if (risk.requiresExplicitConfirmation) {
+                    if (risk.requiresExplicitConfirmation || toolDef.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
                         history.add(
                             LlmPlannerStepRecord(
                                 stepIndex = stepIndex,
@@ -374,7 +374,7 @@ class LlmPlanner(
                         )
                         return LlmMissionExecutionResult(
                             isSuccess = false,
-                            summary = "Approval required before JARVIS can execute '$resolvedName'. No action has been performed.",
+                            summary = risk.confirmationSummary.ifBlank { "Approval required before JARVIS can execute '$resolvedName'. No action has been performed." },
                             stepsExecuted = history.size,
                             history = history,
                             abortReason = "APPROVAL_REQUIRED",
