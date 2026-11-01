@@ -276,6 +276,27 @@ class MultiChatAndMemoryEngineTest {
     }
 
     @Test
+    fun `test confidential memory metadata is preserved and excluded from prompts`() = runBlocking {
+        val memoryId = memoryRepo.saveMemory(
+            rawText = "Private project access phrase is top-secret",
+            category = MemoryEntity.CATEGORY_NOTES,
+            key = "private_project_access",
+            value = "Private project access phrase is top-secret",
+            provenance = "EXPLICIT_USER_STATEMENT",
+            sensitivity = "CONFIDENTIAL"
+        )
+
+        val stored = fakeMemoryDao.allRawMemories.single { it.id == memoryId }
+        assertEquals("EXPLICIT_USER_STATEMENT", stored.provenance)
+        assertEquals("CONFIDENTIAL", stored.sensitivity)
+
+        val session = conversationRepo.createNewSession("Privacy test")
+        val context = contextBuilder.buildPromptContext(session.id, "private project access phrase")
+        assertFalse(context.systemContext.contains("top-secret"))
+        assertTrue(context.retrievedMemories.none { it.memory.id == memoryId })
+    }
+
+    @Test
     fun `test deleted memories are excluded from semantic search and context`() = runBlocking {
         val memId = memoryRepo.remember(
             content = "Secret project code is Chimera",
