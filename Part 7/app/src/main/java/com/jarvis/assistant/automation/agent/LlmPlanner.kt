@@ -167,7 +167,7 @@ class GeminiFunctionCallProvider(
 
         try {
             val model = modelProvider().removePrefix("models/").ifBlank { com.jarvis.assistant.data.model.GeminiConstants.MODEL_3_8_FLASH.removePrefix("models/") }
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
             val contents = mutableListOf<Map<String, Any>>()
 
             // System / goal instruction
@@ -199,15 +199,24 @@ class GeminiFunctionCallProvider(
             val jsonBody = gson.toJson(payload)
             val request = Request.Builder()
                 .url(url)
+                .header("x-goog-api-key", apiKey)
                 .post(jsonBody.toRequestBody("application/json".toMediaType()))
                 .build()
 
             val response = client.newCall(request).execute()
-            val respBody = response.body?.string() ?: ""
+            response.use {
+                val respBody = response.body?.string() ?: ""
 
-            if (!response.isSuccessful) {
-                return@withContext LlmStepDecision.Abort("Gemini API request failed with HTTP ${response.code}.")
-            }
+                if (!response.isSuccessful) {
+                    val reason = when (response.code) {
+                        401, 403 -> "Gemini rejected the API credentials or project access (HTTP ${response.code})."
+                        429 -> "Gemini rate limit or quota reached (HTTP 429); retry after the provider cooldown."
+                        404 -> "The selected Gemini model or endpoint was not found (HTTP 404)."
+                        in 500..599 -> "Gemini service is temporarily unavailable (HTTP ${response.code})."
+                        else -> "Gemini API request failed with HTTP ${response.code}."
+                    }
+                    return@withContext LlmStepDecision.Abort(reason)
+                }
 
             val json = gson.fromJson(respBody, JsonObject::class.java)
             val candidates = json.getAsJsonArray("candidates")
@@ -246,6 +255,7 @@ class GeminiFunctionCallProvider(
             }
 
             LlmStepDecision.Abort("No actionable function call returned by model.")
+            }
         } catch (e: Exception) {
             Log.e("GeminiPlannerProvider", "Function-call request failed (${e.javaClass.simpleName}).")
             LlmStepDecision.Abort("Provider execution failed (${e.javaClass.simpleName}).")
