@@ -6,7 +6,7 @@
 [![Gradle](https://img.shields.io/badge/Gradle-8.9-brightgreen.svg)](https://gradle.org)
 [![Releases](https://img.shields.io/badge/APK_Releases-Part_1_to_7-orange.svg)](https://github.com/levinhocall/Jarvis-os/releases)
 
-Welcome to the official source code repository for the **JARVIS Android AI Assistant Series** by **Tech GPTx**!
+Welcome to the official source code repository for the **JARVIS Android AI Assistant Series** by **NAZIB**!
 Every part in this playlist is organized into its own self-contained, ready-to-run Android Studio project.
 
 ---
@@ -15,11 +15,11 @@ Every part in this playlist is organized into its own self-contained, ready-to-r
 
 > [!IMPORTANT]
 > **100% Mandatory Shoutout Policy:**
-> If you use this source code, fork this repository, or build any video, tutorial, Reel, Short, livestream, or course based on this project, **you MUST give 100% visible and verbal credit/shoutout to Tech GPTx**.
+> If you use this source code, fork this repository, or build any video, tutorial, Reel, Short, livestream, or course based on this project, **you MUST give 100% visible and verbal credit/shoutout to NAZIB**.
 >
-> 1. **In Video Spoken Audio:** Explicit verbal mention: *"Credit to Tech GPTx for the JARVIS AI Android source code / tutorial."*
-> 2. **In Description (Top 3 lines):** *"Original Project by Tech GPTx: https://github.com/techgptx/Playlist"*
-> 3. **On-Screen Display:** Visible watermark or on-screen text crediting **Tech GPTx**.
+> 1. **In Video Spoken Audio:** Explicit verbal mention: *"Credit to NAZIB for the JARVIS AI Android source code / tutorial."*
+> 2. **In Description (Top 3 lines):** *"Original Project by NAZIB: https://github.com/levinhocall/Jarvis-os"*
+> 3. **On-Screen Display:** Visible watermark or on-screen text crediting **NAZIB**.
 > 
 > Read the full legal terms in the [LICENSE](LICENSE) file. Removing attribution or failing to provide a shoutout is a direct license violation.
 
@@ -78,5 +78,5 @@ Playlist/
 - **Safe & Sanitized**: Developer-specific machine paths in `local.properties` removed in favor of clean templates.
 
 Happy coding! Build your own JARVIS! 🎙️⚡  
-*Follow & Subscribe to **Tech GPTx** for more AI & Android tutorials!*
+*Follow & Subscribe to **NAZIB** for more AI & Android tutorials!*
 
