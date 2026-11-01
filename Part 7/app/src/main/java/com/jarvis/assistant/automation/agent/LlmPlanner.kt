@@ -341,6 +341,13 @@ class LlmPlanner(
         val availableTools = ToolRegistry.getAllTools()
         val recentCallSignatures = mutableListOf<String>()
 
+        if (isCancelled.get()) {
+            return LlmMissionExecutionResult(false, "Mission cancelled before execution began.", history.size, history, "CANCELLED")
+        }
+        if (pauseRequested.compareAndSet(true, false)) {
+            return LlmMissionExecutionResult(false, "Mission paused before execution began.", history.size, history, "PAUSED")
+        }
+
         // An approved consequential call is executed once before asking the model to continue.
         // The approval is bound to the exact canonical tool name and complete argument map.
         if (approvedToolCall != null) {
@@ -427,6 +434,9 @@ class LlmPlanner(
 
             // 3. Provider decision
             val decision = provider.predictStep(goal, history, availableTools)
+            if (isCancelled.get()) {
+                return LlmMissionExecutionResult(false, "Mission cancelled before the next tool decision.", history.size, history, "CANCELLED")
+            }
             if (pauseRequested.compareAndSet(true, false)) {
                 return LlmMissionExecutionResult(
                     isSuccess = false,
@@ -549,6 +559,11 @@ class LlmPlanner(
                             )
                         }
                         continue
+                    }
+
+                    // Re-check cancellation immediately before invoking a real-world tool.
+                    if (isCancelled.get()) {
+                        return LlmMissionExecutionResult(false, "Mission cancelled before tool execution.", history.size, history, "CANCELLED")
                     }
 
                     // 6. Execute step with bounded timeout
