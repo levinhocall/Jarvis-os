@@ -126,4 +126,13 @@ class MissionEngineTest {
         assertEquals(MissionOverallStatus.CANCELLED, active?.status)
         assertTrue(active?.outcomeSummary?.contains("User said stop") == true)
     }
+
+    @Test
+    fun testPlanMission_phoneCall_requiresExplicitApproval() {
+        val mission = MissionEngine.planMission("call Rahul")
+
+        assertEquals(MissionOverallStatus.WAITING_FOR_APPROVAL, mission.status)
+        assertEquals(MissionApprovalState.PENDING_APPROVAL, mission.approvalState)
+        assertEquals(MissionRisk.HIGH_CONSEQUENTIAL, mission.steps.single().riskLevel)
+    }
 }
