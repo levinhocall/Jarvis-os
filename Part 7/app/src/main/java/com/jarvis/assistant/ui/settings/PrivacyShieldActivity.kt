@@ -48,6 +48,11 @@ class PrivacyShieldActivity : AppCompatActivity() {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             startActivity(intent)
         } catch (_: Exception) {
+            android.widget.Toast.makeText(
+                this,
+                "No compatible browser or app is available for this link.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
         }
     }
 }
