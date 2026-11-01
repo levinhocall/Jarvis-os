@@ -1,10 +1,8 @@
 name: Android CI
 
+# Manual-only workflow. Main pushes must not start remote CI during the
+# user-directed local verification phase.
 on:
-  push:
-    branches: [ "main", "phase1/**" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -48,9 +46,6 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
-      - name: Assemble Debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
-
       - name: Run Android Lint (baseline capture)
         run: ./gradlew :app:lintDebug --no-daemon --stacktrace
         continue-on-error: true
@@ -75,11 +70,3 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload Debug APK Artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jarvis-os-debug-apk
-          path: Part 7/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
