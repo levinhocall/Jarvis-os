@@ -148,6 +148,11 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         // Notification text is sensitive: persist only after an explicit in-app opt-in.
         if (com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {
             persistenceScope.launch {
+                // Re-check opt-in on the IO dispatcher: the user may disable history
+                // after the notification callback but before this queued write runs.
+                if (!com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {
+                    return@launch
+                }
                 runCatching {
                     val database = com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext)
                     database.notificationHistoryDao().insert(
