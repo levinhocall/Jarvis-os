@@ -108,10 +108,17 @@ object TermuxBridge {
      */
     fun maskSecrets(input: String): String {
         return input
-            .replace(Regex("""(AIza[0-9A-Za-z-_]{35})"""), "AIza[MASKED]")
-            .replace(Regex("""(sk-[0-9A-Za-z-_]{32,})"""), "sk-[MASKED]")
-            .replace(Regex("""(ghp_[0-9A-Za-z]{36})"""), "ghp_[MASKED]")
-            .replace(Regex("""(password\s*=\s*['"]?)[^'"\s]+""", RegexOption.IGNORE_CASE), "$1[MASKED]")
+            .replace(Regex("""(AIza[0-9A-Za-z_-]{30,})"""), "AIza[MASKED]")
+            .replace(Regex("""(sk-[0-9A-Za-z_-]{32,})"""), "sk-[MASKED]")
+            .replace(Regex("""(sk-or-v1-[0-9A-Za-z_-]{20,})"""), "sk-or-v1-[MASKED]")
+            .replace(Regex("""(gsk_[0-9A-Za-z_-]{20,})"""), "gsk_[MASKED]")
+            .replace(Regex("""(github_pat_[0-9A-Za-z_]{20,})"""), "github_pat_[MASKED]")
+            .replace(Regex("""(gh[opusr]_[0-9A-Za-z]{20,})"""), "gh-token-[MASKED]")
+            .replace(Regex("""(glpat-[0-9A-Za-z_-]{20,})"""), "glpat-[MASKED]")
+            .replace(Regex("""(xox[baprs]-[0-9A-Za-z-]{20,})"""), "xox-token-[MASKED]")
+            .replace(Regex("""(Bearer\s+)[A-Za-z0-9._~+/-]+=*""", RegexOption.IGNORE_CASE), "$1[MASKED]")
+            .replace(Regex("""([?&](?:key|api_key|access_token|refresh_token|token)=[^&\s]+)""", RegexOption.IGNORE_CASE), "$1".substringBefore("=") + "=[MASKED]")
+            .replace(Regex("""((?:api[_-]?key|apiKey|access[_-]?token|refresh[_-]?token|secret|password)\s*[:=]\s*['"]?)[^'"\s,;&]+""", RegexOption.IGNORE_CASE), "$1[MASKED]")
     }
 
     /**
