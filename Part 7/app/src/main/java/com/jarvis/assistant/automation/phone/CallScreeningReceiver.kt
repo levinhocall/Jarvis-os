@@ -77,13 +77,13 @@ class CallScreeningReceiver : BroadcastReceiver() {
 
             val messageToSend = customMessage?.trim()?.takeIf { it.isNotEmpty() }
             if (messageToSend == null) {
-                VoiceSynthesisRouter.speak("Incoming call silenced. No SMS was sent.")
-                return CallScreeningResult(true, false, "Incoming call silenced. No SMS was sent because no explicit message was provided.")
+                VoiceSynthesisRouter.speak("The ringtone is muted. The call is not rejected, and no SMS was sent.")
+                return CallScreeningResult(true, false, "Ringtone muted only; the call is not rejected. No SMS was sent because no explicit message was provided.")
             }
 
             if (number.isNullOrBlank()) {
-                VoiceSynthesisRouter.speak("Incoming call silenced. The caller number is unavailable, so no SMS was sent.")
-                return CallScreeningResult(true, false, "Incoming call silenced, but the caller number is unavailable; no SMS was sent.")
+                VoiceSynthesisRouter.speak("The ringtone is muted. The caller number is unavailable, so no SMS draft was opened.")
+                return CallScreeningResult(true, false, "Ringtone muted only; the caller number is unavailable, so no SMS draft was opened.")
             }
 
             return try {
@@ -95,17 +95,17 @@ class CallScreeningReceiver : BroadcastReceiver() {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 if (smsIntent.resolveActivity(context.packageManager) == null) {
-                    VoiceSynthesisRouter.speak("Incoming call silenced. No SMS app is available.")
-                    CallScreeningResult(true, false, "Incoming call silenced, but no SMS composer is available.")
+                    VoiceSynthesisRouter.speak("The ringtone is muted. No SMS app is available to open a draft.")
+                    CallScreeningResult(true, false, "Ringtone muted only; no SMS composer is available.")
                 } else {
                     context.startActivity(smsIntent)
-                    VoiceSynthesisRouter.speak("Incoming call silenced. A draft message is open for your review; it has not been sent.")
-                    CallScreeningResult(true, true, "Incoming call silenced. Draft SMS opened for review; tap Send in your SMS app to send it.")
+                    VoiceSynthesisRouter.speak("The ringtone is muted. A draft message is open for your review; it has not been sent.")
+                    CallScreeningResult(true, true, "Ringtone muted only; the call is not rejected. Draft SMS opened for review; tap Send in your SMS app to send it.")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Could not open the SMS composer (${e.javaClass.simpleName}).")
-                VoiceSynthesisRouter.speak("Incoming call silenced. The SMS draft could not be opened.")
-                CallScreeningResult(true, false, "Incoming call silenced, but the SMS draft could not be opened.")
+                VoiceSynthesisRouter.speak("The ringtone is muted. The SMS draft could not be opened.")
+                CallScreeningResult(true, false, "Ringtone muted only; the SMS draft could not be opened.")
             }
         }
 
