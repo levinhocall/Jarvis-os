@@ -33,6 +33,10 @@ object VoiceSynthesisRouter {
                     pendingSpeech = null
                     speak(queued.first, queued.second)
                 }
+            } else {
+                isInitialized = false
+                pendingSpeech = null
+                Log.e(TAG, "Android TextToSpeech initialization failed (status=$status).")
             }
         }
     }
@@ -86,7 +90,7 @@ object VoiceSynthesisRouter {
     fun speak(text: String, onDone: (() -> Unit)? = null) {
         val tts = localTts
         if (tts == null || !isInitialized) {
-            Log.w(TAG, "TTS not ready yet; queuing utterance: '$text'")
+            Log.w(TAG, "TTS not ready yet; queuing one pending utterance (content omitted).")
             pendingSpeech = Pair(text, onDone)
             return
         }
@@ -95,7 +99,11 @@ object VoiceSynthesisRouter {
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) { onDone?.invoke() }
-            override fun onError(utteranceId: String?) { onDone?.invoke() }
+            override fun onError(utteranceId: String?) {
+                // A failed utterance is not completion; do not run callbacks that start
+                // follow-up capture or report a spoken confirmation.
+                Log.w(TAG, "TTS utterance failed; follow-up callback was not invoked.")
+            }
         })
 
         tts.speak(normalized, TextToSpeech.QUEUE_FLUSH, null, "utterance_${System.currentTimeMillis()}")
@@ -122,5 +130,6 @@ object VoiceSynthesisRouter {
         } catch (_: Exception) {}
         localTts = null
         isInitialized = false
+        pendingSpeech = null
     }
 }
