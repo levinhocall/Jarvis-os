@@ -53,6 +53,7 @@ object MissionEngine {
 
     // Set of successfully completed non-idempotent step IDs
     private val completedNonIdempotentSteps = ConcurrentHashMap.newKeySet<String>()
+    private val pauseRequestedMissions = ConcurrentHashMap.newKeySet<String>()
 
     // Registered tool execution hook (for custom runners or unit tests)
     var toolExecutor: (suspend (step: MissionStep, context: Context?) -> Pair<Boolean, MissionVerificationEvidence>)? = null
@@ -199,7 +200,10 @@ object MissionEngine {
         else "$goal\nUser constraints: ${userConstraints.joinToString("; ")}"
 
     private fun isLlmPlannedMission(mission: MissionDefinition): Boolean =
-        mission.outcomeSummary?.startsWith("Approval required before JARVIS can execute", ignoreCase = true) == true
+        mission.outcomeSummary?.let { summary ->
+            summary.startsWith("Approval required before JARVIS can execute", ignoreCase = true) ||
+                summary.startsWith("LLM planner", ignoreCase = true)
+        } == true
 
     private suspend fun persistLlmPlannerOutcome(
         baseMission: MissionDefinition,
