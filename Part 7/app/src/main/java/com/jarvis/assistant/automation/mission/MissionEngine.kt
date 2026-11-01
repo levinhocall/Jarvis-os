@@ -231,18 +231,40 @@ object MissionEngine {
     ) {
         val current = _activeMission.value?.takeIf { it.missionId == baseMission.missionId } ?: baseMission
         val definition = ToolRegistry.getTool(ToolRegistry.resolveToolName(toolName))
-        val step = MissionStep(
-            title = "LLM Step: $toolName",
-            toolName = ToolRegistry.resolveToolName(toolName),
-            parameters = args,
-            riskLevel = definition?.riskLevel ?: MissionRisk.LOW,
-            isIdempotent = definition?.isIdempotent ?: false,
-            status = MissionStepStatus.RUNNING,
-            startedAt = System.currentTimeMillis()
-        )
+        val canonicalName = ToolRegistry.resolveToolName(toolName)
+        val matchingPendingIndex = current.steps.indexOfLast {
+            it.status == MissionStepStatus.PENDING &&
+                ToolRegistry.resolveToolName(it.toolName) == canonicalName &&
+                it.parameters == args
+        }
+        val step = if (matchingPendingIndex >= 0) {
+            current.steps[matchingPendingIndex].copy(
+                status = MissionStepStatus.RUNNING,
+                startedAt = System.currentTimeMillis(),
+                failureReason = null
+            )
+        } else {
+            MissionStep(
+                title = "LLM Step: $toolName",
+                toolName = canonicalName,
+                parameters = args,
+                riskLevel = definition?.riskLevel ?: MissionRisk.LOW,
+                isIdempotent = definition?.isIdempotent ?: false,
+                status = MissionStepStatus.RUNNING,
+                startedAt = System.currentTimeMillis()
+            )
+        }
+        val updatedSteps = current.steps.toMutableList()
+        val stepIndex = if (matchingPendingIndex >= 0) {
+            updatedSteps[matchingPendingIndex] = step
+            matchingPendingIndex
+        } else {
+            updatedSteps.add(step)
+            updatedSteps.lastIndex
+        }
         val updated = current.copy(
-            steps = current.steps + step,
-            currentStepIndex = current.steps.size,
+            steps = updatedSteps,
+            currentStepIndex = stepIndex,
             status = MissionOverallStatus.EXECUTING,
             outcomeSummary = "LLM planner running",
             updatedAt = System.currentTimeMillis()
