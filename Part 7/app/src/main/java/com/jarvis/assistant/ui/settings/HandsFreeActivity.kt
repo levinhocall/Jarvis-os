@@ -11,6 +11,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.jarvis.assistant.R
+import com.jarvis.assistant.JarvisApp
 import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
 import com.jarvis.assistant.automation.accessibility.AccessibilityState
 import com.jarvis.assistant.databinding.ActivityHandsFreeBinding
@@ -143,6 +144,17 @@ class HandsFreeActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
+        val appPreferences = (application as? JarvisApp)?.preferences
+        binding.switchHeadsetWhisper.isChecked = appPreferences?.headsetWhisperEnabled == true
+        binding.switchHeadsetWhisper.setOnCheckedChangeListener { _, enabled ->
+            appPreferences?.headsetWhisperEnabled = enabled
+            Toast.makeText(
+                this,
+                if (enabled) "Headset message whisper enabled." else "Headset message whisper disabled.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
         binding.btnBack.setOnClickListener {
             finish()
         }
