@@ -161,14 +161,13 @@ class WhatsAppAssistant(
             }
 
             val isA11yActive = JarvisAccessibilityService.isRunning()
-            if (isA11yActive) {
-                // Arm accessibility service BEFORE launching WhatsApp so it clicks send immediately
-                JarvisAccessibilityService.triggerWhatsAppSend(message)
-            }
-
             val launched = ActivityLauncherHelper.startActivitySafely(context, intent)
             if (!launched) {
                 return "Could not open WhatsApp. The draft for ${draft.contactName} is still saved and no message was sent."
+            }
+            if (isA11yActive) {
+                // Queue automation only after Android accepted the WhatsApp launch.
+                JarvisAccessibilityService.triggerWhatsAppSend(message)
             }
 
             val recipient = draft.contactName
@@ -234,9 +233,6 @@ class WhatsAppAssistant(
         }
 
         return try {
-            // Arm accessibility service to click top action bar call icon & confirm prompt
-            JarvisAccessibilityService.triggerWhatsAppCall(isVideo)
-
             val mimeType = if (isVideo) {
                 "vnd.android.cursor.item/vnd.com.whatsapp.video.call"
             } else {
@@ -260,12 +256,18 @@ class WhatsAppAssistant(
             val launched = ActivityLauncherHelper.startActivitySafely(context, intent)
             if (!launched) {
                 "Could not open WhatsApp for the $callType. The call was not started."
-            } else if (callDataUri != null) {
+            } else {
+                if (callDataUri == null && JarvisAccessibilityService.instance != null) {
+                    // Queue the UI action only after WhatsApp launch has been accepted.
+                    JarvisAccessibilityService.triggerWhatsAppCall(isVideo)
+                }
+                if (callDataUri != null) {
                 "Opened WhatsApp's $callType action for ${contact.name}; connection is not confirmed."
             } else if (JarvisAccessibilityService.instance != null) {
                 "Opened WhatsApp and queued the $callType action for ${contact.name}; connection is not confirmed."
-            } else {
-                "Opened the WhatsApp chat for ${contact.name}, but the $callType was not started because Accessibility is unavailable."
+                } else {
+                    "Opened the WhatsApp chat for ${contact.name}, but the $callType was not started because Accessibility is unavailable."
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start WhatsApp call: ${e.message}", e)
@@ -288,9 +290,6 @@ class WhatsAppAssistant(
 
         if (cleanContact.isBlank()) {
             return try {
-                // Arm accessibility BEFORE bringing WhatsApp to the foreground so it's
-                // ready to act on whatever chat is currently visible.
-                JarvisAccessibilityService.triggerWhatsAppDelete(forEveryone)
                 val launchIntent = context.packageManager.getLaunchIntentForPackage(WHATSAPP_PACKAGE)?.apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 }
@@ -300,6 +299,7 @@ class WhatsAppAssistant(
                 if (launchIntent == null || !ActivityLauncherHelper.startActivitySafely(context, launchIntent)) {
                     return "Could not open WhatsApp; no message was deleted."
                 }
+                JarvisAccessibilityService.triggerWhatsAppDelete(forEveryone)
                 "Opened the current WhatsApp chat and queued a delete action $callType. Deletion is not yet verified."
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete WhatsApp message: ${e.message}", e)
@@ -329,7 +329,6 @@ class WhatsAppAssistant(
         }
 
         return try {
-            JarvisAccessibilityService.triggerWhatsAppDelete(forEveryone)
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone")).apply {
                 setPackage(WHATSAPP_PACKAGE)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -340,6 +339,7 @@ class WhatsAppAssistant(
             } else if (JarvisAccessibilityService.instance == null) {
                 "Opened the chat with $cleanContact, but JARVIS Accessibility is not connected; no delete action was queued."
             } else {
+                JarvisAccessibilityService.triggerWhatsAppDelete(forEveryone)
                 "Opened the chat with $cleanContact and queued a delete action $callType. Deletion is not yet verified."
             }
         } catch (e: Exception) {
