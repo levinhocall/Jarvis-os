@@ -13,12 +13,12 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** Wraps a random SQLCipher passphrase with a non-exportable Android Keystore AES key. */
-internal class DatabaseKeyStore(context: Context) {
-    private val keyFile = File(context.applicationContext.noBackupFilesDir, "jarvis_room_database_key.bin")
-    private val pendingFile = File(context.applicationContext.noBackupFilesDir, "jarvis_room_database_init.pending")
+internal class DatabaseKeyStore(context: Context, private val alias: String = DEFAULT_alias) {
+    private val keyFile = File(context.applicationContext.noBackupFilesDir, if (alias == DEFAULT_alias) "jarvis_room_database_key.bin" else "$alias.bin")
+    private val pendingFile = File(context.applicationContext.noBackupFilesDir, if (alias == DEFAULT_alias) "jarvis_room_database_init.pending" else "$alias.pending")
 
     companion object {
-        private const val ALIAS = "jarvis_room_database_key_v1"
+        private const val DEFAULT_alias = "jarvis_room_database_key_v1"
         private const val STORE = "AndroidKeyStore"
         private const val VERSION: Byte = 1
         private const val IV_BYTES = 12
@@ -50,16 +50,16 @@ internal class DatabaseKeyStore(context: Context) {
         check(!hasWrappedPassphrase()) { "A database passphrase already exists." }
         val store = keyStore()
         val initializationWasPending = pendingFile.exists()
-        if (store.containsAlias(ALIAS) && !initializationWasPending) {
+        if (store.containsAlias(alias) && !initializationWasPending) {
             error("Database Keystore key exists without a pending first-open marker; refusing to replace it.")
         }
         if (!initializationWasPending) {
             FileOutputStream(pendingFile).use { it.fd.sync() }
         }
-        if (store.containsAlias(ALIAS)) store.deleteEntry(ALIAS)
+        if (store.containsAlias(alias)) store.deleteEntry(alias)
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, STORE)
         generator.init(
-            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setKeySize(256)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -87,7 +87,7 @@ internal class DatabaseKeyStore(context: Context) {
             }
             return passphrase
         } catch (error: Exception) {
-            runCatching { store.deleteEntry(ALIAS) }
+            runCatching { store.deleteEntry(alias) }
             passphrase.fill(0)
             throw error
         }
@@ -101,7 +101,7 @@ internal class DatabaseKeyStore(context: Context) {
     }
 
     private fun keystoreKey(): SecretKey =
-        (keyStore().getKey(ALIAS, null) as? SecretKey)
+        (keyStore().getKey(alias, null) as? SecretKey)
             ?: throw IllegalStateException("Database Keystore key is unavailable or invalidated.")
 
     private fun keyStore(): KeyStore = KeyStore.getInstance(STORE).apply { load(null) }
