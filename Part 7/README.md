@@ -7,7 +7,7 @@ An Android voice assistant built with Kotlin, Gemini Live, on-device voice compo
 - Android application module: `app`
 - Application ID: `com.jarvis.assistant`
 - Minimum Android version: Android 8.0 (API 26)
-- Compile and target SDK: 34
+- Compile and target SDK: 36
 - Java/Kotlin target: 17
 - Current app version: 1.8.7 (version code 143)
 
