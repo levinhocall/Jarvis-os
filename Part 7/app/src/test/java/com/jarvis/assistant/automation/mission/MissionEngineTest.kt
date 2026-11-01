@@ -8,7 +8,8 @@ import org.junit.Test
 class MissionEngineTest {
 
     @Before
-    fun setUp() = runBlocking {
+    fun setUp() {
+        runBlocking {
         MissionEngine.toolExecutor = null
         MissionEngine.llmPlanner = null
         MissionEngine.activeMission.value?.let { current ->
@@ -29,6 +30,7 @@ class MissionEngineTest {
                     }
                 }
             }
+        }
         }
     }
 
