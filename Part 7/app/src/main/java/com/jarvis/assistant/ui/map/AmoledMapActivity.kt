@@ -47,6 +47,9 @@ class AmoledMapActivity : AppCompatActivity() {
     private var locationListener: LocationListener? = null
     private var locationUpdatesActive = false
     private var lastLocationUiUpdate = 0L
+    private var lastRouteOrigin: GeoPoint? = null
+    private var lastRouteRequestAt = 0L
+    private var routeRequestGeneration = 0L
     private val http by lazy {
         OkHttpClient.Builder()
             .connectTimeout(12, TimeUnit.SECONDS)
@@ -219,6 +222,7 @@ class AmoledMapActivity : AppCompatActivity() {
     private fun updateUserLocation(location: Location, moveCamera: Boolean) {
         val point = GeoPoint(location.latitude, location.longitude)
         origin = point
+        maybeRerouteFromLiveLocation(location)
         val marker = map.overlays.firstOrNull { it is Marker && it.title == "Your location" } as? Marker
         if (marker != null) {
             marker.position = point
@@ -235,6 +239,22 @@ class AmoledMapActivity : AppCompatActivity() {
             lastLocationUiUpdate = now
         }
         map.invalidate()
+    }
+
+    /** Recalculate an active route only after meaningful movement and a cooldown. */
+    private fun maybeRerouteFromLiveLocation(location: Location) {
+        val target = selectedDestination ?: return
+        if (routeOverlay == null) return
+        val previousRouteOrigin = lastRouteOrigin ?: return
+        val distance = FloatArray(1)
+        Location.distanceBetween(
+            previousRouteOrigin.latitude, previousRouteOrigin.longitude,
+            location.latitude, location.longitude, distance
+        )
+        val now = System.currentTimeMillis()
+        if (distance[0] < 75f || now - lastRouteRequestAt < 20_000L) return
+        status.text = "You have moved ${distance[0].toInt()} m. Updating route…"
+        requestRoute(target, automaticReroute = true)
     }
 
     private fun searchDestination() {
@@ -276,12 +296,14 @@ class AmoledMapActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestRoute(target: GeoPoint) {
+    private fun requestRoute(target: GeoPoint, automaticReroute: Boolean = false) {
         val start = origin
         if (start == null) {
             status.text = "Destination marked. Grant location permission to calculate a route."
             return
         }
+        val requestGeneration = ++routeRequestGeneration
+        lastRouteRequestAt = System.currentTimeMillis()
         lifecycleScope.launch {
             try {
                 val points = withContext(Dispatchers.IO) {
@@ -299,12 +321,15 @@ class AmoledMapActivity : AppCompatActivity() {
                         }
                     }
                 }
-                clearRoute()
+                if (requestGeneration != routeRequestGeneration || isFinishing || isDestroyed) return@launch
+                if (!automaticReroute) clearRoute()
                 val route = Polyline().apply {
                     setPoints(points)
                     outlinePaint.strokeWidth = dp(5).toFloat()
                 }
+                routeOverlay?.let { map.overlays.remove(it) }
                 routeOverlay = route
+                lastRouteOrigin = start
                 map.overlays.add(route)
                 navigationButton.visibility = View.VISIBLE
                 map.invalidate()
@@ -312,7 +337,11 @@ class AmoledMapActivity : AppCompatActivity() {
                 val bounds = org.osmdroid.util.BoundingBox.fromGeoPoints(points)
                 map.zoomToBoundingBox(bounds, true, dp(36))
             } catch (error: Exception) {
-                status.text = "Route unavailable: ${error.message ?: "routing service unavailable"}. Destination marker remains available."
+                if (requestGeneration == routeRequestGeneration && !isFinishing && !isDestroyed) {
+                    status.text = if (automaticReroute && routeOverlay != null) {
+                        "Route update failed; keeping the previous route. ${error.message ?: "Routing service unavailable"}"
+                    } else "Route unavailable: ${error.message ?: "routing service unavailable"}. Destination marker remains available."
+                }
             }
         }
     }
