@@ -177,9 +177,9 @@ object MissionEngine {
 
                 val hasUnverified = sanitizedSteps.any { it.status == MissionStepStatus.UNVERIFIED }
                 val overallStatus = when {
-                    hasUnverified || interruptedLlmPlanner -> MissionOverallStatus.UNVERIFIED
+                    hasUnverified -> MissionOverallStatus.UNVERIFIED
                     wasAwaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
-                    wasPaused || interruptedExecution -> MissionOverallStatus.PAUSED
+                    wasPaused || interruptedExecution || interruptedLlmPlanner -> MissionOverallStatus.PAUSED
                     else -> try { MissionOverallStatus.valueOf(e.status) } catch (_: Exception) { MissionOverallStatus.EXECUTING }
                 }
                 val approvalState = if (wasAwaitingApproval) MissionApprovalState.PENDING_APPROVAL else
@@ -196,7 +196,8 @@ object MissionEngine {
                         "Approve the pending '${pendingStep?.toolName ?: "mission"}' action for this mission?"
                     } else null,
                     outcomeSummary = when {
-                        interruptedLlmPlanner -> "Process died while the LLM planner was active. An in-flight action may have an unknown outcome; no automatic replay was performed."
+                        interruptedLlmPlanner && hasUnverified -> "Process died while an LLM tool action was in flight. Its outcome is unknown; no automatic replay was performed."
+                        interruptedLlmPlanner -> "Process stopped between verified LLM steps. The mission is paused and can resume from its verified checkpoint."
                         hasUnverified -> "Mission interrupted during an action whose real-world outcome could not be verified. No automatic retry was performed."
                         interruptedExecution -> "Mission interrupted by process restart. Safe pending steps are paused and require explicit resume."
                         else -> e.outcomeSummary
@@ -316,9 +317,9 @@ object MissionEngine {
 
     private fun isLlmPlannedMission(mission: MissionDefinition): Boolean =
         mission.outcomeSummary?.let { summary ->
-            summary.startsWith("Approval required before JARVIS can execute", ignoreCase = true) ||
-                summary.startsWith("LLM planner", ignoreCase = true)
-        } == true
+            summary.contains("LLM planner", ignoreCase = true) ||
+                summary.startsWith("Approval required before JARVIS can execute", ignoreCase = true)
+        } == true || mission.steps.any { it.title.startsWith("LLM Step:", ignoreCase = true) }
 
     private suspend fun persistLlmPlannerOutcome(
         baseMission: MissionDefinition,
@@ -994,14 +995,16 @@ object MissionEngine {
             return
         }
         planner.resetCancellation()
-        val history = mission.steps.mapIndexed { index, step ->
+        val verifiedSteps = mission.steps.filter {
+            it.status == MissionStepStatus.COMPLETED && it.verificationEvidence?.isVerified == true
+        }
+        val history = verifiedSteps.mapIndexed { index, step ->
             com.jarvis.assistant.automation.agent.LlmPlannerStepRecord(
                 stepIndex = index + 1,
                 toolName = ToolRegistry.resolveToolName(step.toolName),
                 arguments = step.parameters,
-                isVerified = step.status == MissionStepStatus.COMPLETED &&
-                    step.verificationEvidence?.isVerified == true,
-                observation = step.verificationEvidence?.details ?: "Previously verified mission step."
+                isVerified = true,
+                observation = step.verificationEvidence!!.details
             )
         }
         val result = planner.planAndExecute(
