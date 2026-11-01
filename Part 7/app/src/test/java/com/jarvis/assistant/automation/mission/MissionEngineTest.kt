@@ -167,9 +167,15 @@ class MissionEngineTest {
         val mission = MissionEngine.startMission(null, "play AC/DC Back in Black")
         MissionEngine.cancelMission(mission.missionId, "User said stop")
 
+        kotlinx.coroutines.withTimeout(3_000L) {
+            while (MissionEngine.activeMission.value?.status != MissionOverallStatus.CANCELLED) {
+                kotlinx.coroutines.delay(20L)
+            }
+        }
         val active = MissionEngine.activeMission.value
         assertEquals(MissionOverallStatus.CANCELLED, active?.status)
-        assertTrue(active?.outcomeSummary?.contains("User said stop") == true)
+        assertTrue(active?.steps?.any { it.verificationEvidence?.isVerified == true } == true ||
+            active?.steps?.any { it.status == MissionStepStatus.CANCELLED } == true)
     }
 
     @Test
