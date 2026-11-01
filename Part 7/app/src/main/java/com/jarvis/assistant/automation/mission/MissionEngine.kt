@@ -93,8 +93,8 @@ object MissionEngine {
         outcomeSummary = "A previous mission is still active or requires manual review. This request was not started."
     )
 
-    suspend fun persistMission(mission: MissionDefinition, currentStepIdx: Int = 0) {
-        val dao = missionDao ?: return
+    suspend fun persistMission(mission: MissionDefinition, currentStepIdx: Int = 0): Boolean {
+        val dao = missionDao ?: return false
         try {
             val entity = com.jarvis.assistant.data.mission.MissionEntity(
                 id = mission.missionId,
@@ -108,8 +108,10 @@ object MissionEngine {
                 outcomeSummary = mission.outcomeSummary
             )
             dao.insertOrUpdate(entity)
+            return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to persist mission ${mission.missionId}: ${e.message}", e)
+            return false
         }
     }
 
@@ -221,6 +223,74 @@ object MissionEngine {
     private fun buildPlannerGoal(goal: String, userConstraints: List<String>): String =
         if (userConstraints.isEmpty()) goal
         else "$goal\nUser constraints: ${userConstraints.joinToString("; ")}"
+
+    private suspend fun checkpointLlmStepStarted(
+        baseMission: MissionDefinition,
+        toolName: String,
+        args: Map<String, Any?>
+    ) {
+        val current = _activeMission.value?.takeIf { it.missionId == baseMission.missionId } ?: baseMission
+        val definition = ToolRegistry.getTool(ToolRegistry.resolveToolName(toolName))
+        val step = MissionStep(
+            title = "LLM Step: $toolName",
+            toolName = ToolRegistry.resolveToolName(toolName),
+            parameters = args,
+            riskLevel = definition?.riskLevel ?: MissionRisk.LOW,
+            isIdempotent = definition?.isIdempotent ?: false,
+            status = MissionStepStatus.RUNNING,
+            startedAt = System.currentTimeMillis()
+        )
+        val updated = current.copy(
+            steps = current.steps + step,
+            currentStepIndex = current.steps.size,
+            status = MissionOverallStatus.EXECUTING,
+            outcomeSummary = "LLM planner running",
+            updatedAt = System.currentTimeMillis()
+        )
+        _activeMission.value = updated
+        if (!persistMission(updated, updated.steps.lastIndex)) {
+            throw IllegalStateException("Could not persist in-flight LLM action checkpoint; action must not execute.")
+        }
+    }
+
+    private suspend fun checkpointLlmStepRecorded(
+        baseMission: MissionDefinition,
+        record: com.jarvis.assistant.automation.agent.LlmPlannerStepRecord
+    ) {
+        val current = _activeMission.value?.takeIf { it.missionId == baseMission.missionId } ?: baseMission
+        val index = current.steps.indexOfLast {
+            it.status == MissionStepStatus.RUNNING &&
+                ToolRegistry.resolveToolName(it.toolName) == ToolRegistry.resolveToolName(record.toolName) &&
+                it.parameters == record.arguments
+        }
+        if (index < 0) {
+            throw IllegalStateException("The in-flight LLM checkpoint could not be matched to its returned result.")
+        }
+        val oldStep = current.steps[index]
+        val recorded = oldStep.copy(
+            status = if (record.isVerified) MissionStepStatus.COMPLETED else MissionStepStatus.UNVERIFIED,
+            verificationEvidence = MissionVerificationEvidence(
+                evidenceType = if (record.isVerified) EvidenceType.EXTERNAL_API_ACKNOWLEDGED else EvidenceType.UNVERIFIED,
+                isVerified = record.isVerified,
+                details = record.observation
+            ),
+            completedAt = System.currentTimeMillis()
+        )
+        val updatedSteps = current.steps.toMutableList().also { it[index] = recorded }
+        val updated = current.copy(
+            steps = updatedSteps,
+            currentStepIndex = updatedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.let {
+                if (it < 0) updatedSteps.size else it
+            },
+            status = MissionOverallStatus.EXECUTING,
+            outcomeSummary = "LLM planner running",
+            updatedAt = System.currentTimeMillis()
+        )
+        _activeMission.value = updated
+        if (!persistMission(updated, updated.currentStepIndex)) {
+            throw IllegalStateException("Could not persist completed LLM action checkpoint.")
+        }
+    }
 
     private fun isLlmPlannedMission(mission: MissionDefinition): Boolean =
         mission.outcomeSummary?.let { summary ->
