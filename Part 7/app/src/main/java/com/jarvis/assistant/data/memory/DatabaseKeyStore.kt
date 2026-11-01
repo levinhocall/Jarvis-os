@@ -13,12 +13,12 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** Wraps a random SQLCipher passphrase with a non-exportable Android Keystore AES key. */
-internal class DatabaseKeyStore(context: Context, private val alias: String = DEFAULT_alias) {
-    private val keyFile = File(context.applicationContext.noBackupFilesDir, if (alias == DEFAULT_alias) "jarvis_room_database_key.bin" else "$alias.bin")
-    private val pendingFile = File(context.applicationContext.noBackupFilesDir, if (alias == DEFAULT_alias) "jarvis_room_database_init.pending" else "$alias.pending")
+internal class DatabaseKeyStore(context: Context, private val alias: String = DEFAULT_ALIAS) {
+    private val keyFile = File(context.applicationContext.noBackupFilesDir, if (alias == DEFAULT_ALIAS) "jarvis_room_database_key.bin" else "$alias.bin")
+    private val pendingFile = File(context.applicationContext.noBackupFilesDir, if (alias == DEFAULT_ALIAS) "jarvis_room_database_init.pending" else "$alias.pending")
 
     companion object {
-        private const val DEFAULT_alias = "jarvis_room_database_key_v1"
+        private const val DEFAULT_ALIAS = "jarvis_room_database_key_v1"
         private const val STORE = "AndroidKeyStore"
         private const val VERSION: Byte = 1
         private const val IV_BYTES = 12
