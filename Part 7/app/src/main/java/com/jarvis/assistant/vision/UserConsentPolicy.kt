@@ -9,7 +9,7 @@ import java.util.Locale
  */
 object UserConsentPolicy {
     private val permissionContext = Regex(
-        """\b(permission request|wants to access|allow access to|allow .* to access|restricted settings|notification access|accessibility service|display over other apps|precise location)\b""",
+        """\b(permission request|permission|wants to access|allow access to|allow .* to (access|use|record)|restricted settings|notification access|accessibility service|display over other apps|precise location)\b""",
         RegexOption.IGNORE_CASE
     )
     private val termsContext = Regex(
