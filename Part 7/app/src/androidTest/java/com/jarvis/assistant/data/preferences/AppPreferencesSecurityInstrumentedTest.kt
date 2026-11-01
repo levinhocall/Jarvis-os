@@ -7,6 +7,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -14,6 +16,34 @@ import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
 class AppPreferencesSecurityInstrumentedTest {
+    @Test
+    fun geminiKeyPoolRotatesCooldownKeysAndNeverReusesInvalidPrimaryKey() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val suffix = UUID.randomUUID().toString()
+        val preferences = AppPreferences(
+            context,
+            "jarvis_keypool_$suffix",
+            "jarvis_secure_keypool_$suffix"
+        )
+        preferences.apiKey = "primary-test-key"
+        preferences.addApiKeyToPool("gemini", "primary-test-key")
+        preferences.addApiKeyToPool("gemini", "secondary-test-key")
+
+        val firstKey = preferences.getNextActiveKey("gemini")
+        assertTrue("A configured pool key should be selected", !firstKey.isNullOrBlank())
+
+        preferences.reportKeyRateLimit("gemini", firstKey!!)
+        val rotatedKey = preferences.getNextActiveKey("gemini")
+        assertTrue("A rate-limited key must not be selected while another is active", !rotatedKey.isNullOrBlank())
+        assertNotEquals(firstKey, rotatedKey)
+
+        preferences.reportKeyInvalid("gemini", rotatedKey!!)
+        assertNull("An invalid primary key must not be returned as a fallback", preferences.getNextActiveKey("gemini"))
+
+        preferences.reportKeySuccess("gemini", firstKey)
+        assertEquals(firstKey, preferences.getNextActiveKey("gemini"))
+    }
+
     @Test
     fun ownerVoiceProfileMigratesToEncryptedStorageAndNeverWritesPlaintext() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
