@@ -151,6 +151,13 @@ object OwnerVoiceManager {
     }
 
     /**
+     * Accepts only a successfully extracted vector that satisfies the configured owner threshold.
+     * Never widen the threshold at the call site: failed/ambiguous extraction must fail closed.
+     */
+    fun isAcceptedOwnerVoiceMatch(result: VoiceMatchResult): Boolean =
+        result.hasExtractedVector && result.isMatch
+
+    /**
      * Verifies an extracted speaker vector against the enrolled owner profile stored in preferences.
      * Uses multi-sample nearest-neighbor + centroid matching:
      * Compares against both the averaged centroid AND each individual enrolled sample vector.
