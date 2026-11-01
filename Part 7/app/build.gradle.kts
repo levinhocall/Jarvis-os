@@ -21,12 +21,12 @@ val releaseSigningReady = listOf(releaseStorePath, releaseStorePassword, release
 
 android {
     namespace = "com.jarvis.assistant"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.jarvis.assistant"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 143
         versionName = "1.8.7"
 
@@ -115,6 +115,13 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("androidx.webkit:webkit:1.12.0")
+    // CameraX embedded live preview and in-app image capture.
+    val cameraXVersion = "1.6.2"
+    implementation("androidx.camera:camera-core:$cameraXVersion")
+    implementation("androidx.camera:camera-camera2:$cameraXVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraXVersion")
+    implementation("androidx.camera:camera-view:$cameraXVersion")
+
     // OpenStreetMap rendering; no embedded API key required.
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
