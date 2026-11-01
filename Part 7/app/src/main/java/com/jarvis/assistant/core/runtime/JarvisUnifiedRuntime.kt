@@ -265,7 +265,23 @@ class JarvisUnifiedRuntime(
                 }
             }
 
-            // 6. Online Mission Execution via MissionEngine / LlmPlanner
+            // 6. Council risk preflight + online mission execution.
+            // The council is advisory and deterministic here; MissionEngine remains the
+            // single source of truth for clarification and approval state.
+            val councilReview = com.jarvis.assistant.automation.council.MultiAgentCouncil.deliberate(
+                context = context,
+                userGoal = input
+            )
+            val preflightPlan = MissionEngine.planMission(input, context = context)
+            if (!councilReview.isApprovedToExecute &&
+                preflightPlan.status != MissionOverallStatus.WAITING_FOR_APPROVAL &&
+                preflightPlan.status != MissionOverallStatus.CLARIFICATION_REQUIRED
+            ) {
+                return@withContext UnifiedExecutionResult.BlockedBySecurity(
+                    councilReview.finalVerdict
+                )
+            }
+
             val mission = MissionEngine.startMission(context, input)
 
             if (mission.status == MissionOverallStatus.CLARIFICATION_REQUIRED) {
