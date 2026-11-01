@@ -15,6 +15,39 @@ import java.util.UUID
 class MemoryRepositoryTransactionInstrumentedTest {
 
     @Test
+    fun correctingMemoryRefreshesEmbeddingAndRejectsEmptySanitizedContent() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dao = MemoryDatabase.getInstance(context).memoryDao()
+        val key = "correction_${UUID.randomUUID()}"
+        val provider = DeterministicLocalEmbeddingProvider()
+        val repository = MemoryRepository(dao, provider)
+
+        try {
+            val id = repository.remember(
+                content = "Original memory value",
+                key = key,
+                category = MemoryEntity.CATEGORY_NOTES
+            )
+            assertTrue(repository.correct(id, "Corrected durable memory value"))
+            val corrected = dao.getMemoriesByKeyIncludingInactive(key).single { it.id == id }
+            assertEquals("Corrected durable memory value", corrected.value)
+            assertTrue(corrected.embeddingJson?.isNotBlank() == true)
+            assertEquals(provider.modelName, corrected.embeddingModel)
+            assertEquals(provider.dimension, corrected.embeddingDimension)
+
+            var emptyCorrectionRejected = false
+            try {
+                repository.correct(id, "   ")
+            } catch (_: IllegalArgumentException) {
+                emptyCorrectionRejected = true
+            }
+            assertTrue("An empty correction must be rejected.", emptyCorrectionRejected)
+            assertEquals("Corrected durable memory value", dao.getMemoriesByKeyIncludingInactive(key).single { it.id == id }.value)
+        } finally {
+            dao.deleteMemoriesByKeyword(key)
+        }
+    }
+    @Test
     fun failedEmbeddingDoesNotSupersedeExistingMemoryAndReplacementIsAtomic() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val dao = MemoryDatabase.getInstance(context).memoryDao()
