@@ -110,6 +110,7 @@ class FeatureHubActivity : AppCompatActivity() {
                 }
             } else if (mission != null && mission.status !in setOf(
                     com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED,
+                    com.jarvis.assistant.automation.mission.MissionOverallStatus.PARTIALLY_COMPLETED,
                     com.jarvis.assistant.automation.mission.MissionOverallStatus.FAILED,
                     com.jarvis.assistant.automation.mission.MissionOverallStatus.CANCELLED
                 )) {
