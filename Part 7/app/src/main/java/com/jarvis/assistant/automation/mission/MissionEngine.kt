@@ -133,12 +133,13 @@ object MissionEngine {
                 val wasAwaitingApproval =
                     e.status == MissionOverallStatus.WAITING_FOR_APPROVAL.name &&
                         e.approvalState == MissionApprovalState.PENDING_APPROVAL.name
+                val wasPaused = e.status == MissionOverallStatus.PAUSED.name
 
                 // A pending approval is not an interrupted action. Preserve it exactly.
                 // An actually in-flight consequential/non-idempotent action becomes UNVERIFIED
                 // and is never replayed automatically after process death.
                 val sanitizedSteps = steps.mapIndexed { idx, st ->
-                    if (!wasAwaitingApproval && idx == e.currentStepIndex &&
+                    if (!wasAwaitingApproval && !wasPaused && idx == e.currentStepIndex &&
                         (st.status == MissionStepStatus.RUNNING || st.status == MissionStepStatus.PENDING)
                     ) {
                         if (!st.isIdempotent || st.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
