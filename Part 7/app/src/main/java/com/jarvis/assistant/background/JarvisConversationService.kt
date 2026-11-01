@@ -1817,7 +1817,9 @@ class JarvisConversationService : Service() {
                                         hasSignalledUtteranceEnd = true
                                         // When Gemini Live is unavailable, transcribe the complete buffered utterance
                                         // locally and route it through the same security/runtime pipeline.
-                                        if (liveWebSocket?.isSessionReady() != true) {
+                                        if (liveWebSocket?.isSessionReady() != true ||
+                                            !com.jarvis.assistant.automation.offline.OfflineIntelligenceRouter.isOnline.value
+                                        ) {
                                             val offlineAudio = synchronized(currentUtteranceAudioStream) {
                                                 currentUtteranceAudioStream.toByteArray()
                                             }
