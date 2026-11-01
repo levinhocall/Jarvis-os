@@ -84,7 +84,7 @@ class JarvisNotificationListenerService : NotificationListenerService() {
                 bundle.putCharSequence(remoteInput.resultKey, replyMessage)
                 RemoteInput.addResultsToIntent(arrayOf(remoteInput), intent, bundle)
                 action.actionIntent.send(context, 0, intent)
-                Log.i(TAG, "Silently sent WhatsApp reply to '${target.sender}': '$replyMessage'")
+                Log.i(TAG, "Sent a notification quick reply; message content and sender were not logged.")
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send silent reply: ${e.message}", e)
