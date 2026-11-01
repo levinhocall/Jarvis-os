@@ -439,11 +439,22 @@ object DevToolRegistry {
         register(InspectStructureDevTool())
         register(GitStatusAndDiffDevTool())
         register(ExecuteApprovedCommandDevTool())
+        register(TermuxBridgeDevTool { null })
         register(ArtifactVerificationDevTool())
     }
 
     fun register(tool: DevTool) {
         tools[tool.name] = tool
+    }
+
+    /**
+     * Binds Android-backed tools to the application context without retaining an Activity.
+     * Reconfiguration is safe across Fragment recreation and process-level app startup.
+     */
+    fun configureContext(contextProvider: () -> android.content.Context?) {
+        register(GitStatusAndDiffDevTool(contextProvider))
+        register(ExecuteApprovedCommandDevTool(contextProvider))
+        register(TermuxBridgeDevTool(contextProvider))
     }
 
     fun getTool(name: String): DevTool? = tools[name]
@@ -484,10 +495,10 @@ object DevToolRegistry {
 
         return DevEnvironmentCapability(
             type = type,
-            canExecuteCommands = canRunProcess || hasTermux,
+            canExecuteCommands = canRunProcess || termuxPermitted,
             canAccessFiles = canAccessFiles,
-            canRunGit = canRunGit || hasTermux,
-            canRunBuildTools = canRunProcess || hasTermux,
+            canRunGit = canRunGit || termuxPermitted,
+            canRunBuildTools = canRunProcess || termuxPermitted,
             description = when (type) {
                 DevEnvironmentType.TERMUX_BRIDGE -> if (termuxPermitted) {
                     "Termux Bridge active: full Linux shell, compiler, Git, and build tools available on-device without root"
