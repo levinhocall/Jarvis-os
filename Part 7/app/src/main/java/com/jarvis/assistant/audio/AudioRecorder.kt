@@ -15,6 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 class AudioRecorder(
     private val onAudioChunk: (chunk: ByteArray, amplitude: Float, frequencyData: AudioFrequencyData) -> Unit
@@ -34,6 +35,7 @@ class AudioRecorder(
     private var automaticGainControl: AutomaticGainControl? = null
     private var recordingJob: Job? = null
     private val isRecording = AtomicBoolean(false)
+    private val lifecycleGeneration = AtomicLong(0L)
     val isMuted = AtomicBoolean(false)
 
     @SuppressLint("MissingPermission")
@@ -125,6 +127,7 @@ class AudioRecorder(
             audioRecord = record
             record.startRecording()
             isRecording.set(true)
+            val generation = lifecycleGeneration.incrementAndGet()
 
             recordingJob = scope.launch(Dispatchers.IO) {
                 try {
@@ -179,12 +182,12 @@ class AudioRecorder(
                     // Auto-recovery if broken but still meant to be recording.
                     // Audio effects belong to an AudioRecord session ID, so they must be
                     // rebound when a replacement recorder is created.
-                    if (isActive && isRecording.get()) {
+                    if (isActive && isRecording.get() && lifecycleGeneration.get() == generation) {
                         delay(400)
                         // stop() may be requested while recovery is waiting. Re-check
                         // after the suspension so a stopped session does not recreate
                         // microphone hardware in the background.
-                        if (!isActive || !isRecording.get()) break
+                        if (!isActive || !isRecording.get() || lifecycleGeneration.get() != generation) break
                         try {
                             echoCanceler?.release()
                             noiseSuppressor?.release()
@@ -241,9 +244,28 @@ class AudioRecorder(
                             }
 
                             candidate.startRecording()
-                            currentRecord = candidate
-                            audioRecord = candidate
-                            replacementRecord = null // Ownership transferred to the active recording loop.
+                            val published = synchronized(this@AudioRecorder) {
+                                if (isRecording.get() && lifecycleGeneration.get() == generation) {
+                                    currentRecord = candidate
+                                    audioRecord = candidate
+                                    replacementRecord = null // Ownership transferred to the active recording loop.
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            if (!published) {
+                                runCatching { candidate.stop() }
+                                runCatching { candidate.release() }
+                                runCatching { echoCanceler?.release() }
+                                runCatching { noiseSuppressor?.release() }
+                                runCatching { automaticGainControl?.release() }
+                                echoCanceler = null
+                                noiseSuppressor = null
+                                automaticGainControl = null
+                                currentRecord = null
+                                break
+                            }
                             Log.i(TAG, "AudioRecord recovered with effects rebound to session $newSessionId")
                         } catch (reInitEx: Exception) {
                             try { replacementRecord?.release() } catch (_: Exception) {}
@@ -314,6 +336,7 @@ class AudioRecorder(
 
     @Synchronized
     fun stop() {
+        lifecycleGeneration.incrementAndGet()
         isRecording.set(false)
         recordingJob?.cancel()
         recordingJob = null
