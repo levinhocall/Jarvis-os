@@ -1686,7 +1686,7 @@ class JarvisConversationService : Service() {
                             if (audioSnapshot.size >= 16000 * 2 * 0.25) {
                                 serviceScope.launch(Dispatchers.Default) {
                                     val match = com.jarvis.assistant.audio.OwnerVoiceManager.verifySpeakerAudio(audioSnapshot, preferences)
-                                    if (match.isMatch || match.distance < match.threshold * 1.35f) {
+                                    if (com.jarvis.assistant.audio.OwnerVoiceManager.isAcceptedOwnerVoiceMatch(match)) {
                                         lastOwnerVerifiedTimestamp = System.currentTimeMillis()
                                         isCurrentTurnOwnerVoiceVerified = true
                                         Log.i("JarvisService", "EARLY voice verification PASSED: Owner confirmed during speech (dist=${match.distance}, sim=${match.similarityPercent}%)")
@@ -1741,7 +1741,7 @@ class JarvisConversationService : Service() {
                                     }
                                     if (audioBytes.size >= 16000 * 2 * 0.3) {
                                         val match = com.jarvis.assistant.audio.OwnerVoiceManager.verifySpeakerAudio(audioBytes, preferences)
-                                        if (match.isMatch || match.distance < match.threshold * 1.35f) {
+                                        if (com.jarvis.assistant.audio.OwnerVoiceManager.isAcceptedOwnerVoiceMatch(match)) {
                                             lastOwnerVerifiedTimestamp = now
                                             isCurrentTurnOwnerVoiceVerified = true
                                             Log.i("JarvisService", "Speech verification passed: Owner confirmed (dist: ${match.distance}, sim: ${match.similarityPercent}%)")
