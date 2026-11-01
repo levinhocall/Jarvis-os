@@ -283,27 +283,32 @@ class JarvisUnifiedRuntime(
             }
 
             val resultSummary = mission.outcomeSummary?.ifBlank { null }
-                ?: if (mission.status == MissionOverallStatus.COMPLETED) "Mission completed successfully: ${mission.goal}"
-                else "Mission initiated: ${mission.goal}"
+                ?: "Mission ${mission.status.name.lowercase().replace('_', ' ')}: ${mission.goal}"
 
-            val record = provenanceCoordinator.recordEvidence(
-                claim = resultSummary,
-                subject = "mission_execution",
-                source = SourceAuthority.TOOL_EXECUTION,
-                uri = "jarvis://mission/${mission.missionId}",
-                excerpt = input
-            )
-
-            if (mission.status == MissionOverallStatus.FAILED) {
-                UnifiedExecutionResult.Degraded(
-                    reason = "MISSION_FAILED",
-                    fallbackMessage = resultSummary
+            when (mission.status) {
+                MissionOverallStatus.COMPLETED -> {
+                    val record = provenanceCoordinator.recordEvidence(
+                        claim = resultSummary,
+                        subject = "mission_execution",
+                        source = SourceAuthority.TOOL_EXECUTION,
+                        uri = "jarvis://mission/${mission.missionId}",
+                        excerpt = input
+                    )
+                    UnifiedExecutionResult.Success(
+                        outputMessage = resultSummary,
+                        specialistHandled = route.specialistTarget,
+                        provenanceRecordId = record.id
+                    )
+                }
+                MissionOverallStatus.PLANNING,
+                MissionOverallStatus.EXECUTING,
+                MissionOverallStatus.VERIFYING -> UnifiedExecutionResult.Degraded(
+                    reason = "MISSION_IN_PROGRESS",
+                    fallbackMessage = "Mission accepted and is still running. No completion claim has been made. Mission ID: ${mission.missionId}"
                 )
-            } else {
-                UnifiedExecutionResult.Success(
-                    outputMessage = resultSummary,
-                    specialistHandled = route.specialistTarget,
-                    provenanceRecordId = record.id
+                else -> UnifiedExecutionResult.Degraded(
+                    reason = "MISSION_${mission.status.name}",
+                    fallbackMessage = resultSummary
                 )
             }
         } catch (cancelled: CancellationException) {
