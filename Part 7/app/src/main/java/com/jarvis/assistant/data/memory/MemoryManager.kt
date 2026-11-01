@@ -421,6 +421,7 @@ class MemoryManager(
      * Conversation history is loaded separately from the active Room session to preserve chat isolation.
      */
     suspend fun getSystemPromptContext(): String {
+        repository.cleanupExpiredMemories()
         val all = repository.getAllMemories().filter { it.isSafeForModelContext }
         val favSong = resolveSongQuery("my favorite song")
         val sb = StringBuilder("\n[USER PERSONAL PROFILE & MEMORY CORE - PERMANENT STORAGE]:\n")
