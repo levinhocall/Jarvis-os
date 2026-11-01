@@ -39,6 +39,7 @@ class NeuralLensActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private var cameraProvider: ProcessCameraProvider? = null
     private var imageCapture: ImageCapture? = null
+    private var resumeCameraOnForeground = false
     private var pendingCaptureFile: File? = null
     private lateinit var result: TextView
     private lateinit var progress: ProgressBar
@@ -145,10 +146,18 @@ class NeuralLensActivity : AppCompatActivity() {
 
     private fun startCamera() {
         if (isFinishing || isDestroyed) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            status.text = "Camera permission is required. Gallery image analysis remains available."
+            return
+        }
         status.text = "Starting live camera…"
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
             if (isFinishing || isDestroyed) return@addListener
+            if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                resumeCameraOnForeground = true
+                return@addListener
+            }
             try {
                 val provider = providerFuture.get()
                 val previewUseCase = Preview.Builder().build().also {
@@ -335,7 +344,18 @@ class NeuralLensActivity : AppCompatActivity() {
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
+    override fun onResume() {
+        super.onResume()
+        if (resumeCameraOnForeground && selectedBitmap == null &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        ) {
+            resumeCameraOnForeground = false
+            startCamera()
+        }
+    }
+
     override fun onStop() {
+        resumeCameraOnForeground = imageCapture != null
         cameraProvider?.unbindAll()
         imageCapture = null
         super.onStop()
@@ -344,6 +364,7 @@ class NeuralLensActivity : AppCompatActivity() {
     override fun onDestroy() {
         cameraProvider?.unbindAll()
         cameraProvider = null
+        resumeCameraOnForeground = false
         pendingCaptureFile?.delete()
         pendingCaptureFile = null
         if (::preview.isInitialized) preview.setImageDrawable(null)
