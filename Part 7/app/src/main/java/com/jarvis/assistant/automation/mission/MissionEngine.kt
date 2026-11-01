@@ -54,6 +54,7 @@ object MissionEngine {
     // Set of successfully completed non-idempotent step IDs
     private val completedNonIdempotentSteps = ConcurrentHashMap.newKeySet<String>()
     private val pauseRequestedMissions = ConcurrentHashMap.newKeySet<String>()
+    private val cancelRequestedMissions = ConcurrentHashMap.newKeySet<String>()
 
     // Registered tool execution hook (for custom runners or unit tests)
     var toolExecutor: (suspend (step: MissionStep, context: Context?) -> Pair<Boolean, MissionVerificationEvidence>)? = null
@@ -135,8 +136,9 @@ object MissionEngine {
                     e.status == MissionOverallStatus.WAITING_FOR_APPROVAL.name &&
                         e.approvalState == MissionApprovalState.PENDING_APPROVAL.name
                 val wasPaused = e.status == MissionOverallStatus.PAUSED.name
-                val interruptedLlmPlanner = e.status == MissionOverallStatus.EXECUTING.name &&
-                    e.outcomeSummary == "LLM planner running"
+                val interruptedLlmPlanner = e.status in setOf(
+                    MissionOverallStatus.EXECUTING.name, MissionOverallStatus.VERIFYING.name
+                ) && e.outcomeSummary?.startsWith("LLM planner", ignoreCase = true) == true
                 val interruptedExecution = e.status in setOf(
                     MissionOverallStatus.EXECUTING.name, MissionOverallStatus.VERIFYING.name
                 ) && !interruptedLlmPlanner
@@ -922,16 +924,36 @@ object MissionEngine {
      */
     suspend fun cancelMission(missionId: String, reason: String = "User requested cancellation") = mutex.withLock {
         val current = _activeMission.value ?: return@withLock
-        if (current.missionId == missionId && !current.isFinished) {
-            pauseRequestedMissions.remove(missionId)
-            if (isLlmPlannedMission(current)) llmPlanner?.cancel()
+        if (current.missionId != missionId || current.isFinished) return@withLock
+
+        pauseRequestedMissions.remove(missionId)
+        val isExecuting = current.status in setOf(MissionOverallStatus.EXECUTING, MissionOverallStatus.VERIFYING)
+        if (isExecuting && isLlmPlannedMission(current)) {
+            llmPlanner?.cancel()
+            val requested = current.copy(
+                outcomeSummary = "LLM planner cancellation requested; waiting for the current action to return.",
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = requested
+            persistMission(requested, current.currentStepIndex)
+            Log.i(TAG, "LLM mission cancellation requested; waiting for a safe execution boundary.")
+        } else if (isExecuting) {
+            cancelRequestedMissions.add(missionId)
+            val requested = current.copy(
+                outcomeSummary = "Cancellation requested; the current action will finish before the mission stops.",
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = requested
+            persistMission(requested, current.currentStepIndex)
+            Log.i(TAG, "Mission cancellation requested; waiting for a safe execution boundary.")
+        } else {
             val updated = current.copy(
                 status = MissionOverallStatus.CANCELLED,
                 outcomeSummary = "Mission cancelled: $reason",
                 updatedAt = System.currentTimeMillis()
             )
             _activeMission.value = updated
-            persistMission(updated)
+            persistMission(updated, current.currentStepIndex)
             Log.i(TAG, "Mission $missionId cancelled; user-provided reason omitted from logs")
         }
     }
