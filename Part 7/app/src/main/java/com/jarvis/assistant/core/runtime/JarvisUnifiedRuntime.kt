@@ -234,7 +234,7 @@ class JarvisUnifiedRuntime(
 
             // 5. Offline Mode Handling
             if (!isNetworkAvailable || (route.selectedTier == ModelTier.LOCAL_REFLEX && route.providerId == "local_reflex")) {
-                val offlineResult = offlineCoordinator.handleCommandOffline(input)
+                val offlineResult = offlineCoordinator.handleCommandOffline(input, context)
                 return@withContext when (offlineResult) {
                     is com.jarvis.assistant.automation.offline.OfflineExecutionResult.ExecutedLocally -> {
                         val record = provenanceCoordinator.recordEvidence(
