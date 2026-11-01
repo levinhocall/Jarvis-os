@@ -2,6 +2,7 @@ package com.jarvis.assistant.automation.offline
 
 import android.content.Context
 import com.jarvis.assistant.JarvisApp
+import com.jarvis.assistant.BuildConfig
 import com.jarvis.assistant.automation.reflex.OfflineReflexExecutor
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -13,9 +14,8 @@ class OfflineIntelligenceCoordinator {
 
     init {
         // Pre-populate core local cached facts
-        localKnowledgeCache["owner_name"] = "Sir"
         localKnowledgeCache["assistant_name"] = "JARVIS"
-        localKnowledgeCache["system_version"] = "2.0.0-PRO"
+        localKnowledgeCache["system_version"] = BuildConfig.VERSION_NAME
     }
 
     /**
@@ -39,6 +39,10 @@ class OfflineIntelligenceCoordinator {
      * Evaluates and executes user input offline, queuing cloud actions if appropriate.
      */
     suspend fun handleCommandOffline(input: String, context: Context? = null): OfflineExecutionResult {
+        (context?.applicationContext as? JarvisApp)?.let { app ->
+            app.preferences.userName.takeIf { it.isNotBlank() }?.let { cacheFact("owner_name", it) }
+            cacheFact("system_version", BuildConfig.VERSION_NAME)
+        }
         val lower = input.lowercase().trim()
 
         // 1. Local Device Control — only report success after a real platform action.
