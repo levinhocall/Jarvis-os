@@ -310,6 +310,9 @@ class FakeChatDao : ChatDao {
 
     override suspend fun getSessionById(id: String): ChatSessionEntity? = sessions[id]
 
+    override suspend fun getMostRecentActiveSession(): ChatSessionEntity? =
+        sessions.values.filter { !it.isArchived }.maxByOrNull { it.updatedAt }
+
     override suspend fun searchSessions(query: String): List<ChatSessionEntity> =
         sessions.values.filter { it.title.contains(query, ignoreCase = true) }
 
