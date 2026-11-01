@@ -85,6 +85,7 @@ class AppPreferences internal constructor(
         private const val KEY_ORB_PRESET = "key_orb_preset"
         private const val KEY_HAPTIC_FEEDBACK = "key_haptic_feedback"
         private const val KEY_NOTIFICATION_HISTORY_OPT_IN = "key_notification_history_opt_in"
+        private const val KEY_HEADSET_WHISPER_ENABLED = "key_headset_whisper_enabled"
         private const val KEY_CUSTOM_ENDPOINT = "key_custom_endpoint"
     }
 
@@ -452,6 +453,11 @@ class AppPreferences internal constructor(
     var hapticFeedbackEnabled: Boolean
         get() = prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true)
         set(value) = prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK, value).apply()
+
+    /** Incoming notification speech is disabled unless the user explicitly enables it. */
+    var headsetWhisperEnabled: Boolean
+        get() = prefs.getBoolean(KEY_HEADSET_WHISPER_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_HEADSET_WHISPER_ENABLED, value).apply()
 
     /** Persist notification text only after explicit opt-in; disabled by default. */
     var notificationHistoryEnabled: Boolean
