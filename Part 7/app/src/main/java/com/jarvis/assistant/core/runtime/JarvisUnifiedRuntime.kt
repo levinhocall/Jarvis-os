@@ -251,9 +251,9 @@ class JarvisUnifiedRuntime(
                         )
                     }
                     is com.jarvis.assistant.automation.offline.OfflineExecutionResult.QueuedForOnline -> {
-                        UnifiedExecutionResult.Success(
-                            outputMessage = offlineResult.userFeedback,
-                            specialistHandled = "OfflineSyncQueue"
+                        UnifiedExecutionResult.Degraded(
+                            reason = "ACTION_QUEUED_OFFLINE",
+                            fallbackMessage = "The action was queued for a future online retry; it has not been executed yet. ${offlineResult.userFeedback}"
                         )
                     }
                     is com.jarvis.assistant.automation.offline.OfflineExecutionResult.DegradedExplanation -> {
