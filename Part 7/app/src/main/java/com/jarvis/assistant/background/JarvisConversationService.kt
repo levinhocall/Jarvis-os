@@ -808,7 +808,8 @@ class JarvisConversationService : Service() {
                         android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             try {
                 startForeground(NOTIFICATION_ID, notification, types)
-                Log.i("JarvisService", "Foreground service elevated to include MEDIA_PROJECTION")
+                microphoneForegroundReady = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+                Log.i("JarvisService", "Foreground service elevated to include MEDIA_PROJECTION; microphoneReady=$microphoneForegroundReady")
                 return true
             } catch (e: Exception) {
                 Log.w("JarvisService", "Failed to elevate to MEDIA_PROJECTION: ${e.message}")
@@ -825,7 +826,8 @@ class JarvisConversationService : Service() {
                         android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             try {
                 startForeground(NOTIFICATION_ID, notification, types)
-                Log.i("JarvisService", "Foreground service demoted from MEDIA_PROJECTION")
+                microphoneForegroundReady = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+                Log.i("JarvisService", "Foreground service demoted from MEDIA_PROJECTION; microphoneReady=$microphoneForegroundReady")
             } catch (e: Exception) {
                 Log.w("JarvisService", "Failed to demote from MEDIA_PROJECTION: ${e.message}")
             }
