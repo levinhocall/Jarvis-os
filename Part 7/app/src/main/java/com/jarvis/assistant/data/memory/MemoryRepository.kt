@@ -123,8 +123,11 @@ class MemoryRepository(
     suspend fun correct(memoryId: Long, newContent: String): Boolean {
         val all = memoryDao.getAllMemories()
         val target = all.firstOrNull { it.id == memoryId } ?: return false
-        val sanitized = EpisodicVectorMemory.sanitizeForStorage(newContent)
+        val sanitized = EpisodicVectorMemory.sanitizeForStorage(newContent).trim()
+        require(sanitized.isNotBlank()) { "Corrected memory is empty after privacy sanitization." }
 
+        // Prepare the new representation before updating the stored row. If embedding
+        // generation fails, the previous memory and its searchable vector remain intact.
         val vector = embeddingProvider.generateEmbedding("${target.key} $sanitized")
         val embeddingJson = vector?.let { vectorSearchEngine.serializeEmbedding(it) }
 
@@ -132,7 +135,9 @@ class MemoryRepository(
             value = sanitized,
             rawText = sanitized,
             timestamp = System.currentTimeMillis(),
-            embeddingJson = embeddingJson
+            embeddingJson = embeddingJson,
+            embeddingModel = embeddingProvider.modelName,
+            embeddingDimension = embeddingProvider.dimension
         )
         memoryDao.updateMemory(updated)
         return true
