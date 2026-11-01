@@ -192,7 +192,7 @@ object MissionEngine {
 
     private fun buildPlannerGoal(goal: String, userConstraints: List<String>): String =
         if (userConstraints.isEmpty()) goal
-        else "$goal\\nUser constraints: ${userConstraints.joinToString("; ")}"
+        else "$goal\nUser constraints: ${userConstraints.joinToString("; ")}"
 
     private fun isLlmPlannedMission(mission: MissionDefinition): Boolean =
         mission.steps.any { it.title.startsWith("Step ") && it.toolName.isNotBlank() }
