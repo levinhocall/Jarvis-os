@@ -226,6 +226,9 @@ object MissionEngine {
         result: com.jarvis.assistant.automation.agent.LlmMissionExecutionResult,
         context: Context?
     ) {
+        if (_activeMission.value?.let { it.missionId == baseMission.missionId && it.status == MissionOverallStatus.CANCELLED } == true) {
+            return
+        }
         val awaitingApproval = result.abortReason == "APPROVAL_REQUIRED"
         val convertedSteps = result.history.map { record ->
             val isPendingApprovalStep = awaitingApproval &&
