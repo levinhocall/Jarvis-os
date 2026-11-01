@@ -2,6 +2,7 @@ package com.jarvis.assistant.data.preferences
 
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.jarvis.assistant.data.model.ChatTurn
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -29,6 +30,9 @@ class AppPreferencesSecurityInstrumentedTest {
             .putInt("key_owner_voice_sample_count", 2)
             .putFloat("key_owner_voice_threshold", 0.72f)
             .putBoolean("key_owner_voice_enabled", true)
+            .putString("key_user_location", "Legacy private location")
+            .putString("key_user_birthday", "2000-01-01")
+            .putString("key_chat_history", "[]")
             .commit()
 
         val preferences = AppPreferences(context, legacyName, encryptedName)
@@ -39,6 +43,19 @@ class AppPreferencesSecurityInstrumentedTest {
         assertFalse(legacy.contains("key_owner_voice_profile"))
         assertFalse(legacy.contains("key_owner_voice_samples"))
         assertFalse(legacy.contains("key_owner_voice_enabled"))
+        assertEquals("Legacy private location", preferences.userLocation)
+        assertEquals("2000-01-01", preferences.userBirthday)
+        assertFalse(legacy.contains("key_user_location"))
+        assertFalse(legacy.contains("key_user_birthday"))
+        assertFalse(legacy.contains("key_chat_history"))
+
+        preferences.userLocation = "Encrypted private location"
+        preferences.saveChatHistory(listOf(ChatTurn(userTranscript = "hello", jarvisResponse = "hi")))
+        assertEquals("Encrypted private location", preferences.userLocation)
+        assertEquals(1, preferences.loadChatHistory().size)
+        assertFalse(legacy.contains("key_user_location"))
+        assertFalse(legacy.contains("key_chat_history"))
+        assertFalse(preferences.headsetWhisperEnabled)
 
         preferences.saveOwnerVoiceProfile(floatArrayOf(0.4f, 0.5f), 3)
         assertArrayEquals(floatArrayOf(0.4f, 0.5f), preferences.getOwnerVoiceProfile(), 0.0001f)
