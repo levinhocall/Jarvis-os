@@ -73,6 +73,19 @@ class JarvisUnifiedRuntimeTest {
     }
 
     @Test
+    fun `processUserRequest routes offline voice requests through local note handling`() = runBlocking {
+        val result = runtime.processUserRequest(
+            "remember offline voice fallback integration check",
+            isNetworkAvailable = false
+        )
+
+        assertTrue(result is UnifiedExecutionResult.Success)
+        val success = result as UnifiedExecutionResult.Success
+        assertTrue(success.outputMessage.contains("temporary offline cache"))
+        assertEquals(1, runtime.offlineCoordinator.searchLocalKnowledge("offline voice fallback integration check").size)
+    }
+
+    @Test
     fun `processUserRequest never claims hardware execution without Android context`() = runBlocking {
         val result = runtime.processUserRequest("turn on flashlight", isNetworkAvailable = false)
         assertTrue(result is UnifiedExecutionResult.Degraded)
