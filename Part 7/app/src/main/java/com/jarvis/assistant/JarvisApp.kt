@@ -7,6 +7,7 @@ import com.jarvis.assistant.automation.command.CommandExecutor
 import com.jarvis.assistant.automation.agent.GeminiFunctionCallProvider
 import com.jarvis.assistant.automation.agent.LlmPlanner
 import com.jarvis.assistant.automation.mission.MissionEngine
+import com.jarvis.assistant.data.model.GeminiConstants
 import com.jarvis.assistant.automation.contacts.ContactResolver
 import com.jarvis.assistant.automation.phone.PhoneControlManager
 import com.jarvis.assistant.automation.whatsapp.WhatsAppAssistant
@@ -108,7 +109,8 @@ class JarvisApp : Application() {
             GeminiFunctionCallProvider(
                 apiKeyProvider = {
                     preferences.getNextActiveKey("gemini") ?: preferences.apiKey
-                }
+                },
+                modelProvider = { GeminiConstants.MODEL_3_1_FLASH_AGENT }
             )
         )
         appScope.launch {
