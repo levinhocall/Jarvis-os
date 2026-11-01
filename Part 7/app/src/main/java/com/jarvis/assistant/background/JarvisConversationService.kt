@@ -2286,7 +2286,7 @@ class JarvisConversationService : Service() {
                         audioPlayer?.flush()
                         val callResult = com.jarvis.assistant.util.WhatsAppMessenger.placeCall(this@JarvisConversationService, recipient, callType, appNumber, confirmed)
                         val (ok, msg) = when (callResult) {
-                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.Success -> Pair(true, "Calling ${callResult.contactName} on WhatsApp.")
+                            is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.Success -> Pair(true, "Opened WhatsApp ${callResult.callType} call interface for ${callResult.contactName}; call connection is not confirmed.")
                             is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.RequiresConfirmation -> Pair(true, "Please confirm WhatsApp call to ${callResult.contactName}.")
                             is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MultipleAppsFound -> Pair(false, "Multiple WhatsApp apps found. Please specify WhatsApp 1 or 2.")
                             is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.ContactNotFound -> Pair(false, "Could not find contact ${callResult.name}.")
