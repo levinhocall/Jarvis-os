@@ -116,6 +116,9 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim() ?: ""
 
         if (title.isBlank() && text.isBlank()) return
+        val sanitized = NotificationPrivacyFilter.sanitize(title, text)
+        val safeTitle = sanitized.sender
+        val safeText = sanitized.message
 
         // Extract direct-reply action if available
         var replyAction: Notification.Action? = null
@@ -136,17 +139,17 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         val cached = CachedNotification(
             key = sbn.key,
             packageName = pkg,
-            sender = title,
-            message = text,
+            sender = safeTitle,
+            message = safeText,
             timestamp = System.currentTimeMillis(),
-            replyAction = replyAction,
-            remoteInput = replyRemoteInput
+            replyAction = if (sanitized.containsCredential) null else replyAction,
+            remoteInput = if (sanitized.containsCredential) null else replyRemoteInput
         )
 
         recentNotifications[sbn.key] = cached
 
         // Notification text is sensitive: persist only after an explicit in-app opt-in.
-        if (com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {
+        if (!sanitized.containsCredential && com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {
             persistenceScope.launch {
                 // Re-check opt-in on the IO dispatcher: the user may disable history
                 // after the notification callback but before this queued write runs.
@@ -159,8 +162,8 @@ class JarvisNotificationListenerService : NotificationListenerService() {
                         com.jarvis.assistant.data.notification.NotificationHistoryEntity(
                             id = sbn.key,
                             packageName = pkg,
-                            sender = title,
-                            message = text,
+                            sender = safeTitle,
+                            message = safeText,
                             timestamp = System.currentTimeMillis()
                         )
                     )
@@ -177,20 +180,24 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         notificationOrder.add(sbn.key)
 
         // Process financial/UPI transactions into Expense Ledger
-        com.jarvis.assistant.automation.ledger.ExpenseLedgerTracker.processNotification(
-            packageName = pkg,
-            title = title,
-            text = text,
-            context = applicationContext
-        )
+        if (!sanitized.containsCredential) {
+            com.jarvis.assistant.automation.ledger.ExpenseLedgerTracker.processNotification(
+                packageName = pkg,
+                title = safeTitle,
+                text = safeText,
+                context = applicationContext
+            )
+        }
 
         // Explicitly configured notification-keyword triggers are evaluated in memory only.
-        (applicationContext as? com.jarvis.assistant.JarvisApp)?.triggerRepository
-            ?.onNotificationPosted(pkg, title, text)
+        if (!sanitized.containsCredential) {
+            (applicationContext as? com.jarvis.assistant.JarvisApp)?.triggerRepository
+                ?.onNotificationPosted(pkg, safeTitle, safeText)
+        }
 
         // Proactive Headset Whisper for incoming WhatsApp messages
-        if (pkg == "com.whatsapp" && title.isNotBlank() && text.isNotBlank()) {
-            com.jarvis.assistant.audio.HeadsetWhisperManager.whisperNotification(title, text, applicationContext)
+        if (!sanitized.containsCredential && pkg == "com.whatsapp" && safeTitle.isNotBlank() && safeText.isNotBlank()) {
+            com.jarvis.assistant.audio.HeadsetWhisperManager.whisperNotification(safeTitle, safeText, applicationContext)
         }
 
         // Evict older entries
