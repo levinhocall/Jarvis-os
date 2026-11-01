@@ -116,7 +116,7 @@ object HeadsetWhisperManager {
         if (clean.isBlank()) return false
         val normalized = clean.lowercase().replace(Regex("[.!?,]+"), " ").trim().replace(Regex("\\s+"), " ")
 
-        val isNegativeConfirmation = normalized in setOf("no", "no thanks", "cancel", "nahi", "nahin", "mat bhejo", "reply mat bhejo", "don't send", "do not send")
+        val isNegativeConfirmation = normalized in setOf("no", "no thanks", "no reply", "not now", "cancel", "nahi", "nahin", "nahi bhejna", "nahin bhejna", "mat bhejo", "reply mat bhejo", "don't send", "do not send")
         if (isNegativeConfirmation) {
             isAwaitingVoiceReply.set(false)
             isAwaitingReplyContent.set(false)
@@ -126,7 +126,7 @@ object HeadsetWhisperManager {
             return true
         }
 
-        val isPositiveOnly = normalized in setOf("yes", "haan", "han", "ha", "send", "send it", "reply bhejo", "bhej do", "yes send")
+        val isPositiveOnly = normalized in setOf("yes", "yes please", "haan", "han", "ha", "haan bolo", "send", "send it", "send reply", "reply bhejo", "bhej do", "yes send")
         if (!isAwaitingReplyContent.get() && isPositiveOnly) {
             isAwaitingReplyContent.set(true)
             replyWindowJob?.cancel()
