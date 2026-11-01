@@ -1,6 +1,9 @@
 package com.jarvis.assistant.core.runtime
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.SystemClock
 import android.util.Log
 import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
@@ -24,6 +27,10 @@ import com.jarvis.assistant.security.sandbox.CapabilitySandbox
 import com.jarvis.assistant.security.sandbox.SandboxCheckResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import androidx.core.content.ContextCompat
+import com.jarvis.assistant.audio.VoskModelManager
+import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
+import com.jarvis.assistant.data.preferences.AppPreferences
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -64,119 +71,158 @@ class JarvisUnifiedRuntime(
      */
     fun bootSelfTest(
         context: Context? = null,
-        isAccessibilityServiceConnected: Boolean = true,
-        isAudioRecordPermissionGranted: Boolean = true,
-        isNetworkOnline: Boolean = true
+        isAccessibilityServiceConnected: Boolean? = null,
+        isAudioRecordPermissionGranted: Boolean? = null,
+        isNetworkOnline: Boolean? = null
     ): SystemBootReport {
+        val appContext = context?.applicationContext
+        val accessibilityReady = isAccessibilityServiceConnected ?: (
+            appContext != null &&
+                JarvisAccessibilityService.isRunning() &&
+                AccessibilityHealthModel.isOperational()
+            )
+        val voiceReady = isAudioRecordPermissionGranted ?: (
+            appContext != null &&
+                ContextCompat.checkSelfPermission(
+                    appContext,
+                    android.Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED &&
+                VoskModelManager.isModelReady.value
+            )
+        val networkReady = isNetworkOnline ?: appContext?.let(::hasValidatedInternet) ?: false
+
         val diagnostics = mutableListOf<SubsystemDiagnostic>()
 
-        // 1. Accessibility Perception Diagnostic (Real state via AccessibilityHealthModel)
-        val a11yLatency = measureElapsedMs {
-            AccessibilityHealthModel.isOperational()
-        }
-        val a11yStatus = if (isAccessibilityServiceConnected) SubsystemStatus.HEALTHY else SubsystemStatus.DEGRADED
+        // 1. Accessibility is healthy only when the actual service is connected and operational.
+        val a11yLatency = measureElapsedMs { AccessibilityHealthModel.isOperational() }
         diagnostics.add(
             SubsystemDiagnostic(
                 subsystemName = "Accessibility Perception",
-                status = a11yStatus,
+                status = if (accessibilityReady) SubsystemStatus.HEALTHY else SubsystemStatus.DEGRADED,
                 latencyMs = a11yLatency,
-                diagnosticMessage = if (isAccessibilityServiceConnected) "Accessibility service connected and operational." else "Accessibility service disabled.",
-                requiredActionForUser = if (isAccessibilityServiceConnected) null else "Enable Jarvis in Android Accessibility Settings."
+                diagnosticMessage = if (accessibilityReady) {
+                    "Accessibility service is connected and operational."
+                } else {
+                    "Accessibility service is not confirmed connected and operational."
+                },
+                requiredActionForUser = if (accessibilityReady) null else
+                    "Enable JARVIS in Android Accessibility Settings and return to recheck."
             )
         )
 
-        // 2. Audio & Voice Diagnostic
-        val voiceLatency = measureElapsedMs {
-            // Permission and audio engine latency check
-        }
-        val voiceStatus = if (isAudioRecordPermissionGranted) SubsystemStatus.HEALTHY else SubsystemStatus.DISABLED
+        // 2. Voice readiness requires both microphone permission and a loaded local Vosk model.
+        val voiceLatency = measureElapsedMs { VoskModelManager.isModelReady.value }
         diagnostics.add(
             SubsystemDiagnostic(
                 subsystemName = "Voice Pipeline & Wake Word",
-                status = voiceStatus,
+                status = if (voiceReady) SubsystemStatus.HEALTHY else SubsystemStatus.DISABLED,
                 latencyMs = voiceLatency,
-                diagnosticMessage = if (isAudioRecordPermissionGranted) "Audio permission granted, Porcupine engine ready." else "RECORD_AUDIO permission missing.",
-                requiredActionForUser = if (isAudioRecordPermissionGranted) null else "Grant Microphone permission."
+                diagnosticMessage = if (voiceReady) {
+                    "Microphone permission and local Vosk recognition model are ready."
+                } else {
+                    "Microphone permission or local Vosk recognition model is unavailable."
+                },
+                requiredActionForUser = if (voiceReady) null else
+                    "Grant microphone permission and allow the Vosk model to finish loading."
             )
         )
 
-        // 3. Security Execution Sandbox Diagnostic - ACTUALLY calls verifyLedgerIntegrity()
+        // 3. Verify the sandbox ledger and a benign input check.
         var ledgerVerified = false
         val sandboxLatency = measureElapsedMs {
             val sandboxCheck = sandbox.validateInputText("System check ping")
             ledgerVerified = sandbox.verifyLedgerIntegrity() && sandboxCheck is SandboxCheckResult.Allowed
         }
-        val sandboxStatus = if (ledgerVerified) SubsystemStatus.HEALTHY else SubsystemStatus.FAILED
         diagnostics.add(
             SubsystemDiagnostic(
                 subsystemName = "Security Execution Sandbox",
-                status = sandboxStatus,
+                status = if (ledgerVerified) SubsystemStatus.HEALTHY else SubsystemStatus.FAILED,
                 latencyMs = sandboxLatency,
-                diagnosticMessage = if (ledgerVerified) "Chained tamper-evident ledger integrity verified." else "Sandbox verification or ledger integrity check failed."
+                diagnosticMessage = if (ledgerVerified) {
+                    "Sandbox input check and tamper-evident ledger integrity verified."
+                } else {
+                    "Sandbox verification or ledger integrity check failed."
+                }
             )
         )
 
-        // 4. Cognitive Routing & Cloud Provider Diagnostic - Genuine provider health
-        var providerHealthy = false
-        val routerLatency = measureElapsedMs {
-            providerHealthy = router.isProviderHealthy("gemini_flash")
+        // 4. A configured key/circuit breaker is not enough: the mission planner must also be wired.
+        val providerLatency = measureElapsedMs {
+            router.isProviderHealthy("gemini_flash")
         }
-        val routerStatus = if (isNetworkOnline) {
-            if (providerHealthy) SubsystemStatus.HEALTHY else SubsystemStatus.DEGRADED
-        } else {
-            SubsystemStatus.OFFLINE
+        val providerConfigured = appContext?.let { app ->
+            val hasKey = runCatching { AppPreferences(app).apiKey.isNotBlank() }.getOrDefault(false)
+            hasKey && MissionEngine.llmPlanner?.isAvailable() == true &&
+                router.isProviderHealthy("gemini_flash")
+        } ?: false
+        val providerStatus = when {
+            !networkReady -> SubsystemStatus.OFFLINE
+            providerConfigured -> SubsystemStatus.HEALTHY
+            else -> SubsystemStatus.DEGRADED
         }
         diagnostics.add(
             SubsystemDiagnostic(
                 subsystemName = "Cognitive Router & AI Providers",
-                status = routerStatus,
-                latencyMs = routerLatency,
-                diagnosticMessage = if (isNetworkOnline) {
-                    if (providerHealthy) "Cloud reasoning providers active." else "Cloud providers degraded; fallback engaged."
-                } else "Offline mode active. On-device heuristics engaged."
+                status = providerStatus,
+                latencyMs = providerLatency,
+                diagnosticMessage = when {
+                    !networkReady -> "No validated internet connection is available."
+                    providerConfigured -> "A configured provider and mission-planner integration are available; no live model request was sent during boot."
+                    else -> "The production mission-planner provider is not fully configured or connected."
+                },
+                requiredActionForUser = if (providerConfigured || !networkReady) null else
+                    "Configure a supported API key and connect the provider to MissionEngine."
             )
         )
 
-        // 5. Offline Intelligence Diagnostic
-        val offlineLatency = measureElapsedMs {
-            offlineCoordinator.getHonestCapabilityMatrix()
-        }
+        // 5. The current offline queue is process-local and has no automatic executor.
+        val offlineLatency = measureElapsedMs { offlineCoordinator.getHonestCapabilityMatrix() }
         diagnostics.add(
             SubsystemDiagnostic(
                 subsystemName = "Offline Intelligence Store",
-                status = SubsystemStatus.HEALTHY,
+                status = SubsystemStatus.DEGRADED,
                 latencyMs = offlineLatency,
-                diagnosticMessage = "Local memory cache and deferred action queue ready."
+                diagnosticMessage = "Local heuristics are available, but deferred actions are not yet durably persisted or automatically synchronized."
             )
         )
 
-        // Overall status
         val hasFailed = diagnostics.any { it.status == SubsystemStatus.FAILED }
-        val hasDegraded = diagnostics.any { it.status == SubsystemStatus.DEGRADED || it.status == SubsystemStatus.DISABLED || it.status == SubsystemStatus.OFFLINE }
+        val hasDegraded = diagnostics.any {
+            it.status == SubsystemStatus.DEGRADED ||
+                it.status == SubsystemStatus.DISABLED ||
+                it.status == SubsystemStatus.OFFLINE
+        }
         val overallStatus = when {
             hasFailed -> SubsystemStatus.FAILED
             hasDegraded -> SubsystemStatus.DEGRADED
             else -> SubsystemStatus.HEALTHY
         }
-
         val summary = when (overallStatus) {
-            SubsystemStatus.HEALTHY -> "All systems online and operational, Sir."
-            SubsystemStatus.DEGRADED -> "Jarvis running in degraded mode: some features require permission or network."
+            SubsystemStatus.HEALTHY -> "All verified subsystems are online and operational, Sir."
+            SubsystemStatus.DEGRADED -> "JARVIS is running in degraded mode; one or more subsystems need configuration or integration."
             else -> "System alert: critical failure detected during boot self-test."
         }
 
         val report = SystemBootReport(
             overallStatus = overallStatus,
             diagnostics = diagnostics,
-            isAccessibilityReady = isAccessibilityServiceConnected,
-            isVoiceReady = isAudioRecordPermissionGranted,
-            isNetworkReady = isNetworkOnline,
+            isAccessibilityReady = accessibilityReady,
+            isVoiceReady = voiceReady,
+            isNetworkReady = networkReady,
             summaryMessage = summary
         )
-
         lastBootReport = report
         isInitialized.set(true)
         return report
+    }
+
+    private fun hasValidatedInternet(context: Context): Boolean {
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = connectivity.activeNetwork ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     /**
