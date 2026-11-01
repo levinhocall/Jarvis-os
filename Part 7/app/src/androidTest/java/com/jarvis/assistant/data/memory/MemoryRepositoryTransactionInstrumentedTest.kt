@@ -15,6 +15,37 @@ import java.util.UUID
 class MemoryRepositoryTransactionInstrumentedTest {
 
     @Test
+    fun backupImportDoesNotResurrectDeletedOrSupersededMemories() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dao = MemoryDatabase.getInstance(context).memoryDao()
+        val repository = MemoryRepository(dao, DeterministicLocalEmbeddingProvider())
+        val suffix = UUID.randomUUID().toString()
+        val activeKey = "active_$suffix"
+        val deletedKey = "deleted_$suffix"
+        val versionedKey = "versioned_$suffix"
+
+        try {
+            repository.remember("Keep this active", key = activeKey)
+            val deletedId = repository.remember("Do not restore this deleted value", key = deletedKey)
+            repository.forget(deletedId, permanent = false)
+            repository.remember("Old superseded value", key = versionedKey)
+            repository.remember("Current active value", key = versionedKey)
+
+            val backup = repository.exportMemoriesAsJson()
+            dao.deleteMemoriesByKeyword(suffix)
+            val restoredCount = repository.importMemoriesFromJson(backup)
+
+            assertEquals(2, restoredCount)
+            assertEquals(1, dao.getMemoriesByKeyIncludingInactive(activeKey).size)
+            assertTrue(dao.getMemoriesByKeyIncludingInactive(deletedKey).isEmpty())
+            val restoredVersion = dao.getMemoriesByKeyIncludingInactive(versionedKey).single()
+            assertEquals("Current active value", restoredVersion.value)
+            assertEquals(MemoryEntity.STATUS_ACTIVE, restoredVersion.status)
+        } finally {
+            dao.deleteMemoriesByKeyword(suffix)
+        }
+    }
+    @Test
     fun correctingMemoryRefreshesEmbeddingAndRejectsEmptySanitizedContent() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val dao = MemoryDatabase.getInstance(context).memoryDao()
