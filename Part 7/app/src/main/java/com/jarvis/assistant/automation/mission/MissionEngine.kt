@@ -1335,7 +1335,7 @@ object MissionEngine {
         Log.i(TAG, "Mission finalized with status $finalStatus; outcome text omitted from logs")
     }
 
-    private fun finalizeFailure(
+    private suspend fun finalizeFailure(
         mission: MissionDefinition,
         updatedSteps: List<MissionStep>,
         failedIndex: Int,
@@ -1345,15 +1345,23 @@ object MissionEngine {
     ) {
         pauseRequestedMissions.remove(mission.missionId)
         cancelRequestedMissions.remove(mission.missionId)
-        val finalStatus = if (completedCount > 0) MissionOverallStatus.PARTIALLY_COMPLETED else MissionOverallStatus.FAILED
-        val failedStepTitle = updatedSteps[failedIndex].title
-        _activeMission.value = mission.copy(
+        val hasUnverifiedOutcome = unverifiedNotes.isNotEmpty() ||
+            updatedSteps.any { it.status == MissionStepStatus.UNVERIFIED }
+        val finalStatus = when {
+            hasUnverifiedOutcome -> MissionOverallStatus.UNVERIFIED
+            completedCount > 0 -> MissionOverallStatus.PARTIALLY_COMPLETED
+            else -> MissionOverallStatus.FAILED
+        }
+        val failedStepTitle = updatedSteps.getOrNull(failedIndex)?.title ?: "unknown step"
+        val finalized = mission.copy(
             steps = updatedSteps,
             status = finalStatus,
             outcomeSummary = "Mission stopped at step '$failedStepTitle': $reason",
             unverifiedDisclaimers = unverifiedNotes,
             updatedAt = System.currentTimeMillis()
         )
+        _activeMission.value = finalized
+        persistMission(finalized, failedIndex)
     }
 
     /**
