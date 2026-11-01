@@ -47,6 +47,10 @@ class AudioRecorder(
         }
 
         val bufferSize = maxOf(minBufferSize * 4, 32000)
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            Log.e(TAG, "AudioRecord initialization must run off the main thread; refusing to block UI.")
+            return false
+        }
 
         return try {
             var record: AudioRecord? = null
@@ -65,19 +69,14 @@ class AudioRecorder(
                     break
                 }
                 candidate.release()
-                // start() is currently invoked from a foreground Service lifecycle path,
-                // which may run on the main thread. Never sleep there: five retries would
-                // otherwise block the service/UI thread for up to 750ms.
-                val isMainThread = android.os.Looper.myLooper() == android.os.Looper.getMainLooper()
-                Log.w(TAG, "AudioRecord initialization attempt $initAttempts failed; retrying" +
-                    if (isMainThread) " immediately on main thread" else " in 150ms")
-                if (!isMainThread) {
-                    try {
-                        Thread.sleep(150)
-                    } catch (_: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                        break
-                    }
+                // Initialization is guarded above to run only off the main thread.
+                // Back off briefly between hardware initialization attempts.
+                Log.w(TAG, "AudioRecord initialization attempt $initAttempts failed; retrying in 150ms")
+                try {
+                    Thread.sleep(150)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
                 }
             }
 
