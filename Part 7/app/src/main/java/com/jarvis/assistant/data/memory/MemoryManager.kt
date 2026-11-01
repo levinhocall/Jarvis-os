@@ -103,7 +103,7 @@ class MemoryManager(
             key = key,
             value = clean
         )
-        Log.i(TAG, "Saved long-term memory in category '$category': $clean")
+                    Log.i(TAG, "Saved long-term memory (category=$category, length=${clean.length})")
         val response = "Sir, I have permanently committed that to memory: $clean."
         chatRepository.addTurn(clean, response)
         return response
@@ -200,7 +200,7 @@ class MemoryManager(
         if (clean.isBlank() || clean.equals("my favorite song", ignoreCase = true) || clean.equals("favorite song", ignoreCase = true)) return
 
         val currentFav = preferences.recordSongPlay(clean)
-        Log.i(TAG, "Tracked song play: '$clean'. Current top favorite: '$currentFav'")
+                    Log.i(TAG, "Updated song play statistics (title and listening history omitted)")
 
         scope.launch(Dispatchers.IO) {
             repository.saveMemory(
@@ -271,7 +271,7 @@ class MemoryManager(
                         key = fact.take(30),
                         value = fact
                     )
-                    Log.i(TAG, "Learned explicit fact: $fact")
+                    Log.i(TAG, "Learned an explicit user fact (content omitted)")
                 }
             }
 
@@ -287,7 +287,7 @@ class MemoryManager(
                         key = "user_name",
                         value = name
                     )
-                    Log.i(TAG, "Learned user name: $name")
+                    Log.i(TAG, "Updated preferred-name profile field")
                 }
             }
 
@@ -310,7 +310,7 @@ class MemoryManager(
                         key = "user_birthday",
                         value = bday
                     )
-                    Log.i(TAG, "Learned user's birthday: $bday")
+                    Log.i(TAG, "Updated birthday profile field")
                 }
             }
 
@@ -326,7 +326,7 @@ class MemoryManager(
                         key = "user_location",
                         value = loc
                     )
-                    Log.i(TAG, "Learned user location: $loc")
+                    Log.i(TAG, "Updated location profile field")
                 }
             }
 
@@ -341,7 +341,7 @@ class MemoryManager(
                         key = "user_profession",
                         value = job
                     )
-                    Log.i(TAG, "Learned user profession: $job")
+                    Log.i(TAG, "Updated profession profile field")
                 }
             }
 
@@ -358,7 +358,7 @@ class MemoryManager(
                         key = "favorite_song",
                         value = song
                     )
-                    Log.i(TAG, "Learned user's favorite song: $song")
+                    Log.i(TAG, "Updated favorite-song profile field")
                 }
             }
 
@@ -374,7 +374,7 @@ class MemoryManager(
                         key = "favorite_app",
                         value = app
                     )
-                    Log.i(TAG, "Learned user's favorite app: $app")
+                    Log.i(TAG, "Updated favorite-app profile field")
                 }
             }
 
@@ -391,7 +391,7 @@ class MemoryManager(
                         key = "relation_$name",
                         value = relation
                     )
-                    Log.i(TAG, "Learned personal relationship: $name is $relation")
+                    Log.i(TAG, "Learned a personal relationship (identifiers omitted)")
                 }
             }
 
@@ -407,7 +407,7 @@ class MemoryManager(
                         key = "pref_${topic.take(20)}",
                         value = prefValue
                     )
-                    Log.i(TAG, "Learned general preference: $topic -> $prefValue")
+                    Log.i(TAG, "Learned a general preference (content omitted)")
                 }
             }
         }
