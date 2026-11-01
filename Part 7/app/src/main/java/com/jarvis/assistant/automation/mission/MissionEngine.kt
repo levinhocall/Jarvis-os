@@ -402,6 +402,14 @@ object MissionEngine {
         return@withLock mission
     }
 
+    private fun requiresWhatsAppProfileChoice(context: Context?, appNumber: Int?): Boolean {
+        if (context == null) return false
+        val matches = com.jarvis.assistant.util.AppLauncher.findMatchingApps(context, "WhatsApp")
+        val isDual = matches.size >= 2 ||
+            (matches.isNotEmpty() && com.jarvis.assistant.util.AppLauncher.isDualAppEnabled(context, matches[0].packageName))
+        return (isDual && appNumber == null) || (!isDual && appNumber != null && appNumber != 1)
+    }
+
     /**
      * Plans a structured mission from natural language intent using authorized tools only.
      * Detects ambiguities and generates explicit clarification requests when inputs are missing.
@@ -435,9 +443,18 @@ object MissionEngine {
                     missingField = "message"
                 )
             } else {
-                requiresApproval = true
-                approvalPrompt = "Send WhatsApp message to '$contact' saying: '$msg'?"
-                steps.add(
+                val appNumber = userConstraints.firstNotNullOfOrNull {
+                    it.removePrefix("app_number=").toIntOrNull()
+                }
+                if (requiresWhatsAppProfileChoice(context, appNumber)) {
+                    clarification = ClarificationRequest(
+                        question = "Which WhatsApp profile should I use? Please specify WhatsApp 1 or WhatsApp 2.",
+                        missingField = "app_number"
+                    )
+                } else {
+                    requiresApproval = true
+                    approvalPrompt = "Send WhatsApp message to '$contact' saying: '$msg'?"
+                    steps.add(
                     MissionStep(
                         title = "Prepare WhatsApp message",
                         description = "Validate recipient and draft message content",
@@ -455,15 +472,14 @@ object MissionEngine {
                         parameters = buildMap {
                             put("contact", contact)
                             put("message", msg)
-                            userConstraints.firstNotNullOfOrNull {
-                                it.removePrefix("app_number=").toIntOrNull()
-                            }?.let { put("app_number", it) }
+                            if (appNumber != null) put("app_number", appNumber)
                         },
                         riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
                         isIdempotent = false,
                         expectedEvidence = "Message sent checkmark or chat dispatch"
                     )
                 )
+                }
             }
         }
         // 2. WhatsApp voice/video calls are consequential and always require explicit approval.
@@ -483,9 +499,15 @@ object MissionEngine {
                 val appNumber = userConstraints.firstNotNullOfOrNull {
                     it.removePrefix("app_number=").toIntOrNull()
                 }
-                requiresApproval = true
-                approvalPrompt = "Start a WhatsApp $callType call with '$query'?"
-                steps.add(
+                if (requiresWhatsAppProfileChoice(context, appNumber)) {
+                    clarification = ClarificationRequest(
+                        question = "Which WhatsApp profile should I use for this call? Please specify WhatsApp 1 or WhatsApp 2.",
+                        missingField = "app_number"
+                    )
+                } else {
+                    requiresApproval = true
+                    approvalPrompt = "Start a WhatsApp $callType call with '$query'?"
+                    steps.add(
                     MissionStep(
                         title = "Start WhatsApp $callType call",
                         description = "Open WhatsApp call action for '$query' only after explicit user approval",
@@ -500,6 +522,7 @@ object MissionEngine {
                         expectedEvidence = "WhatsApp call interface opened; connection state remains unverified"
                     )
                 )
+                }
             }
         }
         // 3. Ambiguity Detection: Phone Call
