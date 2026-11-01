@@ -22,12 +22,15 @@ class TriggerWorker(
     override suspend fun doWork(): Result {
         val goal = inputData.getString("goal")?.trim().orEmpty()
         val triggerId = inputData.getString("triggerId").orEmpty()
-        val triggerType = inputData.getString("triggerType").orEmpty()
+        val inputTriggerType = inputData.getString("triggerType").orEmpty()
         val isUnattended = inputData.getBoolean("isUnattended", false)
         if (goal.isBlank()) return Result.failure()
 
         val app = applicationContext as? JarvisApp
             ?: return Result.failure()
+        val triggerType = inputTriggerType.ifBlank {
+            app.triggerRepository.getTrigger(triggerId)?.triggerType?.name.orEmpty()
+        }
 
         // Scheduled work must not silently become autonomous execution. A non-unattended
         // trigger becomes a private reminder; the user opens JARVIS and starts it manually.
