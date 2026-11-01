@@ -18,8 +18,14 @@ class GeminiLiveWebSocket(
     private val model: String,
     private val voiceName: String,
     private val systemPrompt: String,
-    private val listener: Listener
+    private val listener: Listener,
+    private val apiKeyProvider: () -> String = { apiKey },
+    private val onApiKeyRateLimited: (String) -> Unit = {},
+    private val onApiKeyInvalid: (String) -> Unit = {},
+    private val onApiKeySuccess: (String) -> Unit = {}
 ) {
+    @Volatile private var activeApiKey: String = apiKey
+    private var reconnectAttempts: Int = 0
     interface Listener {
         fun onConnectionStateChanged(status: String)
         fun onAudioDataReceived(pcmData: ByteArray)
@@ -33,6 +39,9 @@ class GeminiLiveWebSocket(
 
     companion object {
         private const val TAG = "GeminiLiveWebSocket"
+        private const val MAX_RECONNECT_ATTEMPTS = 8
+        private const val BASE_RECONNECT_DELAY_MS = 1_000L
+        private const val MAX_RECONNECT_DELAY_MS = 60_000L
         // Shared OkHttpClient across all sessions — reuses connection pool, DNS cache, and TLS sessions
         private val sharedClient = OkHttpClient.Builder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -102,12 +111,14 @@ class GeminiLiveWebSocket(
     }
 
     private fun initiateConnection() {
-        if (apiKey.isBlank()) {
+        val selectedApiKey = runCatching { apiKeyProvider().trim() }.getOrDefault("")
+        if (selectedApiKey.isBlank()) {
             Log.e(TAG, "Gemini API Key is empty. Aborting connection.")
             listener.onError("Gemini API Key is missing. Please configure it in Settings.", isFatal = true, errorCode = "API_KEY_MISSING")
             listener.onConnectionStateChanged("OFFLINE")
             return
         }
+        activeApiKey = selectedApiKey
 
         listener.onConnectionStateChanged("CONNECTING...")
 
@@ -116,7 +127,7 @@ class GeminiLiveWebSocket(
             // access logs. Gemini accepts the key through the x-goog-api-key header.
             val request = Request.Builder()
                 .url(GeminiConstants.WS_BASE_URL)
-                .header("x-goog-api-key", apiKey)
+                .header("x-goog-api-key", activeApiKey)
                 .build()
 
             webSocket = client.newWebSocket(request, object : WebSocketListener() {
@@ -150,22 +161,25 @@ class GeminiLiveWebSocket(
                     stopTimers()
 
                     val isApiKeyError = reason.contains("API_KEY_INVALID", ignoreCase = true) ||
-                                       reason.contains("API key not valid", ignoreCase = true) ||
-                                       reason.contains("API key", ignoreCase = true) ||
-                                       reason.contains("key invalid", ignoreCase = true)
+                        reason.contains("API key not valid", ignoreCase = true) ||
+                        reason.contains("invalid API key", ignoreCase = true)
                     if (isApiKeyError) {
-                        Log.e(TAG, "Gemini rejected session due to invalid API key (code=$code)")
-                        listener.onError("Invalid API Key: Google rejected the key. Please verify your Gemini API key in Settings.", isFatal = true, errorCode = "API_KEY_INVALID")
+                        runCatching { onApiKeyInvalid(activeApiKey) }
+                        Log.e(TAG, "Gemini explicitly rejected the active API credential (code=$code)")
+                        listener.onError("Google explicitly rejected this Gemini API key. Check the key and project restrictions.", isFatal = true, errorCode = "API_KEY_INVALID")
                         listener.onConnectionStateChanged("ERROR • INVALID KEY")
+                        if (!isManuallyStopped.get()) scheduleReconnect()
                         return
                     }
 
                     val isQuotaError = reason.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
-                                       reason.contains("quota", ignoreCase = true)
+                        reason.contains("quota", ignoreCase = true)
                     if (isQuotaError) {
-                        Log.w(TAG, "Gemini rate-limited or connection collision (code=$code). Retrying in cooldown...")
+                        runCatching { onApiKeyRateLimited(activeApiKey) }
+                        Log.w(TAG, "Gemini rate-limited the active key (code=$code). Rotating/retrying with bounded backoff.")
+                        listener.onError("Gemini rate limit or quota was reached. JARVIS will retry using an available key.", isFatal = false, errorCode = "QUOTA_EXCEEDED")
                         listener.onConnectionStateChanged("COOLDOWN • RETRYING")
-                        scheduleReconnect()
+                        scheduleReconnect(minDelayMs = 5_000L)
                         return
                     }
 
@@ -194,43 +208,61 @@ class GeminiLiveWebSocket(
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     val code = response?.code ?: 0
+                    val retryAfterMs = response?.header("Retry-After")?.toLongOrNull()?.let { (it * 1_000L).coerceAtMost(MAX_RECONNECT_DELAY_MS) }
                     val responseBody = try { response?.body?.string() } catch (_: Exception) { null }
+                    response?.close()
                     val errorMsg = t.message ?: "WebSocket connection failure"
                     Log.e(TAG, "WebSocket failure: httpStatus=$code, errorType=${t.javaClass.simpleName}")
                     isConnected.set(false)
                     isSetupComplete.set(false)
                     stopTimers()
 
-                    val isApiKeyError = code == 400 || code == 401 || code == 403 ||
-                            errorMsg.contains("400") || errorMsg.contains("403") || errorMsg.contains("401") ||
-                            errorMsg.contains("API_KEY_INVALID", ignoreCase = true) ||
-                            errorMsg.contains("API key not valid", ignoreCase = true) ||
-                            (responseBody?.contains("API_KEY_INVALID", ignoreCase = true) == true) ||
-                            (responseBody?.contains("API key not valid", ignoreCase = true) == true)
+                    val bodyExplicitlyRejectsKey =
+                        responseBody?.contains("API_KEY_INVALID", ignoreCase = true) == true ||
+                        responseBody?.contains("API key not valid", ignoreCase = true) == true ||
+                        responseBody?.contains("invalid API key", ignoreCase = true) == true
+                    val isApiKeyError = code == 401 || bodyExplicitlyRejectsKey ||
+                        errorMsg.contains("API_KEY_INVALID", ignoreCase = true) ||
+                        errorMsg.contains("API key not valid", ignoreCase = true)
 
                     val isQuotaError = code == 429 ||
-                            errorMsg.contains("429") ||
-                            errorMsg.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
-                            errorMsg.contains("quota", ignoreCase = true) ||
-                            (responseBody?.contains("RESOURCE_EXHAUSTED", ignoreCase = true) == true)
+                        responseBody?.contains("RESOURCE_EXHAUSTED", ignoreCase = true) == true ||
+                        errorMsg.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                        errorMsg.contains("quota", ignoreCase = true)
 
                     if (isApiKeyError) {
-                        Log.e(TAG, "Fatal failure: Invalid API Key (HTTP $code)")
-                        listener.onError("Invalid API Key: Google rejected the key. Please verify your Gemini API key in Settings.", isFatal = true, errorCode = "API_KEY_INVALID")
+                        runCatching { onApiKeyInvalid(activeApiKey) }
+                        Log.e(TAG, "Gemini explicitly rejected the active API credential (HTTP $code)")
+                        listener.onError("Google explicitly rejected this Gemini API key. Check the key and project restrictions.", isFatal = true, errorCode = "API_KEY_INVALID")
                         listener.onConnectionStateChanged("ERROR • INVALID KEY")
+                        if (!isManuallyStopped.get()) scheduleReconnect()
+                        return
+                    }
+
+                    if (code == 403 || responseBody?.contains("PERMISSION_DENIED", ignoreCase = true) == true) {
+                        listener.onError("Gemini denied access to this API key or project (HTTP 403). This does not prove the key is invalid; check API enablement, project restrictions and billing.", isFatal = true, errorCode = "API_ACCESS_DENIED")
+                        listener.onConnectionStateChanged("ERROR • ACCESS DENIED")
                         return
                     }
 
                     if (isQuotaError) {
-                        Log.w(TAG, "Quota / rate limit hit (HTTP $code). Retrying in cooldown...")
+                        runCatching { onApiKeyRateLimited(activeApiKey) }
+                        Log.w(TAG, "Gemini quota/rate limit hit (HTTP $code); applying cooldown and bounded retry.")
+                        listener.onError("Gemini rate limit or quota reached. JARVIS will retry using an available key.", isFatal = false, errorCode = "QUOTA_EXCEEDED")
                         listener.onConnectionStateChanged("COOLDOWN • RETRYING")
-                        scheduleReconnect()
+                        scheduleReconnect(minDelayMs = retryAfterMs ?: 5_000L)
+                        return
+                    }
+
+                    if (code == 400) {
+                        listener.onError("Gemini rejected the session request (HTTP 400). Check the selected Live model and request configuration.", isFatal = true, errorCode = "SETUP_REJECTED")
+                        listener.onConnectionStateChanged("ERROR • SETUP REJECTED")
                         return
                     }
 
                     if (!isManuallyStopped.get()) {
-                        listener.onError("Connection lost. Retrying...", isFatal = false, errorCode = "CONNECTION_ERROR")
-                        scheduleReconnect()
+                        listener.onError("Connection lost. Retrying with bounded backoff...", isFatal = false, errorCode = "CONNECTION_ERROR")
+                        scheduleReconnect(minDelayMs = retryAfterMs ?: 0L)
                     } else {
                         listener.onConnectionStateChanged("OFFLINE")
                     }
@@ -728,6 +760,8 @@ class GeminiLiveWebSocket(
             if (json.has("setupComplete")) {
                 Log.i(TAG, "Server acknowledged setup: setupComplete received. Session is now LIVE!")
                 if (!isSetupComplete.getAndSet(true)) {
+                    reconnectAttempts = 0
+                    runCatching { onApiKeySuccess(activeApiKey) }
                     listener.onConnectionStateChanged("LIVE")
                     startSessionRenewal()
                 }
@@ -737,6 +771,8 @@ class GeminiLiveWebSocket(
             // Ensure session is marked ready if server sends content before explicit setupComplete
             if (!isSetupComplete.get() && (json.has("serverContent") || json.has("toolCall"))) {
                 isSetupComplete.set(true)
+                reconnectAttempts = 0
+                runCatching { onApiKeySuccess(activeApiKey) }
                 listener.onConnectionStateChanged("LIVE")
                 startSessionRenewal()
             }
@@ -983,12 +1019,26 @@ class GeminiLiveWebSocket(
         }
     }
 
-    private fun scheduleReconnect() {
+    private fun scheduleReconnect(minDelayMs: Long = 0L) {
+        if (isManuallyStopped.get()) return
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            Log.e(TAG, "Reconnect limit reached ($MAX_RECONNECT_ATTEMPTS); waiting for manual retry.")
+            listener.onError("Gemini could not reconnect after $MAX_RECONNECT_ATTEMPTS attempts. Restart the voice session to try again.", isFatal = false, errorCode = "RECONNECT_EXHAUSTED")
+            listener.onConnectionStateChanged("OFFLINE")
+            return
+        }
+
+        val attempt = ++reconnectAttempts
+        val multiplier = 1L shl (attempt - 1).coerceAtMost(6)
+        val exponentialDelay = (BASE_RECONNECT_DELAY_MS * multiplier).coerceAtMost(MAX_RECONNECT_DELAY_MS)
+        val jitter = (Math.random() * (exponentialDelay / 4L + 1L)).toLong()
+        val delayMs = maxOf(minDelayMs, exponentialDelay + jitter)
+
         reconnectJob?.cancel()
         reconnectJob = coroutineScope?.launch(Dispatchers.IO) {
-            delay(500)
+            Log.i(TAG, "Scheduling reconnect attempt $attempt/$MAX_RECONNECT_ATTEMPTS in ${delayMs}ms.")
+            delay(delayMs)
             if (!isManuallyStopped.get()) {
-                Log.d(TAG, "Attempting auto-reconnect...")
                 initiateConnection()
             }
         }
@@ -1004,6 +1054,7 @@ class GeminiLiveWebSocket(
         stopTimers()
         reconnectJob?.cancel()
         reconnectJob = null
+        reconnectAttempts = 0
         isConnected.set(false)
 
         try {
