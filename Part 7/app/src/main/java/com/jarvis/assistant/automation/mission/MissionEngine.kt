@@ -132,7 +132,7 @@ object MissionEngine {
         userConstraints: List<String> = emptyList()
     ): MissionDefinition = mutex.withLock {
         val planner = llmPlanner
-        if (planner != null && planner.isAvailable()) {
+        if (planner != null && planner.isAvailable() && planner.isProviderReady()) {
             val missionId = java.util.UUID.randomUUID().toString()
             val initialMission = MissionDefinition(
                 missionId = missionId,
@@ -156,12 +156,21 @@ object MissionEngine {
                     Pair(success && evidence.isVerified, evidence.details)
                 }
 
+                val awaitingApproval = result.abortReason == "APPROVAL_REQUIRED"
                 val convertedSteps = result.history.map { h ->
+                    val isPendingApprovalStep = awaitingApproval &&
+                        h.toolName == result.pendingApprovalTool &&
+                        !h.isVerified
                     MissionStep(
                         title = "Step ${h.stepIndex}: ${h.toolName}",
                         toolName = h.toolName,
                         parameters = h.arguments,
-                        status = if (h.isVerified) MissionStepStatus.COMPLETED else MissionStepStatus.FAILED,
+                        riskLevel = if (isPendingApprovalStep) MissionRisk.HIGH_CONSEQUENTIAL else MissionRisk.LOW,
+                        status = when {
+                            h.isVerified -> MissionStepStatus.COMPLETED
+                            isPendingApprovalStep -> MissionStepStatus.PENDING
+                            else -> MissionStepStatus.UNVERIFIED
+                        },
                         verificationEvidence = MissionVerificationEvidence(
                             evidenceType = if (h.isVerified) EvidenceType.EXTERNAL_API_ACKNOWLEDGED else EvidenceType.UNVERIFIED,
                             isVerified = h.isVerified,
@@ -170,22 +179,28 @@ object MissionEngine {
                     )
                 }
 
-                val finalStatus = if (result.isSuccess) {
-                    MissionOverallStatus.COMPLETED
-                } else if (result.history.any { !it.isVerified }) {
-                    MissionOverallStatus.UNVERIFIED
-                } else {
-                    MissionOverallStatus.FAILED
+                val allStepsVerified = convertedSteps.isNotEmpty() &&
+                    convertedSteps.all { it.status == MissionStepStatus.COMPLETED && it.verificationEvidence?.isVerified == true }
+                val finalStatus = when {
+                    awaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
+                    result.isSuccess && allStepsVerified -> MissionOverallStatus.COMPLETED
+                    result.history.any { !it.isVerified } || result.isSuccess -> MissionOverallStatus.UNVERIFIED
+                    else -> MissionOverallStatus.FAILED
                 }
 
                 val completedMission = initialMission.copy(
                     steps = convertedSteps,
                     status = finalStatus,
+                    approvalState = if (awaitingApproval) MissionApprovalState.PENDING_APPROVAL else MissionApprovalState.NOT_REQUIRED,
+                    approvalPrompt = if (awaitingApproval) result.summary else null,
                     outcomeSummary = result.summary,
                     updatedAt = System.currentTimeMillis()
                 )
                 _activeMission.value = completedMission
-                persistMission(completedMission, convertedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0))
+                val pendingIndex = convertedSteps.indexOfFirst { it.status == MissionStepStatus.PENDING }
+                val nextIndex = if (pendingIndex >= 0) pendingIndex else
+                    convertedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0)
+                persistMission(completedMission, nextIndex)
             }
             return@withLock initialMission
         }
@@ -519,6 +534,15 @@ object MissionEngine {
             }
 
             var currentStep = updatedSteps[index]
+
+            // Resume only from work that has not already been verified. This prevents
+            // approval/recovery from repeating completed actions, including idempotent ones.
+            if (currentStep.status == MissionStepStatus.COMPLETED &&
+                currentStep.verificationEvidence?.isVerified == true
+            ) {
+                completedCount++
+                continue
+            }
 
             // 1. Idempotency Check: Skip already completed non-idempotent steps
             if (!currentStep.isIdempotent && completedNonIdempotentSteps.contains(currentStep.stepId)) {
