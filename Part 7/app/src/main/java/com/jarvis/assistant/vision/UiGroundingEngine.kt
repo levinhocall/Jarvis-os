@@ -4,6 +4,7 @@ import android.graphics.PointF
 import android.graphics.Rect
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
+import com.jarvis.assistant.core.world.WorldModelCoordinator
 import java.util.Locale
 import kotlin.math.abs
 
@@ -85,7 +86,14 @@ class UiGroundingEngine {
 
     companion object {
         private const val TAG = "UiGroundingEngine"
+        private val sensitiveValuePattern = Regex("""^\\s*(?:\\d{4,8}|(?:\\d[ -]?){13,19})\\s*$""")
+        private val sensitiveLabelPattern = Regex(
+            """\\b(password|passcode|pin|otp|verification code|security code|cvv|card number|account number)\\b""",
+            RegexOption.IGNORE_CASE
+        )
     }
+
+    private var lastWorldModelPackage: String = ""
 
     /**
      * Extracts all interactive or descriptive elements currently visible on the screen.
@@ -169,6 +177,33 @@ class UiGroundingEngine {
             Log.e(TAG, "Error traversing accessibility tree: ${e.message}")
         }
 
+        val foregroundPackage = root.packageName?.toString().orEmpty()
+        if (foregroundPackage.isNotBlank()) {
+            if (lastWorldModelPackage.isNotBlank() &&
+                !lastWorldModelPackage.equals(foregroundPackage, ignoreCase = true)
+            ) {
+                WorldModelCoordinator.onNavigation(foregroundPackage)
+            }
+            lastWorldModelPackage = foregroundPackage
+
+            // Never send editable values or credential-like labels into contextual world memory.
+            val visibleLabels = elements.asSequence()
+                .filterNot { it.isEditable || it.isPassword }
+                .map { it.primaryLabel.trim() }
+                .filter { label ->
+                    label.isNotBlank() &&
+                        !sensitiveLabelPattern.containsMatchIn(label) &&
+                        !sensitiveValuePattern.matches(label)
+                }
+                .distinct()
+                .take(80)
+                .toList()
+            WorldModelCoordinator.updateScreenObservation(
+                foregroundPackage = foregroundPackage,
+                visibleLabels = visibleLabels,
+                containsPasswordFields = elements.any { it.isPassword }
+            )
+        }
         return elements
     }
 
