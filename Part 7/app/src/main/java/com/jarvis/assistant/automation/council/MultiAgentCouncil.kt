@@ -42,10 +42,18 @@ object MultiAgentCouncil {
      * Enforces role-based tool authorization: Only EXECUTOR may invoke state-mutating tools.
      */
     fun isToolAuthorizedForRole(role: AgentRole, toolName: String): Boolean {
+        val canonicalName = ToolRegistry.resolveToolName(toolName)
+        val registeredTool = ToolRegistry.getTool(canonicalName) ?: return false
         return when (role) {
-            AgentRole.EXECUTOR -> true // Executor has full tool execution authority
-            AgentRole.RESEARCHER -> !mutatingTools.contains(toolName) // Read-only research tools only
-            AgentRole.PLANNER, AgentRole.VERIFIER, AgentRole.LEAD_SYNTHESIZER -> false // No direct tool execution
+            AgentRole.EXECUTOR -> true // Executor may invoke only registered tools.
+            AgentRole.RESEARCHER -> {
+                val isExplicitlyMutating = canonicalName in mutatingTools
+                !isExplicitlyMutating &&
+                    registeredTool.riskLevel == MissionRisk.LOW &&
+                    registeredTool.isIdempotent &&
+                    !registeredTool.requiresAccessibility
+            }
+            AgentRole.PLANNER, AgentRole.VERIFIER, AgentRole.LEAD_SYNTHESIZER -> false
         }
     }
 
@@ -232,9 +240,11 @@ object MultiAgentCouncil {
                 break
             }
             val result = if (simulatedExecutor != null) {
+                // Explicit injection is retained for deterministic unit tests only.
                 simulatedExecutor(step)
             } else {
-                Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Executed by council executor"))
+                // Production execution must pass through the central mission executor.
+                MissionEngine.executeStepForCouncil(step, context)
             }
             if (!result.first) {
                 allExecutedSuccessfully = false
