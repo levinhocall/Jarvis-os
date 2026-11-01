@@ -231,6 +231,9 @@ object MissionEngine {
         if (_activeMission.value?.let { it.missionId == baseMission.missionId && it.status == MissionOverallStatus.CANCELLED } == true) {
             return
         }
+        val cancellationRequested = _activeMission.value?.let {
+            it.missionId == baseMission.missionId && it.outcomeSummary?.contains("cancellation requested", ignoreCase = true) == true
+        } == true
         val awaitingApproval = result.abortReason == "APPROVAL_REQUIRED"
         val convertedSteps = result.history.map { record ->
             val isPendingApprovalStep = awaitingApproval &&
@@ -261,6 +264,7 @@ object MissionEngine {
                     it.verificationEvidence?.isVerified == true
             }
         val finalStatus = when {
+            cancellationRequested -> MissionOverallStatus.CANCELLED
             awaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
             result.abortReason == "CLARIFICATION_REQUIRED" -> MissionOverallStatus.CLARIFICATION_REQUIRED
             result.abortReason == "CANCELLED" -> MissionOverallStatus.CANCELLED
@@ -274,7 +278,11 @@ object MissionEngine {
             status = finalStatus,
             approvalState = if (awaitingApproval) MissionApprovalState.PENDING_APPROVAL else baseMission.approvalState,
             approvalPrompt = if (awaitingApproval) result.summary else null,
-            outcomeSummary = if (finalStatus == MissionOverallStatus.PAUSED) "LLM planner paused: ${result.summary}" else result.summary,
+            outcomeSummary = when {
+                cancellationRequested -> "Mission cancelled after the current LLM action returned; recorded evidence was preserved."
+                finalStatus == MissionOverallStatus.PAUSED -> "LLM planner paused: ${result.summary}"
+                else -> result.summary
+            },
             updatedAt = System.currentTimeMillis()
         )
         _activeMission.value = updated
