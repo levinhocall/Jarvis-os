@@ -60,9 +60,13 @@ object YouTubeApiClient {
         if (apiKey.isNotBlank()) {
             val encodedQuery = URLEncoder.encode(clean, "UTF-8")
             val url = "https://www.googleapis.com/youtube/v3/search" +
-                    "?part=snippet&type=video&maxResults=1&q=$encodedQuery&regionCode=IN&key=$apiKey"
+                    "?part=snippet&type=video&maxResults=1&q=$encodedQuery&regionCode=IN"
 
-            val request = Request.Builder().url(url).get().build()
+            val request = Request.Builder()
+                .url(url)
+                .header("x-goog-api-key", apiKey.trim())
+                .get()
+                .build()
 
             try {
                 val response = client.newCall(request).execute()
