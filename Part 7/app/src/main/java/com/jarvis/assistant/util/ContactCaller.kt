@@ -432,8 +432,12 @@ object ContactCaller {
             val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(target.number)}")).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            ActivityLauncherHelper.startActivitySafely(context, intent)
-            CallResult.Success(target, indexUsed, totalCandidates)
+            val launched = ActivityLauncherHelper.startActivitySafely(context, intent)
+            if (launched) {
+                CallResult.Success(target, indexUsed, totalCandidates)
+            } else {
+                CallResult.CallFailed
+            }
         } catch (e: Exception) {
             android.util.Log.e("ContactCaller", "Failed to place call to ${target.name}", e)
             CallResult.CallFailed
