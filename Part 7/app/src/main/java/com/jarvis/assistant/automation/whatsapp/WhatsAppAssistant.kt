@@ -166,14 +166,17 @@ class WhatsAppAssistant(
                 JarvisAccessibilityService.triggerWhatsAppSend(message)
             }
 
-            ActivityLauncherHelper.startActivitySafely(context, intent)
+            val launched = ActivityLauncherHelper.startActivitySafely(context, intent)
+            if (!launched) {
+                return "Could not open WhatsApp. The draft for ${draft.contactName} is still saved and no message was sent."
+            }
 
             val recipient = draft.contactName
             pendingDraft = null
             if (isA11yActive) {
-                "Sending WhatsApp message to $recipient."
+                "Opened WhatsApp and queued the send action for $recipient. Delivery is not yet verified."
             } else {
-                "Opening WhatsApp with your message for $recipient. Tap Send to send it, or enable JARVIS in Accessibility Settings for automatic sending."
+                "Opened WhatsApp with your message for $recipient. Tap Send to send it; no message has been sent yet."
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send WhatsApp message: ${e.message}", e)
@@ -254,8 +257,16 @@ class WhatsAppAssistant(
                 }
             }
 
-            ActivityLauncherHelper.startActivitySafely(context, intent)
-            "Starting WhatsApp $callType to ${contact.name}."
+            val launched = ActivityLauncherHelper.startActivitySafely(context, intent)
+            if (!launched) {
+                "Could not open WhatsApp for the $callType. The call was not started."
+            } else if (callDataUri != null) {
+                "Opened WhatsApp's $callType action for ${contact.name}; connection is not confirmed."
+            } else if (JarvisAccessibilityService.instance != null) {
+                "Opened WhatsApp and queued the $callType action for ${contact.name}; connection is not confirmed."
+            } else {
+                "Opened the WhatsApp chat for ${contact.name}, but the $callType was not started because Accessibility is unavailable."
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start WhatsApp call: ${e.message}", e)
             "Could not initiate WhatsApp call."
@@ -283,10 +294,13 @@ class WhatsAppAssistant(
                 val launchIntent = context.packageManager.getLaunchIntentForPackage(WHATSAPP_PACKAGE)?.apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 }
-                if (launchIntent != null) {
-                    ActivityLauncherHelper.startActivitySafely(context, launchIntent)
+                if (JarvisAccessibilityService.instance == null) {
+                    return "JARVIS Accessibility is not connected; no WhatsApp message was deleted."
                 }
-                "Deleting the last message $callType."
+                if (launchIntent == null || !ActivityLauncherHelper.startActivitySafely(context, launchIntent)) {
+                    return "Could not open WhatsApp; no message was deleted."
+                }
+                "Opened the current WhatsApp chat and queued a delete action $callType. Deletion is not yet verified."
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete WhatsApp message: ${e.message}", e)
                 "Could not open WhatsApp to delete the message."
@@ -320,8 +334,14 @@ class WhatsAppAssistant(
                 setPackage(WHATSAPP_PACKAGE)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            ActivityLauncherHelper.startActivitySafely(context, intent)
-            "Deleting the last message $callType in the chat with $cleanContact."
+            val launched = ActivityLauncherHelper.startActivitySafely(context, intent)
+            if (!launched) {
+                "Could not open the chat with $cleanContact; no message was deleted."
+            } else if (JarvisAccessibilityService.instance == null) {
+                "Opened the chat with $cleanContact, but JARVIS Accessibility is not connected; no delete action was queued."
+            } else {
+                "Opened the chat with $cleanContact and queued a delete action $callType. Deletion is not yet verified."
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open chat to delete WhatsApp message: ${e.message}", e)
             "Could not open the chat with $cleanContact to delete the message."
