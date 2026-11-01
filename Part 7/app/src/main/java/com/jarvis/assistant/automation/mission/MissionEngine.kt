@@ -8,6 +8,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.Locale
@@ -42,6 +43,21 @@ object MissionEngine {
     // Persistent Room DAO for survivable missions across process death and reboots
     var missionDao: com.jarvis.assistant.data.mission.MissionDao? = null
     private val gson = com.google.gson.Gson()
+
+    private fun hasBlockingMission(): Boolean {
+        val current = _activeMission.value ?: return false
+        return current.status !in setOf(
+            MissionOverallStatus.COMPLETED,
+            MissionOverallStatus.FAILED,
+            MissionOverallStatus.CANCELLED
+        )
+    }
+
+    private fun blockedMission(goal: String): MissionDefinition = MissionDefinition(
+        goal = goal,
+        status = MissionOverallStatus.FAILED,
+        outcomeSummary = "A previous mission is still active or requires manual review. This request was not started."
+    )
 
     suspend fun persistMission(mission: MissionDefinition, currentStepIdx: Int = 0) {
         val dao = missionDao ?: return
@@ -156,6 +172,7 @@ object MissionEngine {
         goal: String,
         userConstraints: List<String> = emptyList()
     ): MissionDefinition = mutex.withLock {
+        if (hasBlockingMission()) return@withLock blockedMission(goal)
         val planner = llmPlanner
         if (planner != null && planner.isAvailable() && planner.isProviderReady()) {
             val missionId = java.util.UUID.randomUUID().toString()
@@ -446,6 +463,7 @@ object MissionEngine {
         requiresApproval: Boolean = false,
         approvalPrompt: String? = null
     ): MissionDefinition = mutex.withLock {
+        if (hasBlockingMission()) return@withLock blockedMission(goal)
         val cleanGoal = goal.trim()
         if (cleanGoal.isBlank() || steps.isEmpty()) {
             val rejected = MissionDefinition(
