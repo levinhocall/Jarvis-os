@@ -546,8 +546,11 @@ class VisualTaskOrchestrator(
         val initialRoot = service.getActiveRootNode()
         val visibleScreenText = groundingEngine.scanScreen(initialRoot)
             .joinToString(" ") { it.primaryLabel }
+        val initialPackage = initialRoot?.packageName?.toString().orEmpty().lowercase(Locale.ROOT)
         val requiresConsent = isSensitiveTarget(targetName, description) ||
-            UserConsentPolicy.requiresExplicitConfirmation(targetName, description, visibleScreenText)
+            UserConsentPolicy.requiresExplicitConfirmation(
+                targetName, description, visibleScreenText, initialPackage
+            )
         if (requiresConsent) {
             return@withContext TaskActionResult(
                 success = false,
@@ -562,7 +565,6 @@ class VisualTaskOrchestrator(
 
         // A stale or confused model must not send an email just because it found a
         // button labelled Send. Require the active user task to explicitly request it.
-        val initialPackage = initialRoot?.packageName?.toString().orEmpty().lowercase(Locale.ROOT)
         val normalizedTarget = targetName.lowercase(Locale.ROOT).trim()
         val isGmailSend = initialPackage.contains("com.google.android.gm") &&
             (normalizedTarget == "send" || normalizedTarget == "send email" || normalizedTarget == "send message")
