@@ -80,6 +80,7 @@ object MissionEngine {
         val current = _activeMission.value ?: return false
         return current.status !in setOf(
             MissionOverallStatus.COMPLETED,
+            MissionOverallStatus.PARTIALLY_COMPLETED,
             MissionOverallStatus.FAILED,
             MissionOverallStatus.CANCELLED
         )
