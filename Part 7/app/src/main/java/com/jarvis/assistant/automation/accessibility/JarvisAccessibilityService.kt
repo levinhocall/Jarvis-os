@@ -2081,7 +2081,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             Regex("\\b(password|passcode|pass phrase|passphrase|otp|one[- ]time code|verification code|security code)\\b"),
             Regex("\\b(pin|upi pin|cvv|cvc|card number|credit card|debit card)\\b"),
             Regex("\\b(bank account|account number|beneficiary|ifsc|recovery phrase|seed phrase|private key|wallet phrase)\\b"),
-            Regex("\\b(payment amount|transfer amount|upi id)\\b")
+            Regex("\\b(amount|bank|beneficiary|upi|upi id|ifsc|routing number|sort code|swift code|payment amount|transfer amount)\\b")
         )
         return sensitivePatterns.any { it.containsMatchIn(label) }
     }
