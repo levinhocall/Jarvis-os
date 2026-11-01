@@ -127,10 +127,11 @@ class OfflineIntelligenceCoordinator {
             unsupportedFeature = "Full Cloud Reasoning / Web Browsing",
             userFeedback = "Network is unavailable. I cannot perform complex cloud reasoning or browse external websites right now.",
             availableOfflineAlternatives = listOf(
-                "Control hardware (flashlight, volume, wifi toggles)",
-                "Save and search local notes",
-                "Set timers and alarms",
-                "Lookup saved local facts"
+                "Control the flashlight and supported volume/brightness settings",
+                "Read local battery, time and network status",
+                "Open an installed app",
+                "Save and search local notes when persistent app storage is available",
+                "Look up previously saved local facts"
             )
         )
     }
