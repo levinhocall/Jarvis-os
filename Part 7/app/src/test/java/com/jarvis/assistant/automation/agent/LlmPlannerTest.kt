@@ -239,6 +239,32 @@ class LlmPlannerTest {
     }
 
     @Test
+    fun testCancellationDuringPlanningPreventsNextToolInvocation() = runBlocking {
+        lateinit var planner: LlmPlanner
+        var executionCount = 0
+        val provider = object : LlmFunctionCallProvider {
+            override val providerId: String = "cancel-during-plan-test"
+            override suspend fun isAvailable(): Boolean = true
+            override suspend fun predictStep(
+                goal: String,
+                history: List<LlmPlannerStepRecord>,
+                availableTools: List<ToolDefinition>
+            ): LlmStepDecision {
+                planner.cancel()
+                return LlmStepDecision.InvokeTool("search_web", mapOf("query" to "must not run"))
+            }
+        }
+        planner = LlmPlanner(provider)
+        val result = planner.planAndExecute("Cancel before execution") { _, _ ->
+            executionCount++
+            Pair(true, "Unexpected execution")
+        }
+
+        assertEquals("CANCELLED", result.abortReason)
+        assertEquals(0, executionCount)
+    }
+
+    @Test
     fun testCancellationViaKillSwitch() = runBlocking {
         val provider = FakeScriptedProvider { _, _ ->
             LlmStepDecision.InvokeTool("search_web", mapOf("query" to "test"))
