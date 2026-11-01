@@ -6,6 +6,7 @@ import android.util.Base64
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
 import com.jarvis.assistant.data.memory.RecallCoreManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -144,6 +145,8 @@ object CameraVisionAnalyzer {
                     title = "Neural Lens"
                 )
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             Log.e(TAG, "Image analysis failed", error)
             CameraVisionResult(
