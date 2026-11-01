@@ -28,7 +28,7 @@ data class ScheduledTrigger(
     val dailyHour: Int = 8,
     val dailyMinute: Int = 0,
     val keywordFilter: String? = null,
-    val isUnattended: Boolean = true,
+    val isUnattended: Boolean = false,
     val isEnabled: Boolean = true
 )
 
@@ -201,6 +201,7 @@ class TriggerRepository(
         "triggerId" to trigger.triggerId,
         "goal" to trigger.goalOrAction,
         "isUnattended" to trigger.isUnattended,
+        "triggerType" to trigger.triggerType.name,
         "triggerType" to trigger.triggerType.name
     )
 
