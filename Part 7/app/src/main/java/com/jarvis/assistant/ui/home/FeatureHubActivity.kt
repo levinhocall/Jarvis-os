@@ -72,7 +72,10 @@ class FeatureHubActivity : AppCompatActivity() {
                 .setTitle("Mission Control")
                 .setMessage(message)
                 .setPositiveButton("Close", null)
-            if (mission?.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING) {
+            if (mission?.status in setOf(
+                    com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING,
+                    com.jarvis.assistant.automation.mission.MissionOverallStatus.VERIFYING
+                )) {
                 dialog.setNeutralButton("Pause Mission") { _, _ ->
                     lifecycleScope.launch {
                         val paused = com.jarvis.assistant.automation.mission.MissionEngine.pauseMission(mission.missionId)
