@@ -106,11 +106,12 @@ class GeminiEmbeddingProvider(
         if (apiKey.isNullOrBlank()) return null
 
         return try {
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=$apiKey"
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
             val url = URL(endpoint)
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("x-goog-api-key", apiKey.trim())
             conn.doOutput = true
             conn.connectTimeout = 5000
             conn.readTimeout = 5000
