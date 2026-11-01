@@ -160,6 +160,16 @@ class GeminiLiveWebSocket(
                     isSetupComplete.set(false)
                     stopTimers()
 
+                    if (reason.contains("API_ACCESS_DENIED", ignoreCase = true) ||
+                        reason.contains("PERMISSION_DENIED", ignoreCase = true)) {
+                        listener.onConnectionStateChanged("OFFLINE")
+                        return
+                    }
+                    if (reason.contains("SETUP_REJECTED", ignoreCase = true)) {
+                        listener.onConnectionStateChanged("OFFLINE")
+                        return
+                    }
+
                     val isApiKeyError = reason.contains("API_KEY_INVALID", ignoreCase = true) ||
                         reason.contains("API key not valid", ignoreCase = true) ||
                         reason.contains("invalid API key", ignoreCase = true)
@@ -749,21 +759,19 @@ class GeminiLiveWebSocket(
                     errMsg.contains("quota", ignoreCase = true) ||
                     errCode == 429
                 if (isApiKey) {
-                    runCatching { onApiKeyInvalid(activeApiKey) }
-                    listener.onError("Google explicitly rejected this Gemini API key. Check the key and project restrictions.", isFatal = true, errorCode = "API_KEY_INVALID")
-                    listener.onConnectionStateChanged("ERROR • INVALID KEY")
-                    if (!isManuallyStopped.get()) scheduleReconnect()
+                    // Let onClosed perform key invalidation and the single bounded reconnect.
+                    webSocket?.close(1008, "API_KEY_INVALID")
                 } else if (isQuota) {
-                    runCatching { onApiKeyRateLimited(activeApiKey) }
-                    listener.onError("Gemini API rate limit or quota reached. JARVIS will retry using an available key.", isFatal = false, errorCode = "QUOTA_EXCEEDED")
-                    listener.onConnectionStateChanged("COOLDOWN • RETRYING")
-                    scheduleReconnect(minDelayMs = 5_000L)
+                    // Let onClosed apply the cooldown once and rotate to another available key.
+                    webSocket?.close(1013, "RESOURCE_EXHAUSTED")
                 } else if (errCode == 403 || errStatus.equals("PERMISSION_DENIED", ignoreCase = true)) {
                     listener.onError("Gemini denied access to this API key or project (HTTP 403). This does not prove the key is invalid; check API enablement, project restrictions and billing.", isFatal = true, errorCode = "API_ACCESS_DENIED")
                     listener.onConnectionStateChanged("ERROR • ACCESS DENIED")
+                    webSocket?.close(1008, "API_ACCESS_DENIED")
                 } else if (errCode == 400) {
                     listener.onError("Gemini rejected the request (HTTP 400). Check the selected model and request configuration.", isFatal = true, errorCode = "SETUP_REJECTED")
                     listener.onConnectionStateChanged("ERROR • SETUP REJECTED")
+                    webSocket?.close(1008, "SETUP_REJECTED")
                 } else {
                     listener.onError("Gemini returned an API error (HTTP $errCode).", isFatal = false)
                 }
