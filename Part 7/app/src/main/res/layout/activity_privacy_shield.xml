@@ -56,7 +56,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Zero-Backend • 100% On-Device Security"
+                        android:text="Local-First • Protected Database &amp; Credentials"
                         android:textColor="?attr/themeTextMuted"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -118,7 +118,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="100% PRIVATE • ZERO TRACKING"
+                        android:text="LOCAL DATA CONTROL • CLOUD USE DISCLOSED"
                         android:textColor="@color/status_green"
                         android:textSize="10.5sp"
                         android:textStyle="bold"
@@ -178,7 +178,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Your data is on your mobile."
+                            android:text="Your core app data is stored on your device."
                             android:textColor="?attr/themeTextPrimary"
                             android:textSize="16sp"
                             android:textStyle="bold"
@@ -187,7 +187,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Zero external server databases"
+                            android:text="No JARVIS-operated user account database"
                             android:textColor="?attr/themeTextMuted"
                             android:textSize="12sp" />
                     </LinearLayout>
@@ -196,7 +196,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="In this app there is no backend, nothing. This is a process, totally local on your mobile and Gemini for your conversation. That&apos;s all. No owner added his database or any sign-up pages."
+                    android:text="JARVIS stores its conversation history, long-term memory and mission records in its local encrypted database. API credentials use Android Keystore-backed encryption. When cloud AI, web search or external integrations are enabled, relevant prompts, files, images or action data may be sent to the selected provider. Those providers process data under their own privacy terms. JARVIS does not use a JARVIS-operated account database in this build."
                     android:textColor="?attr/themeTextPrimary"
                     android:textSize="14sp"
                     android:lineSpacingExtra="4dp"
@@ -212,7 +212,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="•  No Sign-Up, No Accounts, No Trackers"
+                        android:text="•  No JARVIS sign-up or user account required"
                         android:textColor="?attr/themeTextMuted"
                         android:textSize="12.5sp"
                         android:layout_marginBottom="6dp" />
@@ -228,7 +228,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="•  Direct encrypted TLS 1.3 socket to Gemini Live"
+                        android:text="•  Gemini Live requests use an encrypted network connection; Google processes cloud requests"
                         android:textColor="?attr/themeTextMuted"
                         android:textSize="12.5sp" />
                 </LinearLayout>
@@ -247,10 +247,13 @@
                 android:layout_marginBottom="10dp" />
 
             <LinearLayout
+                android:id="@+id/cardSourceRepository"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/bg_jarvis_card"
+                android:clickable="true"
+                android:focusable="true"
                 android:padding="20dp"
                 android:layout_marginBottom="24dp">
 
@@ -285,7 +288,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Open Source Coming Soon"
+                            android:text="Public Source Repository"
                             android:textColor="?attr/themeTextPrimary"
                             android:textSize="16sp"
                             android:textStyle="bold"
@@ -294,7 +297,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Full code transparency for the community"
+                            android:text="Browse the current JARVIS OS source on GitHub"
                             android:textColor="?attr/themeTextMuted"
                             android:textSize="12sp" />
                     </LinearLayout>
@@ -303,7 +306,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="And in fact, it will be open source soon. Join if you want source code, Telegram discussion group, Instagram, YouTube. You will get a notification soon that it is open sourced."
+                    android:text="The current project source is publicly available on GitHub. Review the repository for the implementation and current development status."
                     android:textColor="?attr/themeTextPrimary"
                     android:textSize="14sp"
                     android:lineSpacingExtra="4dp"
@@ -555,7 +558,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="JARVIS INTELLIGENCE OS • NAZIB\nEngineered with complete local privacy &amp; transparency"
+                android:text="JARVIS INTELLIGENCE OS • NAZIB\nLocal-first storage with explicit cloud-service disclosure"
                 android:textColor="?attr/themeTextMuted"
                 android:textSize="11.5sp"
                 android:lineSpacingExtra="3dp"
