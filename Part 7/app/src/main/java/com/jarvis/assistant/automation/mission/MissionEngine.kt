@@ -1279,7 +1279,18 @@ object MissionEngine {
             updatedSteps[index] = currentStep
             mission = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
             _activeMission.value = mission
-            persistMission(mission, index)
+            if (!persistMission(mission, index)) {
+                currentStep = currentStep.copy(
+                    status = MissionStepStatus.BLOCKED,
+                    failureReason = "The in-flight checkpoint could not be saved. This action was not attempted."
+                )
+                updatedSteps[index] = currentStep
+                finalizeFailure(
+                    mission, updatedSteps, index, currentStep.failureReason!!,
+                    completedCount, unverifiedNotes
+                )
+                return
+            }
 
             // 5. Execute Step with Bounded Retry and Timeout
             var stepSuccess = false
@@ -1409,7 +1420,23 @@ object MissionEngine {
             updatedSteps[index] = currentStep
             mission = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
             _activeMission.value = mission
-            persistMission(mission, index)
+            if (!persistMission(mission, index)) {
+                val persistenceFailure = currentStep.copy(
+                    status = MissionStepStatus.UNVERIFIED,
+                    failureReason = "The action returned, but its result checkpoint could not be saved. Manual review is required."
+                )
+                updatedSteps[index] = persistenceFailure
+                val unresolved = mission.copy(
+                    steps = updatedSteps.toList(),
+                    status = MissionOverallStatus.UNVERIFIED,
+                    outcomeSummary = "Mission stopped because an action result could not be durably saved. No later steps were executed.",
+                    unverifiedDisclaimers = unverifiedNotes + persistenceFailure.failureReason.orEmpty(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                _activeMission.value = unresolved
+                persistMission(unresolved, index)
+                return
+            }
         }
 
         if (cancelRequestedMissions.remove(missionId)) {
