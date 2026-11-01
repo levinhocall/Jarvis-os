@@ -20,20 +20,31 @@ class JarvisUnifiedRuntimeTest {
     }
 
     @Test
-    fun `bootSelfTest reports healthy when all components ready`() {
+    fun `bootSelfTest does not infer readiness from missing runtime context`() {
+        val report = runtime.bootSelfTest()
+
+        assertEquals(SubsystemStatus.DEGRADED, report.overallStatus)
+        assertFalse(report.isAccessibilityReady)
+        assertFalse(report.isVoiceReady)
+        assertFalse(report.isNetworkReady)
+        assertTrue(runtime.isReady())
+        assertTrue(report.diagnostics.all { it.latencyMs >= 1L })
+    }
+
+    @Test
+    fun `bootSelfTest keeps provider and offline store degraded until actually integrated`() {
         val report = runtime.bootSelfTest(
             isAccessibilityServiceConnected = true,
             isAudioRecordPermissionGranted = true,
             isNetworkOnline = true
         )
 
-        assertEquals(SubsystemStatus.HEALTHY, report.overallStatus)
+        assertEquals(SubsystemStatus.DEGRADED, report.overallStatus)
         assertTrue(report.isAccessibilityReady)
         assertTrue(report.isVoiceReady)
         assertTrue(report.isNetworkReady)
-        assertTrue(runtime.isReady())
-        // Verify real measured latency
-        assertTrue(report.diagnostics.all { it.latencyMs >= 1L })
+        assertEquals(SubsystemStatus.DEGRADED, report.diagnostics.first { it.subsystemName == "Cognitive Router & AI Providers" }.status)
+        assertEquals(SubsystemStatus.DEGRADED, report.diagnostics.first { it.subsystemName == "Offline Intelligence Store" }.status)
     }
 
     @Test
