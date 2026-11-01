@@ -6,34 +6,73 @@ import org.junit.Before
 import org.junit.Test
 
 class MissionEngineTest {
+    private val storedMissions = mutableMapOf<String, com.jarvis.assistant.data.mission.MissionEntity>()
+    private val testMissionDao = object : com.jarvis.assistant.data.mission.MissionDao {
+        override suspend fun insertOrUpdate(mission: com.jarvis.assistant.data.mission.MissionEntity) {
+            storedMissions[mission.id] = mission
+        }
+        override suspend fun getMissionById(id: String) = storedMissions[id]
+        override suspend fun getNonTerminalMissions() = storedMissions.values.filter {
+            it.status !in setOf("COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "CANCELLED")
+        }.sortedByDescending { it.updatedAt }
+        override suspend fun getAllMissions() = storedMissions.values.sortedByDescending { it.updatedAt }
+        override suspend fun delete(mission: com.jarvis.assistant.data.mission.MissionEntity) {
+            storedMissions.remove(mission.id)
+        }
+    }
 
     @Before
     fun setUp() {
+        storedMissions.clear()
+        MissionEngine.missionDao = testMissionDao
         runBlocking {
-        MissionEngine.toolExecutor = null
-        MissionEngine.llmPlanner = null
-        MissionEngine.activeMission.value?.let { current ->
-            when (current.status) {
-                MissionOverallStatus.UNVERIFIED -> MissionEngine.acknowledgeUnverifiedMission(current.missionId)
-                else -> if (!current.isFinished) {
-                    MissionEngine.cancelMission(current.missionId, "Test cleanup")
-                    kotlinx.coroutines.withTimeout(3_000L) {
-                        while (MissionEngine.activeMission.value?.status !in setOf(
-                                MissionOverallStatus.CANCELLED,
-                                MissionOverallStatus.COMPLETED,
-                                MissionOverallStatus.FAILED,
-                                MissionOverallStatus.UNVERIFIED
-                            )
-                        ) {
-                            kotlinx.coroutines.delay(20L)
+            MissionEngine.toolExecutor = null
+            MissionEngine.llmPlanner = null
+            MissionEngine.activeMission.value?.let { current ->
+                when (current.status) {
+                    MissionOverallStatus.UNVERIFIED -> MissionEngine.acknowledgeUnverifiedMission(current.missionId)
+                    else -> if (!current.isFinished) {
+                        MissionEngine.cancelMission(current.missionId, "Test cleanup")
+                        kotlinx.coroutines.withTimeout(3_000L) {
+                            while (MissionEngine.activeMission.value?.status !in setOf(
+                                    MissionOverallStatus.CANCELLED,
+                                    MissionOverallStatus.COMPLETED,
+                                    MissionOverallStatus.FAILED,
+                                    MissionOverallStatus.UNVERIFIED
+                                )
+                            ) {
+                                kotlinx.coroutines.delay(20L)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+    @Test
+    fun testMissionDoesNotExecuteWhenDurableCheckpointIsUnavailable() = runBlocking {
+        MissionEngine.missionDao = null
+        var executed = false
+        MissionEngine.toolExecutor = { _, _ ->
+            executed = true
+            true to MissionVerificationEvidence(EvidenceType.TOOL_RESULT_VERIFIED, true, "Test action returned")
+        }
+
+        try {
+            MissionEngine.startMission(null, "Turn flashlight on")
+            kotlinx.coroutines.withTimeout(3_000L) {
+                while (MissionEngine.activeMission.value?.status != MissionOverallStatus.FAILED) {
+                    kotlinx.coroutines.delay(20L)
+                }
+            }
+            assertFalse(executed)
+            assertEquals(MissionOverallStatus.FAILED, MissionEngine.activeMission.value?.status)
+            assertTrue(MissionEngine.activeMission.value?.outcomeSummary?.contains("not attempted", ignoreCase = true) == true)
+        } finally {
+            MissionEngine.missionDao = testMissionDao
+            MissionEngine.toolExecutor = null
         }
     }
-
     @Test
     fun testPlanMission_unambiguousRequest_createsBoundedPlan() {
         val mission = MissionEngine.planMission("Search information for quantum computing")
