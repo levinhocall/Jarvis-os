@@ -17,6 +17,7 @@ class UserConsentPolicyTest {
     fun blocksCommunicationDispatchAndPaymentSubmission() {
         assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Send", null, "Chat with Alex", "com.whatsapp"))
         assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Share", null, "Photo viewer", "com.google.android.apps.photos"))
+        assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Share My Live Location", null, "Telegram location picker", "org.telegram.messenger"))
         assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Send", null, "Email to recipient", "com.android.chrome"))
         assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Delete", null, "Photo details", "com.google.android.apps.photos"))
         assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Submit", null, "Checkout payment amount total", "com.android.chrome"))
