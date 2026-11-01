@@ -110,7 +110,7 @@ class JarvisApp : Application() {
                 apiKeyProvider = {
                     preferences.getNextActiveKey("gemini") ?: preferences.apiKey
                 },
-                modelProvider = { GeminiConstants.MODEL_3_1_FLASH_AGENT }
+                modelProvider = { GeminiConstants.MODEL_3_8_FLASH }
             )
         )
         appScope.launch {
