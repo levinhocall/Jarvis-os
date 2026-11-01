@@ -38,6 +38,14 @@ class AudioRecorder(
     private val lifecycleGeneration = AtomicLong(0L)
     val isMuted = AtomicBoolean(false)
 
+    private fun releaseAudioEffects(reason: String) {
+        val aec = echoCanceler.also { echoCanceler = null }
+        val ns = noiseSuppressor.also { noiseSuppressor = null }
+        val agc = automaticGainControl.also { automaticGainControl = null }
+        runCatching { aec?.release() }.onFailure { Log.w(TAG, "$reason: AEC release failed", it) }
+        runCatching { ns?.release() }.onFailure { Log.w(TAG, "$reason: NoiseSuppressor release failed", it) }
+        runCatching { agc?.release() }.onFailure { Log.w(TAG, "$reason: AGC release failed", it) }
+    }
     @SuppressLint("MissingPermission")
     @Synchronized
     fun start(scope: CoroutineScope): Boolean {
@@ -188,17 +196,7 @@ class AudioRecorder(
                         // after the suspension so a stopped session does not recreate
                         // microphone hardware in the background.
                         if (!isActive || !isRecording.get() || lifecycleGeneration.get() != generation) break
-                        try {
-                            echoCanceler?.release()
-                            noiseSuppressor?.release()
-                            automaticGainControl?.release()
-                        } catch (effectReleaseEx: Exception) {
-                            Log.w(TAG, "Could not release effects before audio recovery: ${effectReleaseEx.message}")
-                        } finally {
-                            echoCanceler = null
-                            noiseSuppressor = null
-                            automaticGainControl = null
-                        }
+                        releaseAudioEffects("Audio recovery")
 
                         try {
                             currentRecord?.release()
@@ -257,24 +255,14 @@ class AudioRecorder(
                             if (!published) {
                                 runCatching { candidate.stop() }
                                 runCatching { candidate.release() }
-                                runCatching { echoCanceler?.release() }
-                                runCatching { noiseSuppressor?.release() }
-                                runCatching { automaticGainControl?.release() }
-                                echoCanceler = null
-                                noiseSuppressor = null
-                                automaticGainControl = null
+                                releaseAudioEffects("Unpublished replacement recorder")
                                 currentRecord = null
                                 break
                             }
                             Log.i(TAG, "AudioRecord recovered with effects rebound to session $newSessionId")
                         } catch (reInitEx: Exception) {
                             try { replacementRecord?.release() } catch (_: Exception) {}
-                            try { echoCanceler?.release() } catch (_: Exception) {}
-                            try { noiseSuppressor?.release() } catch (_: Exception) {}
-                            try { automaticGainControl?.release() } catch (_: Exception) {}
-                            echoCanceler = null
-                            noiseSuppressor = null
-                            automaticGainControl = null
+                            releaseAudioEffects("Failed audio recovery")
                             audioRecord = null
                             currentRecord = null
                             Log.e(TAG, "AudioRecord auto-recovery failed: ${reInitEx.message}", reInitEx)
@@ -289,27 +277,7 @@ class AudioRecorder(
             // already been created. Release every partially initialized resource
             // so a later start() does not inherit a stale session or leak effects.
             isRecording.set(false)
-            try {
-                echoCanceler?.release()
-            } catch (cleanup: Exception) {
-                Log.w(TAG, "AEC cleanup after start failure failed: ${cleanup.message}")
-            } finally {
-                echoCanceler = null
-            }
-            try {
-                noiseSuppressor?.release()
-            } catch (cleanup: Exception) {
-                Log.w(TAG, "NoiseSuppressor cleanup after start failure failed: ${cleanup.message}")
-            } finally {
-                noiseSuppressor = null
-            }
-            try {
-                automaticGainControl?.release()
-            } catch (cleanup: Exception) {
-                Log.w(TAG, "AGC cleanup after start failure failed: ${cleanup.message}")
-            } finally {
-                automaticGainControl = null
-            }
+            releaseAudioEffects("Audio start failure")
             val failedRecorder = audioRecord
             audioRecord = null
             if (failedRecorder != null) {
@@ -341,15 +309,7 @@ class AudioRecorder(
         recordingJob?.cancel()
         recordingJob = null
 
-        runCatching { echoCanceler?.release() }
-            .onFailure { Log.w(TAG, "AcousticEchoCanceler release failed", it) }
-        echoCanceler = null
-        runCatching { noiseSuppressor?.release() }
-            .onFailure { Log.w(TAG, "NoiseSuppressor release failed", it) }
-        noiseSuppressor = null
-        runCatching { automaticGainControl?.release() }
-            .onFailure { Log.w(TAG, "AutomaticGainControl release failed", it) }
-        automaticGainControl = null
+        releaseAudioEffects("Audio stop")
 
         val recorderToRelease = audioRecord
         audioRecord = null
