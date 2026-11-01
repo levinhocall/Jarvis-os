@@ -2835,7 +2835,18 @@ class JarvisConversationService : Service() {
                         autonomousStepCount >= autonomousTaskStepLimit()) {
                         autonomousHardStop = true
                     }
-                    if (autonomousHardStop) {
+                    val requiresConfirmation = result.optBoolean("requires_confirmation", false)
+                    if (requiresConfirmation) {
+                        autonomousWaitingForUser = true
+                        com.jarvis.assistant.automation.agent.AgentTaskEngine.setState(
+                            com.jarvis.assistant.automation.agent.AgentTaskEngine.State.BLOCKED
+                        )
+                        result.put("autonomous_status", "WAITING_FOR_USER")
+                        result.put(
+                            "system_directive",
+                            "CONSENT GATE: This action was blocked because it requires the user's explicit approval. Explain the exact action and its consequence, ask the user to approve or decline, and wait. Do NOT retry, click through, use another tool to bypass the prompt, or claim completion."
+                        )
+                    } else if (autonomousHardStop) {
                         com.jarvis.assistant.automation.agent.AgentTaskEngine.finish(
                             com.jarvis.assistant.automation.agent.AgentTaskEngine.State.FAILED,
                             "Autonomous safety limit reached after repeated failures or actions."
@@ -2844,11 +2855,17 @@ class JarvisConversationService : Service() {
                         result.put("system_directive", "HARD STOP: you are repeating actions or failing repeatedly. Do NOT call any more tools. Tell the user honestly, in one or two short sentences, what you actually completed and what went wrong (do NOT claim success), then wait for their next instruction.")
                     } else if (toolSuccess) {
                         result.put("autonomous_status", "EXECUTED")
-                        result.put("system_directive", "AUTONOMOUS STEP $autonomousStepCount EXECUTED. OVERARCHING GOAL: '$autonomousTaskGoal'$bulkNotice. MANDATE: Inspect the screen. If the OVERARCHING GOAL is not yet 100% finished on screen, you MUST IMMEDIATELY take the next concrete action (click, type, scroll, wait for install/open). NEVER ABANDON THE TASK MID-WAY! NEVER call task_completed until the ultimate goal is fully achieved on screen!")
+                        result.put(
+                            "system_directive",
+                            "AUTONOMOUS STEP $autonomousStepCount EXECUTED. OVERARCHING GOAL: '$autonomousTaskGoal'$bulkNotice. Inspect the latest screen and take the next safe, non-sensitive action only if it is still required. Pause at permission, terms, credential, payment, deletion, account-security, or other consent gates and wait for the user's explicit decision. Never bypass a gate or call task_completed before the final outcome is visibly verified."
+                        )
                     } else {
                         result.put("autonomous_status", "FAILED")
                         val failMsg = result.optString("message", "Action failed")
-                        result.put("system_directive", "CRITICAL WARNING: STEP $autonomousStepCount FAILED ($failMsg). You MUST NOT claim the action succeeded, do NOT say you completed it, and do NOT call task_completed! Either retry the action, tap the field to focus it first, or truthfully inform the user.")
+                        result.put(
+                            "system_directive",
+                            "STEP $autonomousStepCount FAILED ($failMsg). Do not claim success. Inspect the current screen and classify the failure. Retry only if the action is safe and idempotent; otherwise stop and explain the exact blocker to the user."
+                        )
                     }
                 }
 
