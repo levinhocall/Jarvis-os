@@ -94,6 +94,9 @@ class ConversationServiceCollaboratorsTest {
         // Verify no crash on lifecycle shutdown
         pipeline.stopRecording()
         assertFalse(pipeline.isActive)
+        assertTrue(AudioPipelineManager.isFatalReadError(android.media.AudioRecord.ERROR_DEAD_OBJECT))
+        assertTrue(AudioPipelineManager.isFatalReadError(android.media.AudioRecord.ERROR_INVALID_OPERATION))
+        assertFalse(AudioPipelineManager.isFatalReadError(0))
     }
 
     // --- 4. DeviceActionDispatcher Tests ---
