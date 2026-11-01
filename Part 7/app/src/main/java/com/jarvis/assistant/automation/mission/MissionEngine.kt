@@ -243,6 +243,7 @@ object MissionEngine {
             awaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
             result.abortReason == "CLARIFICATION_REQUIRED" -> MissionOverallStatus.CLARIFICATION_REQUIRED
             result.abortReason == "CANCELLED" -> MissionOverallStatus.CANCELLED
+            result.abortReason == "PAUSED" && allStepsVerified -> MissionOverallStatus.PAUSED
             result.isSuccess && allStepsVerified -> MissionOverallStatus.COMPLETED
             result.history.any { !it.isVerified } || result.isSuccess -> MissionOverallStatus.UNVERIFIED
             else -> MissionOverallStatus.FAILED
@@ -252,7 +253,7 @@ object MissionEngine {
             status = finalStatus,
             approvalState = if (awaitingApproval) MissionApprovalState.PENDING_APPROVAL else baseMission.approvalState,
             approvalPrompt = if (awaitingApproval) result.summary else null,
-            outcomeSummary = result.summary,
+            outcomeSummary = if (finalStatus == MissionOverallStatus.PAUSED) "LLM planner paused: ${result.summary}" else result.summary,
             updatedAt = System.currentTimeMillis()
         )
         _activeMission.value = updated
