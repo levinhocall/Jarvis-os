@@ -60,9 +60,9 @@ class NeuralLensActivity : AppCompatActivity() {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
                 if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
-                var sample = 1
-                while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
-                val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = ImageDecodeSizing.sampleSize(bounds.outWidth, bounds.outHeight)
+                }
                 contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
             }
             if (bitmap == null) {
@@ -198,11 +198,11 @@ class NeuralLensActivity : AppCompatActivity() {
                                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                                 BitmapFactory.decodeFile(file.absolutePath, bounds)
                                 if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
-                                var sample = 1
-                                while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
                                 BitmapFactory.decodeFile(
                                     file.absolutePath,
-                                    BitmapFactory.Options().apply { inSampleSize = sample }
+                                    BitmapFactory.Options().apply {
+                                        inSampleSize = ImageDecodeSizing.sampleSize(bounds.outWidth, bounds.outHeight)
+                                    }
                                 )
                             }
                             if (bitmap == null) {
