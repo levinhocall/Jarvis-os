@@ -50,7 +50,7 @@ object UserConsentPolicy {
         val communicationOrSharingSurface = listOf(
             "whatsapp", "telegram", "messenger", "signal", "messages", "messaging",
             "com.google.android.gm", "outlook", "mail", "instagram"
-        ).any(pkg::contains)
+        ).any { token -> pkg.contains(token) }
         val dispatchActions = setOf(
             "send", "send message", "send email", "send now", "forward"
         )
