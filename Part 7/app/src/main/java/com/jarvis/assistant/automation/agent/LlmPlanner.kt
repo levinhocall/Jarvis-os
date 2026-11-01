@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import com.google.gson.JsonElement
 import com.jarvis.assistant.automation.mission.MissionRisk
 import com.jarvis.assistant.automation.mission.ToolDefinition
 import com.jarvis.assistant.automation.mission.ToolRegistry
@@ -112,6 +113,24 @@ object GeminiSchemaConverter {
 }
 
 /**
+ * Preserve JSON types from Gemini function-call arguments. Converting every primitive to a
+ * String breaks tools that require numeric, boolean, list, or nested-object parameters.
+ */
+internal fun JsonElement.toNativeToolValue(): Any? = when {
+    isJsonNull -> null
+    isJsonObject -> asJsonObject.entrySet().associate { (key, value) -> key to value.toNativeToolValue() }
+    isJsonArray -> asJsonArray.map { it.toNativeToolValue() }
+    isJsonPrimitive -> asJsonPrimitive.let { primitive ->
+        when {
+            primitive.isBoolean -> primitive.asBoolean
+            primitive.isNumber -> primitive.asNumber
+            else -> primitive.asString
+        }
+    }
+    else -> null
+}
+
+/**
  * Production Gemini function-calling provider using OkHttp and Gson.
  */
 class GeminiFunctionCallProvider(
@@ -203,8 +222,8 @@ class GeminiFunctionCallProvider(
                     val fnName = fn.get("name")?.asString ?: ""
                     val argsMap = mutableMapOf<String, Any?>()
                     if (fn.has("args") && fn.get("args").isJsonObject) {
-                        fn.getAsJsonObject("args").entrySet().forEach { (k, v) ->
-                            argsMap[k] = if (v.isJsonPrimitive) v.asString else v.toString()
+                        fn.getAsJsonObject("args").entrySet().forEach { (key, value) ->
+                            argsMap[key] = value.toNativeToolValue()
                         }
                     }
 
