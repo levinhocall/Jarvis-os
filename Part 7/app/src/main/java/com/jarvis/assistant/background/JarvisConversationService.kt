@@ -3412,6 +3412,18 @@ class JarvisConversationService : Service() {
                     userText = query.ifEmpty { "Spoken user query" },
                     jarvisText = reply
                 )
+                // Persist the same verified owner turn in the structured Room conversation store.
+                // Keep this off the audio callback so database I/O cannot delay playback teardown.
+                serviceScope.launch(Dispatchers.IO) {
+                    try {
+                        app.conversationRepository.appendTurn(
+                            userText = query.ifEmpty { "Spoken user query" },
+                            assistantText = reply
+                        )
+                    } catch (error: Exception) {
+                        Log.e("JarvisService", "Could not persist structured conversation turn", error)
+                    }
+                }
             }
         }
         currentTurnAssistantText.clear()
