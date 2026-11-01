@@ -84,7 +84,7 @@ object YouTubeController {
             val played = playVideoId(context, videoId)
             if (played) {
                 android.util.Log.i("YouTubeController", "Successfully launched direct video playback for $videoId ($title)")
-                return PlayResult(true, title, "Playing \"$title\" on YouTube.")
+                return PlayResult(true, title, "Opened the YouTube video \"$title\". Playback state is not independently verified.")
             }
         }
 
@@ -99,8 +99,12 @@ object YouTubeController {
                 setPackage("com.google.android.youtube")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
-            ActivityLauncherHelper.startActivitySafely(context, intent)
-            PlayResult(true, cleanQ, "Playing \"$cleanQ\" on YouTube.")
+            val launched = ActivityLauncherHelper.startActivitySafely(context, intent)
+            if (launched) {
+                PlayResult(true, cleanQ, "Opened YouTube search results for \"$cleanQ\". Playback is not yet verified.")
+            } else {
+                PlayResult(false, null, "Could not open YouTube search results.")
+            }
         } catch (e: Exception) {
             android.util.Log.e("YouTubeController", "Playback fallback failed", e)
             PlayResult(false, null, "Couldn't open YouTube.")
@@ -126,8 +130,12 @@ object YouTubeController {
                 val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=$encoded&gl=IN&hl=en")).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                ActivityLauncherHelper.startActivitySafely(context, webIntent)
-                PlayResult(true, null, "Showing YouTube search results for \"$cleanQ\".")
+                val webLaunched = ActivityLauncherHelper.startActivitySafely(context, webIntent)
+                if (webLaunched) {
+                    PlayResult(true, null, "Opened YouTube search results for \"$cleanQ\".")
+                } else {
+                    PlayResult(false, null, "Could not open YouTube search results.")
+                }
             }
         } catch (e: Exception) {
             android.util.Log.e("YouTubeController", "YouTube search intent failed", e)
