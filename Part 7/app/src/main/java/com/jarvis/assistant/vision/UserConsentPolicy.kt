@@ -58,7 +58,10 @@ object UserConsentPolicy {
             """\b(email|message|chat|recipient|conversation|direct message)\b""",
             RegexOption.IGNORE_CASE
         ).containsMatchIn(screen)
-        val isShareOrPublish = normalizedTarget in setOf("share", "share now", "post", "publish")
+        val isShareOrPublish = normalizedTarget in setOf(
+            "share", "share now", "share location", "share live location", "share photo", "share file",
+            "share screen", "start sharing", "post", "publish"
+        )
         val isCommunicationDispatch = isShareOrPublish ||
             (normalizedTarget in dispatchActions && (communicationOrSharingSurface || communicationContext))
         val isDestructiveAction = normalizedTarget in setOf(
