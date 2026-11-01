@@ -169,7 +169,7 @@ class JarvisApp : Application() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action != Intent.ACTION_BATTERY_LOW) return
-                val batteryState = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                val batteryState = this@JarvisApp.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 val level = batteryState?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
                 val scale = batteryState?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
                 val status = batteryState?.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
