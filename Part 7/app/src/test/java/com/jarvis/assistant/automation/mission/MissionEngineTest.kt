@@ -14,7 +14,20 @@ class MissionEngineTest {
         MissionEngine.activeMission.value?.let { current ->
             when (current.status) {
                 MissionOverallStatus.UNVERIFIED -> MissionEngine.acknowledgeUnverifiedMission(current.missionId)
-                else -> if (!current.isFinished) MissionEngine.cancelMission(current.missionId, "Test cleanup")
+                else -> if (!current.isFinished) {
+                    MissionEngine.cancelMission(current.missionId, "Test cleanup")
+                    kotlinx.coroutines.withTimeout(3_000L) {
+                        while (MissionEngine.activeMission.value?.status !in setOf(
+                                MissionOverallStatus.CANCELLED,
+                                MissionOverallStatus.COMPLETED,
+                                MissionOverallStatus.FAILED,
+                                MissionOverallStatus.UNVERIFIED
+                            )
+                        ) {
+                            kotlinx.coroutines.delay(20L)
+                        }
+                    }
+                }
             }
         }
     }
