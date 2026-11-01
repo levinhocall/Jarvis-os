@@ -303,6 +303,7 @@ object MissionEngine {
                 observation = step.verificationEvidence?.details ?: "Previously verified mission step."
             )
         }
+        planner.resetCancellation()
         var approvalConsumed = false
         val result = planner.planAndExecute(
             goal = buildPlannerGoal(approvedMission.goal, approvedMission.userConstraints),
