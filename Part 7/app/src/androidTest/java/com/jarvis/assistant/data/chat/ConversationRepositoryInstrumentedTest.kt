@@ -81,6 +81,7 @@ class ConversationRepositoryInstrumentedTest {
         assertTrue(database.chatDao().getSessionById(previousId!!)!!.isArchived)
         assertEquals(nextSession.id, recreatedRepository.currentSessionId.value)
         assertTrue(recreatedRepository.getMessages(nextSession.id).isEmpty())
+        assertEquals(1, database.chatDao().getActiveSessionsFlow().first().size)
     }
 
     @Test
