@@ -337,7 +337,13 @@ object MissionEngine {
         val hasExactContactOrProfileConstraint = userConstraints.any {
             it.startsWith("contact_index=") || it.startsWith("app_number=")
         }
+        val normalizedGoal = goal.trim().lowercase(Locale.ROOT)
+        val isDirectConsequentialCommunication =
+            (normalizedGoal.contains("whatsapp") &&
+                listOf("send", "message", "call", "phone").any { normalizedGoal.contains(it) }) ||
+                Regex("^(please\\s+)?(call|phone|dial)\\b").containsMatchIn(normalizedGoal)
         if (!hasExactContactOrProfileConstraint &&
+            !isDirectConsequentialCommunication &&
             planner != null &&
             planner.isAvailable() &&
             planner.isProviderReady()
