@@ -1,17 +1,31 @@
 package com.jarvis.assistant.automation.mission
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
 import com.jarvis.assistant.automation.command.JarvisCommand
+import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
+import com.jarvis.assistant.automation.notification.JarvisNotificationListenerService
+import com.jarvis.assistant.automation.dev.TermuxBridge
+import com.jarvis.assistant.automation.dev.DevToolResult
+import com.jarvis.assistant.automation.dev.DevProjectWorkspaceRegistry
+import com.jarvis.assistant.security.sandbox.SandboxCheckResult
+import com.jarvis.assistant.util.AppLauncher
+import com.jarvis.assistant.vision.VisualTaskOrchestrator
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.Locale
+import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -720,7 +734,7 @@ object MissionEngine {
 
                 val timeout = currentStep.timeoutMs
                 val result = withTimeoutOrNull(timeout) {
-                    executeSingleStep(currentStep, context)
+                    executeSingleStep(currentStep, context, mission.approvalState == MissionApprovalState.APPROVED)
                 }
 
                 if (result != null) {
@@ -866,168 +880,297 @@ object MissionEngine {
      */
     private suspend fun executeSingleStep(
         step: MissionStep,
-        context: Context?
+        context: Context?,
+        isApprovedByUser: Boolean = false
     ): Pair<Boolean, MissionVerificationEvidence> {
         val customHook = toolExecutor
         if (customHook != null) {
             return try {
                 customHook(step, context)
             } catch (e: Exception) {
-                Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Execution threw: ${e.message}"))
+                Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Execution threw: ${e.javaClass.simpleName}"))
             }
         }
 
         if (context == null) {
-            return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Context unavailable"))
+            return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Android context unavailable; action was not executed."))
         }
 
-        // Real execution using JARVIS platform integrations
+        val appContext = context.applicationContext
+        val app = appContext as? JarvisApp
+        val visual = VisualTaskOrchestrator.getInstance()
+
         return when (step.toolName) {
             "device_control" -> {
-                val cmd = step.parameters["command"] as? String ?: ""
-                val reflex = com.jarvis.assistant.automation.reflex.OfflineReflexExecutor.tryExecuteReflex(cmd, context, null)
+                val command = step.parameters["command"] as? String ?: ""
+                val reflex = com.jarvis.assistant.automation.reflex.OfflineReflexExecutor.tryExecuteReflex(command, context, null)
                 if (reflex.handled) {
                     Pair(true, MissionVerificationEvidence(EvidenceType.DEVICE_SETTING_VERIFIED, true, reflex.spokenResponse))
                 } else {
-                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Device setting command could not be matched"))
+                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Device setting command could not be matched or verified."))
                 }
             }
+
+            "open_app" -> {
+                val packageName = step.parameters["package_name"] as? String
+                val appName = packageName?.takeIf { it.isNotBlank() }
+                    ?: (step.parameters["app_name"] as? String).orEmpty()
+                when (val result = AppLauncher.openAppResult(context, appName)) {
+                    is AppLauncher.OpenAppResult.Success -> {
+                        delay(500)
+                        val activePackage = JarvisAccessibilityService.instance?.getActiveRootNode()?.packageName?.toString()
+                        val verified = activePackage == result.app.packageName
+                        Pair(verified, MissionVerificationEvidence(
+                            EvidenceType.UI_STATE_CHANGE, verified,
+                            if (verified) "Foreground package verified: ${result.app.packageName}."
+                            else "Launch was requested for ${result.app.packageName}, but foreground state could not be verified."
+                        ))
+                    }
+                    is AppLauncher.OpenAppResult.MultipleFound -> Pair(false, MissionVerificationEvidence(
+                        EvidenceType.UNVERIFIED, false,
+                        "Multiple apps matched '${result.appName}': ${result.matches.take(4).joinToString { it.label }}. Clarification is required; no app was launched."
+                    ))
+                    is AppLauncher.OpenAppResult.NotFound -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Installed app '${result.appName}' was not found."))
+                    AppLauncher.OpenAppResult.Failure -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Android did not launch the requested app."))
+                }
+            }
+
+            "click_ui_element" -> {
+                val target = step.parameters["target_text"] as? String ?: ""
+                if (target.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Target text is missing."))
+                val result = visual.handleClick(target, taskGoal = _activeMission.value?.goal.orEmpty())
+                Pair(result.success && result.verified, MissionVerificationEvidence(EvidenceType.UI_STATE_CHANGE, result.verified, result.message))
+            }
+
+            "type_text" -> {
+                val textToType = step.parameters["text"] as? String ?: ""
+                val target = step.parameters["target_text"] as? String
+                if (textToType.isEmpty()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Text input is empty."))
+                val result = visual.handleType(text = textToType, targetInputName = target, submit = false)
+                Pair(result.success && result.verified, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, result.verified, result.message))
+            }
+
+            "scroll_screen" -> {
+                val direction = (step.parameters["direction"] as? String).orEmpty().lowercase(Locale.ROOT)
+                if (direction !in setOf("up", "down")) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Scroll direction must be up or down."))
+                val distanceValue = (step.parameters["distance"] as? Number)?.toInt() ?: 2
+                val distance = when {
+                    distanceValue <= 1 -> "small"
+                    distanceValue <= 3 -> "medium"
+                    else -> "large"
+                }
+                val result = visual.handleScroll(direction, distance)
+                Pair(result.success && result.verified, MissionVerificationEvidence(EvidenceType.UI_STATE_CHANGE, result.verified, result.message))
+            }
+
+            "navigate_back" -> {
+                val service = JarvisAccessibilityService.instance
+                    ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Accessibility service is not running."))
+                val before = com.jarvis.assistant.automation.agent.ScreenSignatureCalculator.computeSignature(service.getActiveRootNode())
+                val action = visual.handleKey("back")
+                delay(300)
+                val after = com.jarvis.assistant.automation.agent.ScreenSignatureCalculator.computeSignature(service.getActiveRootNode())
+                val verified = action.success && !after.isEquivalentTo(before)
+                Pair(verified, MissionVerificationEvidence(EvidenceType.UI_STATE_CHANGE, verified, if (verified) "Back navigation changed the active screen." else "Back was dispatched but the screen transition was not verified."))
+            }
+
+            "navigate_home" -> {
+                val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val expectedHomePackage = context.packageManager.resolveActivity(intent, 0)?.activityInfo?.packageName
+                val launched = runCatching { context.startActivity(intent); true }.getOrDefault(false)
+                delay(600)
+                val activePackage = JarvisAccessibilityService.instance?.getActiveRootNode()?.packageName?.toString()
+                val verified = launched && expectedHomePackage != null && activePackage == expectedHomePackage
+                Pair(verified, MissionVerificationEvidence(
+                    EvidenceType.UI_STATE_CHANGE, verified,
+                    if (verified) "Android home launcher foreground state verified."
+                    else "Home intent was dispatched, but launcher foreground state was not verified."
+                ))
+            }
+
             "youtube_play" -> {
                 val query = step.parameters["query"] as? String ?: ""
-                val app = context.applicationContext as? JarvisApp
-                if (app != null && query.isNotBlank()) {
-                    val output = app.commandExecutor.execute(JarvisCommand.PlayYouTube(query))
-                    val failed = output.contains("failed", ignoreCase = true) ||
-                        output.contains("could not", ignoreCase = true) ||
-                        output.contains("unable", ignoreCase = true)
-                    if (failed) {
-                        Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, output))
-                    } else {
-                        Pair(true, MissionVerificationEvidence(
-                            EvidenceType.UNVERIFIED, false,
-                            "YouTube play request was dispatched: $output Playback state was not independently observed."
-                        ))
-                    }
-                } else {
-                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "YouTube player unavailable"))
-                }
+                if (app == null || query.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "YouTube player unavailable or query missing."))
+                val output = app.commandExecutor.execute(JarvisCommand.PlayYouTube(query))
+                val failed = output.contains("failed", true) || output.contains("could not", true) || output.contains("unable", true)
+                if (failed) Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, output))
+                else Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "YouTube request dispatched. Playback state was not independently verified; $output"))
             }
+
             "search_web" -> {
                 val query = step.parameters["query"] as? String ?: ""
-                val app = context.applicationContext as? JarvisApp
-                if (app != null && query.isNotBlank()) {
-                    val output = app.commandExecutor.execute(JarvisCommand.SearchWeb(query))
-                    val launched = output.startsWith("Opening ", ignoreCase = true)
-                    if (launched) {
-                        Pair(true, MissionVerificationEvidence(
-                            EvidenceType.UNVERIFIED, false,
-                            "Browser search page opened for '$query'; search results were not read or verified."
-                        ))
-                    } else {
-                        Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, output))
-                    }
-                } else {
-                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Browser unavailable"))
+                if (app == null || query.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Browser unavailable or query missing."))
+                val output = app.commandExecutor.execute(JarvisCommand.SearchWeb(query))
+                val launched = output.startsWith("Opening ", ignoreCase = true)
+                if (!launched) Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, output))
+                else {
+                    delay(900)
+                    val screen = visual.inspectScreen(waitForContent = true)
+                    val verified = screen.contains(query, ignoreCase = true) && (screen.contains("result", true) || screen.contains("search", true))
+                    Pair(verified, MissionVerificationEvidence(
+                        EvidenceType.TEXT_MATCH, verified,
+                        if (verified) "Search query and result surface were observed on screen."
+                        else "Browser opened, but search results could not be independently read."
+                    ))
                 }
             }
+
             "whatsapp_prepare" -> {
                 val contact = step.parameters["contact"] as? String ?: ""
                 val message = step.parameters["message"] as? String ?: ""
-                val app = context.applicationContext as? JarvisApp
                 if (app != null && contact.isNotBlank() && message.isNotBlank()) {
                     val draftResult = app.whatsAppAssistant.createDraft(contact, message)
-                    if (app.whatsAppAssistant.hasPendingDraft()) {
-                        Pair(true, MissionVerificationEvidence(
-                            EvidenceType.TEXT_MATCH, true,
-                            "WhatsApp draft staged for '$contact'. No message has been sent. $draftResult"
-                        ))
-                    } else {
-                        Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, draftResult))
-                    }
-                } else {
-                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp draft service unavailable or inputs missing."))
-                }
+                    val verified = app.whatsAppAssistant.hasPendingDraft()
+                    Pair(verified, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, verified, if (verified) "WhatsApp draft staged for '$contact'. No message has been sent." else draftResult))
+                } else Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp draft service unavailable or inputs missing."))
             }
+
             "send_whatsapp", "whatsapp_send" -> {
+                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before sending a WhatsApp message."))
                 val contact = step.parameters["contact"] as? String ?: ""
-                val msg = step.parameters["message"] as? String ?: ""
-                val app = context.applicationContext as? JarvisApp
-                if (app != null && contact.isNotBlank() && msg.isNotBlank()) {
-                    val res = app.commandExecutor.execute(JarvisCommand.WhatsAppMessage(contact, msg))
-                    val failed = res.contains("failed", ignoreCase = true) ||
-                        res.contains("error", ignoreCase = true) ||
-                        res.contains("could not", ignoreCase = true) ||
-                        res.contains("no draft", ignoreCase = true)
-                    if (failed) {
-                        Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, res))
-                    } else {
-                        Pair(true, MissionVerificationEvidence(
-                            evidenceType = EvidenceType.UNVERIFIED,
-                            isVerified = false,
-                            details = "$res Delivery was not independently confirmed; do not report the message as sent."
-                        ))
-                    }
-                } else {
-                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp assistant unavailable"))
-                }
+                val message = step.parameters["message"] as? String ?: ""
+                if (app == null || contact.isBlank() || message.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp assistant unavailable or message inputs missing."))
+                val output = app.commandExecutor.execute(JarvisCommand.WhatsAppMessage(contact, message))
+                val failed = output.contains("failed", true) || output.contains("error", true) || output.contains("could not", true) || output.contains("no draft", true)
+                Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, if (failed) output else "$output Delivery was not independently confirmed; mission remains unverified."))
             }
+
             "call_contact" -> {
+                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before placing a phone call."))
                 val contact = step.parameters["contact_name"] as? String ?: ""
-                val idx = step.parameters["contact_index"] as? Int
-                val app = context.applicationContext as? JarvisApp
-                if (app != null && contact.isNotBlank()) {
-                    val res = com.jarvis.assistant.util.ContactCaller.callContact(context, contact, idx)
-                    when (res) {
-                        is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> {
-                            Pair(true, MissionVerificationEvidence(
-                                evidenceType = EvidenceType.UNVERIFIED,
-                                isVerified = false,
-                                details = "Call intent launched for ${res.contact.name} (${res.contact.number}); connection state was not verified."
-                            ))
-                        }
-                        is com.jarvis.assistant.util.ContactCaller.CallResult.MultipleMatches -> {
-                            Pair(false, MissionVerificationEvidence(
-                                evidenceType = EvidenceType.UNVERIFIED,
-                                isVerified = false,
-                                details = "Ambiguous contact name. Found ${res.matches.size} matches."
-                            ))
-                        }
-                        else -> {
-                            Pair(false, MissionVerificationEvidence(
-                                evidenceType = EvidenceType.UNVERIFIED,
-                                isVerified = false,
-                                details = "Call failed or missing permissions."
-                            ))
-                        }
+                val idx = (step.parameters["contact_index"] as? Number)?.toInt()
+                if (contact.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Contact name is missing."))
+                when (val result = com.jarvis.assistant.util.ContactCaller.callContact(context, contact, idx)) {
+                    is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Call intent launched for ${result.contact.name}; connection state was not verified."))
+                    is com.jarvis.assistant.util.ContactCaller.CallResult.MultipleMatches -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Ambiguous contact name; ${result.matches.size} matches found. No call was placed."))
+                    else -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Call failed or required permissions are missing."))
+                }
+            }
+
+            "delete_whatsapp_message" -> {
+                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before deleting a WhatsApp message."))
+                val contact = step.parameters["contact"] as? String ?: ""
+                val targetText = step.parameters["target_text"] as? String
+                if (targetText?.isNotBlank() == true) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Targeted message deletion is not supported; no message was deleted."))
+                if (app == null || contact.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp contact is missing or service unavailable."))
+                val output = app.commandExecutor.execute(JarvisCommand.WhatsAppDeleteMessage(contact, forEveryone = false))
+                Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "$output Deletion is asynchronous and was not independently verified."))
+            }
+
+            "read_unread_notifications" -> {
+                if (JarvisNotificationListenerService.instance == null) Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Notification listener is not connected; unread notification state is unavailable."))
+                else Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, JarvisNotificationListenerService.getUnreadWhatsAppSummary()))
+            }
+
+            "log_recall_core" -> {
+                val key = step.parameters["key"] as? String ?: ""
+                val value = step.parameters["value"] as? String ?: ""
+                if (app == null || key.isBlank() || value.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Memory key/value missing or memory store unavailable."))
+                val id = app.memoryRepository.remember(
+                    content = value,
+                    type = com.jarvis.assistant.data.memory.MemoryEntity.TYPE_PERSONAL_FACT,
+                    key = key,
+                    importance = 0.7f,
+                    confidence = 0.9f
+                )
+                val verified = id > 0L && app.memoryRepository.searchMemories(key).any { it.id == id }
+                Pair(verified, MissionVerificationEvidence(EvidenceType.DATABASE_RECORD, verified, if (verified) "Memory '$key' was persisted and read back from the encrypted database." else "Memory write could not be verified."))
+            }
+
+            "query_recall_core" -> {
+                val query = step.parameters["query"] as? String ?: ""
+                if (app == null || query.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Memory query missing or memory store unavailable."))
+                val matches = app.memoryRepository.searchMemories(query).take(8)
+                val summary = if (matches.isEmpty()) "Memory query completed; no saved memories matched '$query'."
+                    else matches.joinToString("; ") { "${it.key}: ${it.value.take(240)}" }
+                Pair(true, MissionVerificationEvidence(EvidenceType.DATABASE_RECORD, true, summary))
+            }
+
+            "termux_execute" -> {
+                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before executing shell commands."))
+                val command = step.parameters["command"] as? String ?: ""
+                if (command.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Shell command is empty."))
+                when (val result = TermuxBridge.executeCommand(context, command, workDir = null, timeoutSeconds = 60L)) {
+                    is DevToolResult.Success -> Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, TermuxBridge.maskSecrets(result.output).take(2_000)))
+                    is DevToolResult.Failure -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Termux command failed (exit ${result.exitCode}): ${TermuxBridge.maskSecrets(result.error).take(1_000)}"))
+                    is DevToolResult.EnvironmentUnsupported -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, result.reason))
+                    is DevToolResult.AwaitingApproval -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, result.reason))
+                }
+            }
+
+            "inspect_code" -> {
+                val project = DevProjectWorkspaceRegistry.activeProject ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "No development workspace is selected in Dev Studio."))
+                val relativePath = step.parameters["path"] as? String ?: ""
+                if (relativePath.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path is missing."))
+                if (sandbox.validateFilePath(project.workspaceRoot, relativePath) !is SandboxCheckResult.Allowed) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path was blocked by the workspace sandbox."))
+                val root = File(project.workspaceRoot).canonicalFile
+                val target = File(root, relativePath).canonicalFile
+                if (!target.toPath().startsWith(root.toPath()) || !target.isFile) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Requested file does not exist inside the selected workspace."))
+                val text = target.readText().take(40_000)
+                Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Read $relativePath (${text.length} characters):
+${text.take(3_000)}"))
+            }
+
+            "edit_code" -> {
+                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before modifying source files."))
+                val project = DevProjectWorkspaceRegistry.activeProject ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "No development workspace is selected in Dev Studio."))
+                val relativePath = step.parameters["path"] as? String ?: ""
+                val newContent = step.parameters["content"] as? String ?: ""
+                if (relativePath.isBlank() || newContent.isEmpty()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path or replacement content is missing."))
+                if (sandbox.validateFilePath(project.workspaceRoot, relativePath) !is SandboxCheckResult.Allowed) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path was blocked by the workspace sandbox."))
+                val root = File(project.workspaceRoot).canonicalFile
+                val target = File(root, relativePath).canonicalFile
+                if (!target.toPath().startsWith(root.toPath())) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Resolved path escapes the selected workspace."))
+                val parent = target.parentFile ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Target parent directory is unavailable."))
+                if (!parent.exists() && !parent.mkdirs()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Could not create target directory."))
+                val temporary = File(parent, ".${target.name}.${step.stepId}.tmp")
+                try {
+                    FileOutputStream(temporary).use { stream ->
+                        stream.write(newContent.toByteArray(Charsets.UTF_8))
+                        stream.fd.sync()
                     }
-                } else {
-                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Phone service unavailable"))
+                    try {
+                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                    } catch (_: Exception) {
+                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
+                    val verified = target.isFile && target.readText() == newContent
+                    Pair(verified, MissionVerificationEvidence(EvidenceType.FILE_CREATED, verified, if (verified) "File content was written and read back." else "File write completed but read-back verification failed."))
+                } catch (error: Exception) {
+                    temporary.delete()
+                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File edit failed (${error.javaClass.simpleName})."))
                 }
             }
-            "navigate_home" -> {
-                val app = context.applicationContext as? JarvisApp
-                if (app != null) {
-                    val res = app.commandExecutor.execute(JarvisCommand.NavigateHome)
-                    val launched = res.startsWith("Returning home", ignoreCase = true)
-                    Pair(
-                        launched,
-                        MissionVerificationEvidence(
-                            if (launched) EvidenceType.UNVERIFIED else EvidenceType.UNVERIFIED,
-                            false,
-                            if (launched) "$res Home-screen state was not independently observed." else res
-                        )
-                    )
-                } else {
-                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Home navigation unavailable"))
+
+            "run_git" -> {
+                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before running Git operations."))
+                val project = DevProjectWorkspaceRegistry.activeProject ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "No development workspace is selected in Dev Studio."))
+                val safeSubcommand = (step.parameters["subcommand"] as? String).orEmpty().trim()
+                val forbidden = Regex("[;&|$<>\\n\\r]")
+                val verb = safeSubcommand.substringBefore(' ')
+                val allowedVerbs = setOf("status", "diff", "log", "branch", "show", "rev-parse", "fetch", "pull", "push", "add", "commit", "checkout", "switch", "reset", "clean", "merge", "rebase")
+                if (safeSubcommand.isBlank() || forbidden.containsMatchIn(safeSubcommand) || safeSubcommand.contains(0x60.toChar()) || verb !in allowedVerbs) {
+                    return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Git subcommand was rejected by the command allowlist."))
+                }
+                val root = File(project.workspaceRoot).canonicalPath
+                if (!(root.startsWith("/sdcard/") || root.startsWith("/storage/emulated/0/"))) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Termux cannot access this app-private workspace. Move the selected project to shared storage before Git operations."))
+                val quotedRoot = "'" + root.replace("'", "'\\''") + "'"
+                val command = "git -C $quotedRoot $safeSubcommand"
+                when (val result = TermuxBridge.executeCommand(context, command, workDir = root, timeoutSeconds = 90L)) {
+                    is DevToolResult.Success -> Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, TermuxBridge.maskSecrets(result.output).take(2_000)))
+                    is DevToolResult.Failure -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Git command failed (exit ${result.exitCode}): ${TermuxBridge.maskSecrets(result.error).take(1_000)}"))
+                    is DevToolResult.EnvironmentUnsupported -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, result.reason))
+                    is DevToolResult.AwaitingApproval -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, result.reason))
                 }
             }
-            else -> {
-                Pair(false, MissionVerificationEvidence(
-                    EvidenceType.UNVERIFIED,
-                    false,
-                    "No real executor is registered for tool '${step.toolName}'; action was not executed."
-                ))
-            }
+
+            "task_completed" -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Completion signals are accepted only by LlmPlanner after all tool steps have verified."))
+
+            else -> Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED, false,
+                "No real executor is registered for tool '${step.toolName}'; action was not executed."
+            ))
         }
     }
+}
 }
