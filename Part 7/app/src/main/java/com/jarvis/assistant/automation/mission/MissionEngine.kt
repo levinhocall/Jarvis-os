@@ -1118,9 +1118,7 @@ object MissionEngine {
             persistMission(failed)
             return
         }
-        var completedCount = updatedSteps.count {
-            it.status == MissionStepStatus.COMPLETED && it.verificationEvidence?.isVerified == true
-        }
+        var completedCount = 0
 
         for (index in updatedSteps.indices) {
             mission = _activeMission.value ?: break
