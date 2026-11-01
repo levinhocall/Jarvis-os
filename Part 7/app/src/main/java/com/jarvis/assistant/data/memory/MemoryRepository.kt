@@ -243,16 +243,24 @@ class MemoryRepository(
     }
 
     suspend fun importMemoriesFromJson(jsonStr: String): Int {
+        // Imports are untrusted user data. Bound parsing work and restore only active
+        // records: superseded/deleted rows must never be resurrected by a backup restore.
+        if (jsonStr.length > 5_000_000) return 0
         val list = try {
             val type = object : com.google.gson.reflect.TypeToken<List<MemoryEntity>>() {}.type
             gson.fromJson<List<MemoryEntity>>(jsonStr, type) ?: emptyList()
         } catch (_: Exception) {
             return 0
         }
+        if (list.size > 10_000) return 0
 
+        val activeRecords = list.asSequence()
+            .filter { it.status == MemoryEntity.STATUS_ACTIVE && it.key.isNotBlank() }
+            .groupBy { it.key.trim().lowercase(Locale.ROOT) }
+            .values
+            .mapNotNull { versions -> versions.maxByOrNull { it.timestamp } }
         var count = 0
-        for (item in list) {
-            if (item.key.isBlank()) continue
+        for (item in activeRecords) {
             val imported = runCatching {
                 remember(
                     content = item.value.ifBlank { item.rawText },
@@ -263,10 +271,15 @@ class MemoryRepository(
                     sourceConversationId = item.sourceConversationId,
                     sourceMessageId = item.sourceMessageId,
                     category = item.category,
-                    expiryTimeMs = item.expiryTimeMs
+                    expiryTimeMs = item.expiryTimeMs,
+                    provenance = "IMPORTED_BACKUP:${item.provenance}",
+                    sensitivity = item.sensitivity
                 )
             }.getOrNull()
-            if (imported != null && imported > 0L) count++
+            if (imported != null && imported > 0L) {
+                if (item.pinned) runCatching { memoryDao.setPinned(imported, true) }
+                count++
+            }
         }
         return count
     }
