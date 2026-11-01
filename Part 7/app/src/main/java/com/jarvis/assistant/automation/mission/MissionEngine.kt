@@ -11,6 +11,7 @@ import com.jarvis.assistant.automation.dev.TermuxBridge
 import com.jarvis.assistant.automation.dev.DevToolResult
 import com.jarvis.assistant.automation.dev.DevProjectWorkspaceRegistry
 import com.jarvis.assistant.security.sandbox.CapabilitySandbox
+import com.jarvis.assistant.security.sandbox.RiskPolicy
 import com.jarvis.assistant.security.sandbox.SandboxCheckResult
 import com.jarvis.assistant.util.AppLauncher
 import com.jarvis.assistant.vision.VisualTaskOrchestrator
@@ -59,6 +60,16 @@ object MissionEngine {
     var missionDao: com.jarvis.assistant.data.mission.MissionDao? = null
     private val gson = com.google.gson.Gson()
     private val sandbox = CapabilitySandbox()
+
+    private fun isSensitiveWorkspacePath(path: String): Boolean {
+        val normalized = path.replace('\\', '/').lowercase(Locale.ROOT)
+        val fileName = normalized.substringAfterLast('/')
+        return fileName in setOf(
+            ".env", ".env.local", "local.properties", "gradle.properties",
+            "keystore.properties", "credentials.json", "service-account.json"
+        ) || normalized.contains("/secrets/") ||
+            normalized.endsWith(".jks") || normalized.endsWith(".keystore")
+    }
 
     private fun hasBlockingMission(): Boolean {
         val current = _activeMission.value ?: return false
@@ -497,7 +508,10 @@ object MissionEngine {
         // Never allow a skill's declared risk to downgrade the registered tool's risk.
         val riskAdjustedSteps = steps.map { step ->
             val registeredRisk = ToolRegistry.getTool(step.toolName)?.riskLevel ?: step.riskLevel
-            if (registeredRisk.ordinal > step.riskLevel.ordinal) step.copy(riskLevel = registeredRisk) else step
+            val policyRequiresApproval = RiskPolicy.evaluateRisk(step.toolName, step.parameters, cleanGoal)
+                .requiresExplicitConfirmation
+            val effectiveRisk = if (policyRequiresApproval) MissionRisk.HIGH_CONSEQUENTIAL else registeredRisk
+            if (effectiveRisk.ordinal > step.riskLevel.ordinal) step.copy(riskLevel = effectiveRisk) else step
         }
         val needsApproval = requiresApproval || riskAdjustedSteps.any {
             it.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL
@@ -996,7 +1010,7 @@ object MissionEngine {
                 val output = app.commandExecutor.execute(JarvisCommand.PlayYouTube(query))
                 val failed = output.contains("failed", true) || output.contains("could not", true) || output.contains("unable", true)
                 if (failed) Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, output))
-                else Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "YouTube request dispatched. Playback state was not independently verified; $output"))
+                else Pair(true, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "YouTube request dispatched. Playback state was not independently verified; $output"))
             }
 
             "search_web" -> {
@@ -1009,7 +1023,7 @@ object MissionEngine {
                     delay(900)
                     val screen = visual.inspectScreen(waitForContent = true)
                     val verified = screen.contains(query, ignoreCase = true) && (screen.contains("result", true) || screen.contains("search", true))
-                    Pair(verified, MissionVerificationEvidence(
+                    Pair(launched, MissionVerificationEvidence(
                         EvidenceType.TEXT_MATCH, verified,
                         if (verified) "Search query and result surface were observed on screen."
                         else "Browser opened, but search results could not be independently read."
@@ -1034,7 +1048,7 @@ object MissionEngine {
                 if (app == null || contact.isBlank() || message.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp assistant unavailable or message inputs missing."))
                 val output = app.commandExecutor.execute(JarvisCommand.WhatsAppMessage(contact, message))
                 val failed = output.contains("failed", true) || output.contains("error", true) || output.contains("could not", true) || output.contains("no draft", true)
-                Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, if (failed) output else "$output Delivery was not independently confirmed; mission remains unverified."))
+                Pair(!failed, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, if (failed) output else "$output Delivery was not independently confirmed; mission remains unverified."))
             }
 
             "call_contact" -> {
@@ -1043,7 +1057,7 @@ object MissionEngine {
                 val idx = (step.parameters["contact_index"] as? Number)?.toInt()
                 if (contact.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Contact name is missing."))
                 when (val result = com.jarvis.assistant.util.ContactCaller.callContact(context, contact, idx)) {
-                    is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Call intent launched for ${result.contact.name}; connection state was not verified."))
+                    is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> Pair(true, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Call intent launched for ${result.contact.name}; connection state was not verified."))
                     is com.jarvis.assistant.util.ContactCaller.CallResult.MultipleMatches -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Ambiguous contact name; ${result.matches.size} matches found. No call was placed."))
                     else -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Call failed or required permissions are missing."))
                 }
@@ -1056,7 +1070,7 @@ object MissionEngine {
                 if (targetText?.isNotBlank() == true) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Targeted message deletion is not supported; no message was deleted."))
                 if (app == null || contact.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp contact is missing or service unavailable."))
                 val output = app.commandExecutor.execute(JarvisCommand.WhatsAppDeleteMessage(contact, forEveryone = false))
-                Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "$output Deletion is asynchronous and was not independently verified."))
+                Pair(true, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "$output Deletion is asynchronous and was not independently verified."))
             }
 
             "read_unread_notifications" -> {
@@ -1092,6 +1106,7 @@ object MissionEngine {
                 if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before executing shell commands."))
                 val command = step.parameters["command"] as? String ?: ""
                 if (command.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Shell command is empty."))
+                if (sandbox.validateInputText(command) is SandboxCheckResult.Blocked) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Shell command was blocked by the capability sandbox."))
                 when (val result = TermuxBridge.executeCommand(context, command, workDir = null, timeoutSeconds = 60L)) {
                     is DevToolResult.Success -> Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, TermuxBridge.maskSecrets(result.output).take(2_000)))
                     is DevToolResult.Failure -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Termux command failed (exit ${result.exitCode}): ${TermuxBridge.maskSecrets(result.error).take(1_000)}"))
@@ -1104,6 +1119,8 @@ object MissionEngine {
                 val project = DevProjectWorkspaceRegistry.activeProject ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "No development workspace is selected in Dev Studio."))
                 val relativePath = step.parameters["path"] as? String ?: ""
                 if (relativePath.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path is missing."))
+                if (isSensitiveWorkspacePath(relativePath)) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Sensitive configuration and credential files are blocked from mission inspection."))
+                if (isSensitiveWorkspacePath(relativePath)) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Sensitive configuration and credential files are blocked from mission editing."))
                 if (sandbox.validateFilePath(project.workspaceRoot, relativePath) !is SandboxCheckResult.Allowed) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path was blocked by the workspace sandbox."))
                 val root = File(project.workspaceRoot).canonicalFile
                 val target = File(root, relativePath).canonicalFile
@@ -1148,10 +1165,10 @@ ${text.take(3_000)}"))
                 if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before running Git operations."))
                 val project = DevProjectWorkspaceRegistry.activeProject ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "No development workspace is selected in Dev Studio."))
                 val safeSubcommand = (step.parameters["subcommand"] as? String).orEmpty().trim()
-                val forbidden = Regex("[;&|$<>\\n\\r]")
                 val verb = safeSubcommand.substringBefore(' ')
                 val allowedVerbs = setOf("status", "diff", "log", "branch", "show", "rev-parse", "fetch", "pull", "push", "add", "commit", "checkout", "switch", "reset", "clean", "merge", "rebase")
-                if (safeSubcommand.isBlank() || forbidden.containsMatchIn(safeSubcommand) || safeSubcommand.contains(0x60.toChar()) || verb !in allowedVerbs) {
+                val safeArgumentSyntax = safeSubcommand.matches(Regex("^[A-Za-z0-9._/=@:+, -]+$"))
+                if (safeSubcommand.isBlank() || !safeArgumentSyntax || verb !in allowedVerbs) {
                     return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Git subcommand was rejected by the command allowlist."))
                 }
                 val root = File(project.workspaceRoot).canonicalPath
