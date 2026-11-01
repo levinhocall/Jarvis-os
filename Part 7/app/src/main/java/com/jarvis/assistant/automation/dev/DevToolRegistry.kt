@@ -4,11 +4,52 @@ import com.jarvis.assistant.security.sandbox.CapabilitySandbox
 import com.jarvis.assistant.security.sandbox.SandboxCheckResult
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.UUID
 import java.io.InputStreamReader
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private fun isSensitiveDevWorkspacePath(path: String): Boolean {
+    val normalized = path.replace('\\', '/').lowercase()
+    val fileName = normalized.substringAfterLast('/')
+    return fileName in setOf(
+        ".env", ".env.local", "local.properties", "gradle.properties",
+        "keystore.properties", "credentials.json", "service-account.json"
+    ) || normalized.contains("/secrets/") ||
+        normalized.endsWith(".jks") || normalized.endsWith(".keystore")
+}
+
+private fun writeFileAtomically(target: File, content: String): Boolean {
+    val parent = target.parentFile ?: return false
+    if (!parent.exists() || !parent.isDirectory) return false
+    val temporary = File(parent, ".${target.name}.${UUID.randomUUID()}.tmp")
+    return try {
+        FileOutputStream(temporary).use { stream ->
+            stream.write(content.toByteArray(Charsets.UTF_8))
+            stream.fd.sync()
+        }
+        try {
+            Files.move(
+                temporary.toPath(),
+                target.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE
+            )
+        } catch (_: Exception) {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+        target.isFile && target.readText() == content
+    } catch (_: Exception) {
+        false
+    } finally {
+        temporary.delete()
+    }
+}
 
 interface DevTool {
     val name: String
@@ -39,6 +80,14 @@ class ReadFileDevTool : DevTool {
     ): DevToolResult = withContext(Dispatchers.IO) {
         val relPath = params["path"] as? String
             ?: return@withContext DevToolResult.Failure(name, "Missing parameter 'path'")
+
+        if (isSensitiveDevWorkspacePath(relPath)) {
+            return@withContext DevToolResult.Failure(
+                name,
+                "Sensitive configuration and credential files cannot be read through Dev Studio.",
+                isRecoverable = false
+            )
+        }
 
         val pathCheck = sandbox.validateFilePath(project.workspaceRoot, relPath)
         if (pathCheck is SandboxCheckResult.Blocked) {
@@ -85,6 +134,14 @@ class EditFileDevTool : DevTool {
         val replacement = params["replacementSnippet"] as? String
             ?: return@withContext DevToolResult.Failure(name, "Missing parameter 'replacementSnippet'")
 
+        if (isSensitiveDevWorkspacePath(relPath)) {
+            return@withContext DevToolResult.Failure(
+                name,
+                "Sensitive configuration and credential files cannot be modified through Dev Studio.",
+                isRecoverable = false
+            )
+        }
+
         val pathCheck = sandbox.validateFilePath(project.workspaceRoot, relPath)
         if (pathCheck is SandboxCheckResult.Blocked) {
             return@withContext DevToolResult.Failure(name, "Path rejected: ${pathCheck.reason}", isRecoverable = false)
@@ -107,10 +164,17 @@ class EditFileDevTool : DevTool {
         val patchResult = devAgent.applyMultiFilePatch(project.workspaceRoot, fileMap, patch)
         when (patchResult) {
             is PatchApplicationResult.Success -> {
-                targetFile.writeText(fileMap[relPath]!!)
+                val updatedContent = fileMap[relPath]
+                    ?: return@withContext DevToolResult.Failure(name, "Patch output was missing; file was not changed.")
+                if (!writeFileAtomically(targetFile, updatedContent)) {
+                    return@withContext DevToolResult.Failure(
+                        name,
+                        "Atomic file replacement or read-back verification failed for '$relPath'."
+                    )
+                }
                 DevToolResult.Success(
                     toolName = name,
-                    output = "Successfully updated '$relPath'",
+                    output = "Successfully updated and read-back verified '$relPath'",
                     modifiedFiles = listOf(relPath)
                 )
             }
