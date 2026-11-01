@@ -37,6 +37,7 @@ class AudioRecorder(
     val isMuted = AtomicBoolean(false)
 
     @SuppressLint("MissingPermission")
+    @Synchronized
     fun start(scope: CoroutineScope): Boolean {
         if (isRecording.get()) return true
 
@@ -311,22 +312,21 @@ class AudioRecorder(
         }
     }
 
+    @Synchronized
     fun stop() {
         isRecording.set(false)
         recordingJob?.cancel()
         recordingJob = null
 
-        try {
-            echoCanceler?.release()
-            noiseSuppressor?.release()
-            automaticGainControl?.release()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error releasing audio effects: ${e.message}")
-        } finally {
-            echoCanceler = null
-            noiseSuppressor = null
-            automaticGainControl = null
-        }
+        runCatching { echoCanceler?.release() }
+            .onFailure { Log.w(TAG, "AcousticEchoCanceler release failed", it) }
+        echoCanceler = null
+        runCatching { noiseSuppressor?.release() }
+            .onFailure { Log.w(TAG, "NoiseSuppressor release failed", it) }
+        noiseSuppressor = null
+        runCatching { automaticGainControl?.release() }
+            .onFailure { Log.w(TAG, "AutomaticGainControl release failed", it) }
+        automaticGainControl = null
 
         val recorderToRelease = audioRecord
         audioRecord = null
