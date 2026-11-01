@@ -14,6 +14,9 @@ interface NotificationHistoryDao {
     @Query("SELECT * FROM notification_history WHERE isRead = 0 ORDER BY timestamp DESC LIMIT 200")
     fun observeUnread(): Flow<List<NotificationHistoryEntity>>
 
+    @Query("SELECT * FROM notification_history")
+    suspend fun getAllForPrivacyAudit(): List<NotificationHistoryEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: NotificationHistoryEntity)
 
