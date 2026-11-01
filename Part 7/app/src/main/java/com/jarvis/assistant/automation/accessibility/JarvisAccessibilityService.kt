@@ -109,19 +109,10 @@ class JarvisAccessibilityService : AccessibilityService() {
             instance?.armOemSetupAutoClick()
         }
 
-        data class ExtractedOtp(val code: String, val timestamp: Long, val senderPkg: String)
-        @Volatile
-        var latestExtractedOtp: ExtractedOtp? = null
 
         private val screenshotExecutor = Executors.newSingleThreadExecutor()
 
-        fun getRecentOtp(): String? {
-            val otp = latestExtractedOtp ?: return null
-            if (System.currentTimeMillis() - otp.timestamp < 120_000L) { // valid for 2 minutes
-                return otp.code
-            }
-            return null
-        }
+
 
         suspend fun captureScreenBitmap(): Bitmap? {
             val s = instance ?: return null
@@ -368,29 +359,6 @@ class JarvisAccessibilityService : AccessibilityService() {
             if (matchesMonitored) {
                 val previous = _uiChanges.value
                 _uiChanges.value = UiChange(previous.revision + 1, pkg, eventType, System.currentTimeMillis())
-            }
-
-            // Auto-extract incoming OTP / verification codes from notifications (SMS, WhatsApp, banking)
-            if (eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-                try {
-                    val texts = event.text
-                    if (!texts.isNullOrEmpty()) {
-                        val fullText = texts.filterNotNull().joinToString(" ")
-                        if (fullText.isNotBlank()) {
-                            val otpRegex = Regex("""\b(?:OTP|code|verification|passcode|is|pin|password)[^\d]*(\d{4,8})\b""", RegexOption.IGNORE_CASE)
-                            val match = otpRegex.find(fullText) ?: Regex("""\b(\d{4,6})\b""").find(fullText)
-                            if (match != null) {
-                                val code = match.groupValues.lastOrNull { it.isNotBlank() && it.all { c -> c.isDigit() } }
-                                if (code != null && code.length in 4..8) {
-                                    Log.i(TAG, "Auto-detected incoming OTP/code from notification ($pkg); value withheld from logs")
-                                    latestExtractedOtp = ExtractedOtp(code, System.currentTimeMillis(), pkg)
-                                }
-                            }
-                        }
-                    }
-                } catch (t: Throwable) {
-                    Log.d(TAG, "Error inspecting notification for OTP: ${t.message}")
-                }
             }
 
             // Safe UI Automations: Localized try-catches prevent one failure from killing the service
