@@ -110,7 +110,10 @@ class JarvisApp : Application() {
                 apiKeyProvider = {
                     preferences.getNextActiveKey("gemini") ?: preferences.apiKey
                 },
-                modelProvider = { GeminiConstants.MODEL_3_8_FLASH }
+                modelProvider = { GeminiConstants.MODEL_3_8_FLASH },
+                onApiKeyRateLimited = { key -> preferences.reportKeyRateLimit("gemini", key) },
+                onApiKeyInvalid = { key -> preferences.reportKeyInvalid("gemini", key) },
+                onApiKeySuccess = { key -> preferences.reportKeySuccess("gemini", key) }
             )
         )
         appScope.launch {
