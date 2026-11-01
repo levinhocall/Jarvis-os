@@ -385,7 +385,7 @@ object MissionEngine {
         val mission = planMission(goal, userConstraints, context)
         _activeMission.value = mission
         persistMission(mission)
-        Log.i(TAG, "Planned mission ${mission.missionId}: '${mission.goal}' with status ${mission.status}")
+        Log.i(TAG, "Mission planned (id=${mission.missionId}, status=${mission.status}); goal omitted from logs")
 
         // 1. If clarification is needed, do not execute
         if (mission.status == MissionOverallStatus.CLARIFICATION_REQUIRED) {
@@ -789,7 +789,7 @@ object MissionEngine {
             )
             _activeMission.value = updated
             persistMission(updated)
-            Log.i(TAG, "Mission $missionId cancelled: $reason")
+            Log.i(TAG, "Mission $missionId cancelled; user-provided reason omitted from logs")
         }
     }
 
@@ -831,7 +831,7 @@ object MissionEngine {
 
             // 1. Idempotency Check: Skip already completed non-idempotent steps
             if (!currentStep.isIdempotent && completedNonIdempotentSteps.contains(currentStep.stepId)) {
-                Log.i(TAG, "Skipping already completed non-idempotent step: ${currentStep.title}")
+                Log.i(TAG, "Skipping an already completed non-idempotent step; title omitted from logs")
                 continue
             }
 
@@ -1027,7 +1027,7 @@ object MissionEngine {
         )
         _activeMission.value = finalizedMission
         persistMission(finalizedMission, updatedSteps.size)
-        Log.i(TAG, "Mission finalized: $finalStatus — $finalSummary")
+        Log.i(TAG, "Mission finalized with status $finalStatus; outcome text omitted from logs")
     }
 
     private fun finalizeFailure(
