@@ -628,6 +628,7 @@ class CodingDevFragment : Fragment() {
                 description = "JARVIS OS Android Intelligent Assistant"
             )
 
+            com.jarvis.assistant.automation.dev.DevProjectWorkspaceRegistry.setActiveProject(project)
             val plan = devLoop.createPlan(project, requirement)
             appendLog("[PLAN] 6-phase engineering workflow:")
             plan.steps.forEachIndexed { idx, step ->
