@@ -226,7 +226,7 @@ class LlmPlannerTest {
         val provider = FakeScriptedProvider { _, _ ->
             LlmStepDecision.InvokeTool("search_web", mapOf("query" to "safe pause test"))
         }
-        val planner = LlmPlanner(provider, maxSteps = 5)
+        val planner = LlmPlanner(provider, maxSteps = 1)
         val result = planner.planAndExecute("Pause safely") { _, _ ->
             planner.requestPause()
             Pair(true, "Search result verified")
