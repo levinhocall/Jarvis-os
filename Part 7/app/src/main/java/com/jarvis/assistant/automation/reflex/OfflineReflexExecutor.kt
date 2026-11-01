@@ -16,11 +16,30 @@ import java.util.Locale
 data class OfflineReflexResult(
     val handled: Boolean,
     val spokenResponse: String,
-    val actionName: String = ""
+    val actionName: String = "",
+    val succeeded: Boolean = handled
 )
 
 object OfflineReflexExecutor {
     private const val TAG = "OfflineReflexExecutor"
+
+    internal fun actionSucceeded(response: String): Boolean {
+        val normalized = response.trim().lowercase(Locale.ROOT)
+        val failureMarkers = listOf(
+            "failed", "unable to", "could not", "not found", "not installed",
+            "please grant", "permission is required", "permission required",
+            "no flashlight", "dikkat hui", "check karne mein dikkat"
+        )
+        return normalized.isNotBlank() && failureMarkers.none { normalized.contains(it) }
+    }
+
+    private fun actionResult(response: String, actionName: String): OfflineReflexResult =
+        OfflineReflexResult(
+            handled = true,
+            spokenResponse = response,
+            actionName = actionName,
+            succeeded = actionSucceeded(response)
+        )
 
     /**
      * Inspects raw user utterance. If it matches a 100% local hardware, status, or protocol command,
@@ -36,19 +55,19 @@ object OfflineReflexExecutor {
         // 1. Instant Battery Status Readout
         if (clean.contains("battery") && (clean.contains("kitni") || clean.contains("kya") || clean.contains("status") || clean.contains("percent") || clean.contains("check"))) {
             val batteryStatus = getBatteryStatus(context)
-            return OfflineReflexResult(true, batteryStatus, "battery_status")
+            return actionResult(batteryStatus, "battery_status")
         }
 
         // 2. Instant Time Readout
         if ((clean.contains("time") || clean.contains("samay") || clean.contains("waqt")) && (clean.contains("kya") || clean.contains("batao") || clean.contains("hua"))) {
             val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
-            return OfflineReflexResult(true, "Abhi $timeStr ho raha hai, Nazib Sir.", "time_status")
+            return actionResult("Abhi $timeStr ho raha hai, Nazib Sir.", "time_status")
         }
 
         // 3. Instant Network Status Readout
         if (clean.contains("network") && (clean.contains("kaisa") || clean.contains("check") || clean.contains("status") || clean.contains("hai"))) {
             val networkStatus = getNetworkStatus(context)
-            return OfflineReflexResult(true, networkStatus, "network_status")
+            return actionResult(networkStatus, "network_status")
         }
 
         // 4. Torch / Flashlight Reflex
@@ -56,14 +75,14 @@ object OfflineReflexExecutor {
             val pm = phoneControlManager ?: PhoneControlManager(context)
             if (clean.contains("on") || clean.contains("jala") || clean.contains("chalu") || clean.contains("start")) {
                 val res = pm.setFlashlight(true)
-                return OfflineReflexResult(true, res, "torch_on")
+                return actionResult(res, "torch_on")
             }
             if (clean.contains("off") || clean.contains("band") || clean.contains("bujha") || clean.contains("stop")) {
                 val res = pm.setFlashlight(false)
-                return OfflineReflexResult(true, res, "torch_off")
+                return actionResult(res, "torch_off")
             }
             val res = pm.toggleFlashlight()
-            return OfflineReflexResult(true, res, "torch_toggle")
+            return actionResult(res, "torch_toggle")
         }
 
         // 5. Volume & Audio Reflex
@@ -71,30 +90,30 @@ object OfflineReflexExecutor {
             val pm = phoneControlManager ?: PhoneControlManager(context)
             if (clean.contains("mute") || clean.contains("silent") || clean.contains("band")) {
                 val res = pm.muteVolume(true)
-                return OfflineReflexResult(true, res, "volume_mute")
+                return actionResult(res, "volume_mute")
             }
             if (clean.contains("unmute") || clean.contains("awaz chalu")) {
                 val res = pm.muteVolume(false)
-                return OfflineReflexResult(true, res, "volume_unmute")
+                return actionResult(res, "volume_unmute")
             }
             if (clean.contains("full") || clean.contains("max") || clean.contains("100")) {
                 val res = pm.setVolumePercent(100)
-                return OfflineReflexResult(true, res, "volume_full")
+                return actionResult(res, "volume_full")
             }
             // Parse percentage (e.g., "volume 50 percent karo")
             val percentMatch = Regex("(\\d{1,3})\\s*(%|percent)").find(clean)
             if (percentMatch != null) {
                 val pct = percentMatch.groupValues[1].toIntOrNull() ?: 50
                 val res = pm.setVolumePercent(pct.coerceIn(0, 100))
-                return OfflineReflexResult(true, res, "volume_percent")
+                return actionResult(res, "volume_percent")
             }
             if (clean.contains("badhao") || clean.contains("zyada") || clean.contains("up") || clean.contains("increase")) {
                 val res = pm.adjustVolume(true)
-                return OfflineReflexResult(true, res, "volume_up")
+                return actionResult(res, "volume_up")
             }
             if (clean.contains("kam") || clean.contains("down") || clean.contains("ghatao") || clean.contains("decrease")) {
                 val res = pm.adjustVolume(false)
-                return OfflineReflexResult(true, res, "volume_down")
+                return actionResult(res, "volume_down")
             }
         }
 
@@ -103,25 +122,25 @@ object OfflineReflexExecutor {
             val pm = phoneControlManager ?: PhoneControlManager(context)
             if (clean.contains("full") || clean.contains("max") || clean.contains("100")) {
                 val res = pm.setBrightnessPercent(100)
-                return OfflineReflexResult(true, res, "brightness_full")
+                return actionResult(res, "brightness_full")
             }
             if (clean.contains("zero") || clean.contains("minimum") || clean.contains("min")) {
                 val res = pm.setBrightnessPercent(5)
-                return OfflineReflexResult(true, res, "brightness_min")
+                return actionResult(res, "brightness_min")
             }
             val percentMatch = Regex("(\\d{1,3})\\s*(%|percent)").find(clean)
             if (percentMatch != null) {
                 val pct = percentMatch.groupValues[1].toIntOrNull() ?: 50
                 val res = pm.setBrightnessPercent(pct.coerceIn(0, 100))
-                return OfflineReflexResult(true, res, "brightness_percent")
+                return actionResult(res, "brightness_percent")
             }
             if (clean.contains("badhao") || clean.contains("zyada") || clean.contains("up") || clean.contains("increase")) {
                 val res = pm.adjustBrightness(true)
-                return OfflineReflexResult(true, res, "brightness_up")
+                return actionResult(res, "brightness_up")
             }
             if (clean.contains("kam") || clean.contains("down") || clean.contains("ghatao") || clean.contains("decrease")) {
                 val res = pm.adjustBrightness(false)
-                return OfflineReflexResult(true, res, "brightness_down")
+                return actionResult(res, "brightness_down")
             }
         }
 
@@ -134,7 +153,7 @@ object OfflineReflexExecutor {
                 if (appName.isNotBlank() && !isCloudSearchQuery(appName)) {
                     val pm = phoneControlManager ?: PhoneControlManager(context)
                     val res = pm.openApp(appName)
-                    return OfflineReflexResult(true, res, "open_app")
+                    return actionResult(res, "open_app")
                 }
             }
         }
