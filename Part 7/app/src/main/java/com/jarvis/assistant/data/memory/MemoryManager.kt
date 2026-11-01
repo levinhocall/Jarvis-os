@@ -421,7 +421,7 @@ class MemoryManager(
      * 3. Recent 15 conversation turns across sessions (persistent dialogue memory)
      */
     suspend fun getSystemPromptContext(): String {
-        val all = repository.getAllMemories()
+        val all = repository.getAllMemories().filter { it.isSafeForModelContext }
         val favSong = resolveSongQuery("my favorite song")
         val sb = StringBuilder("\n[USER PERSONAL PROFILE & MEMORY CORE - PERMANENT STORAGE]:\n")
         sb.append("- User's Preferred Name: ${preferences.userName.ifBlank { "Sir" }}\n")
