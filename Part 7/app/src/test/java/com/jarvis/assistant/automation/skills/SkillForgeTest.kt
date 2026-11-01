@@ -3,6 +3,7 @@ package com.jarvis.assistant.automation.skills
 import com.jarvis.assistant.automation.mission.MissionRisk
 import com.jarvis.assistant.automation.mission.MissionStep
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -152,10 +153,32 @@ class SkillForgeTest {
         assertFalse(resultDisabled.success)
         assertTrue(resultDisabled.message.contains("disabled", ignoreCase = true))
 
-        // Re-enable skill
+        // Re-enable skill and execute through the real MissionEngine lifecycle.
         SkillForgeManager.setSkillEnabled("toggle_test_skill", true)
-        val resultEnabled = SkillForgeManager.executeSkill(null, "toggle_test_skill")
-        assertTrue(resultEnabled.success)
+        val previousExecutor = com.jarvis.assistant.automation.mission.MissionEngine.toolExecutor
+        try {
+            com.jarvis.assistant.automation.mission.MissionEngine.toolExecutor = { _, _ ->
+                Pair(
+                    true,
+                    com.jarvis.assistant.automation.mission.MissionVerificationEvidence(
+                        com.jarvis.assistant.automation.mission.EvidenceType.DEVICE_SETTING_VERIFIED,
+                        true,
+                        "Unit-test executor verified the step."
+                    )
+                )
+            }
+            val resultEnabled = SkillForgeManager.executeSkill(null, "toggle_test_skill")
+            assertTrue(resultEnabled.success)
+            assertTrue(resultEnabled.message.contains("in progress", ignoreCase = true))
+            val completed = kotlinx.coroutines.withTimeout(2_000L) {
+                com.jarvis.assistant.automation.mission.MissionEngine.activeMission.first {
+                    it?.goal == "Toggle Test" && it.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED
+                }
+            }
+            assertEquals(com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED, completed?.status)
+        } finally {
+            com.jarvis.assistant.automation.mission.MissionEngine.toolExecutor = previousExecutor
+        }
     }
 
     @Test
