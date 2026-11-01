@@ -117,7 +117,9 @@ object TermuxBridge {
             .replace(Regex("""(glpat-[0-9A-Za-z_-]{20,})"""), "glpat-[MASKED]")
             .replace(Regex("""(xox[baprs]-[0-9A-Za-z-]{20,})"""), "xox-token-[MASKED]")
             .replace(Regex("""(Bearer\s+)[A-Za-z0-9._~+/-]+=*""", RegexOption.IGNORE_CASE), "$1[MASKED]")
-            .replace(Regex("""([?&](?:key|api_key|access_token|refresh_token|token)=[^&\s]+)""", RegexOption.IGNORE_CASE), "$1".substringBefore("=") + "=[MASKED]")
+            .replace(Regex("""[?&](?:key|api_key|access_token|refresh_token|token)=[^&\\s]+""", RegexOption.IGNORE_CASE)) { match ->
+                match.value.substringBefore("=") + "=[MASKED]"
+            }
             .replace(Regex("""((?:api[_-]?key|apiKey|access[_-]?token|refresh[_-]?token|secret|password)\s*[:=]\s*['"]?)[^'"\s,;&]+""", RegexOption.IGNORE_CASE), "$1[MASKED]")
     }
 
