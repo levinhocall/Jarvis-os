@@ -24,9 +24,8 @@ class SqlCipherRuntimeInstrumentedTest {
         val wrongKey = Base64.encode(ByteArray(32).also { SecureRandom().nextBytes(it) }, Base64.NO_WRAP)
 
         try {
-            assertTrue(file.createNewFile())
-            val created = CipherDatabase.openDatabase(
-                file.absolutePath, cipherKey, null, CipherDatabase.OPEN_READWRITE, null
+            val created = CipherDatabase.openOrCreateDatabase(
+                file, cipherKey, null, null, null
             )
             try {
                 created.execSQL("CREATE TABLE secret_payload (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
