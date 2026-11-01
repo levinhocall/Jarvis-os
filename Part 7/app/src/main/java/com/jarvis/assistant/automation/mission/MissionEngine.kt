@@ -293,7 +293,7 @@ object MissionEngine {
         val recorded = oldStep.copy(
             status = if (record.isVerified) MissionStepStatus.COMPLETED else MissionStepStatus.UNVERIFIED,
             verificationEvidence = MissionVerificationEvidence(
-                evidenceType = if (record.isVerified) EvidenceType.EXTERNAL_API_ACKNOWLEDGED else EvidenceType.UNVERIFIED,
+                evidenceType = if (record.isVerified) EvidenceType.TOOL_RESULT_VERIFIED else EvidenceType.UNVERIFIED,
                 isVerified = record.isVerified,
                 details = record.observation
             ),
