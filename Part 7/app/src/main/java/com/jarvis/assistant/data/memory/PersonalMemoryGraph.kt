@@ -75,7 +75,7 @@ object PersonalMemoryGraph {
         // Check for contradiction with existing node
         val existing = inMemoryNodes[cleanKey]
         val contradiction = if (existing != null && !existing.value.equals(sanitizedValue, ignoreCase = true)) {
-            Log.w(TAG, "Contradiction detected for key '$cleanKey': old='${existing.value}', new='$sanitizedValue'")
+            Log.w(TAG, "Contradiction detected for a stored memory key; values omitted from logs")
             ContradictionReport(
                 hasContradiction = true,
                 existingNode = existing,
