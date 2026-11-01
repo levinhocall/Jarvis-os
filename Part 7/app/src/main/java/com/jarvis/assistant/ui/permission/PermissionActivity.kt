@@ -44,9 +44,6 @@ class PermissionActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { updatePermissionStates() }
 
-    private val allPermissionsLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { updatePermissionStates() }
     private val contactsLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { updatePermissionStates() }
     private val callLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { updatePermissionStates() }
     private val cameraLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { updatePermissionStates() }
@@ -114,7 +111,7 @@ class PermissionActivity : AppCompatActivity() {
         }
 
         binding.btnGrantAll.setOnClickListener {
-            requestAllMissingPermissions()
+            showPermissionChoices()
         }
 
         binding.btnOpenSettings.setOnClickListener {
@@ -196,7 +193,7 @@ class PermissionActivity : AppCompatActivity() {
                 binding.btnGrantAll.isEnabled = false
             }
         } else {
-            binding.btnGrantAll.text = "GRANT ALL PERMISSIONS"
+            binding.btnGrantAll.text = "CHOOSE A PERMISSION"
             binding.btnGrantAll.alpha = 1.0f
             binding.btnGrantAll.isEnabled = true
             binding.btnGrantAll.setOnClickListener {
@@ -272,32 +269,56 @@ class PermissionActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestAllMissingPermissions() {
-        val missing = mutableListOf<String>()
+    private fun showPermissionChoices() {
+        val choices = mutableListOf<Pair<String, () -> Unit>>()
         if (!PermissionHelper.hasRecordAudioPermission(this)) {
-            missing.add(Manifest.permission.RECORD_AUDIO)
+            choices += "Microphone — live voice conversations" to { micLauncher.launch(Manifest.permission.RECORD_AUDIO) }
         }
         if (!PermissionHelper.hasLocationPermission(this)) {
-            missing.add(Manifest.permission.ACCESS_FINE_LOCATION)
-            missing.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+            choices += "Location — maps and route origin" to {
+                locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !PermissionHelper.hasNotificationPermission(this)) {
-            missing.add(Manifest.permission.POST_NOTIFICATIONS)
+            choices += "Notifications — reminders and service status" to { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
         }
-        listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.CAMERA).forEach {
-            if (!hasPermission(it)) missing.add(it)
+        if (!PermissionHelper.hasContactsPermission(this)) {
+            choices += "Contacts — resolve saved contact names" to { contactsLauncher.launch(Manifest.permission.READ_CONTACTS) }
+        }
+        if (!hasPermission(Manifest.permission.CALL_PHONE)) {
+            choices += "Phone calls — place calls when requested" to { callLauncher.launch(Manifest.permission.CALL_PHONE) }
+        }
+        if (!hasPermission(Manifest.permission.CAMERA)) {
+            choices += "Camera — Neural Lens capture" to { cameraLauncher.launch(Manifest.permission.CAMERA) }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-            missing.add(Manifest.permission.BLUETOOTH_CONNECT)
+            choices += "Bluetooth — headset routing" to { bluetoothLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT) }
+        }
+        if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
+            choices += "Accessibility — screen reading and UI actions" to {
+                PermissionHelper.requestAccessibilityWithRestrictedGuidance(this)
+            }
+        }
+        if (!PermissionHelper.hasOverlayPermission(this)) {
+            choices += "Display over other apps — floating avatar" to { PermissionHelper.requestOverlayPermission(this) }
+        }
+        if (!PermissionHelper.hasWriteSettingsPermission(this)) {
+            choices += "Modify system settings — brightness and supported controls" to { PermissionHelper.requestWriteSettings(this) }
         }
 
-        if (missing.isNotEmpty()) {
-            allPermissionsLauncher.launch(missing.toTypedArray())
-        } else if (!PermissionHelper.isAccessibilityServiceEnabled(this)) {
-            PermissionHelper.openAccessibilitySettings(this)
-        } else if (!PermissionHelper.hasOverlayPermission(this)) {
-            PermissionHelper.requestOverlayPermission(this)
+        if (choices.isEmpty()) {
+            Toast.makeText(this, "All currently listed permissions are granted.", Toast.LENGTH_SHORT).show()
+            return
         }
+
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Choose one permission to review")
+            .setMessage("Permissions are optional and feature-specific. Select only the capability you want to enable. Android will ask for its own confirmation.")
+            .setItems(choices.map { it.first }.toTypedArray()) { _, index ->
+                choices.getOrNull(index)?.second?.invoke()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun hasPermission(permission: String) = ContextCompat.checkSelfPermission(this, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
