@@ -72,7 +72,7 @@ class FeatureHubActivity : AppCompatActivity() {
                 .setTitle("Mission Control")
                 .setMessage(message)
                 .setPositiveButton("Close", null)
-            if (mission?.status in setOf(
+            if (mission != null && mission.status in setOf(
                     com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING,
                     com.jarvis.assistant.automation.mission.MissionOverallStatus.VERIFYING
                 )) {
