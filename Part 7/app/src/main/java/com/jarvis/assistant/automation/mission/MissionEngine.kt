@@ -1158,11 +1158,19 @@ object MissionEngine {
                 return
             }
             if (pauseRequestedMissions.remove(missionId)) {
+                val hasUnverifiedOutcome = updatedSteps.any { it.status == MissionStepStatus.UNVERIFIED }
                 val paused = mission.copy(
                     steps = updatedSteps.toList(),
                     currentStepIndex = index,
-                    status = MissionOverallStatus.PAUSED,
-                    outcomeSummary = "Mission paused after the current action reached a safe boundary.",
+                    status = if (hasUnverifiedOutcome) MissionOverallStatus.UNVERIFIED else MissionOverallStatus.PAUSED,
+                    outcomeSummary = if (hasUnverifiedOutcome) {
+                        "Pause reached a safe boundary, but an action outcome is unverified. Manual review is required."
+                    } else {
+                        "Mission paused after the current action reached a safe boundary."
+                    },
+                    unverifiedDisclaimers = if (hasUnverifiedOutcome) {
+                        updatedSteps.filter { it.status == MissionStepStatus.UNVERIFIED }.mapNotNull { it.failureReason }
+                    } else mission.unverifiedDisclaimers,
                     updatedAt = System.currentTimeMillis()
                 )
                 _activeMission.value = paused
@@ -1411,11 +1419,19 @@ object MissionEngine {
         }
 
         if (pauseRequestedMissions.remove(missionId) && updatedSteps.any { it.status != MissionStepStatus.COMPLETED }) {
+            val hasUnverifiedOutcome = updatedSteps.any { it.status == MissionStepStatus.UNVERIFIED }
             val paused = (_activeMission.value ?: mission).copy(
                 steps = updatedSteps.toList(),
                 currentStepIndex = updatedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0),
-                status = MissionOverallStatus.PAUSED,
-                outcomeSummary = "Mission paused after the current action reached a safe boundary.",
+                status = if (hasUnverifiedOutcome) MissionOverallStatus.UNVERIFIED else MissionOverallStatus.PAUSED,
+                outcomeSummary = if (hasUnverifiedOutcome) {
+                    "Pause reached a safe boundary, but an action outcome is unverified. Manual review is required."
+                } else {
+                    "Mission paused after the current action reached a safe boundary."
+                },
+                unverifiedDisclaimers = if (hasUnverifiedOutcome) {
+                    updatedSteps.filter { it.status == MissionStepStatus.UNVERIFIED }.mapNotNull { it.failureReason }
+                } else mission.unverifiedDisclaimers,
                 updatedAt = System.currentTimeMillis()
             )
             _activeMission.value = paused
