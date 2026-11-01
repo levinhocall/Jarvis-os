@@ -201,7 +201,6 @@ class TriggerRepository(
         "triggerId" to trigger.triggerId,
         "goal" to trigger.goalOrAction,
         "isUnattended" to trigger.isUnattended,
-        "triggerType" to trigger.triggerType.name,
         "triggerType" to trigger.triggerType.name
     )
 
