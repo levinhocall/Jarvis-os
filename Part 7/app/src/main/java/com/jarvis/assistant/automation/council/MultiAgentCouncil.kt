@@ -27,17 +27,14 @@ object MultiAgentCouncil {
     private val _activeRole = MutableStateFlow<AgentRole?>(null)
     val activeRole: StateFlow<AgentRole?> = _activeRole.asStateFlow()
 
-    private val mutatingTools = setOf(
-        "call_contact",
-        "whatsapp_send",
-        "send_whatsapp",
-        "device_control",
-        "click_ui_element",
-        "type_text",
-        "open_app",
-        "scroll_screen",
-        "navigate_home",
-        "navigate_back"
+    // Default-deny: the Researcher may only use explicitly read-only tools.
+    // New tools are never granted Researcher access merely because their risk metadata
+    // was incorrectly or incompletely configured.
+    private val researcherReadOnlyTools = setOf(
+        "search_web",
+        "query_recall_core",
+        "read_unread_notifications",
+        "inspect_code"
     )
 
     /**
@@ -48,13 +45,11 @@ object MultiAgentCouncil {
         val registeredTool = ToolRegistry.getTool(canonicalName) ?: return false
         return when (role) {
             AgentRole.EXECUTOR -> true // Executor may invoke only registered tools.
-            AgentRole.RESEARCHER -> {
-                val isExplicitlyMutating = canonicalName in mutatingTools
-                !isExplicitlyMutating &&
+            AgentRole.RESEARCHER ->
+                canonicalName in researcherReadOnlyTools &&
                     registeredTool.riskLevel == MissionRisk.LOW &&
                     registeredTool.isIdempotent &&
                     !registeredTool.requiresAccessibility
-            }
             AgentRole.PLANNER, AgentRole.VERIFIER, AgentRole.LEAD_SYNTHESIZER -> false
         }
     }
@@ -162,8 +157,22 @@ object MultiAgentCouncil {
      */
     suspend fun executeCouncilTask(
         context: Context? = null,
+        goal: String
+    ): CouncilExecutionOutcome = executeCouncilTaskInternal(context, goal, null)
+
+    /**
+     * Test-only executor injection. Production callers cannot supply a simulated executor.
+     */
+    internal suspend fun executeCouncilTaskForTest(
+        context: Context? = null,
         goal: String,
-        simulatedExecutor: (suspend (MissionStep) -> Pair<Boolean, MissionVerificationEvidence>)? = null
+        simulatedExecutor: suspend (MissionStep) -> Pair<Boolean, MissionVerificationEvidence>
+    ): CouncilExecutionOutcome = executeCouncilTaskInternal(context, goal, simulatedExecutor)
+
+    private suspend fun executeCouncilTaskInternal(
+        context: Context?,
+        goal: String,
+        simulatedExecutor: (suspend (MissionStep) -> Pair<Boolean, MissionVerificationEvidence>)?
     ): CouncilExecutionOutcome = withContext(Dispatchers.Default) {
         val cleanGoal = goal.trim()
         val handoffs = mutableListOf<AgentHandoff>()
@@ -207,8 +216,24 @@ object MultiAgentCouncil {
             )
         )
 
-        // Check consequential risk & approval requirement
-        if (missionPlan.approvalState == MissionApprovalState.PENDING_APPROVAL) {
+        // Never let an empty or clarification-required plan fall through as a zero-step success.
+        if (missionPlan.status == MissionOverallStatus.CLARIFICATION_REQUIRED) {
+            _activeRole.value = AgentRole.LEAD_SYNTHESIZER
+            return@withContext CouncilExecutionOutcome(
+                isSuccess = false,
+                goal = cleanGoal,
+                leadResponse = missionPlan.clarificationRequest?.question
+                    ?: "More information is required before this task can be planned.",
+                handoffHistory = handoffs,
+                executionStepsCount = 0,
+                isVerifiedIndependently = false,
+                failureReason = "Clarification required: ${missionPlan.clarificationRequest?.missingField ?: "unspecified input"}"
+            )
+        }
+
+        if (missionPlan.approvalState == MissionApprovalState.PENDING_APPROVAL ||
+            missionPlan.status == MissionOverallStatus.WAITING_FOR_APPROVAL
+        ) {
             _activeRole.value = AgentRole.LEAD_SYNTHESIZER
             return@withContext CouncilExecutionOutcome(
                 isSuccess = false,
@@ -218,6 +243,19 @@ object MultiAgentCouncil {
                 executionStepsCount = 0,
                 isVerifiedIndependently = false,
                 failureReason = "Awaiting user approval"
+            )
+        }
+
+        if (missionPlan.steps.isEmpty()) {
+            _activeRole.value = AgentRole.LEAD_SYNTHESIZER
+            return@withContext CouncilExecutionOutcome(
+                isSuccess = false,
+                goal = cleanGoal,
+                leadResponse = "The planner produced no executable steps. Nothing was run.",
+                handoffHistory = handoffs,
+                executionStepsCount = 0,
+                isVerifiedIndependently = false,
+                failureReason = "Empty mission plan"
             )
         }
 
@@ -234,6 +272,7 @@ object MultiAgentCouncil {
         )
 
         var lastEvidence: MissionVerificationEvidence? = null
+        var executedStepCount = 0
         var allExecutedSuccessfully = true
 
         for (step in missionPlan.steps) {
@@ -253,6 +292,7 @@ object MultiAgentCouncil {
                 lastEvidence = result.second
                 break
             }
+            executedStepCount++
             lastEvidence = result.second
         }
 
@@ -263,7 +303,7 @@ object MultiAgentCouncil {
                 goal = cleanGoal,
                 leadResponse = "Executor encountered a roadblock: ${lastEvidence?.details ?: "Step failed"}.",
                 handoffHistory = handoffs,
-                executionStepsCount = 0,
+                executionStepsCount = executedStepCount,
                 isVerifiedIndependently = false,
                 failureReason = lastEvidence?.details
             )
