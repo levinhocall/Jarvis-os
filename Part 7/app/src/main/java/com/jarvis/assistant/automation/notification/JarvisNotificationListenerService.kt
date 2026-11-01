@@ -184,6 +184,10 @@ class JarvisNotificationListenerService : NotificationListenerService() {
             context = applicationContext
         )
 
+        // Explicitly configured notification-keyword triggers are evaluated in memory only.
+        (applicationContext as? com.jarvis.assistant.JarvisApp)?.triggerRepository
+            ?.onNotificationPosted(pkg, title, text)
+
         // Proactive Headset Whisper for incoming WhatsApp messages
         if (pkg == "com.whatsapp" && title.isNotBlank() && text.isNotBlank()) {
             com.jarvis.assistant.audio.HeadsetWhisperManager.whisperNotification(title, text, applicationContext)
