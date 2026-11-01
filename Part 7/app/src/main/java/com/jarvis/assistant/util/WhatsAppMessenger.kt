@@ -109,23 +109,33 @@ object WhatsAppMessenger {
             intent.putExtra("clone_app", true)
         }
 
-        return try {
-            ActivityLauncherHelper.startActivitySafely(context, intent)
-            JarvisAccessibilityService.instance?.scheduleWhatsAppAutoSend()
-            val targetAppName = targetApp?.label ?: if (chosenPackage.contains("w4b")) "WhatsApp Business" else "WhatsApp"
-            SendResult.Success(targetContact.name, phoneDigits, targetAppName)
-        } catch (e: Exception) {
-            try {
-                val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(deepLinkUrl)).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                }
-                ActivityLauncherHelper.startActivitySafely(context, fallbackIntent)
-                JarvisAccessibilityService.instance?.scheduleWhatsAppAutoSend()
-                SendResult.Success(targetContact.name, phoneDigits, "WhatsApp")
-            } catch (e2: Exception) {
-                SendResult.Error("Could not launch WhatsApp. Is WhatsApp installed on your device?")
-            }
+        val accessibility = JarvisAccessibilityService.instance
+        if (accessibility == null) {
+            return SendResult.Error("WhatsApp automation is unavailable because JARVIS Accessibility is not connected; no send action was queued.")
         }
+
+        val targetAppName = targetApp?.label ?: if (chosenPackage.contains("w4b")) "WhatsApp Business" else "WhatsApp"
+        val primaryLaunched = runCatching {
+            ActivityLauncherHelper.startActivitySafely(context, intent)
+        }.getOrDefault(false)
+
+        if (primaryLaunched) {
+            accessibility.scheduleWhatsAppAutoSend()
+            return SendResult.Success(targetContact.name, phoneDigits, targetAppName)
+        }
+
+        val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(deepLinkUrl)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val fallbackLaunched = runCatching {
+            ActivityLauncherHelper.startActivitySafely(context, fallbackIntent)
+        }.getOrDefault(false)
+        if (!fallbackLaunched) {
+            return SendResult.Error("Could not launch WhatsApp. No message was sent.")
+        }
+
+        accessibility.scheduleWhatsAppAutoSend()
+        SendResult.Success(targetContact.name, phoneDigits, "WhatsApp")
     }
 
     /**
@@ -204,11 +214,11 @@ object WhatsAppMessenger {
                 setPackage(chosenPackage)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
-            try {
+            val directLaunched = runCatching {
                 ActivityLauncherHelper.startActivitySafely(context, directIntent)
+            }.getOrDefault(false)
+            if (directLaunched) {
                 return CallResult.Success(targetContact.name, normalizedType, targetAppName)
-            } catch (e: Exception) {
-                // Fallback below
             }
         }
 
@@ -219,13 +229,18 @@ object WhatsAppMessenger {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
 
-        return try {
-            ActivityLauncherHelper.startActivitySafely(context, fallbackIntent)
-            JarvisAccessibilityService.instance?.scheduleWhatsAppCallAutoTap(normalizedType)
-            CallResult.Success(targetContact.name, normalizedType, targetAppName)
-        } catch (e: Exception) {
-            CallResult.Error("Could not connect WhatsApp $normalizedType call to ${targetContact.name}.")
+        val accessibility = JarvisAccessibilityService.instance
+        if (accessibility == null) {
+            return CallResult.Error("WhatsApp Accessibility automation is not connected; the call was not started.")
         }
+        val launched = runCatching {
+            ActivityLauncherHelper.startActivitySafely(context, fallbackIntent)
+        }.getOrDefault(false)
+        if (!launched) {
+            return CallResult.Error("Could not open WhatsApp for the $normalizedType call; no call was started.")
+        }
+        accessibility.scheduleWhatsAppCallAutoTap(normalizedType)
+        CallResult.Success(targetContact.name, normalizedType, targetAppName)
     }
 
     private fun findWhatsAppContactDataId(context: Context, phoneDigits: String, mimeType: String): Long? {
