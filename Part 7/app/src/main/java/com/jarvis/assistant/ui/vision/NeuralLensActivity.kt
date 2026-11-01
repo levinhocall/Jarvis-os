@@ -127,12 +127,30 @@ class NeuralLensActivity : AppCompatActivity() {
             status.text = "Capture or select an image before analysis."
             return
         }
+        // Analyze an owned snapshot. The activity may be destroyed and recycle its preview
+        // bitmap while the provider request is still running.
+        val analysisBitmap = try {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } catch (error: Exception) {
+            status.text = "Could not prepare the selected image for analysis."
+            return
+        }
         setBusy(true, "Analyzing the selected image…")
         lifecycleScope.launch {
-            val analysis = CameraVisionAnalyzer.analyzeBitmap(this@NeuralLensActivity, bitmap)
-            result.text = analysis.summary
-            status.text = if (analysis.success) "Image analysis completed by Gemini Vision." else "Image analysis did not complete."
-            setBusy(false)
+            try {
+                val analysis = CameraVisionAnalyzer.analyzeBitmap(this@NeuralLensActivity, analysisBitmap)
+                if (!isFinishing && !isDestroyed) {
+                    result.text = analysis.summary
+                    status.text = if (analysis.success) "Image analysis completed by Gemini Vision." else "Image analysis did not complete."
+                }
+            } catch (error: Exception) {
+                if (!isFinishing && !isDestroyed) {
+                    status.text = "Image analysis failed: ${error.localizedMessage ?: "unknown error"}"
+                }
+            } finally {
+                if (!analysisBitmap.isRecycled) analysisBitmap.recycle()
+                if (!isFinishing && !isDestroyed) setBusy(false)
+            }
         }
     }
 
