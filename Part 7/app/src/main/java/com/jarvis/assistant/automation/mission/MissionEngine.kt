@@ -420,7 +420,9 @@ object MissionEngine {
             approvedToolCall = com.jarvis.assistant.automation.agent.ApprovedLlmToolCall(
                 toolName = canonicalToolName,
                 arguments = pending.parameters
-            )
+            ),
+            onStepStarted = { toolName, args -> checkpointLlmStepStarted(approvedMission, toolName, args) },
+            onStepRecorded = { record -> checkpointLlmStepRecorded(approvedMission, record) }
         ) { toolName, args ->
             val exactApproval = !approvalConsumed &&
                 ToolRegistry.resolveToolName(toolName) == canonicalToolName &&
@@ -482,7 +484,12 @@ object MissionEngine {
             _activeMission.value = initialMission
             persistMission(initialMission)
             engineScope.launch {
-                val result = planner.planAndExecute(buildPlannerGoal(goal, userConstraints), context) { toolName, args ->
+                val result = planner.planAndExecute(
+                    goal = buildPlannerGoal(goal, userConstraints),
+                    context = context,
+                    onStepStarted = { toolName, args -> checkpointLlmStepStarted(initialMission, toolName, args) },
+                    onStepRecorded = { record -> checkpointLlmStepRecorded(initialMission, record) }
+                ) { toolName, args ->
                     val step = MissionStep(
                         title = "LLM Step: $toolName",
                         toolName = toolName,
@@ -978,7 +985,9 @@ object MissionEngine {
         val result = planner.planAndExecute(
             goal = buildPlannerGoal(mission.goal, mission.userConstraints),
             context = context,
-            initialHistory = history
+            initialHistory = history,
+            onStepStarted = { toolName, args -> checkpointLlmStepStarted(mission, toolName, args) },
+            onStepRecorded = { record -> checkpointLlmStepRecorded(mission, record) }
         ) { toolName, args ->
             val step = MissionStep(
                 title = "LLM Step: $toolName",
