@@ -346,8 +346,8 @@ class NeuralLensActivity : AppCompatActivity() {
         cameraProvider = null
         pendingCaptureFile?.delete()
         pendingCaptureFile = null
-        preview.setImageDrawable(null)
-        selectedBitmap?.recycle()
+        if (::preview.isInitialized) preview.setImageDrawable(null)
+        selectedBitmap?.takeUnless { it.isRecycled }?.recycle()
         selectedBitmap = null
         super.onDestroy()
     }
