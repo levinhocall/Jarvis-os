@@ -10,7 +10,9 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.card.MaterialCardView
 import com.jarvis.assistant.R
 import com.jarvis.assistant.ui.permission.PermissionActivity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Feature launcher backed only by capabilities already present in this build. */
 class FeatureHubActivity : AppCompatActivity() {
@@ -79,6 +81,28 @@ class FeatureHubActivity : AppCompatActivity() {
             dialog.show()
         }
 
+        entry(root, "Mission History", "Review persisted multi-step missions and their verified outcomes", true) {
+            lifecycleScope.launch {
+                val missions = withContext(Dispatchers.IO) {
+                    com.jarvis.assistant.JarvisApp.instance.memoryDatabase.missionDao().getAllMissions()
+                }
+                val summary = if (missions.isEmpty()) {
+                    "No saved missions yet."
+                } else {
+                    missions.take(20).joinToString("\n\n") { mission ->
+                        val updated = java.text.DateFormat.getDateTimeInstance(
+                            java.text.DateFormat.SHORT, java.text.DateFormat.SHORT
+                        ).format(java.util.Date(mission.updatedAt))
+                        "${mission.status.replace('_', ' ')} • $updated\n${mission.goal.take(180)}\n${mission.outcomeSummary.orEmpty().take(220)}"
+                    }
+                }
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(this@FeatureHubActivity)
+                    .setTitle("Mission History")
+                    .setMessage(summary)
+                    .setPositiveButton("Close", null)
+                    .show()
+            }
+        }
         entry(root, "AI Personalization", "Configure assistant personality and response style", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.settings.PersonaActivity::class.java))
         }
