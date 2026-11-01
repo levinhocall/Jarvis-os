@@ -449,7 +449,43 @@ object MissionEngine {
                 )
             }
         }
-        // 2. Ambiguity Detection: Phone Call
+        // 2. WhatsApp voice/video calls are consequential and always require explicit approval.
+        else if (lower.contains("whatsapp") && (lower.contains("call") || lower.contains("phone"))) {
+            val query = cleanGoal
+                .replace(Regex("(?i)^(?:please\\s+)?(?:make\\s+)?(?:a\\s+)?whatsapp\\s+(?:voice\\s+|video\\s+)?call\\s*(?:to\\s+)?"), "")
+                .replace(Regex("(?i)^(?:please\\s+)?(?:make\\s+)?(?:a\\s+)?(?:voice\\s+|video\\s+)?call\\s*(?:to\\s+)?"), "")
+                .replace(Regex("(?i)\\s+on\\s+whatsapp$"), "")
+                .trim()
+            if (query.isBlank()) {
+                clarification = ClarificationRequest(
+                    question = "Who should I call on WhatsApp, Sir?",
+                    missingField = "contact_name"
+                )
+            } else {
+                val callType = if (lower.contains("video")) "video" else "voice"
+                val appNumber = userConstraints.firstNotNullOfOrNull {
+                    it.removePrefix("app_number=").toIntOrNull()
+                }
+                requiresApproval = true
+                approvalPrompt = "Start a WhatsApp $callType call with '$query'?"
+                steps.add(
+                    MissionStep(
+                        title = "Start WhatsApp $callType call",
+                        description = "Open WhatsApp call action for '$query' only after explicit user approval",
+                        toolName = "whatsapp_call",
+                        parameters = buildMap {
+                            put("contact_name", query)
+                            put("call_type", callType)
+                            if (appNumber != null) put("app_number", appNumber)
+                        },
+                        riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                        isIdempotent = false,
+                        expectedEvidence = "WhatsApp call interface opened; connection state remains unverified"
+                    )
+                )
+            }
+        }
+        // 3. Ambiguity Detection: Phone Call
         else if (lower.startsWith("call") || lower.startsWith("phone") || lower.contains("ko phone") || lower.contains("ko call")) {
             val query = cleanGoal.replace(Regex("(?i)^(call|phone|dial)\\s*"), "").trim()
             if (query.isBlank()) {
@@ -460,12 +496,18 @@ object MissionEngine {
             } else {
                 requiresApproval = true
                 approvalPrompt = "Place a phone call to '$query'?"
+                val contactIndex = userConstraints.firstNotNullOfOrNull {
+                    it.removePrefix("contact_index=").toIntOrNull()
+                }
                 steps.add(
                     MissionStep(
                         title = "Place phone call",
                         description = "Call contact '$query' after explicit user approval",
                         toolName = "call_contact",
-                        parameters = mapOf("contact_name" to query),
+                        parameters = buildMap {
+                            put("contact_name", query)
+                            if (contactIndex != null) put("contact_index", contactIndex)
+                        },
                         riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
                         isIdempotent = false,
                         expectedEvidence = "Outgoing phone call screen launched"
