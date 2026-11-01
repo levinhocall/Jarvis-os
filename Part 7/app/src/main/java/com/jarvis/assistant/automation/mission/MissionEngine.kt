@@ -342,6 +342,7 @@ object MissionEngine {
     ): MissionDefinition = mutex.withLock {
         if (hasBlockingMission()) return@withLock blockedMission(goal)
         val planner = llmPlanner
+        planner?.resetCancellation()
         val hasExactContactOrProfileConstraint = userConstraints.any {
             it.startsWith("contact_index=") || it.startsWith("app_number=")
         }
@@ -363,6 +364,7 @@ object MissionEngine {
                 userConstraints = userConstraints,
                 steps = emptyList(),
                 status = MissionOverallStatus.EXECUTING,
+                outcomeSummary = "LLM planner running",
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )
