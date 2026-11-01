@@ -1961,7 +1961,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             if (curr.isClickable) {
                 val clicked = curr.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 if (clicked) {
-                    Log.i(TAG, "clickNodeBySemanticMatch: clicked node via ACTION_CLICK for '$targetQuery'")
+                    Log.i(TAG, "clickNodeBySemanticMatch: clicked semantic target via ACTION_CLICK")
                     return true
                 }
             }
@@ -1974,7 +1974,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         if (bounds.width() > 0 && bounds.height() > 0) {
             val cx = bounds.centerX().toFloat()
             val cy = bounds.centerY().toFloat()
-            Log.i(TAG, "clickNodeBySemanticMatch: dispatching center tap at ($cx, $cy) for '$targetQuery'")
+            Log.i(TAG, "clickNodeBySemanticMatch: dispatching verified center tap")
             return clickAt(cx, cy)
         }
         return false
@@ -2209,7 +2209,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
 
         if (pasteNode != null) {
-            Log.i(TAG, "Found native Paste popup menu item: ${pasteNode.text ?: pasteNode.contentDescription}")
+            Log.i(TAG, "Found native Paste popup menu item; label omitted")
             val clicked = clickNodeAndTap(pasteNode)
             safeDelay(120)
             return clicked
