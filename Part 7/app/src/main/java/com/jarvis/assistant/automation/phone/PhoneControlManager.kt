@@ -403,8 +403,9 @@ class PhoneControlManager(
                 }
             }
 
-            ActivityLauncherHelper.startActivitySafely(context, intent)
-            "Calling $displayName."
+            val launched = ActivityLauncherHelper.startActivitySafely(context, intent)
+            if (launched) "Call request handed to Android for $displayName; connection is not confirmed."
+            else "Could not open the phone dialer for $displayName."
         } catch (e: Exception) {
             Log.e(TAG, "Failed to place call: ${e.message}", e)
             "Could not initiate phone call."
@@ -645,14 +646,15 @@ class PhoneControlManager(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             return try {
-                ActivityLauncherHelper.startActivitySafely(context, cameraIntent)
-                "Opening Camera."
+                if (ActivityLauncherHelper.startActivitySafely(context, cameraIntent)) "Opening Camera."
+                else "Failed to open Camera."
             } catch (e: Exception) {
                 // Try direct package
                 val pkg = resolveInstalledPackageByName("camera") ?: "com.android.camera"
                 context.packageManager.getLaunchIntentForPackage(pkg)?.let {
-                    ActivityLauncherHelper.startActivitySafely(context, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    return "Opening Camera."
+                    if (ActivityLauncherHelper.startActivitySafely(context, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) {
+                        return "Opening Camera."
+                    }
                 }
                 "Failed to open Camera."
             }
@@ -664,8 +666,8 @@ class PhoneControlManager(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             return try {
-                ActivityLauncherHelper.startActivitySafely(context, settingsIntent)
-                "Opening Settings."
+                if (ActivityLauncherHelper.startActivitySafely(context, settingsIntent)) "Opening Settings."
+                else "Failed to open Settings."
             } catch (e: Exception) {
                 "Failed to open Settings."
             }
@@ -680,16 +682,16 @@ class PhoneControlManager(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             if (launchIntent != null) {
-                ActivityLauncherHelper.startActivitySafely(context, launchIntent)
-                return "Opening Gallery."
+                if (ActivityLauncherHelper.startActivitySafely(context, launchIntent)) return "Opening Gallery."
+                return "Failed to open Gallery."
             }
             val galleryIntent = Intent(Intent.ACTION_VIEW).apply {
                 type = "image/*"
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             return try {
-                ActivityLauncherHelper.startActivitySafely(context, galleryIntent)
-                "Opening Gallery."
+                if (ActivityLauncherHelper.startActivitySafely(context, galleryIntent)) "Opening Gallery."
+                else "Failed to open Gallery."
             } catch (e: Exception) {
                 "Failed to open Gallery."
             }
@@ -722,8 +724,9 @@ class PhoneControlManager(
             if (launchIntent != null) {
                 return try {
                     val launched = ActivityLauncherHelper.startActivitySafely(context, launchIntent)
-                    Log.i(TAG, "Successfully launched via ActivityLauncherHelper: $targetPackage ($launched)")
-                    "Opening ${clean.replaceFirstChar { it.uppercase() }}."
+                    Log.i(TAG, "Launch request for $targetPackage accepted: $launched")
+                    if (launched) "Opening ${clean.replaceFirstChar { it.uppercase() }}."
+                    else "Failed to launch app."
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to launch $targetPackage: ${e.message}")
                     "Failed to launch app."
