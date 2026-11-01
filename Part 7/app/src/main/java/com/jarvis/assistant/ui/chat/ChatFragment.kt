@@ -16,7 +16,9 @@ import com.jarvis.assistant.background.JarvisConversationService
 import com.jarvis.assistant.databinding.FragmentChatBinding
 import com.jarvis.assistant.ui.home.MainActivity
 import com.jarvis.assistant.ui.home.MainViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ChatFragment : Fragment() {
 
@@ -82,7 +84,25 @@ class ChatFragment : Fragment() {
                 .setTitle("New Conversation")
                 .setMessage("Start a new conversation and clear current history?")
                 .setPositiveButton("New Chat") { _, _ ->
-                    JarvisApp.instance.chatRepository.clearHistory()
+                    val app = JarvisApp.instance
+                    app.chatRepository.clearHistory()
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val repository = app.conversationRepository
+                                val activeSession = repository.restoreMostRecentActiveSession()
+                                if (activeSession != null) repository.archiveSession(activeSession, true)
+                                repository.createNewSession("New Chat")
+                            }
+                        }.onFailure { error ->
+                            Toast.makeText(
+                                requireContext(),
+                                "Legacy chat history was cleared, but the structured conversation could not be reset.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            android.util.Log.e("ChatFragment", "Could not start a fresh structured conversation", error)
+                        }
+                    }
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
