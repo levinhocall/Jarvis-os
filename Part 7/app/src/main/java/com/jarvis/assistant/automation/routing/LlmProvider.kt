@@ -7,6 +7,7 @@ import com.jarvis.assistant.automation.agent.GeminiSchemaConverter
 import com.jarvis.assistant.automation.agent.LlmStepDecision
 import com.jarvis.assistant.automation.mission.ToolDefinition
 import com.jarvis.assistant.data.preferences.AppPreferences
+import com.jarvis.assistant.data.model.GeminiConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -79,7 +80,8 @@ class GeminiProvider(
             throw IllegalStateException("No active Gemini API key available in key pool.")
         }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$currentKey"
+        val modelName = GeminiConstants.MODEL_3_8_FLASH.removePrefix("models/")
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent"
 
         val contents = mutableListOf<Map<String, Any>>()
         contents.add(
@@ -93,12 +95,20 @@ class GeminiProvider(
             "contents" to contents
         )
 
+        if (!request.systemPrompt.isNullOrBlank()) {
+            payload["systemInstruction"] = mapOf("parts" to listOf(mapOf("text" to request.systemPrompt)))
+        }
+
         if (request.tools.isNotEmpty()) {
             payload["tools"] = GeminiSchemaConverter.convertTools(request.tools)
         }
 
         val reqBody = gson.toJson(payload).toRequestBody("application/json".toMediaType())
-        val httpRequest = Request.Builder().url(url).post(reqBody).build()
+        val httpRequest = Request.Builder()
+            .url(url)
+            .header("x-goog-api-key", currentKey)
+            .post(reqBody)
+            .build()
 
         val httpResponse = try {
             client.newCall(httpRequest).execute()
@@ -118,9 +128,10 @@ class GeminiProvider(
             throw IllegalStateException("Gemini Authentication failed (${httpResponse.code}). Key marked invalid.")
         }
         if (!httpResponse.isSuccessful) {
-            throw IllegalStateException("Gemini error ${httpResponse.code}: $respBody")
+            throw IllegalStateException("Gemini request failed with HTTP ${httpResponse.code}. Check provider diagnostics and key status.")
         }
 
+        preferences.reportKeySuccess("gemini", currentKey)
         val json = gson.fromJson(respBody, JsonObject::class.java)
         var textResult = ""
         val toolCalls = mutableListOf<LlmStepDecision.InvokeTool>()
@@ -161,7 +172,7 @@ class GeminiProvider(
             completionTokens = compTokens,
             latencyMs = latency,
             providerId = id,
-            modelName = "gemini-1.5-flash"
+            modelName = modelName
         )
     }
 }
