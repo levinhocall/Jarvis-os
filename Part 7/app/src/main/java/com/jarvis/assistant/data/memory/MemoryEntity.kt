@@ -32,6 +32,11 @@ data class MemoryEntity(
     val isExpired: Boolean
         get() = expiryTimeMs != null && System.currentTimeMillis() > expiryTimeMs
 
+    /** Confidential, expired or low-confidence facts must never be injected into model prompts. */
+    val isSafeForModelContext: Boolean
+        get() = !isExpired && confidence >= 0.55f &&
+            sensitivity.uppercase(Locale.ROOT) !in setOf("CONFIDENTIAL", "SECRET", "CREDENTIAL", "AUTHENTICATION")
+
     companion object {
         const val CATEGORY_PERSONAL = "Personal"
         const val CATEGORY_PREFERENCES = "Preferences"
