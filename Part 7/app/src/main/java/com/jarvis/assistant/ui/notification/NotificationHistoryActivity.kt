@@ -41,7 +41,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
             setTextColor(resolveColor(com.jarvis.assistant.R.attr.themeTextPrimary))
         })
         root.addView(TextView(this).apply {
-            text = "Notification text can contain private messages. Nothing is saved unless enabled here. History stays in the app's encrypted database and is limited to 30 days."
+            text = "Notification text can contain private messages. Nothing is saved unless enabled here. History stays in the app's encrypted database for up to 30 days. OTPs, passwords and other credential notifications are always excluded."
             textSize = 13f
             setPadding(0, dp(8), 0, dp(14))
             setTextColor(resolveColor(com.jarvis.assistant.R.attr.themeTextMuted))
