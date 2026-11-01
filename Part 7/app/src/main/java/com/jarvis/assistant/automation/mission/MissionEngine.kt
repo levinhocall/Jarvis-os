@@ -809,7 +809,6 @@ object MissionEngine {
         } else {
             pauseRequestedMissions.add(missionId)
             val requested = current.copy(
-                status = MissionOverallStatus.PAUSED,
                 outcomeSummary = "Pause requested; the current action will finish before execution stops.",
                 updatedAt = System.currentTimeMillis()
             )
