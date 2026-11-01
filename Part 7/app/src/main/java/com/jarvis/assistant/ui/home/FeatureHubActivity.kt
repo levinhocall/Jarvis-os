@@ -96,6 +96,25 @@ class FeatureHubActivity : AppCompatActivity() {
             startActivity(Intent(this, com.jarvis.assistant.ui.wallpaper.VideoWallpaperActivity::class.java))
         }
 
+        entry(root, "Memory & Context", "Review persistent memories and manage assistant recall", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.memory.MemoryActivity::class.java))
+        }
+        entry(root, "Floating Avatar & Character", "Configure the assistant overlay, character and display behavior", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.settings.OverlayAvatarActivity::class.java))
+        }
+        entry(root, "Voice Identity", "Enroll or manage the owner voice profile", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.voice.VoiceEnrollmentActivity::class.java))
+        }
+        entry(root, "Hands-Free Voice", "Configure hands-free and voice session behavior", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.settings.HandsFreeActivity::class.java))
+        }
+        entry(root, "Privacy Shield", "Review privacy controls and sensitive-data protections", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.settings.PrivacyShieldActivity::class.java))
+        }
+        entry(root, "AI Provider Connections", "Manage provider credentials and connection settings", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.settings.ApiConnectionActivity::class.java))
+        }
+
         setContentView(android.widget.ScrollView(this).apply { addView(root) })
     }
 
