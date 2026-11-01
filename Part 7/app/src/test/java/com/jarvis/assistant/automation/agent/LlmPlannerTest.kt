@@ -222,6 +222,23 @@ class LlmPlannerTest {
     }
 
     @Test
+    fun testPauseStopsAtSafeBoundaryAndPreservesVerifiedHistory() = runBlocking {
+        val provider = FakeScriptedProvider { _, _ ->
+            LlmStepDecision.InvokeTool("search_web", mapOf("query" to "safe pause test"))
+        }
+        val planner = LlmPlanner(provider, maxSteps = 5)
+        val result = planner.planAndExecute("Pause safely") { _, _ ->
+            planner.requestPause()
+            Pair(true, "Search result verified")
+        }
+
+        assertFalse(result.isSuccess)
+        assertEquals("PAUSED", result.abortReason)
+        assertEquals(1, result.stepsExecuted)
+        assertTrue(result.history.single().isVerified)
+    }
+
+    @Test
     fun testCancellationViaKillSwitch() = runBlocking {
         val provider = FakeScriptedProvider { _, _ ->
             LlmStepDecision.InvokeTool("search_web", mapOf("query" to "test"))
