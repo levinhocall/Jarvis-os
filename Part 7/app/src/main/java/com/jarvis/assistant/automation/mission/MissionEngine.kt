@@ -441,7 +441,13 @@ object MissionEngine {
                         title = "Send WhatsApp message",
                         description = "Dispatch approved message through WhatsApp automation",
                         toolName = "whatsapp_send",
-                        parameters = mapOf("contact" to contact, "message" to msg),
+                        parameters = buildMap {
+                            put("contact", contact)
+                            put("message", msg)
+                            userConstraints.firstNotNullOfOrNull {
+                                it.removePrefix("app_number=").toIntOrNull()
+                            }?.let { put("app_number", it) }
+                        },
                         riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
                         isIdempotent = false,
                         expectedEvidence = "Message sent checkmark or chat dispatch"
@@ -1176,9 +1182,29 @@ object MissionEngine {
                 val contact = step.parameters["contact"] as? String ?: ""
                 val message = step.parameters["message"] as? String ?: ""
                 if (app == null || contact.isBlank() || message.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp assistant unavailable or message inputs missing."))
-                val output = app.commandExecutor.execute(JarvisCommand.WhatsAppMessage(contact, message))
-                val failed = output.contains("failed", true) || output.contains("error", true) || output.contains("could not", true) || output.contains("no draft", true)
-                Pair(!failed, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, if (failed) output else "$output Delivery was not independently confirmed; mission remains unverified."))
+                val appNumber = (step.parameters["app_number"] as? Number)?.toInt()
+                when (val sendResult = com.jarvis.assistant.util.WhatsAppMessenger.sendMessage(
+                    context = context,
+                    recipientName = contact,
+                    message = message,
+                    appNumber = appNumber,
+                    confirmed = true
+                )) {
+                    is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.Success -> Pair(
+                        true,
+                        MissionVerificationEvidence(
+                            EvidenceType.UNVERIFIED,
+                            false,
+                            "WhatsApp opened and the send action was queued for ${sendResult.contactName}; delivery is not independently verified."
+                        )
+                    )
+                    is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.MultipleAppsFound -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Multiple WhatsApp profiles are available; specify the app number."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.ContactNotFound -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp contact '${sendResult.name}' was not found."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.MultipleContactsFound -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Multiple contacts matched '${sendResult.name}'; clarification is required."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.MissingPermission -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Contacts permission is not granted."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.RequiresConfirmation -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp message confirmation is still required."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.SendResult.Error -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, sendResult.reason))
+                }
             }
 
             "whatsapp_call" -> {
