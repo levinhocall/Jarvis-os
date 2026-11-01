@@ -1143,7 +1143,7 @@ class VisualTaskOrchestrator(
             null
         }
 
-        val requestedSensitiveField = targetInputName?.let(::isSensitiveInputLabel) == true
+        val requestedSensitiveField = targetInputName?.let(SensitiveInputPolicy::isSensitiveLabel) == true
         if (focusedInputIsPassword || selectedInputElement?.let(::isSensitiveInputElement) == true || requestedSensitiveField) {
             return@withContext TaskActionResult(
                 success = false,
@@ -1500,19 +1500,8 @@ class VisualTaskOrchestrator(
                 lower.contains("turn on") || lower.contains("turn off")
     }
 
-    private fun isSensitiveInputLabel(label: String): Boolean {
-        val normalized = label.lowercase(Locale.ROOT)
-        val patterns = listOf(
-            Regex("\\b(password|passcode|pass phrase|passphrase|otp|one[- ]time code|verification code|security code)\\b"),
-            Regex("\\b(pin|upi pin|cvv|cvc|card number|credit card|debit card)\\b"),
-            Regex("\\b(bank account|account number|beneficiary|ifsc|recovery phrase|seed phrase|private key|wallet phrase)\\b"),
-            Regex("\\b(amount|bank|beneficiary|upi|upi id|ifsc|routing number|sort code|swift code|payment amount|transfer amount)\\b")
-        )
-        return patterns.any { it.containsMatchIn(normalized) }
-    }
-
     private fun isSensitiveInputElement(element: UiElementInfo): Boolean =
-        element.isPassword || isSensitiveInputLabel(
+        element.isPassword || SensitiveInputPolicy.isSensitiveLabel(
             "${element.primaryLabel} ${element.viewId} ${element.className}"
         )
 
