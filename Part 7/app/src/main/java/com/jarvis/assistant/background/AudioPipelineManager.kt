@@ -27,6 +27,12 @@ class AudioPipelineManager(
         private const val TAG = "AudioPipelineManager"
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+
+        internal fun isFatalReadError(errorCode: Int): Boolean =
+            errorCode == AudioRecord.ERROR ||
+                errorCode == AudioRecord.ERROR_BAD_VALUE ||
+                errorCode == AudioRecord.ERROR_INVALID_OPERATION ||
+                errorCode == AudioRecord.ERROR_DEAD_OBJECT
     }
 
     private var audioRecord: AudioRecord? = null
@@ -99,8 +105,13 @@ class AudioPipelineManager(
                 }
             }
 
-            record.startRecording()
+            // Publish ownership before startRecording(): if the platform throws, the
+            // common shutdown path can still release this recorder and its effects.
             audioRecord = record
+            record.startRecording()
+            if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                throw IllegalStateException("AudioRecord did not enter RECORDSTATE_RECORDING.")
+            }
             isRecording.set(true)
 
             launchCaptureLoop(bufferSize)
@@ -122,24 +133,22 @@ class AudioPipelineManager(
         recordingJob?.cancel()
         recordingJob = null
 
-        try {
-            echoCanceler?.release()
-            echoCanceler = null
-
-            noiseSuppressor?.release()
-            noiseSuppressor = null
-
-            audioRecord?.apply {
-                if (recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                    stop()
-                }
-                release()
-            }
-            audioRecord = null
-            Log.i(TAG, "Audio recording stopped and hardware freed.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during audio pipeline shutdown", e)
-        }
+        val record = audioRecord
+        audioRecord = null
+        // Stop the blocking read first, then cancel the loop. Each resource is
+        // released independently so one platform cleanup exception cannot leak the rest.
+        runCatching {
+            if (record?.recordingState == AudioRecord.RECORDSTATE_RECORDING) record.stop()
+        }.onFailure { Log.w(TAG, "AudioRecord stop failed during shutdown", it) }
+        runCatching { echoCanceler?.release() }
+            .onFailure { Log.w(TAG, "AcousticEchoCanceler release failed", it) }
+        echoCanceler = null
+        runCatching { noiseSuppressor?.release() }
+            .onFailure { Log.w(TAG, "NoiseSuppressor release failed", it) }
+        noiseSuppressor = null
+        runCatching { record?.release() }
+            .onFailure { Log.w(TAG, "AudioRecord release failed", it) }
+        Log.i(TAG, "Audio recording stopped and hardware cleanup attempted.")
     }
 
     /**
@@ -187,10 +196,17 @@ class AudioPipelineManager(
                         Log.w(TAG, "Audio chunk callback failed; capture remains active.", callbackError)
                     }
                 } else if (bytesRead < 0) {
-                    // AudioRecord error codes are negative. Avoid a hot spin if the device
-                    // temporarily revokes or resets the input route.
                     Log.w(TAG, "AudioRecord.read failed with code $bytesRead")
+                    if (isFatalReadError(bytesRead)) {
+                        // Dead/invalid recorders cannot recover by polling. Tear down and
+                        // expose an inactive state instead of spinning forever on a dead mic.
+                        stopRecording()
+                        break
+                    }
                     kotlinx.coroutines.delay(40L)
+                } else {
+                    // Defensive backoff for unexpected zero-length reads.
+                    kotlinx.coroutines.delay(10L)
                 }
             }
         }
