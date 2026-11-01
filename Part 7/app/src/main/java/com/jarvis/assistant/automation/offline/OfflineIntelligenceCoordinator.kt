@@ -1,5 +1,8 @@
 package com.jarvis.assistant.automation.offline
 
+import android.content.Context
+import com.jarvis.assistant.JarvisApp
+import com.jarvis.assistant.automation.reflex.OfflineReflexExecutor
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -35,24 +38,24 @@ class OfflineIntelligenceCoordinator {
     /**
      * Evaluates and executes user input offline, queuing cloud actions if appropriate.
      */
-    fun handleCommandOffline(input: String): OfflineExecutionResult {
+    suspend fun handleCommandOffline(input: String, context: Context? = null): OfflineExecutionResult {
         val lower = input.lowercase().trim()
 
-        // 1. Local Device Control
-        if (lower.contains("torch") || lower.contains("flashlight")) {
-            val state = if (lower.contains("off")) "OFF" else "ON"
-            return OfflineExecutionResult.ExecutedLocally(
-                actionType = "DEVICE_HARDWARE",
-                userFeedback = "Flashlight turned $state (offline reflex).",
-                outputData = mapOf("device" to "flashlight", "state" to state)
-            )
-        }
-
-        if (lower.contains("volume")) {
-            return OfflineExecutionResult.ExecutedLocally(
-                actionType = "DEVICE_HARDWARE",
-                userFeedback = "Volume adjusted (offline reflex).",
-                outputData = mapOf("device" to "volume")
+        // 1. Local Device Control — only report success after a real platform action.
+        if (lower.contains("torch") || lower.contains("flashlight") || lower.contains("volume") ||
+            lower.contains("brightness")) {
+            val reflex = context?.let { OfflineReflexExecutor.tryExecuteReflex(input, it, null) }
+            if (reflex?.handled == true) {
+                return OfflineExecutionResult.ExecutedLocally(
+                    actionType = "DEVICE_HARDWARE",
+                    userFeedback = reflex.spokenResponse,
+                    outputData = mapOf("action" to reflex.actionName)
+                )
+            }
+            return OfflineExecutionResult.DegradedExplanation(
+                unsupportedFeature = "Device hardware control",
+                userFeedback = "The device action was not executed because the Android context or a matching hardware handler is unavailable.",
+                availableOfflineAlternatives = listOf("Open JARVIS and retry the device-control command.")
             )
         }
 
@@ -61,19 +64,28 @@ class OfflineIntelligenceCoordinator {
             val noteText = input.replace(Regex("^(remember|note|yaad rakhna)\\s*", RegexOption.IGNORE_CASE), "").trim()
             val noteKey = "note_${System.currentTimeMillis()}"
             cacheFact(noteKey, noteText)
+            val app = context?.applicationContext as? JarvisApp
+            if (app != null) {
+                val saved = app.memoryManager.rememberFact(input)
+                return OfflineExecutionResult.ExecutedLocally(
+                    actionType = "LOCAL_NOTE",
+                    userFeedback = saved,
+                    outputData = mapOf("key" to noteKey, "content" to noteText, "persistent" to true)
+                )
+            }
             return OfflineExecutionResult.ExecutedLocally(
                 actionType = "LOCAL_NOTE",
-                userFeedback = "Note saved to local offline memory: \"$noteText\".",
-                outputData = mapOf("key" to noteKey, "content" to noteText)
+                userFeedback = "Note is available in this process's temporary offline cache only; it has not been saved to persistent storage.",
+                outputData = mapOf("key" to noteKey, "content" to noteText, "persistent" to false)
             )
         }
 
-        // 3. Alarms and Timers
+        // 3. Timers and alarms are not reported as scheduled until a real scheduler is connected.
         if (lower.contains("timer") || lower.contains("alarm")) {
-            return OfflineExecutionResult.ExecutedLocally(
-                actionType = "LOCAL_ALARM",
-                userFeedback = "Timer/alarm scheduled via on-device clock manager.",
-                outputData = mapOf("type" to "timer", "status" to "scheduled")
+            return OfflineExecutionResult.DegradedExplanation(
+                unsupportedFeature = "Offline timer scheduling",
+                userFeedback = "No timer or alarm was scheduled. The offline timer scheduler is not connected yet.",
+                availableOfflineAlternatives = listOf("Use the device Clock app to set a timer or alarm.")
             )
         }
 
@@ -89,7 +101,7 @@ class OfflineIntelligenceCoordinator {
             syncQueue.offer(item)
             return OfflineExecutionResult.QueuedForOnline(
                 itemId = item.id,
-                userFeedback = "You are currently offline. Your consequential request has been queued and will require your confirmation once network connectivity is restored.",
+                userFeedback = "Your consequential request is held in this process's temporary queue and has not been executed. It will be lost if the app process stops; fresh approval is required before any later execution.",
                 requiresConfirmationOnSync = true
             )
         }
@@ -105,7 +117,7 @@ class OfflineIntelligenceCoordinator {
             syncQueue.offer(item)
             return OfflineExecutionResult.QueuedForOnline(
                 itemId = item.id,
-                userFeedback = "You are offline. Search request queued for automatic sync upon reconnection.",
+                userFeedback = "Search request is held in this process's temporary queue only. It has not been executed and automatic sync is not currently connected.",
                 requiresConfirmationOnSync = false
             )
         }
@@ -127,7 +139,10 @@ class OfflineIntelligenceCoordinator {
      * Flushes sync queue when online connectivity is restored.
      */
     @Synchronized
-    fun processSyncQueue(isOnline: Boolean): SyncResultSummary {
+    fun processSyncQueue(
+        isOnline: Boolean,
+        executor: ((SyncQueueItem) -> Boolean)? = null
+    ): SyncResultSummary {
         if (!isOnline) {
             return SyncResultSummary(0, 0, 0, listOf("Still offline; sync deferred."))
         }
@@ -136,27 +151,41 @@ class OfflineIntelligenceCoordinator {
         var pendingConfirmation = 0
         var failed = 0
         val details = mutableListOf<String>()
-
         val remaining = mutableListOf<SyncQueueItem>()
 
         while (!syncQueue.isEmpty()) {
             val item = syncQueue.poll() ?: break
             if (item.isConsequential) {
-                // Keep consequential items pending user confirmation
                 val updated = item.copy(syncStatus = SyncStatus.AWAITING_CONFIRMATION)
                 remaining.add(updated)
                 pendingConfirmation++
-                details.add("Action '${item.actionType}' requires user confirmation before execution.")
-            } else {
-                // Execute non-consequential sync
+                details.add("Action '${item.actionType}' requires fresh user confirmation before execution.")
+                continue
+            }
+
+            val syncHandler = executor
+            if (syncHandler == null) {
+                remaining.add(item)
+                details.add("'${item.actionType}' remains pending: no real sync executor is registered; nothing was fetched or executed.")
+                continue
+            }
+
+            val didSync = try {
+                syncHandler(item)
+            } catch (_: Exception) {
+                false
+            }
+            if (didSync) {
                 synced++
-                details.add("Synced '${item.actionType}' automatically.")
+                details.add("'${item.actionType}' was processed by the registered sync executor.")
+            } else {
+                failed++
+                remaining.add(item.copy(syncStatus = SyncStatus.FAILED))
+                details.add("'${item.actionType}' sync failed and remains queued for retry.")
             }
         }
 
-        // Restore pending items
         syncQueue.addAll(remaining)
-
         return SyncResultSummary(
             syncedCount = synced,
             pendingConfirmationCount = pendingConfirmation,
@@ -171,7 +200,7 @@ class OfflineIntelligenceCoordinator {
         return mapOf(
             "Hardware Control (Torch, Volume)" to true,
             "Local Memory & Notes" to true,
-            "Timers & Alarms" to true,
+            "Timers & Alarms" to false,
             "Offline Rules & Heuristics" to true,
             "Web Search & Scraping" to false,
             "Cloud LLM Reasoning" to false,
