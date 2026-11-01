@@ -56,6 +56,7 @@ class TriggerWorker(
             val started = MissionEngine.startMission(applicationContext, goal)
             val outcome = if (started.status in setOf(
                     MissionOverallStatus.WAITING_FOR_APPROVAL,
+                    MissionOverallStatus.PAUSED,
                     MissionOverallStatus.CLARIFICATION_REQUIRED,
                     MissionOverallStatus.COMPLETED,
                     MissionOverallStatus.PARTIALLY_COMPLETED,
@@ -98,6 +99,10 @@ class TriggerWorker(
                 MissionOverallStatus.PARTIALLY_COMPLETED,
                 MissionOverallStatus.FAILED -> {
                     Log.w(TAG, "Mission ended with status ${outcome.status}; no success was reported.")
+                    Result.success()
+                }
+                MissionOverallStatus.PAUSED -> {
+                    Log.i(TAG, "Triggered mission is safely paused and awaits explicit user resume.")
                     Result.success()
                 }
                 MissionOverallStatus.CANCELLED -> Result.success()
