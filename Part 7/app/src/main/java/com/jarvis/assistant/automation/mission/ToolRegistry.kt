@@ -268,6 +268,20 @@ object ToolRegistry {
 
         register(
             ToolDefinition(
+                name = "schedule_reminder",
+                description = "Schedules a private one-time reminder. It only notifies the user; it never starts an unattended mission.",
+                parameters = listOf(
+                    ToolParameter("title", "String", "Short reminder title", required = true),
+                    ToolParameter("description", "String", "What the user should be reminded to do", required = true),
+                    ToolParameter("delay_minutes", "Int", "Minutes from now; use zero for an immediate reminder", required = true)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = false
+            )
+        )
+
+        register(
+            ToolDefinition(
                 name = "task_completed",
                 description = "Signals that the goal has been successfully accomplished",
                 parameters = listOf(
