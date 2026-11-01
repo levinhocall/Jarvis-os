@@ -54,33 +54,52 @@ class FeatureHubActivity : AppCompatActivity() {
         entry(root, "Aura Control", "Choose Classic, Aura, Crimson or Midnight Orb and customize appearance", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.settings.AuraControlActivity::class.java))
         }
-        entry(root, "Mission Mode", "Inspect and control the active agent task", true) {
-            val engine = com.jarvis.assistant.automation.agent.AgentTaskEngine
-            val task = engine.taskState.value
-            val message = task?.let {
-                "${it.originalGoal}\n\n${it.progressPercentage}% • ${it.currentStatus.replace('_', ' ')}"
-            } ?: "No active mission. Start a task through the assistant chat or voice command."
+        entry(root, "Mission Mode", "Inspect and control active accessibility tasks and durable missions", true) {
+            val agentEngine = com.jarvis.assistant.automation.agent.AgentTaskEngine
+            val task = agentEngine.taskState.value
+            val mission = com.jarvis.assistant.automation.mission.MissionEngine.activeMission.value
+            val sections = mutableListOf<String>()
+            task?.let {
+                sections += "ACCESSIBILITY TASK\\n${it.originalGoal}\\n${it.progressPercentage}% • ${it.currentStatus.replace('_', ' ')}"
+            }
+            mission?.let {
+                sections += "DURABLE MISSION\\n${it.goal}\\n${it.status.name.replace('_', ' ')} • ${it.steps.count { step -> step.status == com.jarvis.assistant.automation.mission.MissionStepStatus.COMPLETED }}/${it.steps.size} steps verified\\n${it.outcomeSummary.orEmpty()}"
+            }
+            val message = sections.joinToString("\\n\\n").ifBlank {
+                "No active accessibility task or multi-step mission."
+            }
             val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle("Mission control")
+                .setTitle("Mission Control")
                 .setMessage(message)
                 .setPositiveButton("Close", null)
             if (task != null) {
-                if (engine.isPaused.value) {
-                    dialog.setNeutralButton("Resume") { _, _ ->
-                        val resumed = engine.resumeTask()
-                        android.widget.Toast.makeText(this, if (resumed) "Mission resumed" else "Mission could not resume", android.widget.Toast.LENGTH_SHORT).show()
+                if (agentEngine.isPaused.value) {
+                    dialog.setNeutralButton("Resume Agent") { _, _ ->
+                        val resumed = agentEngine.resumeTask()
+                        android.widget.Toast.makeText(this, if (resumed) "Agent resumed" else "Agent could not resume", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    dialog.setNeutralButton("Pause") { _, _ ->
-                        val paused = engine.pauseTask()
-                        android.widget.Toast.makeText(this, if (paused) "Mission paused" else "Mission cannot be paused", android.widget.Toast.LENGTH_SHORT).show()
+                    dialog.setNeutralButton("Pause Agent") { _, _ ->
+                        val paused = agentEngine.pauseTask()
+                        android.widget.Toast.makeText(this, if (paused) "Agent paused" else "Agent cannot be paused", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
-                dialog.setNegativeButton("Cancel mission") { _, _ -> engine.requestCancellation() }
+            }
+            if (mission != null && mission.status !in setOf(
+                    com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED,
+                    com.jarvis.assistant.automation.mission.MissionOverallStatus.FAILED,
+                    com.jarvis.assistant.automation.mission.MissionOverallStatus.CANCELLED
+                )) {
+                dialog.setNegativeButton("Cancel Mission") { _, _ ->
+                    lifecycleScope.launch {
+                        com.jarvis.assistant.automation.mission.MissionEngine.cancelMission(mission.missionId)
+                    }
+                }
+            } else if (task != null) {
+                dialog.setNegativeButton("Cancel Agent") { _, _ -> agentEngine.requestCancellation() }
             }
             dialog.show()
         }
-
         entry(root, "Mission History", "Review persisted multi-step missions and their verified outcomes", true) {
             lifecycleScope.launch {
                 val missions = withContext(Dispatchers.IO) {
