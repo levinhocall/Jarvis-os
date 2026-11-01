@@ -4,7 +4,6 @@ import android.graphics.Rect
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
-import com.jarvis.assistant.core.world.WorldModelCoordinator
 import java.util.ArrayDeque
 import java.util.Locale
 
@@ -65,37 +64,6 @@ object ScreenGroundingEngine {
 
         val root = service.getActiveRootNode() ?: service.getAppRootNode()
         val context = parseNodeHierarchy(root)
-        val previousPackage = cachedContext?.foregroundPackage.orEmpty()
-        if (previousPackage.isNotBlank() &&
-            context.foregroundPackage.isNotBlank() &&
-            !previousPackage.equals(context.foregroundPackage, ignoreCase = true)
-        ) {
-            WorldModelCoordinator.onNavigation(context.foregroundPackage)
-        }
-
-        // Feed only non-editable, non-protected labels into the short-lived world model.
-        // Never copy text from editable fields, password fields, secure windows, or numeric OTP-like values.
-        val sensitiveValue = Regex("""^\s*(?:\d{4,8}|(?:\d[ -]?){13,19})\s*$""")
-        val visibleLabels = if (context.isSecureWindow) {
-            emptyList()
-        } else {
-            context.elements.asSequence()
-                .filterNot { it.isEditable || it.isPassword || it.isProtected }
-                .mapNotNull { element ->
-                    (element.contentDescription?.takeIf { it.isNotBlank() } ?: element.text)
-                        .trim()
-                        .takeIf { it.isNotBlank() && !sensitiveValue.matches(it) }
-                }
-                .distinct()
-                .take(100)
-                .toList()
-        }
-        val containsProtectedFields = context.isSecureWindow || context.elements.any { it.isPassword || it.isProtected }
-        WorldModelCoordinator.updateScreenObservation(
-            foregroundPackage = context.foregroundPackage,
-            visibleLabels = visibleLabels,
-            containsPasswordFields = containsProtectedFields
-        )
         cachedContext = context
         return context
     }
