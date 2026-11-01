@@ -18,6 +18,7 @@ class MultiAgentCouncilTest {
 
         // Researcher is authorized for read-only, never mutating
         assertTrue(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "search_web"))
+        assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "open_app"))
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "whatsapp_send"))
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "device_control"))
 
