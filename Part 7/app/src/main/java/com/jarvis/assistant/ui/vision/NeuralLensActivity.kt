@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
 import com.jarvis.assistant.R
 import com.jarvis.assistant.util.ThemeManager
 import com.jarvis.assistant.vision.CameraVisionAnalyzer
@@ -147,6 +148,8 @@ class NeuralLensActivity : AppCompatActivity() {
                     result.text = analysis.summary
                     status.text = if (analysis.success) "Image analysis completed by Gemini Vision." else "Image analysis did not complete."
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 if (!isFinishing && !isDestroyed) {
                     status.text = "Image analysis failed: ${error.localizedMessage ?: "unknown error"}"
