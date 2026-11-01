@@ -7,6 +7,7 @@ import com.google.gson.JsonObject
 import com.jarvis.assistant.automation.mission.MissionRisk
 import com.jarvis.assistant.automation.mission.ToolDefinition
 import com.jarvis.assistant.automation.mission.ToolRegistry
+import com.jarvis.assistant.security.sandbox.RiskPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -52,7 +53,9 @@ data class LlmMissionExecutionResult(
     val summary: String,
     val stepsExecuted: Int,
     val history: List<LlmPlannerStepRecord>,
-    val abortReason: String? = null
+    val abortReason: String? = null,
+    val pendingApprovalTool: String? = null,
+    val pendingApprovalArguments: Map<String, Any?> = emptyMap()
 )
 
 /**
@@ -113,6 +116,7 @@ object GeminiSchemaConverter {
  */
 class GeminiFunctionCallProvider(
     private val apiKeyProvider: () -> String,
+    private val modelProvider: () -> String = { "gemini-3.8-flash" },
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -137,7 +141,8 @@ class GeminiFunctionCallProvider(
         }
 
         try {
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+            val model = modelProvider().removePrefix("models/").ifBlank { "gemini-3.8-flash" }
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
             val contents = mutableListOf<Map<String, Any>>()
 
             // System / goal instruction
@@ -176,7 +181,7 @@ class GeminiFunctionCallProvider(
             val respBody = response.body?.string() ?: ""
 
             if (!response.isSuccessful) {
-                return@withContext LlmStepDecision.Abort("Gemini API error ${response.code}: $respBody")
+                return@withContext LlmStepDecision.Abort("Gemini API request failed with HTTP ${response.code}.")
             }
 
             val json = gson.fromJson(respBody, JsonObject::class.java)
@@ -211,18 +216,14 @@ class GeminiFunctionCallProvider(
                     return@withContext LlmStepDecision.InvokeTool(fnName, argsMap)
                 }
 
-                if (part.has("text")) {
-                    val text = part.get("text").asString
-                    if (text.contains("completed", ignoreCase = true) || text.contains("finished", ignoreCase = true)) {
-                        return@withContext LlmStepDecision.Finish(text)
-                    }
-                }
+                // Natural-language claims such as "completed" are not execution evidence.
+                // Only the task_completed function call can request finalization.
             }
 
             LlmStepDecision.Abort("No actionable function call returned by model.")
         } catch (e: Exception) {
-            Log.e("GeminiPlannerProvider", "Function call prediction failed", e)
-            LlmStepDecision.Abort("Provider execution error: ${e.message}")
+            Log.e("GeminiPlannerProvider", "Function-call request failed (${e.javaClass.simpleName}).")
+            LlmStepDecision.Abort("Provider execution failed (${e.javaClass.simpleName}).")
         }
     }
 }
@@ -248,9 +249,10 @@ class LlmPlanner(
         isCancelled.set(true)
     }
 
-    fun isAvailable(): Boolean {
-        return !isCancelled.get()
-    }
+    fun isAvailable(): Boolean = !isCancelled.get()
+
+    suspend fun isProviderReady(): Boolean =
+        !isCancelled.get() && provider.isAvailable()
 
     /**
      * Executes the autonomous reasoning-action loop.
@@ -265,7 +267,7 @@ class LlmPlanner(
         val availableTools = ToolRegistry.getAllTools()
         val recentCallSignatures = mutableListOf<String>()
 
-        Log.i(TAG, "Starting LLM mission loop for goal: '$goal'")
+        Log.i(TAG, "Starting bounded LLM mission loop.")
 
         for (stepIndex in 1..maxSteps) {
             // 1. Cancellation check
@@ -294,12 +296,18 @@ class LlmPlanner(
             val decision = provider.predictStep(goal, history, availableTools)
             when (decision) {
                 is LlmStepDecision.Finish -> {
-                    Log.i(TAG, "Mission finished by LLM: ${decision.summary}")
+                    val unverified = history.filterNot { it.isVerified }
+                    val hasEvidence = history.isNotEmpty() && unverified.isEmpty()
                     return LlmMissionExecutionResult(
-                        isSuccess = true,
-                        summary = decision.summary,
+                        isSuccess = hasEvidence,
+                        summary = if (hasEvidence) {
+                            decision.summary
+                        } else {
+                            "The planner requested completion, but verified execution evidence is missing. The mission is not marked complete."
+                        },
                         stepsExecuted = history.size,
-                        history = history
+                        history = history,
+                        abortReason = if (hasEvidence) null else "UNVERIFIED_FINISH"
                     )
                 }
                 is LlmStepDecision.Clarify -> {
@@ -352,6 +360,29 @@ class LlmPlanner(
                         )
                     }
 
+                    // Consequential operations must stop for explicit user approval before execution.
+                    val risk = RiskPolicy.evaluateRisk(resolvedName, decision.arguments, goal)
+                    if (risk.requiresExplicitConfirmation) {
+                        history.add(
+                            LlmPlannerStepRecord(
+                                stepIndex = stepIndex,
+                                toolName = resolvedName,
+                                arguments = decision.arguments,
+                                isVerified = false,
+                                observation = "Awaiting explicit user approval; this action has not been executed."
+                            )
+                        )
+                        return LlmMissionExecutionResult(
+                            isSuccess = false,
+                            summary = "Approval required before JARVIS can execute '$resolvedName'. No action has been performed.",
+                            stepsExecuted = history.size,
+                            history = history,
+                            abortReason = "APPROVAL_REQUIRED",
+                            pendingApprovalTool = resolvedName,
+                            pendingApprovalArguments = decision.arguments
+                        )
+                    }
+
                     // 5. Pre-execution ToolRegistry Validation
                     val validation = ToolRegistry.validate(resolvedName, decision.arguments, context)
                     if (validation !is com.jarvis.assistant.automation.mission.ToolValidationResult.Valid) {
@@ -379,7 +410,7 @@ class LlmPlanner(
                     }
 
                     // 6. Execute step with bounded timeout
-                    Log.i(TAG, "Step $stepIndex: Invoking '$resolvedName' with args: ${decision.arguments}")
+                    Log.i(TAG, "Step $stepIndex: Invoking registered tool '$resolvedName'.")
                     val executionOutcome = withTimeoutOrNull(perStepTimeoutMs) {
                         try {
                             executor(resolvedName, decision.arguments)
