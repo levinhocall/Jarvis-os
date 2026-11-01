@@ -33,6 +33,8 @@ object MultiAgentCouncil {
         "send_whatsapp",
         "device_control",
         "click_ui_element",
+        "type_text",
+        "open_app",
         "scroll_screen",
         "navigate_home",
         "navigate_back"
