@@ -211,18 +211,29 @@ class GeminiFunctionCallProvider(
                 val respBody = response.body?.string() ?: ""
 
                 if (!response.isSuccessful) {
-                    val reason = when (response.code) {
-                        401 -> {
+                    val explicitlyInvalidKey = response.code == 401 ||
+                        respBody.contains("API_KEY_INVALID", ignoreCase = true) ||
+                        respBody.contains("API key not valid", ignoreCase = true) ||
+                        respBody.contains("invalid API key", ignoreCase = true)
+                    val permissionDenied = response.code == 403 ||
+                        respBody.contains("PERMISSION_DENIED", ignoreCase = true)
+                    val quotaExceeded = response.code == 429 ||
+                        respBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                        respBody.contains("quota", ignoreCase = true)
+
+                    val reason = when {
+                        explicitlyInvalidKey -> {
                             runCatching { onApiKeyInvalid(apiKey) }
-                            "Gemini explicitly rejected the API key (HTTP 401)."
+                            "Gemini explicitly rejected the API key (HTTP ${response.code})."
                         }
-                        403 -> "Gemini denied access to this API key or project (HTTP 403); this does not prove the key is invalid."
-                        429 -> {
+                        permissionDenied -> "Gemini denied access to this API key or project (HTTP ${response.code}); this does not prove the key is invalid."
+                        quotaExceeded -> {
                             runCatching { onApiKeyRateLimited(apiKey) }
-                            "Gemini rate limit or quota reached (HTTP 429); the key was placed into cooldown."
+                            "Gemini rate limit or quota reached (HTTP ${response.code}); the key was placed into cooldown."
                         }
-                        404 -> "The selected Gemini model or endpoint was not found (HTTP 404)."
-                        in 500..599 -> "Gemini service is temporarily unavailable (HTTP ${response.code})."
+                        response.code == 404 -> "The selected Gemini model or endpoint was not found (HTTP 404)."
+                        response.code == 400 -> "Gemini rejected the request configuration (HTTP 400); check the model and function-call schema."
+                        response.code in 500..599 -> "Gemini service is temporarily unavailable (HTTP ${response.code})."
                         else -> "Gemini API request failed with HTTP ${response.code}."
                     }
                     return@withContext LlmStepDecision.Abort(reason)
