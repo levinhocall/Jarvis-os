@@ -941,14 +941,25 @@ object MissionEngine {
         pauseRequestedMissions.remove(missionId)
         val isExecuting = current.status in setOf(MissionOverallStatus.EXECUTING, MissionOverallStatus.VERIFYING)
         if (isExecuting && isLlmPlannedMission(current)) {
-            llmPlanner?.cancel()
-            val requested = current.copy(
-                outcomeSummary = "LLM planner cancellation requested; waiting for the current action to return.",
-                updatedAt = System.currentTimeMillis()
-            )
-            _activeMission.value = requested
-            persistMission(requested, current.currentStepIndex)
-            Log.i(TAG, "LLM mission cancellation requested; waiting for a safe execution boundary.")
+            val planner = llmPlanner
+            if (planner == null) {
+                val unresolved = current.copy(
+                    status = MissionOverallStatus.UNVERIFIED,
+                    outcomeSummary = "LLM planner is unavailable while cancellation was requested. The in-flight outcome is unknown; manual review is required.",
+                    updatedAt = System.currentTimeMillis()
+                )
+                _activeMission.value = unresolved
+                persistMission(unresolved, current.currentStepIndex)
+            } else {
+                planner.cancel()
+                val requested = current.copy(
+                    outcomeSummary = "LLM planner cancellation requested; waiting for the current action to return.",
+                    updatedAt = System.currentTimeMillis()
+                )
+                _activeMission.value = requested
+                persistMission(requested, current.currentStepIndex)
+                Log.i(TAG, "LLM mission cancellation requested; waiting for a safe execution boundary.")
+            }
         } else if (isExecuting) {
             cancelRequestedMissions.add(missionId)
             val requested = current.copy(
