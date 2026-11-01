@@ -63,7 +63,10 @@ object MissionEngine {
         }
     }
 
-    suspend fun resumeNonTerminalMissions(context: Context? = null): List<MissionDefinition> = mutex.withLock {
+    suspend fun resumeNonTerminalMissions(
+        context: Context? = null,
+        preferredMissionId: String? = null
+    ): List<MissionDefinition> = mutex.withLock {
         val dao = missionDao ?: return emptyList()
         val entities = dao.getNonTerminalMissions()
         val list = mutableListOf<MissionDefinition>()
@@ -79,13 +82,21 @@ object MissionEngine {
                 val type = object : com.google.gson.reflect.TypeToken<List<MissionStep>>() {}.type
                 val steps: List<MissionStep> = gson.fromJson(e.planJson, type) ?: emptyList()
 
-                // If in flight step was non-idempotent or consequential at crash time -> mark UNVERIFIED
+                val wasAwaitingApproval =
+                    e.status == MissionOverallStatus.WAITING_FOR_APPROVAL.name &&
+                        e.approvalState == MissionApprovalState.PENDING_APPROVAL.name
+
+                // A pending approval is not an interrupted action. Preserve it exactly.
+                // An actually in-flight consequential/non-idempotent action becomes UNVERIFIED
+                // and is never replayed automatically after process death.
                 val sanitizedSteps = steps.mapIndexed { idx, st ->
-                    if (idx == e.currentStepIndex && (st.status == MissionStepStatus.RUNNING || st.status == MissionStepStatus.PENDING)) {
+                    if (!wasAwaitingApproval && idx == e.currentStepIndex &&
+                        (st.status == MissionStepStatus.RUNNING || st.status == MissionStepStatus.PENDING)
+                    ) {
                         if (!st.isIdempotent || st.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
                             st.copy(
                                 status = MissionStepStatus.UNVERIFIED,
-                                failureReason = "Process died while step was in flight. Manual user confirmation required."
+                                failureReason = "Process died while this action was in flight. JARVIS will not replay it automatically."
                             )
                         } else {
                             st
@@ -96,24 +107,38 @@ object MissionEngine {
                 }
 
                 val hasUnverified = sanitizedSteps.any { it.status == MissionStepStatus.UNVERIFIED }
-                val overallStatus = if (hasUnverified) {
-                    MissionOverallStatus.WAITING_FOR_APPROVAL
-                } else {
-                    try { MissionOverallStatus.valueOf(e.status) } catch (_: Exception) { MissionOverallStatus.EXECUTING }
+                val overallStatus = when {
+                    hasUnverified -> MissionOverallStatus.UNVERIFIED
+                    wasAwaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
+                    else -> try { MissionOverallStatus.valueOf(e.status) } catch (_: Exception) { MissionOverallStatus.EXECUTING }
                 }
+                val approvalState = if (wasAwaitingApproval) MissionApprovalState.PENDING_APPROVAL else
+                    try { MissionApprovalState.valueOf(e.approvalState) } catch (_: Exception) { MissionApprovalState.NOT_REQUIRED }
+                val pendingStep = sanitizedSteps.getOrNull(e.currentStepIndex)
 
                 val mission = MissionDefinition(
                     missionId = e.id,
                     goal = e.goal,
                     steps = sanitizedSteps,
                     status = overallStatus,
-                    approvalState = if (hasUnverified) MissionApprovalState.PENDING_APPROVAL else try { MissionApprovalState.valueOf(e.approvalState) } catch (_: Exception) { MissionApprovalState.APPROVED },
-                    outcomeSummary = e.outcomeSummary,
+                    approvalState = approvalState,
+                    approvalPrompt = if (wasAwaitingApproval) {
+                        "Approve the pending '${pendingStep?.toolName ?: "mission"}' action for this mission?"
+                    } else null,
+                    outcomeSummary = if (hasUnverified) {
+                        "Mission interrupted during an action whose real-world outcome could not be verified. No automatic retry was performed."
+                    } else e.outcomeSummary,
                     createdAt = e.updatedAt,
                     updatedAt = System.currentTimeMillis()
                 )
 
                 persistMission(mission, e.currentStepIndex)
+                if (preferredMissionId == e.id || (_activeMission.value == null && preferredMissionId == null)) {
+                    _activeMission.value = mission
+                }
+                if (context != null && mission.status == MissionOverallStatus.WAITING_FOR_APPROVAL) {
+                    MissionApprovalNotifier.show(context, mission)
+                }
                 list.add(mission)
             } catch (err: Exception) {
                 Log.e(TAG, "Error resuming mission: ${err.message}", err)
@@ -201,6 +226,9 @@ object MissionEngine {
                 val nextIndex = if (pendingIndex >= 0) pendingIndex else
                     convertedSteps.indexOfFirst { it.status != MissionStepStatus.COMPLETED }.coerceAtLeast(0)
                 persistMission(completedMission, nextIndex)
+                if (awaitingApproval && context != null) {
+                    MissionApprovalNotifier.show(context, completedMission)
+                }
             }
             return@withLock initialMission
         }
@@ -452,6 +480,9 @@ object MissionEngine {
         _activeMission.value = mission
         persistMission(mission)
 
+        if (needsApproval && context != null) {
+            MissionApprovalNotifier.show(context, mission)
+        }
         if (!needsApproval) {
             engineScope.launch { executeMission(context, mission.missionId) }
         }
@@ -466,6 +497,12 @@ object MissionEngine {
         if (current.missionId != missionId || current.status != MissionOverallStatus.WAITING_FOR_APPROVAL) {
             return@withLock
         }
+
+        if (current.steps.any { it.status == MissionStepStatus.UNVERIFIED }) {
+            Log.w(TAG, "Mission $missionId contains an unverified in-flight action; approval cannot safely replay it.")
+            return@withLock
+        }
+        MissionApprovalNotifier.cancel(context, missionId)
 
         if (approved) {
             val updated = current.copy(
