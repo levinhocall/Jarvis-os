@@ -55,7 +55,9 @@ class MemoryRepository(
         sourceConversationId: String? = null,
         sourceMessageId: String? = null,
         category: String = MemoryEntity.CATEGORY_NOTES,
-        expiryTimeMs: Long? = null
+        expiryTimeMs: Long? = null,
+        provenance: String = "EXPLICIT_USER_COMMAND",
+        sensitivity: String = "PREFERENCE"
     ): Long {
         val cleanContent = EpisodicVectorMemory.sanitizeForStorage(content)
         val calculatedKey = key.ifBlank {
@@ -78,8 +80,8 @@ class MemoryRepository(
             key = calculatedKey,
             value = cleanContent,
             rawText = cleanContent,
-            provenance = "EXPLICIT_USER_COMMAND",
-            sensitivity = "PREFERENCE",
+            provenance = provenance,
+            sensitivity = sensitivity,
             expiryTimeMs = expiryTimeMs,
             memoryType = type,
             status = MemoryEntity.STATUS_ACTIVE,
@@ -113,7 +115,9 @@ class MemoryRepository(
             type = if (category == MemoryEntity.CATEGORY_PREFERENCES) MemoryEntity.TYPE_PREFERENCE else MemoryEntity.TYPE_PERSONAL_FACT,
             key = key,
             category = category,
-            expiryTimeMs = expiryTimeMs
+            expiryTimeMs = expiryTimeMs,
+            provenance = provenance,
+            sensitivity = sensitivity
         )
     }
 
