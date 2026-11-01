@@ -137,7 +137,7 @@ object OwnerVoiceManager {
                 val vector = FloatArray(arr.length()) { i -> arr.getDouble(i).toFloat() }
                 if (vector.isNotEmpty()) vector else null
             } else {
-                Log.d(TAG, "No 'spk' field found in Vosk final result: $jsonStr")
+                Log.d(TAG, "Speaker embedding was not present in the Vosk result; transcript content omitted.")
                 null
             }
         } catch (e: Throwable) {
