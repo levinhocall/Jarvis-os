@@ -159,6 +159,10 @@ class AutonomousSoftwareEngineeringAgentTest {
         val evilResult = readTool.execute(project, mapOf("path" to "../../etc/hosts"), sandbox, devAgent)
         assertTrue(evilResult is DevToolResult.Failure)
         assertTrue((evilResult as DevToolResult.Failure).error.contains("Path rejected"))
+
+        val secretRead = readTool.execute(project, mapOf("path" to ".env"), sandbox, devAgent)
+        assertTrue(secretRead is DevToolResult.Failure)
+        assertTrue((secretRead as DevToolResult.Failure).error.contains("Sensitive configuration"))
     }
 
     @Test
@@ -196,6 +200,19 @@ class AutonomousSoftwareEngineeringAgentTest {
         )
         assertTrue(driftResult is DevToolResult.Failure)
         assertEquals("val TIMEOUT = 5000\nval RETRIES = 3\n", sourceFile.readText())
+
+        val secretEdit = editTool.execute(
+            project,
+            mapOf(
+                "path" to "local.properties",
+                "originalSnippet" to "sdk.dir=/old",
+                "replacementSnippet" to "sdk.dir=/new"
+            ),
+            sandbox,
+            devAgent
+        )
+        assertTrue(secretEdit is DevToolResult.Failure)
+        assertTrue((secretEdit as DevToolResult.Failure).error.contains("Sensitive configuration"))
     }
 
     @Test
