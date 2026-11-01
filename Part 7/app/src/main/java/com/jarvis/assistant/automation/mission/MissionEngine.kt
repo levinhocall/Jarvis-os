@@ -1122,6 +1122,7 @@ object MissionEngine {
             )
 
             for (attempt in 0..currentStep.maxRetries) {
+                if (cancelRequestedMissions.contains(missionId)) break
                 if (_activeMission.value?.status == MissionOverallStatus.CANCELLED) {
                     currentStep = currentStep.copy(status = MissionStepStatus.CANCELLED)
                     updatedSteps[index] = currentStep
@@ -1164,6 +1165,36 @@ object MissionEngine {
                 if (attempt < currentStep.maxRetries) {
                     delay(200L * (attempt + 1))
                 }
+            }
+
+            if (cancelRequestedMissions.remove(missionId)) {
+                val cancelledStepStatus = when {
+                    stepSuccess && evidence.isVerified -> MissionStepStatus.COMPLETED
+                    stepSuccess || !currentStep.isIdempotent -> MissionStepStatus.UNVERIFIED
+                    else -> MissionStepStatus.CANCELLED
+                }
+                currentStep = currentStep.copy(
+                    status = cancelledStepStatus,
+                    verificationEvidence = evidence,
+                    failureReason = if (cancelledStepStatus == MissionStepStatus.UNVERIFIED) {
+                        "Cancellation arrived while this action's outcome could not be fully verified."
+                    } else currentStep.failureReason,
+                    completedAt = System.currentTimeMillis()
+                )
+                updatedSteps[index] = currentStep
+                if (cancelledStepStatus == MissionStepStatus.COMPLETED && !currentStep.isIdempotent) {
+                    completedNonIdempotentSteps.add(currentStep.stepId)
+                }
+                val cancelled = (_activeMission.value ?: mission).copy(
+                    steps = updatedSteps.toList(),
+                    currentStepIndex = index,
+                    status = MissionOverallStatus.CANCELLED,
+                    outcomeSummary = "Mission cancelled after the current action returned; recorded evidence was preserved.",
+                    updatedAt = System.currentTimeMillis()
+                )
+                _activeMission.value = cancelled
+                persistMission(cancelled, index)
+                return
             }
 
             // 6. Verify Outcome
