@@ -22,7 +22,7 @@ interface ChatDao {
     @Query("SELECT * FROM chat_sessions WHERE id = :id LIMIT 1")
     suspend fun getSessionById(id: String): ChatSessionEntity?
 
-    @Query("SELECT * FROM chat_sessions WHERE isArchived = 0 ORDER BY pinned DESC, updatedAt DESC LIMIT 1")
+    @Query("SELECT * FROM chat_sessions WHERE isArchived = 0 ORDER BY updatedAt DESC LIMIT 1")
     suspend fun getMostRecentActiveSession(): ChatSessionEntity?
 
     @Query("SELECT * FROM chat_sessions WHERE title LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
