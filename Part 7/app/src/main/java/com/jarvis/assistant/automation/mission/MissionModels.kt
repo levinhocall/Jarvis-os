@@ -103,6 +103,7 @@ enum class MissionOverallStatus {
     CLARIFICATION_REQUIRED,
     PLANNING,
     WAITING_FOR_APPROVAL,
+    PAUSED,
     EXECUTING,
     VERIFYING,
     COMPLETED,
