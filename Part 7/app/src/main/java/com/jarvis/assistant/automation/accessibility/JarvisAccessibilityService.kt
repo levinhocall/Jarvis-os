@@ -24,6 +24,7 @@ import com.jarvis.assistant.vision.SensitiveInputPolicy
 import java.util.concurrent.Executors
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -1361,14 +1362,8 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun safeDelay(ms: Long) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            try {
-                Thread.sleep(ms.coerceAtMost(50L))
-            } catch (_: Exception) {}
-        } else {
-            try { Thread.sleep(ms) } catch (_: Exception) {}
-        }
+    private suspend fun safeDelay(ms: Long) {
+        delay(ms.coerceIn(0L, 1_200L))
     }
 
     private fun longPressAt(x: Float, y: Float) {
@@ -2081,7 +2076,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         return SensitiveInputPolicy.isSensitiveLabel(label)
     }
 
-    fun smartTypeText(textToType: String, targetRect: Rect? = null, submit: Boolean = false): Boolean {
+    suspend fun smartTypeText(textToType: String, targetRect: Rect? = null, submit: Boolean = false): Boolean {
         lastTypeVerified = false
         if (textToType.isBlank()) {
             Log.w(TAG, "smartTypeText refused blank input")
@@ -2212,7 +2207,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         return lastTypeVerified
     }
 
-    private fun performLongPressAndPaste(targetRect: Rect): Boolean {
+    private suspend fun performLongPressAndPaste(targetRect: Rect): Boolean {
         val clickX = targetRect.centerX().toFloat()
         val clickY = targetRect.centerY().toFloat()
         val path = Path().apply {
@@ -2364,7 +2359,7 @@ class JarvisAccessibilityService : AccessibilityService() {
      * cannot cause a false positive; NOT the URL bar) and checks whether the start of [text] is visible.
      * Polls for up to ~1.2s because Chrome syncs web inputs to the accessibility tree with a delay.
      */
-    fun verifyTextVisibleAnywhere(text: String): Boolean {
+    suspend fun verifyTextVisibleAnywhere(text: String): Boolean {
         val snippet = text.trim().take(24).lowercase(Locale.ROOT)
         if (snippet.length < 3) return true
         fun scan(n: AccessibilityNodeInfo, depth: Int): Boolean {
