@@ -1191,8 +1191,16 @@ object MissionEngine {
                 val cancelled = (_activeMission.value ?: mission).copy(
                     steps = updatedSteps.toList(),
                     currentStepIndex = index,
-                    status = MissionOverallStatus.CANCELLED,
-                    outcomeSummary = "Mission cancelled after the current action returned; recorded evidence was preserved.",
+                    status = if (cancelledStepStatus == MissionStepStatus.UNVERIFIED) {
+                        MissionOverallStatus.UNVERIFIED
+                    } else {
+                        MissionOverallStatus.CANCELLED
+                    },
+                    outcomeSummary = if (cancelledStepStatus == MissionStepStatus.UNVERIFIED) {
+                        "Cancellation reached a safe boundary, but the last non-idempotent action outcome is unverified. Manual review is required."
+                    } else {
+                        "Mission cancelled after the current action returned; recorded evidence was preserved."
+                    },
                     updatedAt = System.currentTimeMillis()
                 )
                 _activeMission.value = cancelled
