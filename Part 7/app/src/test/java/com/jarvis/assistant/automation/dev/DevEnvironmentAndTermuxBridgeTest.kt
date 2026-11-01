@@ -15,6 +15,22 @@ import java.io.File
  * - Safe in-process Git repository inspection without execve
  */
 class DevEnvironmentAndTermuxBridgeTest {
+    @Test
+    fun maskSecretsRedactsProviderKeysBearerTokensAndQueryParameters() {
+        val googleKey = "AIza" + "A".repeat(35)
+        val githubToken = "github_pat_" + "B".repeat(30)
+        val input = "https://example.test/?key=$googleKey&token=private-token " +
+            "Bearer private-bearer apiKey=private-api-key $githubToken"
+        val sanitized = TermuxBridge.maskSecrets(input)
+
+        assertFalse(sanitized.contains(googleKey))
+        assertFalse(sanitized.contains(githubToken))
+        assertFalse(sanitized.contains("private-token"))
+        assertFalse(sanitized.contains("private-bearer"))
+        assertFalse(sanitized.contains("private-api-key"))
+        assertTrue(sanitized.contains("[MASKED]"))
+    }
+
 
     // --- 1. Secret Sanitization Tests ---
 
