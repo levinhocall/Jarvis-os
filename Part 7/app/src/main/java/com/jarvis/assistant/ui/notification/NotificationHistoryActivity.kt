@@ -23,6 +23,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private var showUnreadOnly = false
     private var historyJob: Job? = null
+    private val pendingCredentialCleanup = mutableSetOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.jarvis.assistant.util.ThemeManager.applyTheme(this)
@@ -122,11 +123,24 @@ class NotificationHistoryActivity : AppCompatActivity() {
             return
         }
         items.forEach { item ->
+            val sanitized = com.jarvis.assistant.automation.notification.NotificationPrivacyFilter
+                .sanitize(item.sender, item.message)
+            if (sanitized.containsCredential) {
+                if (pendingCredentialCleanup.add(item.id)) {
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        runCatching {
+                            MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().delete(item.id)
+                        }
+                        withContext(Dispatchers.Main) { pendingCredentialCleanup.remove(item.id) }
+                    }
+                }
+                return@forEach
+            }
             val time = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT)
                 .format(java.util.Date(item.timestamp))
             val card = TextView(this).apply {
-                text = (if (item.isRead) "✓  " else "●  ") + (item.sender.ifBlank { item.packageName }) +
-                    "\n" + item.message + "\n" + time + " • " + item.packageName
+                text = (if (item.isRead) "✓  " else "●  ") + (sanitized.sender.ifBlank { item.packageName }) +
+                    "\n" + sanitized.message + "\n" + time + " • " + item.packageName
                 textSize = 14f
                 setPadding(dp(12), dp(12), dp(12), dp(12))
                 setTextColor(resolveColor(com.jarvis.assistant.R.attr.themeTextPrimary))
