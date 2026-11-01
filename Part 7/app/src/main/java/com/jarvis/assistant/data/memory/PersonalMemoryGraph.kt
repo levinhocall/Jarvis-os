@@ -141,8 +141,14 @@ object PersonalMemoryGraph {
                         key = ent.key.lowercase(Locale.ROOT),
                         value = ent.value,
                         category = ent.category,
-                        provenance = MemoryProvenance.EXPLICIT_USER_STATEMENT,
-                        sensitivity = MemorySensitivity.PREFERENCE
+                        provenance = runCatching { MemoryProvenance.valueOf(ent.provenance) }
+                            .getOrDefault(MemoryProvenance.EXPLICIT_USER_STATEMENT),
+                        sensitivity = runCatching { MemorySensitivity.valueOf(ent.sensitivity) }
+                            .getOrDefault(MemorySensitivity.PREFERENCE),
+                        confidence = ent.confidence,
+                        isConfirmedFact = ent.provenance == MemoryProvenance.EXPLICIT_USER_STATEMENT.name,
+                        createdAt = ent.timestamp,
+                        expiryTimeMs = ent.expiryTimeMs
                     )
                     inMemoryNodes[node.key] = node
                 }
