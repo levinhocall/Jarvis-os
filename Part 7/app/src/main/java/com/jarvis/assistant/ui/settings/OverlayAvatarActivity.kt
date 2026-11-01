@@ -1,6 +1,9 @@
 package com.jarvis.assistant.ui.settings
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -21,6 +24,7 @@ class OverlayAvatarActivity : AppCompatActivity() {
     private lateinit var overlaySwitch: SwitchCompat
     private val preferences get() = JarvisApp.instance.preferences
     private lateinit var assetLoader: WebViewAssetLoader
+    private var pendingOverlayEnable = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         ThemeManager.applyTheme(this)
@@ -30,7 +34,7 @@ class OverlayAvatarActivity : AppCompatActivity() {
 
         findViewById<android.view.View>(R.id.btnBack).setOnClickListener { finish() }
         overlaySwitch = findViewById(R.id.switchOverlayEnabled)
-        overlaySwitch.isChecked = preferences.isTaskOverlayEnabled
+        overlaySwitch.isChecked = preferences.isTaskOverlayEnabled && Settings.canDrawOverlays(this)
         val modeGroup = findViewById<RadioGroup>(R.id.radioOverlayMode)
         modeGroup.check(if (preferences.taskOverlayMode == "working") R.id.rbOverlayWorking else R.id.rbOverlayAlways)
         modeGroup.setOnCheckedChangeListener { _, checkedId ->
@@ -54,6 +58,26 @@ class OverlayAvatarActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
         }
         overlaySwitch.setOnCheckedChangeListener { _, enabled ->
+            if (enabled && !Settings.canDrawOverlays(this)) {
+                // Android requires the user to grant special overlay access in Settings.
+                // Never persist an enabled state that the OS will refuse to display.
+                pendingOverlayEnable = true
+                overlaySwitch.isChecked = false
+                try {
+                    startActivity(Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    ))
+                } catch (_: Exception) {
+                    pendingOverlayEnable = false
+                    android.widget.Toast.makeText(
+                        this,
+                        "Open Android Settings and allow display over other apps.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@setOnCheckedChangeListener
+            }
             preferences.isTaskOverlayEnabled = enabled
             modeGroup.isEnabled = enabled
             edgeSpinner.isEnabled = enabled
@@ -111,6 +135,27 @@ class OverlayAvatarActivity : AppCompatActivity() {
                 preferences.taskOverlayAvatar = name
                 selectInGallery(preferences.taskOverlayAvatar)
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (pendingOverlayEnable) {
+            pendingOverlayEnable = false
+            if (Settings.canDrawOverlays(this)) {
+                preferences.isTaskOverlayEnabled = true
+                overlaySwitch.isChecked = true
+            } else {
+                android.widget.Toast.makeText(
+                    this,
+                    "Overlay access was not granted. The floating avatar remains disabled.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        } else if (preferences.isTaskOverlayEnabled && !Settings.canDrawOverlays(this)) {
+            // Permission may be revoked while this screen is away.
+            preferences.isTaskOverlayEnabled = false
+            overlaySwitch.isChecked = false
         }
     }
 
