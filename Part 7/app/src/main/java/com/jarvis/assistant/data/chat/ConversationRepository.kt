@@ -1,6 +1,8 @@
 package com.jarvis.assistant.data.chat
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,6 +12,7 @@ class ConversationRepository(
     private val chatDao: ChatDao
 ) {
     private val _currentSessionId = MutableStateFlow<String?>(null)
+    private val turnWriteMutex = Mutex()
     val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
 
     fun getActiveSessionsFlow(): Flow<List<ChatSessionEntity>> = chatDao.getActiveSessionsFlow()
@@ -104,6 +107,28 @@ class ConversationRepository(
         }
 
         return message
+    }
+
+    /**
+     * Atomically persists a complete user/assistant turn in the durable Room conversation store.
+     * A session is restored when possible and created lazily after process restart or deletion.
+     */
+    suspend fun appendTurn(userText: String, assistantText: String): String? = turnWriteMutex.withLock {
+        val user = userText.trim()
+        val assistant = assistantText.trim()
+        if (user.isBlank() && assistant.isBlank()) return@withLock null
+
+        val existingId = _currentSessionId.value
+        val existing = existingId?.let { chatDao.getSessionById(it) }
+        val session = if (existing != null && !existing.isArchived) {
+            existing
+        } else {
+            createNewSession(title = user.lineSequence().firstOrNull()?.take(36)?.ifBlank { "Voice Conversation" } ?: "Voice Conversation")
+        }
+
+        if (user.isNotBlank()) addMessage(session.id, role = "USER", content = user)
+        if (assistant.isNotBlank()) addMessage(session.id, role = "ASSISTANT", content = assistant)
+        session.id
     }
 
     suspend fun deleteMessage(messageId: String) {
