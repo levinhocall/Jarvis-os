@@ -1115,6 +1115,7 @@ object MissionEngine {
 
             // 5. Execute Step with Bounded Retry and Timeout
             var stepSuccess = false
+            var actionAttempted = false
             var evidence = MissionVerificationEvidence(
                 evidenceType = EvidenceType.UNVERIFIED,
                 isVerified = false,
@@ -1133,6 +1134,7 @@ object MissionEngine {
                 }
 
                 val timeout = currentStep.timeoutMs
+                actionAttempted = true
                 val result = withTimeoutOrNull(timeout) {
                     executeSingleStep(currentStep, context, mission.approvalState == MissionApprovalState.APPROVED)
                 }
@@ -1169,9 +1171,10 @@ object MissionEngine {
 
             if (cancelRequestedMissions.remove(missionId)) {
                 val cancelledStepStatus = when {
+                    !actionAttempted -> MissionStepStatus.CANCELLED
                     stepSuccess && evidence.isVerified -> MissionStepStatus.COMPLETED
                     stepSuccess || !currentStep.isIdempotent -> MissionStepStatus.UNVERIFIED
-                    else -> MissionStepStatus.CANCELLED
+                    else -> MissionStepStatus.FAILED
                 }
                 currentStep = currentStep.copy(
                     status = cancelledStepStatus,
