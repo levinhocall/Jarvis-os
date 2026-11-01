@@ -171,8 +171,11 @@ class SkillForgeTest {
             assertTrue(resultEnabled.success)
             assertTrue(resultEnabled.message.contains("in progress", ignoreCase = true))
             val completed = kotlinx.coroutines.withTimeout(2_000L) {
-                com.jarvis.assistant.automation.mission.MissionEngine.activeMission.first {
-                    it?.goal == "Toggle Test" && it.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED
+                com.jarvis.assistant.automation.mission.MissionEngine.activeMission.first { mission ->
+                    mission?.let {
+                        it.goal == "Toggle Test" &&
+                            it.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED
+                    } == true
                 }
             }
             assertEquals(com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED, completed?.status)
