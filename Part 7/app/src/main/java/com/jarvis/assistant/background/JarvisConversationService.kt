@@ -1883,7 +1883,12 @@ class JarvisConversationService : Service() {
             }
             com.jarvis.assistant.automation.mission.MissionOverallStatus.CLARIFICATION_REQUIRED -> {
                 result.put("requires_clarification", true)
-                result.put("message", mission.outcomeSummary ?: "More information is required before this action can proceed.")
+                result.put(
+                    "message",
+                    mission.clarificationRequest?.question
+                        ?: mission.outcomeSummary
+                        ?: "More information is required before this action can proceed."
+                )
             }
             com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING,
             com.jarvis.assistant.automation.mission.MissionOverallStatus.PLANNING,
