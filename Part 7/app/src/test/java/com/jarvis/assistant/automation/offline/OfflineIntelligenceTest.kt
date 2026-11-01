@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlinx.coroutines.runBlocking
 
 class OfflineIntelligenceTest {
 
@@ -16,17 +17,17 @@ class OfflineIntelligenceTest {
     }
 
     @Test
-    fun `device hardware controls execute locally offline`() {
+    fun `device hardware command without Android context is not reported as executed`() = runBlocking {
         val result = coordinator.handleCommandOffline("turn on flashlight")
-        assertTrue(result is OfflineExecutionResult.ExecutedLocally)
-        assertEquals("DEVICE_HARDWARE", (result as OfflineExecutionResult.ExecutedLocally).actionType)
-        assertEquals("ON", result.outputData["state"])
+        assertTrue(result is OfflineExecutionResult.DegradedExplanation)
+        assertTrue((result as OfflineExecutionResult.DegradedExplanation).userFeedback.contains("was not executed"))
     }
 
     @Test
-    fun `local notes save to cache and can be searched offline`() {
+    fun `local notes save to temporary cache when persistent app storage is unavailable`() = runBlocking {
         val noteResult = coordinator.handleCommandOffline("remember flight confirmation code is XYZ-789")
         assertTrue(noteResult is OfflineExecutionResult.ExecutedLocally)
+        assertTrue(noteResult.userFeedback.contains("temporary offline cache"))
 
         val found = coordinator.searchLocalKnowledge("XYZ-789")
         assertEquals(1, found.size)
@@ -34,16 +35,16 @@ class OfflineIntelligenceTest {
     }
 
     @Test
-    fun `non consequential search query is queued for automatic online sync`() {
+    fun `non consequential search is queued without claiming automatic sync`() = runBlocking {
         val result = coordinator.handleCommandOffline("search weather in Tokyo")
         assertTrue(result is OfflineExecutionResult.QueuedForOnline)
         assertFalse((result as OfflineExecutionResult.QueuedForOnline).requiresConfirmationOnSync)
-
+        assertTrue(result.userFeedback.contains("automatic sync is not currently connected"))
         assertEquals(1, coordinator.getSyncQueue().size)
     }
 
     @Test
-    fun `consequential action is queued with confirmation requirement`() {
+    fun `consequential action is queued with confirmation requirement`() = runBlocking {
         val result = coordinator.handleCommandOffline("send email to boss with contract attached")
         assertTrue(result is OfflineExecutionResult.QueuedForOnline)
         assertTrue((result as OfflineExecutionResult.QueuedForOnline).requiresConfirmationOnSync)
@@ -54,7 +55,7 @@ class OfflineIntelligenceTest {
     }
 
     @Test
-    fun `degraded explanation gives honest offline alternatives for unsupported features`() {
+    fun `degraded explanation gives honest offline alternatives for unsupported features`() = runBlocking {
         val result = coordinator.handleCommandOffline("generate a python script for deep learning")
         assertTrue(result is OfflineExecutionResult.DegradedExplanation)
         val explanation = result as OfflineExecutionResult.DegradedExplanation
@@ -63,7 +64,7 @@ class OfflineIntelligenceTest {
     }
 
     @Test
-    fun `processSyncQueue flushes non-consequential items and holds consequential for confirmation`() {
+    fun `processSyncQueue retains non-consequential items until a real handler succeeds`() = runBlocking {
         coordinator.handleCommandOffline("search recipe for pasta") // non-consequential
         coordinator.handleCommandOffline("pay utility bill of $50") // consequential
 
@@ -73,12 +74,19 @@ class OfflineIntelligenceTest {
 
         // When online returns
         val onlineSync = coordinator.processSyncQueue(isOnline = true)
-        assertEquals(1, onlineSync.syncedCount)
+        assertEquals(0, onlineSync.syncedCount)
         assertEquals(1, onlineSync.pendingConfirmationCount)
+        assertTrue(onlineSync.details.any { it.contains("no real sync executor") })
 
         val remainingQueue = coordinator.getSyncQueue()
-        assertEquals(1, remainingQueue.size)
-        assertEquals(SyncStatus.AWAITING_CONFIRMATION, remainingQueue[0].syncStatus)
+        assertEquals(2, remainingQueue.size)
+        assertTrue(remainingQueue.any { it.syncStatus == SyncStatus.AWAITING_CONFIRMATION })
+        assertTrue(remainingQueue.any { it.syncStatus == SyncStatus.PENDING })
+
+        val handled = coordinator.processSyncQueue(isOnline = true) { it.actionType == "BACKGROUND_QUERY_SYNC" }
+        assertEquals(1, handled.syncedCount)
+        assertEquals(1, handled.pendingConfirmationCount)
+        assertEquals(1, coordinator.getSyncQueue().size)
     }
 
     @Test
