@@ -1159,7 +1159,7 @@ class JarvisConversationService : Service() {
                             }
                             _liveAssistantResponse.value = currentTurnAssistantText.toString().trim()
                             val assistantText = currentTurnAssistantText.toString().lowercase(Locale.ROOT)
-                            Log.d("JarvisService", "Assistant text so far: '$assistantText'")
+                            Log.d("JarvisService", "Assistant response chunk received (length=${chunkToAppend.length})")
                         }
 
                         override fun onUserTextReceived(textChunk: String) {
@@ -1216,11 +1216,11 @@ class JarvisConversationService : Service() {
                             updateNotification()
                             val userText = currentTurnUserText.toString().lowercase(Locale.ROOT)
                             if (isStopCommand(userText)) {
-                                Log.i("JarvisService", "Detected explicit stop/cancel in user speech: '$userText'. Aborting all tasks.")
+                                Log.i("JarvisService", "Explicit stop/cancel intent detected; active tasks are being aborted")
                                 triggerVoiceBargeIn("explicit_stop_command")
                             }
                             if (isExplicitStandbyCommand(userText)) {
-                                Log.i("JarvisService", "Detected explicit background / standby command in user speech: '$userText'")
+                                Log.i("JarvisService", "Explicit standby intent detected")
                                 minimizeToHomeScreen()
                                 enterStandby(announce = true)
                                 return
@@ -1639,7 +1639,7 @@ class JarvisConversationService : Service() {
                         val assistantText = synchronized(currentTurnAssistantText) { currentTurnAssistantText.toString() }
 
                         if (isBargeInSpeechDetected(detectedText, assistantText, isLoudspeaker = !hasHeadset)) {
-                            Log.i("JarvisService", "Instant barge-in detected via Vosk: '$detectedText' (isFinal=$isFinal)")
+                            Log.i("JarvisService", "Instant Vosk barge-in detected (isFinal=$isFinal)")
                             triggerHardBargeIn("vosk_recognizer")
                             rec.reset()
                             synchronized(currentUtteranceAudioStream) {
@@ -1831,7 +1831,7 @@ class JarvisConversationService : Service() {
                             if (totalVoicedFramesInCurrentUtterance >= VAD_MIN_UTTERANCE_FRAMES || currentTurnUserText.trim().isNotEmpty()) {
                                 if (preferences.isOwnerVoiceEnabled && preferences.hasOwnerVoiceProfile() && !isCurrentTurnOwnerVoiceVerified) {
                                     val nonOwnerQuery = currentTurnUserText.toString().trim()
-                                    Log.w("JarvisService", "Non-owner speech ended: '$nonOwnerQuery'; IGNORING utterance, suppressing reply, and recording to history.")
+                                    Log.w("JarvisService", "Non-owner speech rejected; transcript omitted from logs")
                                     val app = application as? JarvisApp
                                     val loggedQuery = if (nonOwnerQuery.isNotEmpty()) nonOwnerQuery else "(Unrecognized voice)"
                                     app?.chatRepository?.addTurn(
@@ -2145,7 +2145,7 @@ class JarvisConversationService : Service() {
                         val activeElements = com.jarvis.assistant.vision.UiGroundingEngine().scanScreen(activeRoot)
                         isGoogleFlowCreationTask = com.jarvis.assistant.vision.UiGroundingEngine().isGoogleFlowSurface(activeElements) &&
                             isFlowCreationIntent(autonomousTaskGoal)
-                        Log.i("JarvisService", "Started autonomous task loop with goal: '$autonomousTaskGoal'")
+                        Log.i("JarvisService", "Started autonomous task loop; goal omitted from logs")
                     } else {
                         autonomousStepCount++
                         Log.i("JarvisService", "Autonomous task advancing to step $autonomousStepCount")
@@ -2419,7 +2419,7 @@ class JarvisConversationService : Service() {
                                 lower == "a song" || lower == "music" ||
                                 lower.contains(" chalao") || lower.contains(" bajao")
                         if (isPlayIntent) {
-                            Log.i("JarvisService", "STRICT RULE INTERCEPTION: search_youtube called with play intent ('$query') -> rerouting to search_and_play_youtube!")
+                            Log.i("JarvisService", "Rerouted YouTube play intent to the safe search-and-play handler")
                             audioPlayer?.flush()
                             val apiKey = app.youTubePreferences.youtubeApiKey
                             val effectiveQuery = if (query.isBlank() || query.equals("video", ignoreCase = true) || query.equals("play video", ignoreCase = true) || query.equals("song", ignoreCase = true) || query.equals("play song", ignoreCase = true) || query.equals("a song", ignoreCase = true) || query.equals("songs", ignoreCase = true)) {
@@ -2736,7 +2736,7 @@ class JarvisConversationService : Service() {
                             result.put("message", "Google Flow task is not verified complete. Confirm the prompt text is visible and a generated or processing video item is visible before reporting completion.")
                             result.put("system_directive", "COMPLETION REJECTED: Do not tell the user the video was submitted. Inspect the current Flow screen. If the prompt is missing, enter it and verify it; if Generate has not started, click the visible Generate button and wait for a processing or generated item. Report a blocker honestly if the screen cannot confirm it.")
                         } else if (isAutonomousTaskRunning && goalObj.isBulkAction && !bulkEndOfListVerified) {
-                            Log.w("JarvisService", "Premature task_completed rejected for bulk action goal: '$autonomousTaskGoal'")
+                            Log.w("JarvisService", "Premature task completion signal rejected for bulk action")
                             result.put("success", false)
                             result.put("message", "Bulk task completion rejected: no end-of-list evidence yet. Continue processing matching visible items, then scroll and re-observe until two consecutive screen signatures show no further list content.")
                             result.put("system_directive", "COMPLETION REJECTED: The request explicitly applies to ALL matching items. Do not claim completion. Inspect the fresh screen, process each visible matching target once, then scroll and observe again. Repeat until the app shows no further content; do not scroll past a visible target before processing it.")
@@ -3064,7 +3064,7 @@ class JarvisConversationService : Service() {
         if (hasExecutedCommandInCurrentTurn || cleanSpeech == lastHandledCommandText) return
 
         if (preferences.isOwnerVoiceEnabled && preferences.hasOwnerVoiceProfile() && !isCurrentTurnOwnerVoiceVerified) {
-            Log.w("JarvisService", "BLOCKED local command execution: Speaker is not verified owner! ('$cleanSpeech')")
+            Log.w("JarvisService", "Blocked local command from an unverified speaker; transcript omitted")
             return
         }
 
@@ -3097,7 +3097,7 @@ class JarvisConversationService : Service() {
             }
         }
 
-        Log.d("JarvisService", "checkAndExecuteCommand: '$cleanSpeech'")
+        Log.d("JarvisService", "Processing recognized command intent; transcript omitted")
 
         if (com.jarvis.assistant.audio.HeadsetWhisperManager.handleSpokenReply(cleanSpeech, this)) {
             hasExecutedCommandInCurrentTurn = true
@@ -3116,7 +3116,7 @@ class JarvisConversationService : Service() {
         if (reflexResult.handled) {
             hasExecutedCommandInCurrentTurn = true
             lastHandledCommandText = cleanSpeech
-            Log.i("JarvisService", "Executed offline reflex '${reflexResult.actionName}' (<100ms): ${reflexResult.spokenResponse}")
+            Log.i("JarvisService", "Executed verified offline reflex action: ${reflexResult.actionName}")
             com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(reflexResult.spokenResponse)
             return
         }
@@ -3139,10 +3139,10 @@ class JarvisConversationService : Service() {
             val genericCmd = pendingGenericCommand
             pendingGenericCommand = null
             if (cmd.confirmed && genericCmd != null) {
-                Log.i("JarvisService", "User confirmed pending command: $genericCmd")
+                Log.i("JarvisService", "User confirmed a pending command")
                 executeDetectedCommand(genericCmd, cleanSpeech)
             } else {
-                Log.i("JarvisService", "User cancelled pending command: $genericCmd")
+                Log.i("JarvisService", "User cancelled a pending command")
                 announce("Okay, I won't do that.")
             }
             return
@@ -3157,7 +3157,7 @@ class JarvisConversationService : Service() {
             ) {
                 lastHandledCommandText = cleanSpeech
                 pendingGenericCommand = cmd
-                Log.i("JarvisService", "Ambiguous YouTube query '${cmd.query}', asking for confirmation before playing")
+                Log.i("JarvisService", "Ambiguous YouTube intent; asking for confirmation")
                 announce("Did you want me to play \"${cmd.query}\" on YouTube? Say yes to confirm, or tell me the name again.")
                 return
             }
@@ -3398,7 +3398,7 @@ class JarvisConversationService : Service() {
 
         if (command != null) {
             lastHandledAssistantCommand = clean
-            Log.i("JarvisService", "ASSISTANT TEXT → Detected hardware command [$matchSource]: $command")
+            Log.i("JarvisService", "Assistant hardware command intent detected (source=$matchSource)")
             executeDetectedCommand(command, "assistant: $clean")
         }
     }
@@ -3420,7 +3420,7 @@ class JarvisConversationService : Service() {
         serviceScope.launch {
             try {
                 val result = app.commandExecutor.execute(command)
-                Log.i("JarvisService", "Command executed successfully: $result (source: $source)")
+                Log.i("JarvisService", "Command execution returned; output omitted from logs (source=$source)")
                 app.memoryManager.addShortTermTurn(source, result)
             } catch (e: Exception) {
                 Log.e("JarvisService", "Command execution FAILED: ${e.message}", e)
@@ -3702,7 +3702,7 @@ class JarvisConversationService : Service() {
             // Word-level array must be present: never wake blindly without confidence verification.
             val resultArr = json.optJSONArray("result")
             if (resultArr == null || resultArr.length() == 0) {
-                Log.d("JarvisService", "WAKE REJECTED: No word-level result array for '$text'. Ignored.")
+                Log.d("JarvisService", "Wake hypothesis rejected: no word-level result array")
                 return
             }
 
