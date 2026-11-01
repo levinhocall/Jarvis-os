@@ -14,6 +14,7 @@ class MultiAgentCouncilTest {
         assertTrue(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.EXECUTOR, "whatsapp_send"))
         assertTrue(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.EXECUTOR, "device_control"))
         assertTrue(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.EXECUTOR, "search_web"))
+        assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.EXECUTOR, "unregistered_tool"))
 
         // Researcher is authorized for read-only, never mutating
         assertTrue(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.RESEARCHER, "search_web"))
@@ -78,5 +79,18 @@ class MultiAgentCouncilTest {
         // Verifier must NOT claim independent verification when physical evidence is false
         assertFalse(outcome.isVerifiedIndependently)
         assertTrue(outcome.leadResponse.contains("unconfirmed", ignoreCase = true))
+    }
+
+    @Test
+    fun testCouncilExecution_withoutRealContextDoesNotFabricateSuccess() = runBlocking {
+        val outcome = MultiAgentCouncil.executeCouncilTask(
+            context = null,
+            goal = "Search quantum computing"
+        )
+
+        assertFalse(outcome.isSuccess)
+        assertFalse(outcome.isVerifiedIndependently)
+        assertEquals(0, outcome.executionStepsCount)
+        assertTrue(outcome.failureReason?.contains("Context unavailable", ignoreCase = true) == true)
     }
 }
