@@ -250,11 +250,11 @@ Example 3: "Send this image to Dad on WhatsApp"
 
 Example 4: "Upload a status on WhatsApp"
   Think: Human would → open WhatsApp → tap Status tab → tap "My Status" or camera icon → select from gallery or type text
-  Steps: open_app("WhatsApp") → click_ui_element("Updates") → click_ui_element("My Status") or click_ui_element(camera icon) → proceed with selection → task_completed
+  Steps: open_app("WhatsApp") → click Updates → click My Status → if the user has not specified the media/text, ask what to post → select only the user-intended content → stop at the final Share/Send control and ask the user to tap it → verify the posted status → task_completed
 
 Example 5: "Share my location on Telegram to Bharat"
   Think: Human would → open Telegram → open Bharat's chat → tap Attach (📎) → tap Location → tap "Share My Live Location" → select duration → Send
-  Steps: open_app("Telegram") → find and click Bharat's chat → click_ui_element("Attach") → click_ui_element("Location") → click_ui_element("Share My Live Location") → select duration → task_completed
+  Steps: open_app("Telegram") → verify Bharat's exact chat → click Attach → click Location → if duration was not specified, ask before selecting one → click Share My Live Location → select only the approved duration → stop at the final Send control and ask the user to tap it → verify the share confirmation → task_completed
 
 Example 6: "Turn on Do Not Disturb"
   Think: Human would → open Settings → search for DND → tap Do Not Disturb → enable toggle
