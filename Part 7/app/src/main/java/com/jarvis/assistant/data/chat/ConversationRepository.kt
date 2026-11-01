@@ -42,6 +42,17 @@ class ConversationRepository(
         return session
     }
 
+    /** Atomically archives the active session and creates a fresh conversation. */
+    suspend fun startNewSession(title: String = "New Chat"): ChatSessionEntity = turnWriteMutex.withLock {
+        val currentId = _currentSessionId.value
+        val current = currentId?.let { chatDao.getSessionById(it) }
+            ?: chatDao.getMostRecentActiveSession()
+        if (current != null && !current.isArchived) {
+            chatDao.setArchived(current.id, true)
+        }
+        createNewSession(title)
+    }
+
     suspend fun selectSession(sessionId: String) {
         val session = chatDao.getSessionById(sessionId)
         if (session != null) {
