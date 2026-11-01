@@ -4,6 +4,9 @@ import android.app.Application
 import com.jarvis.assistant.security.SecurityManager
 import com.jarvis.assistant.audio.VoskModelManager
 import com.jarvis.assistant.automation.command.CommandExecutor
+import com.jarvis.assistant.automation.agent.GeminiFunctionCallProvider
+import com.jarvis.assistant.automation.agent.LlmPlanner
+import com.jarvis.assistant.automation.mission.MissionEngine
 import com.jarvis.assistant.automation.contacts.ContactResolver
 import com.jarvis.assistant.automation.phone.PhoneControlManager
 import com.jarvis.assistant.automation.whatsapp.WhatsAppAssistant
@@ -100,7 +103,14 @@ class JarvisApp : Application() {
 
         // Unified Runtime & Self-Diagnostics
         unifiedRuntime = com.jarvis.assistant.core.runtime.JarvisUnifiedRuntime()
-        com.jarvis.assistant.automation.mission.MissionEngine.missionDao = memoryDatabase.missionDao()
+        MissionEngine.missionDao = memoryDatabase.missionDao()
+        MissionEngine.llmPlanner = LlmPlanner(
+            GeminiFunctionCallProvider(
+                apiKeyProvider = {
+                    preferences.getNextActiveKey("gemini") ?: preferences.apiKey
+                }
+            )
+        )
         appScope.launch {
             unifiedRuntime.bootSelfTest(context = this@JarvisApp)
             com.jarvis.assistant.automation.mission.MissionEngine.resumeNonTerminalMissions(this@JarvisApp)
