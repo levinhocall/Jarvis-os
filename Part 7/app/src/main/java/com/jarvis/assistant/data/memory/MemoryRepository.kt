@@ -238,27 +238,31 @@ class MemoryRepository(
     }
 
     suspend fun importMemoriesFromJson(jsonStr: String): Int {
-        var count = 0
-        try {
+        val list = try {
             val type = object : com.google.gson.reflect.TypeToken<List<MemoryEntity>>() {}.type
-            val list: List<MemoryEntity> = gson.fromJson(jsonStr, type) ?: emptyList()
-            for (item in list) {
-                if (item.key.isNotBlank()) {
-                    remember(
-                        content = item.value.ifBlank { item.rawText },
-                        type = item.memoryType,
-                        key = item.key,
-                        importance = item.importance,
-                        confidence = item.confidence,
-                        sourceConversationId = item.sourceConversationId,
-                        sourceMessageId = item.sourceMessageId,
-                        category = item.category,
-                        expiryTimeMs = item.expiryTimeMs
-                    )
-                    count++
-                }
-            }
-        } catch (_: Exception) {}
+            gson.fromJson<List<MemoryEntity>>(jsonStr, type) ?: emptyList()
+        } catch (_: Exception) {
+            return 0
+        }
+
+        var count = 0
+        for (item in list) {
+            if (item.key.isBlank()) continue
+            val imported = runCatching {
+                remember(
+                    content = item.value.ifBlank { item.rawText },
+                    type = item.memoryType,
+                    key = item.key,
+                    importance = item.importance,
+                    confidence = item.confidence,
+                    sourceConversationId = item.sourceConversationId,
+                    sourceMessageId = item.sourceMessageId,
+                    category = item.category,
+                    expiryTimeMs = item.expiryTimeMs
+                )
+            }.getOrNull()
+            if (imported != null && imported > 0L) count++
+        }
         return count
     }
 
