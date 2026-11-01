@@ -200,6 +200,10 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".automation.mission.MissionApprovalReceiver"
+            android:exported="false" />
+
         <!-- Result delivery is through the explicit PendingIntent passed to Termux. -->
         <receiver
             android:name=".automation.dev.TermuxCommandResultReceiver"
