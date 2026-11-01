@@ -177,6 +177,18 @@ class MissionPersistenceAndTriggerTest {
     }
 
     @Test
+    fun scheduleReminderIsRegisteredAsAUserRequestedLowRiskTool() {
+        val tool = ToolRegistry.getTool("schedule_reminder")
+        assertNotNull(tool)
+        assertEquals(MissionRisk.LOW, tool!!.riskLevel)
+        assertFalse(tool.isIdempotent)
+        assertEquals(
+            setOf("title", "description", "delay_minutes"),
+            tool.parameters.map { it.name }.toSet()
+        )
+    }
+
+    @Test
     fun testOneTimeReminderCanPreserveSubMinuteDelay() {
         val trigger = ScheduledTrigger(
             triggerId = "subminute_reminder",
