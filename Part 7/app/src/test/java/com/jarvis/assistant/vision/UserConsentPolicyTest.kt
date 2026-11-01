@@ -14,6 +14,14 @@ class UserConsentPolicyTest {
     }
 
     @Test
+    fun blocksCommunicationDispatchAndPaymentSubmission() {
+        assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Send", null, "Chat with Alex", "com.whatsapp"))
+        assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Share", null, "Photo viewer", "com.google.android.apps.photos"))
+        assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Submit", null, "Checkout payment amount total", "com.android.chrome"))
+        assertFalse(UserConsentPolicy.requiresExplicitConfirmation("Send", null, "Search results", "com.android.chrome"))
+        assertFalse(UserConsentPolicy.requiresExplicitConfirmation("Submit", null, "Create profile", "com.android.chrome"))
+    }
+    @Test
     fun blocksTermsAcceptanceAndCredentialAutofill() {
         assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Agree and continue", null, "Please review our Terms and Conditions and Privacy Policy"))
         assertTrue(UserConsentPolicy.requiresExplicitConfirmation("Autofill from Messages", null, "Enter the OTP verification code sent to your phone"))
