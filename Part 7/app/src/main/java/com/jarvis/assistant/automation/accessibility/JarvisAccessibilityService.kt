@@ -452,7 +452,6 @@ class JarvisAccessibilityService : AccessibilityService() {
         isWaitingForYouTubeSubscribe = false
         isWaitingForYouTubeFullscreen = false
         isWaitingForWhatsAppDelete = false
-        latestExtractedOtp = null
     }
 
     override fun onDestroy() {
