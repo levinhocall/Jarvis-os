@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
-import com.jarvis.assistant.data.memory.RecallCoreManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -137,15 +136,8 @@ object CameraVisionAnalyzer {
 
                 val amount = Regex("(?:₹|rs\\.?|inr)\\s*([\\d,]+)", RegexOption.IGNORE_CASE)
                     .find(candidateText)?.let { "₹" + it.groupValues[1] }
-                runCatching {
-                    RecallCoreManager.logProductResearch(
-                        context = context.applicationContext,
-                        productName = "Neural Lens Image",
-                        price = amount ?: "Not detected",
-                        platform = "Gemini Vision",
-                        extraDetails = candidateText
-                    )
-                }.onFailure { Log.w(TAG, "Could not save image analysis to Recall Core", it) }
+                // Image contents can include private documents or personal data. Analysis is
+                // shown to the user but is not persisted to long-term memory automatically.
 
                 CameraVisionResult(
                     success = true,
