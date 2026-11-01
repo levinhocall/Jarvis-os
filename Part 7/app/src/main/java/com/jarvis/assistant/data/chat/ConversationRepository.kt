@@ -20,6 +20,13 @@ class ConversationRepository(
 
     suspend fun getSession(id: String): ChatSessionEntity? = chatDao.getSessionById(id)
 
+    /** Restores the latest non-archived session after process recreation. */
+    suspend fun restoreMostRecentActiveSession(): String? {
+        val session = chatDao.getMostRecentActiveSession()
+        _currentSessionId.value = session?.id
+        return session?.id
+    }
+
     suspend fun createNewSession(title: String = "New Chat", systemPrompt: String? = null): ChatSessionEntity {
         val session = ChatSessionEntity(
             id = UUID.randomUUID().toString(),
