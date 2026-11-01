@@ -75,7 +75,7 @@ object ScreenGroundingEngine {
 
         // Feed only non-editable, non-protected labels into the short-lived world model.
         // Never copy text from editable fields, password fields, secure windows, or numeric OTP-like values.
-        val sensitiveValue = Regex("""^\\s*(?:\\d{4,8}|(?:\\d[ -]?){13,19})\\s*$""")
+        val sensitiveValue = Regex("""^\s*(?:\d{4,8}|(?:\d[ -]?){13,19})\s*$""")
         val visibleLabels = if (context.isSecureWindow) {
             emptyList()
         } else {
