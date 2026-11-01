@@ -60,12 +60,12 @@ class FeatureHubActivity : AppCompatActivity() {
             val mission = com.jarvis.assistant.automation.mission.MissionEngine.activeMission.value
             val sections = mutableListOf<String>()
             task?.let {
-                sections += "ACCESSIBILITY TASK\\n${it.originalGoal}\\n${it.progressPercentage}% • ${it.currentStatus.replace('_', ' ')}"
+                sections += "ACCESSIBILITY TASK\n${it.originalGoal}\n${it.progressPercentage}% • ${it.currentStatus.replace('_', ' ')}"
             }
             mission?.let {
-                sections += "DURABLE MISSION\\n${it.goal}\\n${it.status.name.replace('_', ' ')} • ${it.steps.count { step -> step.status == com.jarvis.assistant.automation.mission.MissionStepStatus.COMPLETED }}/${it.steps.size} steps verified\\n${it.outcomeSummary.orEmpty()}"
+                sections += "DURABLE MISSION\n${it.goal}\\n${it.status.name.replace('_', ' ')} • ${it.steps.count { step -> step.status == com.jarvis.assistant.automation.mission.MissionStepStatus.COMPLETED }}/${it.steps.size} steps verified\n${it.outcomeSummary.orEmpty()}"
             }
-            val message = sections.joinToString("\\n\\n").ifBlank {
+            val message = sections.joinToString("\n\n").ifBlank {
                 "No active accessibility task or multi-step mission."
             }
             val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
