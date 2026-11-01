@@ -234,6 +234,7 @@ object MissionEngine {
         val cancellationRequested = _activeMission.value?.let {
             it.missionId == baseMission.missionId && it.outcomeSummary?.contains("cancellation requested", ignoreCase = true) == true
         } == true
+        val hasUnverifiedHistory = result.history.any { !it.isVerified }
         val awaitingApproval = result.abortReason == "APPROVAL_REQUIRED"
         val convertedSteps = result.history.map { record ->
             val isPendingApprovalStep = awaitingApproval &&
@@ -264,7 +265,8 @@ object MissionEngine {
                     it.verificationEvidence?.isVerified == true
             }
         val finalStatus = when {
-            cancellationRequested -> MissionOverallStatus.CANCELLED
+            (cancellationRequested || result.abortReason == "CANCELLED") && hasUnverifiedHistory -> MissionOverallStatus.UNVERIFIED
+            cancellationRequested || result.abortReason == "CANCELLED" -> MissionOverallStatus.CANCELLED
             awaitingApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
             result.abortReason == "CLARIFICATION_REQUIRED" -> MissionOverallStatus.CLARIFICATION_REQUIRED
             result.abortReason == "CANCELLED" -> MissionOverallStatus.CANCELLED
@@ -279,7 +281,9 @@ object MissionEngine {
             approvalState = if (awaitingApproval) MissionApprovalState.PENDING_APPROVAL else baseMission.approvalState,
             approvalPrompt = if (awaitingApproval) result.summary else null,
             outcomeSummary = when {
+                cancellationRequested && hasUnverifiedHistory -> "Cancellation reached a safe boundary, but an LLM action outcome is unverified. Manual review is required."
                 cancellationRequested -> "Mission cancelled after the current LLM action returned; recorded evidence was preserved."
+                result.abortReason == "CANCELLED" && hasUnverifiedHistory -> "Mission cancellation left an action outcome unverified. Manual review is required."
                 finalStatus == MissionOverallStatus.PAUSED -> "LLM planner paused: ${result.summary}"
                 else -> result.summary
             },
