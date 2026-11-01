@@ -150,7 +150,7 @@ class MissionPersistenceAndTriggerTest {
             triggerType = TriggerType.RECURRING_DAILY,
             dailyHour = 8,
             dailyMinute = 0,
-            isUnattended = true
+            isUnattended = false
         )
 
         assertFalse(repo.scheduleTrigger(trigger))
