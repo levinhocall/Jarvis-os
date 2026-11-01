@@ -200,8 +200,8 @@ class LlmPlannerTest {
         }
         val attempts = AtomicInteger(0)
         val approved = ApprovedLlmToolCall(
-            toolName = "whatsapp_send",
-            arguments = mapOf("contact" to "Asha", "message" to "On my way")
+            toolName = "termux_execute",
+            arguments = mapOf("command" to "git status --short")
         )
 
         val result = LlmPlanner(provider).planAndExecute(
@@ -209,10 +209,10 @@ class LlmPlannerTest {
             initialHistory = priorHistory,
             approvedToolCall = approved
         ) { toolName, args ->
-            assertEquals("whatsapp_send", toolName)
+            assertEquals("termux_execute", toolName)
             assertEquals(approved.arguments, args)
             attempts.incrementAndGet()
-            true to "WhatsApp action acknowledged and independently verified."
+            true to "Termux command output verified by test executor."
         }
 
         assertTrue(result.isSuccess)
