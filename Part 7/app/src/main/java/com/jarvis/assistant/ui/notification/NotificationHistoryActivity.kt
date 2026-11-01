@@ -117,11 +117,11 @@ class NotificationHistoryActivity : AppCompatActivity() {
 
     private fun render(items: List<NotificationHistoryEntity>) {
         content.removeAllViews()
-        status.text = items.size.toString() + if (showUnreadOnly) " unread saved item(s)" else " saved item(s)"
         if (items.isEmpty()) {
             renderEmpty(if (showUnreadOnly) "No unread notifications." else "No saved notifications yet.")
             return
         }
+        var visibleCount = 0
         items.forEach { item ->
             val sanitized = com.jarvis.assistant.automation.notification.NotificationPrivacyFilter
                 .sanitize(item.sender, item.message)
@@ -136,6 +136,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
                 }
                 return@forEach
             }
+            visibleCount++
             val time = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT)
                 .format(java.util.Date(item.timestamp))
             val card = TextView(this).apply {
@@ -153,6 +154,11 @@ class NotificationHistoryActivity : AppCompatActivity() {
                 }
             }
             content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        }
+        status.text = if (visibleCount == 0) {
+            "Credential notifications were removed for privacy."
+        } else {
+            visibleCount.toString() + if (showUnreadOnly) " unread saved item(s)" else " saved item(s)"
         }
     }
 
