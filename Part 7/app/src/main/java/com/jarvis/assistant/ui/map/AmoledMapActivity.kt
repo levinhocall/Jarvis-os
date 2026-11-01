@@ -50,6 +50,7 @@ class AmoledMapActivity : AppCompatActivity() {
     private var lastRouteOrigin: GeoPoint? = null
     private var lastRouteRequestAt = 0L
     private var routeRequestGeneration = 0L
+    private var destinationSearchGeneration = 0L
     private val http by lazy {
         OkHttpClient.Builder()
             .connectTimeout(12, TimeUnit.SECONDS)
@@ -261,6 +262,7 @@ class AmoledMapActivity : AppCompatActivity() {
         val query = destination.text?.toString()?.trim().orEmpty()
         if (query.isBlank()) { status.text = "Enter a destination to search."; return }
         status.text = "Searching destination…"
+        val searchGeneration = ++destinationSearchGeneration
         lifecycleScope.launch {
             try {
                 val point = withContext(Dispatchers.IO) {
@@ -277,6 +279,7 @@ class AmoledMapActivity : AppCompatActivity() {
                         GeoPoint(row.getDouble("lat"), row.getDouble("lon")) to row.optString("display_name", query)
                     }
                 }
+                if (searchGeneration != destinationSearchGeneration || isFinishing || isDestroyed) return@launch
                 val (point, label) = point
                 selectedDestination = point
                 map.overlays.removeAll { it is Marker && it.title == "Destination" }
@@ -291,7 +294,9 @@ class AmoledMapActivity : AppCompatActivity() {
                 status.text = "Destination found. Searching for a route…"
                 requestRoute(point)
             } catch (error: Exception) {
-                status.text = "Destination search failed: ${error.message ?: "service unavailable"}"
+                if (searchGeneration == destinationSearchGeneration && !isFinishing && !isDestroyed) {
+                    status.text = "Destination search failed: ${error.message ?: "service unavailable"}"
+                }
             }
         }
     }
@@ -347,6 +352,11 @@ class AmoledMapActivity : AppCompatActivity() {
     }
 
     private fun clearRoute() {
+        // Invalidate in-flight geocoding/routing callbacks so Clear cannot be undone by
+        // a late network response that re-adds a destination or route overlay.
+        destinationSearchGeneration++
+        routeRequestGeneration++
+        lastRouteOrigin = null
         routeOverlay?.let { map.overlays.remove(it) }
         routeOverlay = null
         if (::navigationButton.isInitialized) navigationButton.visibility = View.GONE
@@ -398,6 +408,8 @@ class AmoledMapActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        destinationSearchGeneration++
+        routeRequestGeneration++
         stopLiveLocationTracking()
         map.onDetach()
         http.dispatcher.cancelAll()
