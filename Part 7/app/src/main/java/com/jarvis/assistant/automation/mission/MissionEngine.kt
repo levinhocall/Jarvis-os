@@ -1181,6 +1181,36 @@ object MissionEngine {
                 Pair(!failed, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, if (failed) output else "$output Delivery was not independently confirmed; mission remains unverified."))
             }
 
+            "whatsapp_call" -> {
+                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before placing a WhatsApp call."))
+                val contact = step.parameters["contact_name"] as? String ?: ""
+                val callType = (step.parameters["call_type"] as? String).orEmpty().ifBlank { "voice" }
+                val appNumber = (step.parameters["app_number"] as? Number)?.toInt()
+                if (contact.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp contact name is missing."))
+                when (val result = com.jarvis.assistant.util.WhatsAppMessenger.placeCall(
+                    context = context ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Android context is unavailable.")),
+                    recipientName = contact,
+                    callType = callType,
+                    appNumber = appNumber,
+                    confirmed = true
+                )) {
+                    is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.Success -> Pair(
+                        true,
+                        MissionVerificationEvidence(
+                            EvidenceType.UNVERIFIED,
+                            false,
+                            "WhatsApp $callType call interface was opened for ${result.contactName}; call connection is not verified."
+                        )
+                    )
+                    is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MultipleAppsFound -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Multiple WhatsApp apps are available; select a profile before retrying."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.ContactNotFound -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp contact '${result.name}' was not found."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MultipleContactsFound -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Multiple contacts matched '${result.name}'; clarification is required."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.MissingPermission -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Contacts permission is not granted."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.RequiresConfirmation -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp call confirmation is still required."))
+                    is com.jarvis.assistant.util.WhatsAppMessenger.CallResult.Error -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, result.reason))
+                }
+            }
+
             "call_contact" -> {
                 if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before placing a phone call."))
                 val contact = step.parameters["contact_name"] as? String ?: ""
