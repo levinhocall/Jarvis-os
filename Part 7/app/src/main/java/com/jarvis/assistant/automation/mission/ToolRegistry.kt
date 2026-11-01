@@ -53,7 +53,7 @@ object ToolRegistry {
                     android.Manifest.permission.READ_CONTACTS,
                     android.Manifest.permission.CALL_PHONE
                 ),
-                riskLevel = MissionRisk.MEDIUM,
+                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
                 isIdempotent = false
             )
         )
