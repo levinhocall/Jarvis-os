@@ -15,7 +15,9 @@ object NotificationPrivacyFilter {
     fun sanitize(sender: String, message: String): SanitizedNotification {
         val combined = "$sender $message"
         val hasCredentialTerm = credentialTerms.containsMatchIn(combined)
-        val hasBankCodePattern = sensitiveSender.containsMatchIn(sender) && shortCode.containsMatchIn(message)
+        val hasBankCodePattern = sensitiveSender.containsMatchIn(sender) && shortCode.containsMatchIn(message) &&
+            Regex("""\b(code|otp|verification|authentication|login|security|pin|passcode|authorize)\b""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(message)
         val hasExplicitCredentialCode = shortCode.containsMatchIn(message) &&
             Regex("(?i)\\b(code|otp|pin|passcode|verification|security)\\b").containsMatchIn(message)
         val sensitive = hasCredentialTerm || hasBankCodePattern || hasExplicitCredentialCode
