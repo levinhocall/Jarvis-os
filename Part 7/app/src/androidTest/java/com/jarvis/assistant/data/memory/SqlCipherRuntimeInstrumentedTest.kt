@@ -5,7 +5,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import net.zetetic.database.sqlcipher.SQLiteDatabase as CipherDatabase
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,6 +29,10 @@ class SqlCipherRuntimeInstrumentedTest {
             try {
                 created.execSQL("CREATE TABLE secret_payload (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
                 created.execSQL("INSERT INTO secret_payload(value) VALUES ('encrypted-round-trip')")
+                created.rawQuery("PRAGMA cipher_status", emptyArray()).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(1, cursor.getInt(0))
+                }
                 created.rawQuery("PRAGMA integrity_check", emptyArray()).use { cursor ->
                     assertTrue(cursor.moveToFirst())
                     assertEquals("ok", cursor.getString(0))
