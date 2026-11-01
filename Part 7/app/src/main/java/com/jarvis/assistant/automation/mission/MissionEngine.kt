@@ -1072,8 +1072,14 @@ object MissionEngine {
             outcomeSummary = "User acknowledged that the final outcome could not be verified. No automatic replay was performed.",
             updatedAt = System.currentTimeMillis()
         )
+        if (!persistMission(acknowledged, current.currentStepIndex)) {
+            _activeMission.value = current.copy(
+                outcomeSummary = "Acknowledgement could not be saved. The mission remains locked for manual review.",
+                updatedAt = System.currentTimeMillis()
+            )
+            return@withLock false
+        }
         _activeMission.value = acknowledged
-        persistMission(acknowledged, current.currentStepIndex)
         true
     }
 
