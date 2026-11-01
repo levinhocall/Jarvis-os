@@ -391,6 +391,59 @@ object MissionEngine {
     }
 
     /**
+     * Starts a skill-provided, already validated plan through the same durable mission lifecycle
+     * used by natural-language missions. Consequential tool definitions always require approval.
+     */
+    suspend fun startPreparedMission(
+        context: Context? = null,
+        goal: String,
+        userConstraints: List<String> = emptyList(),
+        steps: List<MissionStep>,
+        requiresApproval: Boolean = false,
+        approvalPrompt: String? = null
+    ): MissionDefinition = mutex.withLock {
+        val cleanGoal = goal.trim()
+        if (cleanGoal.isBlank() || steps.isEmpty()) {
+            val rejected = MissionDefinition(
+                goal = cleanGoal.ifBlank { "Unnamed skill mission" },
+                userConstraints = userConstraints,
+                steps = steps,
+                status = MissionOverallStatus.FAILED,
+                outcomeSummary = "Mission was not started because its goal or step list was empty."
+            )
+            _activeMission.value = rejected
+            persistMission(rejected)
+            return@withLock rejected
+        }
+
+        // Never allow a skill's declared risk to downgrade the registered tool's risk.
+        val riskAdjustedSteps = steps.map { step ->
+            val registeredRisk = ToolRegistry.getTool(step.toolName)?.riskLevel ?: step.riskLevel
+            if (registeredRisk.ordinal > step.riskLevel.ordinal) step.copy(riskLevel = registeredRisk) else step
+        }
+        val needsApproval = requiresApproval || riskAdjustedSteps.any {
+            it.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL
+        }
+        val mission = MissionDefinition(
+            goal = cleanGoal,
+            userConstraints = userConstraints,
+            steps = riskAdjustedSteps,
+            status = if (needsApproval) MissionOverallStatus.WAITING_FOR_APPROVAL else MissionOverallStatus.EXECUTING,
+            approvalState = if (needsApproval) MissionApprovalState.PENDING_APPROVAL else MissionApprovalState.NOT_REQUIRED,
+            approvalPrompt = if (needsApproval) {
+                approvalPrompt ?: "Skill '$cleanGoal' contains consequential actions. Do you want to proceed?"
+            } else null
+        )
+        _activeMission.value = mission
+        persistMission(mission)
+
+        if (!needsApproval) {
+            engineScope.launch { executeMission(context, mission.missionId) }
+        }
+        mission
+    }
+
+    /**
      * Approves or rejects a pending mission requiring user consent.
      */
     suspend fun resolveApproval(missionId: String, approved: Boolean, context: Context? = null) = mutex.withLock {
