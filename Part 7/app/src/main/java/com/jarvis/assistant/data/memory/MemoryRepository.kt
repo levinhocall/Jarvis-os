@@ -64,14 +64,8 @@ class MemoryRepository(
             cleanContent.take(30).trim()
         }.lowercase(Locale.ROOT)
 
-        // 1. Contradiction & Deduplication check
-        val existing = memoryDao.getActiveMemoryByKey(calculatedKey)
-        if (existing != null) {
-            // Supersede older memory if new information arrives
-            memoryDao.updateMemoryStatus(existing.id, MemoryEntity.STATUS_SUPERSEDED)
-        }
-
-        // 2. Generate real embedding
+        // Generate the replacement embedding before touching the currently active value.
+        // If embedding generation fails, the old memory remains active and recoverable.
         val vector = embeddingProvider.generateEmbedding("$calculatedKey $cleanContent")
         val embeddingJson = vector?.let { vectorSearchEngine.serializeEmbedding(it) }
 
@@ -95,7 +89,7 @@ class MemoryRepository(
             pinned = false
         )
 
-        return memoryDao.insertMemory(entity)
+        return memoryDao.insertReplacingActiveMemory(entity)
     }
 
     /**
