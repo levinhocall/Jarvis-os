@@ -26,6 +26,10 @@ class MissionApprovalReceiver : BroadcastReceiver() {
             try {
                 val appContext = context.applicationContext
                 MissionEngine.resumeNonTerminalMissions(appContext, preferredMissionId = missionId)
+                if (MissionEngine.activeMission.value?.missionId != missionId) {
+                    Log.w(TAG, "Approval ignored because the requested mission could not be restored.")
+                    return@launch
+                }
                 MissionEngine.resolveApproval(missionId, approved, appContext)
                 MissionApprovalNotifier.cancel(appContext, missionId)
             } catch (error: Exception) {
