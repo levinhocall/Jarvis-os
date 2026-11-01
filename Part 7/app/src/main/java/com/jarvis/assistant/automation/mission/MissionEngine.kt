@@ -999,7 +999,17 @@ object MissionEngine {
 
         val unverifiedNotes = mutableListOf<String>()
         val updatedSteps = mission.steps.toMutableList()
-        var completedCount = 0
+        if (updatedSteps.isEmpty()) {
+            val failed = mission.copy(
+                status = MissionOverallStatus.FAILED,
+                outcomeSummary = "No executable mission steps were produced. Nothing was reported as completed.",
+                updatedAt = System.currentTimeMillis()
+            )
+            _activeMission.value = failed
+            persistMission(failed)
+            return
+        }
+        var completedCount = updatedSteps.count { it.status == MissionStepStatus.COMPLETED }
 
         for (index in updatedSteps.indices) {
             mission = _activeMission.value ?: break
