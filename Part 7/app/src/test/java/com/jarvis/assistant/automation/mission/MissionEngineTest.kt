@@ -8,8 +8,15 @@ import org.junit.Test
 class MissionEngineTest {
 
     @Before
-    fun setUp() {
+    fun setUp() = runBlocking {
         MissionEngine.toolExecutor = null
+        MissionEngine.llmPlanner = null
+        MissionEngine.activeMission.value?.let { current ->
+            when (current.status) {
+                MissionOverallStatus.UNVERIFIED -> MissionEngine.acknowledgeUnverifiedMission(current.missionId)
+                else -> if (!current.isFinished) MissionEngine.cancelMission(current.missionId, "Test cleanup")
+            }
+        }
     }
 
     @Test
@@ -111,6 +118,44 @@ class MissionEngineTest {
         assertTrue(active?.outcomeSummary?.contains("declined", ignoreCase = true) == true)
     }
 
+    @Test
+    fun testMissionPauseAndResume_occursBetweenVerifiedSteps() = runBlocking {
+        val firstStepStarted = kotlinx.coroutines.CompletableDeferred<Unit>()
+        MissionEngine.toolExecutor = { step, _ ->
+            if (step.toolName == "whatsapp_prepare") {
+                firstStepStarted.complete(Unit)
+                kotlinx.coroutines.delay(180L)
+            }
+            Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Verified ${step.toolName}"))
+        }
+
+        val mission = MissionEngine.startMission(
+            null,
+            "Send WhatsApp to Tony saying Suit ready"
+        )
+        assertEquals(MissionOverallStatus.WAITING_FOR_APPROVAL, mission.status)
+
+        MissionEngine.resolveApproval(mission.missionId, approved = true, context = null)
+        firstStepStarted.await()
+        assertTrue(MissionEngine.pauseMission(mission.missionId))
+
+        kotlinx.coroutines.withTimeout(3_000L) {
+            while (MissionEngine.activeMission.value?.status != MissionOverallStatus.PAUSED) {
+                kotlinx.coroutines.delay(20L)
+            }
+        }
+        val paused = MissionEngine.activeMission.value!!
+        assertEquals(1, paused.steps.count { it.status == MissionStepStatus.COMPLETED })
+        assertTrue(paused.steps.any { it.toolName == "whatsapp_send" && it.status == MissionStepStatus.PENDING })
+
+        assertTrue(MissionEngine.resumeMission(null, mission.missionId))
+        kotlinx.coroutines.withTimeout(3_000L) {
+            while (MissionEngine.activeMission.value?.status != MissionOverallStatus.COMPLETED) {
+                kotlinx.coroutines.delay(20L)
+            }
+        }
+        assertEquals(MissionOverallStatus.COMPLETED, MissionEngine.activeMission.value?.status)
+    }
     @Test
     fun testMissionCancellation_inFlight() = runBlocking {
         // Mock step that simulates latency
