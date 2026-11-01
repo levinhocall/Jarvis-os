@@ -2866,6 +2866,35 @@ class JarvisConversationService : Service() {
             return
         }
 
+        val pendingMission = com.jarvis.assistant.automation.mission.MissionEngine.activeMission.value
+        if (pendingMission?.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.WAITING_FOR_APPROVAL) {
+            val approvalDecision = com.jarvis.assistant.automation.mission.MissionApprovalCommandParser.parse(cleanSpeech)
+            if (approvalDecision != null) {
+                hasExecutedCommandInCurrentTurn = true
+                lastHandledCommandText = cleanSpeech
+                serviceScope.launch(Dispatchers.IO) {
+                    com.jarvis.assistant.automation.mission.MissionEngine.resolveApproval(
+                        missionId = pendingMission.missionId,
+                        approved = approvalDecision,
+                        context = this@JarvisConversationService
+                    )
+                    val current = com.jarvis.assistant.automation.mission.MissionEngine.activeMission.value
+                    val response = when {
+                        !approvalDecision -> "Mission rejected. No action was executed."
+                        current?.missionId == pendingMission.missionId &&
+                            current.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING ->
+                            "Approval recorded. The mission may now proceed; I will not claim completion until its result is verified."
+                        current?.missionId == pendingMission.missionId &&
+                            current.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.WAITING_FOR_APPROVAL ->
+                            "I could not approve this mission because a previous step is still unverified. No further action was executed."
+                        else -> "Mission approval was processed. Check the mission status before assuming the action completed."
+                    }
+                    com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(response)
+                }
+                return
+            }
+        }
+
         Log.d("JarvisService", "checkAndExecuteCommand: '$cleanSpeech'")
 
         if (com.jarvis.assistant.audio.HeadsetWhisperManager.handleSpokenReply(cleanSpeech, this)) {
