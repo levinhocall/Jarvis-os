@@ -1008,7 +1008,7 @@ object MissionEngine {
             "device_control" -> {
                 val command = step.parameters["command"] as? String ?: ""
                 val reflex = com.jarvis.assistant.automation.reflex.OfflineReflexExecutor.tryExecuteReflex(command, context, null)
-                if (reflex.handled) {
+                if (reflex.handled && reflex.succeeded) {
                     Pair(true, MissionVerificationEvidence(EvidenceType.DEVICE_SETTING_VERIFIED, true, reflex.spokenResponse))
                 } else {
                     Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Device setting command could not be matched or verified."))
