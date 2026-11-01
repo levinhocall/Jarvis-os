@@ -346,6 +346,7 @@ object MissionEngine {
                 toolName = record.toolName,
                 parameters = record.arguments,
                 riskLevel = if (isPendingApprovalStep) MissionRisk.HIGH_CONSEQUENTIAL else registeredRisk,
+                isIdempotent = ToolRegistry.getTool(record.toolName)?.isIdempotent ?: false,
                 status = when {
                     record.isVerified -> MissionStepStatus.COMPLETED
                     isPendingApprovalStep -> MissionStepStatus.PENDING
