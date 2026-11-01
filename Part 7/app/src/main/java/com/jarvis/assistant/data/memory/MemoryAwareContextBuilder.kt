@@ -27,7 +27,7 @@ class MemoryAwareContextBuilder(
     ): MemoryAwarePrompt {
         // 1. Retrieve relevant memories via hybrid semantic vector search
         val scoredMemories = memoryRepository.searchMemoriesSemantic(currentQuery, limit = maxMemoriesToInject)
-            .filter { it.score >= minMemoryScoreThreshold }
+            .filter { it.score >= minMemoryScoreThreshold && it.memory.isSafeForModelContext }
 
         // 2. Load conversation history for current session (strictly isolated)
         val pagedHistory = conversationRepository.getMessagesPaged(
