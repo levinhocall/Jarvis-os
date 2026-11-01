@@ -148,14 +148,10 @@ class AutonomousDevLoop(
                     }
 
                     DevPhase.PROPOSE -> {
-                        // Formulate change strategy
-                        step.status = DevStepStatus.COMPLETED
-                        step.outputSummary = "Change plan formulated: verified targeting within workspace boundary."
-                        memoryRepo?.remember(
-                            content = "Formulated change proposal for: '${plan.userRequirement}' on project ${project.name}",
-                            type = MemoryEntity.TYPE_DECISION,
-                            key = "dev_decision_${step.stepId}"
-                        )
+                        step.status = DevStepStatus.BLOCKED
+                        step.outputSummary = "No proposal provider is connected; an AI-generated implementation strategy was not produced."
+                        limitations.add("Proposal stage is not integrated with an LLM planning provider.")
+                        overallSuccess = false
                     }
 
                     DevPhase.EXECUTE -> {
@@ -191,15 +187,29 @@ class AutonomousDevLoop(
                                 }
                             }
                         } else {
-                            step.status = DevStepStatus.COMPLETED
-                            step.outputSummary = "No direct tool params specified; manual/custom proposal step."
+                            step.status = DevStepStatus.BLOCKED
+                            step.error = "No registered execution tool and parameters were supplied; no source changes were made."
+                            overallSuccess = false
+                            limitations.add(step.error!!)
                         }
                     }
 
                     DevPhase.TEST -> {
-                        if (capability.canExecuteCommands) {
+                        val testCmd = step.toolParams?.get("command") as? String
+                        if (testCmd.isNullOrBlank()) {
+                            step.status = DevStepStatus.BLOCKED
+                            step.error = "No explicit test command was configured; no tests were run."
+                            testSummary = "Not run: no test command configured"
+                            limitations.add(step.error!!)
+                            overallSuccess = false
+                        } else if (!capability.canExecuteCommands) {
+                            step.status = DevStepStatus.BLOCKED
+                            step.error = "Test execution is unavailable in this environment; no syntax or test pass is inferred."
+                            testSummary = "Not run: command execution unavailable"
+                            limitations.add(step.error!!)
+                            overallSuccess = false
+                        } else {
                             val cmdTool = DevToolRegistry.getTool("execute_command")
-                            val testCmd = step.toolParams?.get("command") as? String ?: "echo 'Running unit test verification...'"
                             val result = cmdTool?.execute(
                                 project,
                                 buildMap {
@@ -211,53 +221,54 @@ class AutonomousDevLoop(
                                 devAgent,
                                 isApprovedByUser && testCmd == approvedAction
                             )
-
-                            if (result is DevToolResult.Success) {
-                                step.status = DevStepStatus.COMPLETED
-                                step.outputSummary = result.output.take(500)
-                                testSummary = "Tests passed: 0 failures"
-                            } else if (result is DevToolResult.AwaitingApproval) {
-                                step.status = DevStepStatus.AWAITING_APPROVAL
-                                step.outputSummary = result.proposedAction
-                                step.error = result.reason
-                                overallSuccess = false
-                                break
-                            } else if (result is DevToolResult.Failure) {
-                                // Trigger bounded repair loop if repairs remain
-                                if (plan.repairAttempts < plan.maxRepairAttempts) {
-                                    plan.repairAttempts++
+                            when (result) {
+                                is DevToolResult.Success -> {
+                                    step.status = DevStepStatus.COMPLETED
+                                    step.outputSummary = result.output.take(500)
+                                    testSummary = "Command exited successfully. Inspect its output to confirm test counts."
+                                }
+                                is DevToolResult.AwaitingApproval -> {
+                                    step.status = DevStepStatus.AWAITING_APPROVAL
+                                    step.outputSummary = result.proposedAction
+                                    step.error = result.reason
+                                    overallSuccess = false
+                                    break
+                                }
+                                is DevToolResult.Failure -> {
                                     step.status = DevStepStatus.FAILED
-                                    step.error = "Test failure: ${result.error}. Triggering bounded repair (attempt ${plan.repairAttempts}/${plan.maxRepairAttempts})."
-                                    // Insert repair step
-                                    val repairStep = DevTaskStep(
-                                        phase = DevPhase.REPAIR,
-                                        title = "Bounded Repair Attempt #${plan.repairAttempts}",
-                                        description = "Diagnose and fix failure: ${result.error}"
-                                    )
-                                    repairStep.status = DevStepStatus.COMPLETED
-                                    repairStep.outputSummary = "Applied repair patch addressing ${result.error}"
-                                } else {
-                                    step.status = DevStepStatus.FAILED
-                                    step.error = "Tests failed after max repair attempts (${plan.maxRepairAttempts}): ${result.error}"
-                                    testSummary = "Tests failed: ${result.error}"
+                                    step.error = result.error
+                                    testSummary = "Command failed: ${result.error}"
+                                    overallSuccess = false
+                                }
+                                is DevToolResult.EnvironmentUnsupported -> {
+                                    step.status = DevStepStatus.BLOCKED
+                                    step.error = result.reason
+                                    testSummary = "Not run: ${result.reason}"
+                                    limitations.add(result.reason)
+                                    overallSuccess = false
+                                }
+                                null -> {
+                                    step.status = DevStepStatus.BLOCKED
+                                    step.error = "Test command tool is not registered; no tests were run."
+                                    testSummary = "Not run: test command tool unavailable"
                                     overallSuccess = false
                                 }
                             }
-                        } else {
-                            step.status = DevStepStatus.COMPLETED
-                            step.outputSummary = "Command test execution skipped (environment unsupported); file integrity verified."
-                            testSummary = "File syntax and integrity verified locally"
                         }
                     }
 
                     DevPhase.ANALYZE -> {
-                        step.status = DevStepStatus.COMPLETED
-                        step.outputSummary = "Failure analysis completed."
+                        step.status = DevStepStatus.BLOCKED
+                        step.error = "No diagnostic analyzer is connected; no root-cause analysis was performed."
+                        limitations.add(step.error!!)
+                        overallSuccess = false
                     }
 
                     DevPhase.REPAIR -> {
-                        step.status = DevStepStatus.COMPLETED
-                        step.outputSummary = "Repair cycle executed."
+                        step.status = DevStepStatus.BLOCKED
+                        step.error = "No repair patch was generated or applied by an automated repair provider."
+                        limitations.add(step.error!!)
+                        overallSuccess = false
                     }
 
                     DevPhase.VERIFY -> {
@@ -275,8 +286,10 @@ class AutonomousDevLoop(
                                 overallSuccess = false
                             }
                         } else {
-                            step.status = DevStepStatus.COMPLETED
-                            step.outputSummary = "No specific output artifact path configured for verification."
+                            step.status = DevStepStatus.BLOCKED
+                            step.error = "No artifact path was supplied; artifact existence and checksum were not verified."
+                            limitations.add(step.error!!)
+                            overallSuccess = false
                         }
                     }
 
