@@ -197,7 +197,7 @@ class PermissionActivity : AppCompatActivity() {
             binding.btnGrantAll.alpha = 1.0f
             binding.btnGrantAll.isEnabled = true
             binding.btnGrantAll.setOnClickListener {
-                requestAllMissingPermissions()
+                showPermissionChoices()
             }
         }
     }
