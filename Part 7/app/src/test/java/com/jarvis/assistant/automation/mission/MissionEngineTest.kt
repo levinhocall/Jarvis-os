@@ -44,6 +44,13 @@ class MissionEngineTest {
     }
 
     @Test
+    fun testPlanMission_deviceControlIsNotAutomaticallyReplaySafe() {
+        val mission = MissionEngine.planMission("Turn flashlight on")
+        assertEquals("device_control", mission.steps.single().toolName)
+        assertFalse(mission.steps.single().isIdempotent)
+    }
+
+    @Test
     fun testPlanMission_ambiguousWhatsApp_requiresClarification() {
         val mission = MissionEngine.planMission("Send WhatsApp message")
         assertEquals(MissionOverallStatus.CLARIFICATION_REQUIRED, mission.status)
