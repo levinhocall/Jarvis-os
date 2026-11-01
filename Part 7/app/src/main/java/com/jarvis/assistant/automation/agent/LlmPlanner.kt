@@ -59,6 +59,12 @@ data class LlmMissionExecutionResult(
     val pendingApprovalArguments: Map<String, Any?> = emptyMap()
 )
 
+/** Exact tool invocation explicitly approved by the user for a single execution. */
+data class ApprovedLlmToolCall(
+    val toolName: String,
+    val arguments: Map<String, Any?>
+)
+
 /**
  * Provider abstraction for LLM function-calling planning.
  */
@@ -279,12 +285,63 @@ class LlmPlanner(
     suspend fun planAndExecute(
         goal: String,
         context: Context? = null,
+        initialHistory: List<LlmPlannerStepRecord> = emptyList(),
+        approvedToolCall: ApprovedLlmToolCall? = null,
         executor: suspend (toolName: String, args: Map<String, Any?>) -> Pair<Boolean, String>
     ): LlmMissionExecutionResult {
-        val history = mutableListOf<LlmPlannerStepRecord>()
+        val history = initialHistory.toMutableList()
         val startTime = System.currentTimeMillis()
         val availableTools = ToolRegistry.getAllTools()
         val recentCallSignatures = mutableListOf<String>()
+
+        // An approved consequential call is executed once before asking the model to continue.
+        // The approval is bound to the exact canonical tool name and complete argument map.
+        if (approvedToolCall != null) {
+            val canonicalName = ToolRegistry.resolveToolName(approvedToolCall.toolName)
+            val definition = ToolRegistry.getTool(canonicalName)
+                ?: return LlmMissionExecutionResult(
+                    false, "Approved tool is no longer registered; no action was executed.",
+                    history.size, history, "APPROVED_TOOL_UNAVAILABLE"
+                )
+            val risk = RiskPolicy.evaluateRisk(canonicalName, approvedToolCall.arguments, goal)
+            if (!risk.requiresExplicitConfirmation && definition.riskLevel != MissionRisk.HIGH_CONSEQUENTIAL) {
+                return LlmMissionExecutionResult(
+                    false, "Approval token did not match a consequential tool; no action was executed.",
+                    history.size, history, "APPROVAL_SCOPE_MISMATCH"
+                )
+            }
+            val validation = ToolRegistry.validate(canonicalName, approvedToolCall.arguments, context)
+            if (validation !is com.jarvis.assistant.automation.mission.ToolValidationResult.Valid) {
+                return LlmMissionExecutionResult(
+                    false, "Approved action is currently blocked by tool validation: $validation",
+                    history.size, history, "APPROVED_TOOL_VALIDATION_FAILED"
+                )
+            }
+
+            val outcome = withTimeoutOrNull(perStepTimeoutMs) {
+                runCatching { executor(canonicalName, approvedToolCall.arguments) }
+                    .getOrElse { false to "Approved action failed (${it.javaClass.simpleName})." }
+            } ?: (false to "Approved action timed out after ${perStepTimeoutMs}ms.")
+            history.add(
+                LlmPlannerStepRecord(
+                    stepIndex = history.size + 1,
+                    toolName = canonicalName,
+                    arguments = approvedToolCall.arguments,
+                    isVerified = outcome.first,
+                    observation = outcome.second
+                )
+            )
+            recentCallSignatures.add("$canonicalName:${approvedToolCall.arguments.entries.sortedBy { it.key }}")
+            if (!outcome.first) {
+                return LlmMissionExecutionResult(
+                    false,
+                    "The user-approved action was attempted but its result was not verified: ${outcome.second}",
+                    history.size,
+                    history,
+                    "APPROVED_ACTION_UNVERIFIED"
+                )
+            }
+        }
 
         Log.i(TAG, "Starting bounded LLM mission loop.")
 
