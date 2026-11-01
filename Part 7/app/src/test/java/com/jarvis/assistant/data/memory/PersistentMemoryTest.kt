@@ -122,6 +122,26 @@ class PersistentMemoryTest {
     }
 
     @Test
+    fun testMemoryEntity_modelContextPrivacyGate() {
+        val preference = MemoryEntity(
+            category = MemoryEntity.CATEGORY_PREFERENCES,
+            key = "theme",
+            value = "dark",
+            rawText = "User prefers dark theme",
+            sensitivity = "PREFERENCE",
+            confidence = 0.9f
+        )
+        val confidential = preference.copy(key = "private_note", sensitivity = "CONFIDENTIAL")
+        val expired = preference.copy(key = "expired", expiryTimeMs = System.currentTimeMillis() - 1L)
+        val lowConfidence = preference.copy(key = "uncertain", confidence = 0.2f)
+
+        assertTrue(preference.isSafeForModelContext)
+        assertFalse(confidential.isSafeForModelContext)
+        assertFalse(expired.isSafeForModelContext)
+        assertFalse(lowConfidence.isSafeForModelContext)
+    }
+
+    @Test
     fun testMemoryDatabase_migration1to2Definition() {
         assertNotNull(MemoryDatabase.MIGRATION_1_2)
         assertEquals(1, MemoryDatabase.MIGRATION_1_2.startVersion)
