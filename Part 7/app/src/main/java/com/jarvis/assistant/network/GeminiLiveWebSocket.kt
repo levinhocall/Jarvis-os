@@ -737,21 +737,35 @@ class GeminiLiveWebSocket(
                 val errObj = json.optJSONObject("error")
                 val errMsg = errObj?.optString("message", "") ?: json.optString("error", "Unknown error")
                 val errCode = errObj?.optInt("code", 0) ?: 0
-                Log.e(TAG, "Server returned error: code=$errCode, message=$errMsg")
-                val isApiKey = errMsg.contains("API_KEY_INVALID", ignoreCase = true) ||
-                               errMsg.contains("API key not valid", ignoreCase = true) ||
-                               errCode == 400 || errCode == 403
+                val errStatus = errObj?.optString("status", "").orEmpty()
+                Log.e(TAG, "Server returned error: code=$errCode, status=$errStatus")
+                val isApiKey = errStatus.equals("API_KEY_INVALID", ignoreCase = true) ||
+                    errMsg.contains("API_KEY_INVALID", ignoreCase = true) ||
+                    errMsg.contains("API key not valid", ignoreCase = true) ||
+                    errMsg.contains("invalid API key", ignoreCase = true) ||
+                    errCode == 401
                 val isQuota = errMsg.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
-                              errMsg.contains("quota", ignoreCase = true) ||
-                              errCode == 429
+                    errStatus.equals("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                    errMsg.contains("quota", ignoreCase = true) ||
+                    errCode == 429
                 if (isApiKey) {
-                    listener.onError("Invalid API Key: $errMsg", isFatal = true, errorCode = "API_KEY_INVALID")
+                    runCatching { onApiKeyInvalid(activeApiKey) }
+                    listener.onError("Google explicitly rejected this Gemini API key. Check the key and project restrictions.", isFatal = true, errorCode = "API_KEY_INVALID")
                     listener.onConnectionStateChanged("ERROR • INVALID KEY")
+                    if (!isManuallyStopped.get()) scheduleReconnect()
                 } else if (isQuota) {
-                    listener.onError("API Quota Exceeded: $errMsg", isFatal = true, errorCode = "QUOTA_EXCEEDED")
-                    listener.onConnectionStateChanged("ERROR • QUOTA EXCEEDED")
+                    runCatching { onApiKeyRateLimited(activeApiKey) }
+                    listener.onError("Gemini API rate limit or quota reached. JARVIS will retry using an available key.", isFatal = false, errorCode = "QUOTA_EXCEEDED")
+                    listener.onConnectionStateChanged("COOLDOWN • RETRYING")
+                    scheduleReconnect(minDelayMs = 5_000L)
+                } else if (errCode == 403 || errStatus.equals("PERMISSION_DENIED", ignoreCase = true)) {
+                    listener.onError("Gemini denied access to this API key or project (HTTP 403). This does not prove the key is invalid; check API enablement, project restrictions and billing.", isFatal = true, errorCode = "API_ACCESS_DENIED")
+                    listener.onConnectionStateChanged("ERROR • ACCESS DENIED")
+                } else if (errCode == 400) {
+                    listener.onError("Gemini rejected the request (HTTP 400). Check the selected model and request configuration.", isFatal = true, errorCode = "SETUP_REJECTED")
+                    listener.onConnectionStateChanged("ERROR • SETUP REJECTED")
                 } else {
-                    listener.onError("Gemini Error ($errCode): $errMsg", isFatal = false)
+                    listener.onError("Gemini returned an API error (HTTP $errCode).", isFatal = false)
                 }
                 return
             }
