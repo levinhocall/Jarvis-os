@@ -89,10 +89,7 @@ class ChatFragment : Fragment() {
                     viewLifecycleOwner.lifecycleScope.launch {
                         runCatching {
                             withContext(Dispatchers.IO) {
-                                val repository = app.conversationRepository
-                                val activeSession = repository.restoreMostRecentActiveSession()
-                                if (activeSession != null) repository.archiveSession(activeSession, true)
-                                repository.createNewSession("New Chat")
+                                app.conversationRepository.startNewSession("New Chat")
                             }
                         }.onFailure { error ->
                             Toast.makeText(
