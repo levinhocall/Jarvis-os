@@ -25,6 +25,7 @@ class GeminiLiveWebSocket(
     private val onApiKeySuccess: (String) -> Unit = {}
 ) {
     @Volatile private var activeApiKey: String = apiKey
+    @Volatile private var pendingApiKey: String? = null
     private var reconnectAttempts: Int = 0
     interface Listener {
         fun onConnectionStateChanged(status: String)
@@ -107,11 +108,15 @@ class GeminiLiveWebSocket(
     fun connect(scope: CoroutineScope) {
         coroutineScope = scope
         isManuallyStopped.set(false)
+        reconnectAttempts = 0
+        pendingApiKey = null
+        activeApiKey = apiKey.trim()
         initiateConnection()
     }
 
     private fun initiateConnection() {
-        val selectedApiKey = runCatching { apiKeyProvider().trim() }.getOrDefault("")
+        val selectedApiKey = pendingApiKey?.also { pendingApiKey = null }
+            ?: activeApiKey.trim().ifBlank { runCatching { apiKeyProvider().trim() }.getOrDefault("") }
         if (selectedApiKey.isBlank()) {
             Log.e(TAG, "Gemini API Key is empty. Aborting connection.")
             listener.onError("Gemini API Key is missing. Please configure it in Settings.", isFatal = true, errorCode = "API_KEY_MISSING")
@@ -178,7 +183,7 @@ class GeminiLiveWebSocket(
                         Log.e(TAG, "Gemini explicitly rejected the active API credential (code=$code)")
                         listener.onError("Google explicitly rejected this Gemini API key. Check the key and project restrictions.", isFatal = true, errorCode = "API_KEY_INVALID")
                         listener.onConnectionStateChanged("ERROR • INVALID KEY")
-                        if (!isManuallyStopped.get()) scheduleReconnect()
+                        if (!isManuallyStopped.get()) reconnectWithNextKey()
                         return
                     }
 
@@ -189,7 +194,7 @@ class GeminiLiveWebSocket(
                         Log.w(TAG, "Gemini rate-limited the active key (code=$code). Rotating/retrying with bounded backoff.")
                         listener.onError("Gemini rate limit or quota was reached. JARVIS will retry using an available key.", isFatal = false, errorCode = "QUOTA_EXCEEDED")
                         listener.onConnectionStateChanged("COOLDOWN • RETRYING")
-                        scheduleReconnect(minDelayMs = 5_000L)
+                        reconnectWithNextKey(minDelayMs = 5_000L)
                         return
                     }
 
@@ -245,7 +250,7 @@ class GeminiLiveWebSocket(
                         Log.e(TAG, "Gemini explicitly rejected the active API credential (HTTP $code)")
                         listener.onError("Google explicitly rejected this Gemini API key. Check the key and project restrictions.", isFatal = true, errorCode = "API_KEY_INVALID")
                         listener.onConnectionStateChanged("ERROR • INVALID KEY")
-                        if (!isManuallyStopped.get()) scheduleReconnect()
+                        if (!isManuallyStopped.get()) reconnectWithNextKey()
                         return
                     }
 
@@ -260,7 +265,7 @@ class GeminiLiveWebSocket(
                         Log.w(TAG, "Gemini quota/rate limit hit (HTTP $code); applying cooldown and bounded retry.")
                         listener.onError("Gemini rate limit or quota reached. JARVIS will retry using an available key.", isFatal = false, errorCode = "QUOTA_EXCEEDED")
                         listener.onConnectionStateChanged("COOLDOWN • RETRYING")
-                        scheduleReconnect(minDelayMs = retryAfterMs ?: 5_000L)
+                        reconnectWithNextKey(minDelayMs = retryAfterMs ?: 5_000L)
                         return
                     }
 
@@ -1041,6 +1046,22 @@ class GeminiLiveWebSocket(
         }
     }
 
+    private fun reconnectWithNextKey(minDelayMs: Long = 0L) {
+        if (isManuallyStopped.get()) return
+        val candidate = runCatching { apiKeyProvider().trim() }.getOrDefault("")
+        if (candidate.isBlank() || candidate == activeApiKey) {
+            listener.onError(
+                "No alternate active Gemini API key is available. Add another key or retry after the current cooldown.",
+                isFatal = false,
+                errorCode = "KEY_POOL_EXHAUSTED"
+            )
+            listener.onConnectionStateChanged("OFFLINE")
+            return
+        }
+        pendingApiKey = candidate
+        scheduleReconnect(minDelayMs)
+    }
+
     private fun scheduleReconnect(minDelayMs: Long = 0L) {
         if (isManuallyStopped.get()) return
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
@@ -1077,6 +1098,7 @@ class GeminiLiveWebSocket(
         reconnectJob?.cancel()
         reconnectJob = null
         reconnectAttempts = 0
+        pendingApiKey = null
         isConnected.set(false)
 
         try {
