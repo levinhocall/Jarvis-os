@@ -939,7 +939,7 @@ object MissionEngine {
                 val target = step.parameters["target_text"] as? String ?: ""
                 if (target.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Target text is missing."))
                 val result = visual.handleClick(target, taskGoal = _activeMission.value?.goal.orEmpty())
-                Pair(result.success && result.verified, MissionVerificationEvidence(EvidenceType.UI_STATE_CHANGE, result.verified, result.message))
+                Pair(result.success && result.verified == true, MissionVerificationEvidence(EvidenceType.UI_STATE_CHANGE, result.verified == true, result.message))
             }
 
             "type_text" -> {
@@ -947,7 +947,7 @@ object MissionEngine {
                 val target = step.parameters["target_text"] as? String
                 if (textToType.isEmpty()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Text input is empty."))
                 val result = visual.handleType(text = textToType, targetInputName = target, submit = false)
-                Pair(result.success && result.verified, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, result.verified, result.message))
+                Pair(result.success && result.verified == true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, result.verified == true, result.message))
             }
 
             "scroll_screen" -> {
