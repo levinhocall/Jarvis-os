@@ -84,17 +84,22 @@ object TacticalScannerManager {
         val detectedProduct = candidateTitles.firstOrNull() ?: "Item on $platform"
 
         if (detectedPrice != null) {
-            // Save to Recall Core asynchronously
-            RecallCoreManager.logProductResearch(
-                context = context,
-                productName = detectedProduct,
-                price = detectedPrice,
-                platform = platform,
-                extraDetails = if (detectedRating != null) "Rating: $detectedRating" else ""
-            )
+            // Product detection and persistence are separate outcomes. A database failure
+            // must not crash the scan or produce a false "logged" confirmation.
+            val saved = runCatching {
+                RecallCoreManager.logProductResearch(
+                    context = context,
+                    productName = detectedProduct,
+                    price = detectedPrice,
+                    platform = platform,
+                    extraDetails = if (detectedRating != null) "Rating: $detectedRating" else ""
+                )
+            }.onFailure { Log.w(TAG, "Product scan detected data but Recall Core persistence failed.", it) }
+                .isSuccess
 
             val ratingText = if (detectedRating != null) " with a $detectedRating rating" else ""
-            val verdict = "Tactical scan complete: detected $detectedProduct at $detectedPrice on $platform$ratingText. Logged to Recall Core, Nazib Sir."
+            val persistenceText = if (saved) " The result was saved to Recall Core." else " The result could not be saved to Recall Core."
+            val verdict = "Tactical scan complete: detected $detectedProduct at $detectedPrice on $platform$ratingText.$persistenceText"
             Log.i(TAG, verdict)
             return@withContext TacticalScanResult(
                 success = true,
