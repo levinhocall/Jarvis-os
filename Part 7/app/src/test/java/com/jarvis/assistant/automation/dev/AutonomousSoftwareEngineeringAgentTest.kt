@@ -323,18 +323,20 @@ class AutonomousSoftwareEngineeringAgentTest {
 
         val report = devLoop.executePlan(
             project = project,
-            plan = plan,
-            isApprovedByUser = true,
-            approvedAction = "echo 'Running unit test verification...'"
+            plan = plan
         )
-        assertTrue(report.success)
-        assertEquals(DevStepStatus.COMPLETED, plan.status)
+        // The edit itself is applied, but the generic proposal, test and artifact-verification
+        // stages are not wired to real providers/commands and must not be reported as complete.
+        assertFalse(report.success)
+        assertEquals(DevStepStatus.FAILED, plan.status)
         assertEquals("class MainActivity { val appName = \"Jarvis\" }", srcFile.readText())
+        assertTrue(report.testResultsSummary.contains("Not run"))
+        assertTrue(report.limitations.any { it.contains("proposal provider") })
 
-        // Verify project facts were persisted in Memory
+        // Verify project facts were persisted in Memory with the truthful final status.
         val allMemories = memoryRepo.getAllMemories()
         assertTrue(allMemories.any { it.memoryType == MemoryEntity.TYPE_PROJECT && it.value.contains("TestProject") })
-        assertTrue(allMemories.any { it.memoryType == MemoryEntity.TYPE_ONGOING_TASK && it.value.contains("COMPLETED") })
+        assertTrue(allMemories.any { it.memoryType == MemoryEntity.TYPE_ONGOING_TASK && it.value.contains("FAILED") })
     }
 
     @Test
