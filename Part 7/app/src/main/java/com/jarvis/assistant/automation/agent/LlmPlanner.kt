@@ -334,6 +334,8 @@ class LlmPlanner(
         context: Context? = null,
         initialHistory: List<LlmPlannerStepRecord> = emptyList(),
         approvedToolCall: ApprovedLlmToolCall? = null,
+        onStepStarted: suspend (toolName: String, args: Map<String, Any?>) -> Unit = { _, _ -> },
+        onStepRecorded: suspend (record: LlmPlannerStepRecord) -> Unit = {},
         executor: suspend (toolName: String, args: Map<String, Any?>) -> Pair<Boolean, String>
     ): LlmMissionExecutionResult {
         val history = initialHistory.toMutableList()
@@ -376,6 +378,14 @@ class LlmPlanner(
                 )
             }
 
+            try {
+                onStepStarted(canonicalName, approvedToolCall.arguments)
+            } catch (checkpointError: Exception) {
+                return LlmMissionExecutionResult(
+                    false, "Could not persist the approved action checkpoint; the action was not executed.",
+                    history.size, history, "CHECKPOINT_FAILED_BEFORE_EXECUTION"
+                )
+            }
             val outcome = withTimeoutOrNull(perStepTimeoutMs) {
                 runCatching { executor(canonicalName, approvedToolCall.arguments) }
                     .getOrElse { false to "Approved action failed (${it.javaClass.simpleName})." }
@@ -389,6 +399,14 @@ class LlmPlanner(
                     observation = outcome.second
                 )
             )
+            try {
+                onStepRecorded(history.last())
+            } catch (checkpointError: Exception) {
+                return LlmMissionExecutionResult(
+                    false, "The approved action returned, but its checkpoint could not be persisted.",
+                    history.size, history, "CHECKPOINT_FAILED_AFTER_EXECUTION"
+                )
+            }
             recentCallSignatures.add("$canonicalName:${approvedToolCall.arguments.entries.sortedBy { it.key }}")
             if (!outcome.first) {
                 return LlmMissionExecutionResult(
@@ -570,6 +588,13 @@ class LlmPlanner(
                         return LlmMissionExecutionResult(false, "Mission cancelled before tool execution.", history.size, history, "CANCELLED")
                     }
 
+                    // Persist the in-flight action before invoking a real-world tool.
+                    try {
+                        onStepStarted(resolvedName, decision.arguments)
+                    } catch (checkpointError: Exception) {
+                        return LlmMissionExecutionResult(false, "Could not persist the tool checkpoint; the action was not executed.", history.size, history, "CHECKPOINT_FAILED_BEFORE_EXECUTION")
+                    }
+
                     // 6. Execute step with bounded timeout
                     Log.i(TAG, "Step $stepIndex: Invoking registered tool '$resolvedName'.")
                     val executionOutcome = withTimeoutOrNull(perStepTimeoutMs) {
@@ -590,6 +615,11 @@ class LlmPlanner(
                         observation = observation
                     )
                     history.add(record)
+                    try {
+                        onStepRecorded(record)
+                    } catch (checkpointError: Exception) {
+                        return LlmMissionExecutionResult(false, "The tool returned, but its execution checkpoint could not be persisted.", history.size, history, "CHECKPOINT_FAILED_AFTER_EXECUTION")
+                    }
 
                     // 7. Consequential failure guard: Never blindly retry consequential failures
                     if (!verified && toolDef.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
