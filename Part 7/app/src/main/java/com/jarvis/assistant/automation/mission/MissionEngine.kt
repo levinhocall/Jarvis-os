@@ -1208,7 +1208,6 @@ object MissionEngine {
                 val relativePath = step.parameters["path"] as? String ?: ""
                 if (relativePath.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path is missing."))
                 if (isSensitiveWorkspacePath(relativePath)) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Sensitive configuration and credential files are blocked from mission inspection."))
-                if (isSensitiveWorkspacePath(relativePath)) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Sensitive configuration and credential files are blocked from mission editing."))
                 if (sandbox.validateFilePath(project.workspaceRoot, relativePath) !is SandboxCheckResult.Allowed) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path was blocked by the workspace sandbox."))
                 val root = File(project.workspaceRoot).canonicalFile
                 val target = File(root, relativePath).canonicalFile
@@ -1224,6 +1223,7 @@ ${text.take(3_000)}"))
                 val relativePath = step.parameters["path"] as? String ?: ""
                 val newContent = step.parameters["content"] as? String ?: ""
                 if (relativePath.isBlank() || newContent.isEmpty()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path or replacement content is missing."))
+                if (isSensitiveWorkspacePath(relativePath)) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Sensitive configuration and credential files are blocked from mission editing."))
                 if (sandbox.validateFilePath(project.workspaceRoot, relativePath) !is SandboxCheckResult.Allowed) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "File path was blocked by the workspace sandbox."))
                 val root = File(project.workspaceRoot).canonicalFile
                 val target = File(root, relativePath).canonicalFile
