@@ -32,9 +32,19 @@ object TacticalScannerManager {
         }
 
         val allTexts = mutableListOf<String>()
-        collectAllText(rootNode, allTexts)
-
         val pkgName = rootNode.packageName?.toString()?.lowercase(Locale.ROOT) ?: ""
+        try {
+            collectAllText(rootNode, allTexts, intArrayOf(0), 0)
+        } finally {
+            // getActiveRootNode returns a live AccessibilityNodeInfo; release it after traversal.
+            rootNode.recycle()
+        }
+        if (allTexts.isEmpty()) {
+            return@withContext TacticalScanResult(
+                success = false,
+                summary = "Screen is available, but it exposes no readable text to the accessibility service."
+            )
+        }
         val platform = when {
             pkgName.contains("flipkart") -> "Flipkart"
             pkgName.contains("amazon") -> "Amazon"
@@ -106,16 +116,29 @@ object TacticalScannerManager {
         }
     }
 
-    private fun collectAllText(node: AccessibilityNodeInfo, collector: MutableList<String>) {
+    private fun collectAllText(
+        node: AccessibilityNodeInfo,
+        collector: MutableList<String>,
+        visitedNodes: IntArray,
+        depth: Int
+    ) {
+        // Protect against unusually large or deeply nested accessibility trees.
+        if (depth > 40 || visitedNodes[0] >= 500) return
+        visitedNodes[0]++
+
         val text = node.text?.toString()?.trim()
         if (!text.isNullOrBlank()) collector.add(text)
         val desc = node.contentDescription?.toString()?.trim()
         if (!desc.isNullOrBlank() && desc != text) collector.add(desc)
 
         for (i in 0 until node.childCount) {
+            if (visitedNodes[0] >= 500) break
             val child = node.getChild(i) ?: continue
-            collectAllText(child, collector)
-            child.recycle()
+            try {
+                collectAllText(child, collector, visitedNodes, depth + 1)
+            } finally {
+                child.recycle()
+            }
         }
     }
 }
