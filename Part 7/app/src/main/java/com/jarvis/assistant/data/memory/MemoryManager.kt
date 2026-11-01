@@ -422,7 +422,6 @@ class MemoryManager(
      */
     suspend fun getSystemPromptContext(): String {
         repository.cleanupExpiredMemories()
-        repository.cleanupExpiredMemories()
         val favSong = resolveSongQuery("my favorite song")
         val sb = StringBuilder("\n[USER PERSONAL PROFILE & MEMORY CORE - PERMANENT STORAGE]:\n")
         sb.append("- User's Preferred Name: ${preferences.userName.ifBlank { "Sir" }}\n")
