@@ -237,6 +237,10 @@ class NeuralLensActivity : AppCompatActivity() {
     }
 
     private fun showImage(bitmap: Bitmap, message: String) {
+        // Stop camera streaming once the user switches to a still image; this releases
+        // the camera promptly for other apps and avoids hidden preview battery use.
+        cameraProvider?.unbindAll()
+        imageCapture = null
         selectedBitmap?.takeIf { it !== bitmap }?.recycle()
         selectedBitmap = bitmap
         livePreview.visibility = View.GONE
