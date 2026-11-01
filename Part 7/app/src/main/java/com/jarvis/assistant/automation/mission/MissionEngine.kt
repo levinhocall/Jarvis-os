@@ -676,6 +676,38 @@ object MissionEngine {
     }
 
     /**
+     * Executes one already-planned council step through the same validation and platform
+     * execution path used by regular missions. Missing context, tools, permissions, or
+     * integrations are returned as failures; this method never fabricates success.
+     */
+    suspend fun executeStepForCouncil(
+        step: MissionStep,
+        context: Context?
+    ): Pair<Boolean, MissionVerificationEvidence> {
+        if (context == null) {
+            return Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED, false, "Context unavailable; execution was not attempted."
+            ))
+        }
+
+        return when (val validation = ToolRegistry.validate(step.toolName, step.parameters, context)) {
+            ToolValidationResult.Valid -> executeSingleStep(step, context)
+            is ToolValidationResult.UnknownTool -> Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED, false, "Unknown tool '${validation.toolName}'; execution was not attempted."
+            ))
+            is ToolValidationResult.MissingParameters -> Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED, false, "Missing required parameters: ${validation.missingParams.joinToString()}."
+            ))
+            is ToolValidationResult.MissingPermissions -> Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED, false, "Missing Android permissions: ${validation.missingPermissions.joinToString()}."
+            ))
+            is ToolValidationResult.AccessibilityUnavailable -> Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED, false, validation.guidance
+            ))
+        }
+    }
+
+    /**
      * Executes a single step using registered hook or real platform tool integrations.
      */
     private suspend fun executeSingleStep(
@@ -788,7 +820,11 @@ object MissionEngine {
                 }
             }
             else -> {
-                Pair(true, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Action dispatched without deep closed-loop sensor"))
+                Pair(false, MissionVerificationEvidence(
+                    EvidenceType.UNVERIFIED,
+                    false,
+                    "No real executor is registered for tool '${step.toolName}'; action was not executed."
+                ))
             }
         }
     }
