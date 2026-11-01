@@ -11,14 +11,14 @@ import kotlin.system.exitProcess
  * JARVIS ASSISTANT — SECURITY MODULE
  * Developer       : NAZIB
  * Copyright © 2026: NAZIB. All Rights Reserved.
- * GitHub          : https://github.com/techgptx/Playlist
+ * GitHub          : https://github.com/levinhocall/Jarvis-os
  */
 object SecurityManager {
 
     const val DEVELOPER_NAME    = "NAZIB"
     const val COPYRIGHT_NOTICE  = "Copyright © 2026 NAZIB. All Rights Reserved."
-    const val GITHUB_REPO       = "https://github.com/techgptx/Playlist"
-    const val LICENSE_NAME      = "TAMCL v1.0 — Content creators MUST credit Tech GPTx"
+    const val GITHUB_REPO       = "https://github.com/levinhocall/Jarvis-os"
+    const val LICENSE_NAME      = "TAMCL v1.0 — Content creators MUST credit NAZIB"
 
     private const val EXPECTED_PACKAGE = "com.jarvis.assistant"
 
