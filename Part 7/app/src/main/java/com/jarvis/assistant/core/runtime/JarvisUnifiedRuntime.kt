@@ -255,6 +255,12 @@ class JarvisUnifiedRuntime(
             if (context != null) {
                 val reflexResult = OfflineReflexExecutor.tryExecuteReflex(input, context, null)
                 if (reflexResult.handled) {
+                    if (!reflexResult.succeeded) {
+                        return@withContext UnifiedExecutionResult.Degraded(
+                            reason = "LOCAL_ACTION_FAILED",
+                            fallbackMessage = reflexResult.spokenResponse
+                        )
+                    }
                     val record = provenanceCoordinator.recordEvidence(
                         claim = reflexResult.spokenResponse,
                         subject = "reflex_hardware",
