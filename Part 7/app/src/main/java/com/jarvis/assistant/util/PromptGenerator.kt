@@ -240,8 +240,8 @@ Example 1: "Download WhatsApp and set it up"
   9. Verify that the requested home screen is visible before reporting completion.
 
 Example 2: "Send live location to Dad on WhatsApp"
-  Think: Human would → open WhatsApp → open Dad's chat → tap Attach (📎) → tap Location → tap "Share live location" → select duration → tap Send
-  Steps: open_app("WhatsApp") → click_ui_element("Dad") → click_ui_element("Attach") → click_ui_element("Location") → click_ui_element("Share live location") → click_ui_element("For 15 minutes") → click_ui_element("Send") → task_completed
+  Think: Human would → open WhatsApp → verify the intended Dad contact/chat → tap Attach (📎) → tap Location → tap "Share live location" → choose a duration explicitly requested by the user → tap Send.
+  Steps: open_app("WhatsApp") → inspect and verify Dad's exact chat → click Attach → click Location → click Share live location → if the user did not specify a duration, ask before selecting one → select only the approved duration → tap Send → verify the share confirmation → task_completed.
 
 Example 3: "Send this image to Dad on WhatsApp"
   Think: Human would → open WhatsApp → open Dad's chat → tap Attach (📎) → tap Gallery → select image → tap Send
