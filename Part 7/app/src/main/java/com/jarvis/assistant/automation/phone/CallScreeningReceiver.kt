@@ -18,8 +18,6 @@ class CallScreeningReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "CallScreeningReceiver"
-        const val DEFAULT_AUTO_REPLY = "Nazib Sir is currently in a meeting, will call back soon."
-
         @Volatile
         var isRinging: Boolean = false
             private set
@@ -196,17 +194,19 @@ class CallScreeningReceiver : BroadcastReceiver() {
                 // Recover a stale mute snapshot if Android did not deliver the previous call's end event.
                 restoreRingerIfStillJarvisMuted(context)
                 isRinging = true
-                lastRingingNumber = incomingNumber.ifBlank { lastRingingNumber }
+                lastRingingNumber = incomingNumber.takeIf { it.isNotBlank() }
                 val resolvedName = resolveContactName(context, incomingNumber)
                 lastCallerName = resolvedName
 
                 // Spoken announcement
-                val announcement = "Sir, incoming call from $resolvedName. Reject karke message bhejun ya answer karenge?"
+                val announcement = "Sir, incoming call from $resolvedName. Ringer mute karun aur message bhejun, ya call answer karenge?"
                 VoiceSynthesisRouter.speak(announcement)
             }
             TelephonyManager.EXTRA_STATE_IDLE, TelephonyManager.EXTRA_STATE_OFFHOOK -> {
                 isRinging = false
                 restoreRingerIfStillJarvisMuted(context)
+                lastRingingNumber = null
+                lastCallerName = null
             }
         }
     }
