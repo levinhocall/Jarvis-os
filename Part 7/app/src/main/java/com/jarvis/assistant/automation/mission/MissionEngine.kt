@@ -785,6 +785,18 @@ object MissionEngine {
             )
         }
 
+        // A plan cannot declare a tool replay-safe when the registry says otherwise.
+        // Unknown tools default to non-idempotent and require manual review after interruption.
+        val normalizedSteps = steps.map { step ->
+            val registeredTool = ToolRegistry.getTool(step.toolName)
+            step.copy(
+                riskLevel = if (registeredTool != null && registeredTool.riskLevel.ordinal > step.riskLevel.ordinal) {
+                    registeredTool.riskLevel
+                } else step.riskLevel,
+                isIdempotent = step.isIdempotent && registeredTool?.isIdempotent == true
+            )
+        }
+
         val overallStatus = when {
             clarification != null -> MissionOverallStatus.CLARIFICATION_REQUIRED
             requiresApproval -> MissionOverallStatus.WAITING_FOR_APPROVAL
@@ -794,7 +806,7 @@ object MissionEngine {
         return MissionDefinition(
             goal = cleanGoal,
             userConstraints = userConstraints,
-            steps = steps,
+            steps = normalizedSteps,
             status = overallStatus,
             approvalState = if (requiresApproval) MissionApprovalState.PENDING_APPROVAL else MissionApprovalState.NOT_REQUIRED,
             approvalPrompt = approvalPrompt,
@@ -831,11 +843,15 @@ object MissionEngine {
 
         // Never allow a skill's declared risk to downgrade the registered tool's risk.
         val riskAdjustedSteps = steps.map { step ->
-            val registeredRisk = ToolRegistry.getTool(step.toolName)?.riskLevel ?: step.riskLevel
+            val registeredTool = ToolRegistry.getTool(step.toolName)
+            val registeredRisk = registeredTool?.riskLevel ?: step.riskLevel
             val policyRequiresApproval = RiskPolicy.evaluateRisk(step.toolName, step.parameters, cleanGoal)
                 .requiresExplicitConfirmation
             val effectiveRisk = if (policyRequiresApproval) MissionRisk.HIGH_CONSEQUENTIAL else registeredRisk
-            if (effectiveRisk.ordinal > step.riskLevel.ordinal) step.copy(riskLevel = effectiveRisk) else step
+            val effectiveIdempotency = step.isIdempotent && registeredTool?.isIdempotent == true
+            if (effectiveRisk.ordinal > step.riskLevel.ordinal || effectiveIdempotency != step.isIdempotent) {
+                step.copy(riskLevel = effectiveRisk, isIdempotent = effectiveIdempotency)
+            } else step
         }
         val needsApproval = requiresApproval || riskAdjustedSteps.any {
             it.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL
