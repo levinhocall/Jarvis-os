@@ -1,5 +1,6 @@
 package com.jarvis.assistant.automation.dev
 
+import android.content.Context
 import com.jarvis.assistant.data.memory.MemoryEntity
 import com.jarvis.assistant.data.memory.MemoryRepository
 import com.jarvis.assistant.security.sandbox.CapabilitySandbox
@@ -12,7 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 class AutonomousDevLoop(
     private val memoryRepo: MemoryRepository? = null,
     private val sandbox: CapabilitySandbox = CapabilitySandbox(),
-    private val devAgent: SoftwareEngineeringAgent = SoftwareEngineeringAgent()
+    private val devAgent: SoftwareEngineeringAgent = SoftwareEngineeringAgent(),
+    private val contextProvider: () -> Context? = { null }
 ) {
 
     private val _currentPlan = MutableStateFlow<DevTaskPlan?>(null)
@@ -104,7 +106,8 @@ class AutonomousDevLoop(
         var testSummary = "Tests not executed"
         var overallSuccess = true
 
-        val capability = DevToolRegistry.detectEnvironment(project.workspaceRoot)
+        DevToolRegistry.configureContext(contextProvider)
+        val capability = DevToolRegistry.detectEnvironment(project.workspaceRoot, contextProvider())
         if (!capability.canExecuteCommands) {
             limitations.add("Shell command execution is restricted in this environment. Using file modification only.")
         }
