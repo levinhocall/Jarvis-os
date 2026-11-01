@@ -286,13 +286,15 @@ object MissionEngine {
                     missingField = "contact_name"
                 )
             } else {
+                requiresApproval = true
+                approvalPrompt = "Place a phone call to '$query'?"
                 steps.add(
                     MissionStep(
                         title = "Place phone call",
-                        description = "Call contact '$query'",
+                        description = "Call contact '$query' after explicit user approval",
                         toolName = "call_contact",
                         parameters = mapOf("contact_name" to query),
-                        riskLevel = MissionRisk.MEDIUM,
+                        riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
                         isIdempotent = false,
                         expectedEvidence = "Outgoing phone call screen launched"
                     )
