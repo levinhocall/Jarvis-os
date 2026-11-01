@@ -418,7 +418,7 @@ class MemoryManager(
      * Contains:
      * 1. Core Profile
      * 2. All categorized Room database memories (persistent across restarts)
-     * 3. Recent 15 conversation turns across sessions (persistent dialogue memory)
+     * Conversation history is loaded separately from the active Room session to preserve chat isolation.
      */
     suspend fun getSystemPromptContext(): String {
         val all = repository.getAllMemories().filter { it.isSafeForModelContext }
@@ -442,21 +442,6 @@ class MemoryManager(
             sb.append("\n[ALL PERMANENT MEMORIES FROM DATABASE]:\n")
             all.take(40).forEach { mem ->
                 sb.append("- [${mem.category}] ${mem.rawText}\n")
-            }
-        }
-
-        // Persistent Dialogue History across App Restarts
-        val recentTurns = chatRepository.turns.value.takeLast(15)
-        if (recentTurns.isNotEmpty()) {
-            sb.append("\n[PERSISTENT DIALOGUE HISTORY ACROSS APP RESTARTS]:\n")
-            sb.append("You remember what was discussed in previous conversations with the user:\n")
-            recentTurns.forEach { turn ->
-                val u = turn.userTranscript.trim()
-                val j = turn.jarvisResponse.trim()
-                if (u.isNotBlank() && j.isNotBlank() && u != "(Audio query)" && j != "(Audio response)") {
-                    sb.append("User: \"$u\"\n")
-                    sb.append("JARVIS: \"$j\"\n")
-                }
             }
         }
 
