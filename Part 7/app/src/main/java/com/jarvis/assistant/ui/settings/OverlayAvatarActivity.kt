@@ -20,6 +20,13 @@ import com.jarvis.assistant.R
 import com.jarvis.assistant.util.ThemeManager
 
 class OverlayAvatarActivity : AppCompatActivity() {
+
+    companion object {
+        private val ALLOWED_AVATARS = setOf(
+            "alien", "blob", "cat", "circle", "cloud", "droid", "drop", "flower",
+            "ghost", "hexagon", "mech", "pebble", "pill", "puddle", "square", "star", "triangle"
+        )
+    }
     private lateinit var avatarGallery: WebView
     private lateinit var overlaySwitch: SwitchCompat
     private val preferences get() = JarvisApp.instance.preferences
@@ -106,6 +113,15 @@ class OverlayAvatarActivity : AppCompatActivity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 assetLoader.shouldInterceptRequest(request.url)
 
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val uri = request.url
+                // The JavaScript bridge is privileged. Never let this WebView navigate to
+                // arbitrary content that could call it from an untrusted origin.
+                return uri.scheme != "https" ||
+                    uri.host != "appassets.androidplatform.net" ||
+                    uri.path?.startsWith("/assets/") != true
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 selectInGallery(preferences.taskOverlayAvatar)
@@ -119,7 +135,8 @@ class OverlayAvatarActivity : AppCompatActivity() {
     }
 
     private fun selectInGallery(name: String) {
-        avatarGallery.evaluateJavascript("window.setSelectedAvatar && window.setSelectedAvatar('$name')", null)
+        val safeName = org.json.JSONObject.quote(name)
+        avatarGallery.evaluateJavascript("window.setSelectedAvatar && window.setSelectedAvatar($safeName)", null)
     }
 
     private fun themeColor(attribute: Int): String {
@@ -136,6 +153,7 @@ class OverlayAvatarActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun selectAvatar(name: String) {
+            if (name !in ALLOWED_AVATARS) return
             runOnUiThread {
                 preferences.taskOverlayAvatar = name
                 selectInGallery(preferences.taskOverlayAvatar)
