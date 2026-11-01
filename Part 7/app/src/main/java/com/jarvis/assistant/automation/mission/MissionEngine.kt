@@ -1409,6 +1409,35 @@ ${text.take(3_000)}"))
                 }
             }
 
+            "schedule_reminder" -> {
+                val title = (step.parameters["title"] as? String).orEmpty().trim()
+                val description = (step.parameters["description"] as? String).orEmpty().trim()
+                val delayMinutes = (step.parameters["delay_minutes"] as? Number)?.toLong()
+                    ?: return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Reminder delay is missing."))
+                if (title.isBlank() || description.isBlank()) {
+                    return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Reminder title or description is missing."))
+                }
+                if (delayMinutes !in 0L..43_200L) {
+                    return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Reminder delay must be between 0 minutes and 30 days."))
+                }
+                val reminder = com.jarvis.assistant.automation.proactive.ProactiveAssistantCoordinator.scheduleReminder(
+                    context = context,
+                    title = title,
+                    description = description,
+                    delayMs = delayMinutes * 60_000L,
+                    missionId = _activeMission.value?.missionId
+                )
+                if (reminder == null) {
+                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Reminder could not be persisted or scheduled; no success was reported."))
+                } else {
+                    Pair(true, MissionVerificationEvidence(
+                        EvidenceType.DATABASE_RECORD,
+                        true,
+                        "Reminder '${reminder.title}' was persisted in encrypted storage and scheduled with WorkManager. It will notify only; it will not execute a mission automatically."
+                    ))
+                }
+            }
+
             "task_completed" -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Completion signals are accepted only by LlmPlanner after all tool steps have verified."))
 
             else -> Pair(false, MissionVerificationEvidence(
