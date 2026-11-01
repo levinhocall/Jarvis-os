@@ -742,8 +742,18 @@ object MissionEngine {
                 val query = step.parameters["query"] as? String ?: ""
                 val app = context.applicationContext as? JarvisApp
                 if (app != null && query.isNotBlank()) {
-                    app.commandExecutor.execute(JarvisCommand.PlayYouTube(query))
-                    Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, "YouTube intent launched for '$query'"))
+                    val output = app.commandExecutor.execute(JarvisCommand.PlayYouTube(query))
+                    val failed = output.contains("failed", ignoreCase = true) ||
+                        output.contains("could not", ignoreCase = true) ||
+                        output.contains("unable", ignoreCase = true)
+                    if (failed) {
+                        Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, output))
+                    } else {
+                        Pair(true, MissionVerificationEvidence(
+                            EvidenceType.UNVERIFIED, false,
+                            "YouTube play request was dispatched: $output Playback state was not independently observed."
+                        ))
+                    }
                 } else {
                     Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "YouTube player unavailable"))
                 }
@@ -752,14 +762,37 @@ object MissionEngine {
                 val query = step.parameters["query"] as? String ?: ""
                 val app = context.applicationContext as? JarvisApp
                 if (app != null && query.isNotBlank()) {
-                    app.commandExecutor.execute(JarvisCommand.SearchWeb(query))
-                    Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, "Web search dispatched for '$query'"))
+                    val output = app.commandExecutor.execute(JarvisCommand.SearchWeb(query))
+                    val launched = output.startsWith("Opening ", ignoreCase = true)
+                    if (launched) {
+                        Pair(true, MissionVerificationEvidence(
+                            EvidenceType.UNVERIFIED, false,
+                            "Browser search page opened for '$query'; search results were not read or verified."
+                        ))
+                    } else {
+                        Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, output))
+                    }
                 } else {
                     Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Browser unavailable"))
                 }
             }
             "whatsapp_prepare" -> {
-                Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "WhatsApp message validated and staged"))
+                val contact = step.parameters["contact"] as? String ?: ""
+                val message = step.parameters["message"] as? String ?: ""
+                val app = context.applicationContext as? JarvisApp
+                if (app != null && contact.isNotBlank() && message.isNotBlank()) {
+                    val draftResult = app.whatsAppAssistant.createDraft(contact, message)
+                    if (app.whatsAppAssistant.hasPendingDraft()) {
+                        Pair(true, MissionVerificationEvidence(
+                            EvidenceType.TEXT_MATCH, true,
+                            "WhatsApp draft staged for '$contact'. No message has been sent. $draftResult"
+                        ))
+                    } else {
+                        Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, draftResult))
+                    }
+                } else {
+                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp draft service unavailable or inputs missing."))
+                }
             }
             "send_whatsapp", "whatsapp_send" -> {
                 val contact = step.parameters["contact"] as? String ?: ""
@@ -767,12 +800,19 @@ object MissionEngine {
                 val app = context.applicationContext as? JarvisApp
                 if (app != null && contact.isNotBlank() && msg.isNotBlank()) {
                     val res = app.commandExecutor.execute(JarvisCommand.WhatsAppMessage(contact, msg))
-                    val verified = !res.contains("failed", ignoreCase = true) && !res.contains("error", ignoreCase = true)
-                    Pair(verified, MissionVerificationEvidence(
-                        evidenceType = if (verified) EvidenceType.EXTERNAL_API_ACKNOWLEDGED else EvidenceType.UNVERIFIED,
-                        isVerified = verified,
-                        details = res
-                    ))
+                    val failed = res.contains("failed", ignoreCase = true) ||
+                        res.contains("error", ignoreCase = true) ||
+                        res.contains("could not", ignoreCase = true) ||
+                        res.contains("no draft", ignoreCase = true)
+                    if (failed) {
+                        Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, res))
+                    } else {
+                        Pair(true, MissionVerificationEvidence(
+                            evidenceType = EvidenceType.UNVERIFIED,
+                            isVerified = false,
+                            details = "$res Delivery was not independently confirmed; do not report the message as sent."
+                        ))
+                    }
                 } else {
                     Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp assistant unavailable"))
                 }
@@ -786,9 +826,9 @@ object MissionEngine {
                     when (res) {
                         is com.jarvis.assistant.util.ContactCaller.CallResult.Success -> {
                             Pair(true, MissionVerificationEvidence(
-                                evidenceType = EvidenceType.DEVICE_SETTING_VERIFIED,
-                                isVerified = true,
-                                details = "Placed call to ${res.contact.name} (${res.contact.number})"
+                                evidenceType = EvidenceType.UNVERIFIED,
+                                isVerified = false,
+                                details = "Call intent launched for ${res.contact.name} (${res.contact.number}); connection state was not verified."
                             ))
                         }
                         is com.jarvis.assistant.util.ContactCaller.CallResult.MultipleMatches -> {
@@ -814,7 +854,15 @@ object MissionEngine {
                 val app = context.applicationContext as? JarvisApp
                 if (app != null) {
                     val res = app.commandExecutor.execute(JarvisCommand.NavigateHome)
-                    Pair(true, MissionVerificationEvidence(EvidenceType.UI_STATE_CHANGE, true, res))
+                    val launched = res.startsWith("Returning home", ignoreCase = true)
+                    Pair(
+                        launched,
+                        MissionVerificationEvidence(
+                            if (launched) EvidenceType.UNVERIFIED else EvidenceType.UNVERIFIED,
+                            false,
+                            if (launched) "$res Home-screen state was not independently observed." else res
+                        )
+                    )
                 } else {
                     Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Home navigation unavailable"))
                 }
