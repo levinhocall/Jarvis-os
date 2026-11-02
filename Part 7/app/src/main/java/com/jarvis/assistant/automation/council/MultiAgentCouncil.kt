@@ -5,6 +5,12 @@ import android.util.Log
 import com.jarvis.assistant.automation.mission.*
 import com.jarvis.assistant.data.memory.PersonalMemoryGraph
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.update
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +32,13 @@ object MultiAgentCouncil {
 
     private val _activeRole = MutableStateFlow<AgentRole?>(null)
     val activeRole: StateFlow<AgentRole?> = _activeRole.asStateFlow()
+    private val _activeSubAgents = MutableStateFlow<Set<AgentRole>>(emptySet())
+    val activeSubAgents: StateFlow<Set<AgentRole>> = _activeSubAgents.asStateFlow()
+
+    private data class AgentReviewBatch(
+        val reports: Map<String, String>,
+        val callsUsed: Int
+    )
 
     // Default-deny: the Researcher may only use explicitly read-only tools.
     // New tools are never granted Researcher access merely because their risk metadata
@@ -105,6 +118,45 @@ object MultiAgentCouncil {
         )
     }
 
+    /**
+     * Runs three independent, text-only model reviewers in parallel under one shared budget.
+     * Sub-agents have no ToolRegistry executor and cannot perform device actions.
+     */
+    private suspend fun runIndependentSubAgents(
+        goal: String,
+        plan: List<MissionStep>,
+        researchedContext: String
+    ): AgentReviewBatch = coroutineScope {
+        val planner = MissionEngine.llmPlanner
+            ?: return@coroutineScope AgentReviewBatch(emptyMap(), 0)
+        val budget = AtomicInteger(0)
+        val roles = listOf(AgentRole.PLANNER, AgentRole.CRITIC, AgentRole.VERIFIER)
+        val planSummary = plan.take(20).joinToString("\\n") { "- " + it.title + " [tool=" + it.toolName + "]" }.take(5000)
+        val prompts = mapOf(
+            AgentRole.PLANNER to "You are the independent PLANNER sub-agent for JARVIS OS. Review this user goal and proposed plan. Identify missing dependencies, ordering issues and unclear requirements. Do not execute tools. Return concise findings and begin with REVIEW: unless the plan is structurally impossible, in which case begin BLOCK:.\\nGoal: " + goal.take(3000) + "\\nPlan:\\n" + planSummary,
+            AgentRole.CRITIC to "You are the adversarial CRITIC sub-agent for JARVIS OS. Inspect the goal and plan for destructive, privacy, external-communication, financial, permission and duplicate-action risks. Do not execute tools. Return concise findings beginning REVIEW:. Use BLOCK: only when the plan has a concrete severe safety flaw that should stop execution.\\nGoal: " + goal.take(3000) + "\\nPlan:\\n" + planSummary,
+            AgentRole.VERIFIER to "You are the independent VERIFIER sub-agent for JARVIS OS. Define observable evidence needed to verify the goal and identify any step whose success cannot be verified. Do not execute tools. Return concise findings beginning REVIEW:.\\nGoal: " + goal.take(3000) + "\\nResearch context: " + researchedContext.take(2500) + "\\nPlan:\\n" + planSummary
+        )
+        val results = withTimeoutOrNull(24_000L) {
+            roles.map { role ->
+                async(Dispatchers.IO) {
+                    if (budget.incrementAndGet() > 3) return@async role to null
+                    _activeSubAgents.update { it + role }
+                    try {
+                        val prompt = prompts.getValue(role) + "\\nShared mission budget: maximum 3 sub-agent calls, no delegation, no tool execution, output under 400 words."
+                        withTimeoutOrNull(18_000L) { planner.reasonAsSubAgent(prompt) }?.take(4000)?.let { role to it }
+                            ?: (role to null)
+                    } finally {
+                        _activeSubAgents.update { it - role }
+                    }
+                }
+            }.awaitAll()
+        } ?: emptyList()
+        AgentReviewBatch(
+            reports = results.mapNotNull { (role, report) -> report?.takeIf { it.isNotBlank() }?.let { role.name to it } }.toMap(),
+            callsUsed = budget.get().coerceAtMost(3)
+        )
+    }
     private fun decomposeGoal(goal: String): List<String> {
         val lower = goal.lowercase()
         return when {
@@ -259,6 +311,48 @@ object MultiAgentCouncil {
             )
         }
 
+        // 3b. Independent LLM reviews run concurrently with a shared 3-call budget.
+        // The local Researcher retrieval above supplies context; these sub-agents are advisory only.
+        val agentReview = runIndependentSubAgents(cleanGoal, missionPlan.steps, researchedContext)
+        agentReview.reports.forEach { (roleName, report) ->
+            val role = runCatching { AgentRole.valueOf(roleName) }.getOrNull() ?: return@forEach
+            handoffs.add(
+                AgentHandoff(
+                    fromRole = AgentRole.LEAD_SYNTHESIZER,
+                    toRole = role,
+                    taskDescription = "Independent bounded model review; no tool execution authority",
+                    inputPayload = mapOf("goal" to cleanGoal),
+                    outputPayload = mapOf("review" to report.take(4000)),
+                    delegationDepth = 1
+                )
+            )
+            handoffs.add(
+                AgentHandoff(
+                    fromRole = role,
+                    toRole = AgentRole.LEAD_SYNTHESIZER,
+                    taskDescription = "Return advisory findings for lead reconciliation",
+                    outputPayload = mapOf("review" to report.take(4000)),
+                    delegationDepth = 2
+                )
+            )
+        }
+        val criticReport = agentReview.reports[AgentRole.CRITIC.name].orEmpty()
+        if (criticReport.trimStart().startsWith("BLOCK:", ignoreCase = true)) {
+            _activeRole.value = AgentRole.LEAD_SYNTHESIZER
+            return@withContext CouncilExecutionOutcome(
+                isSuccess = false,
+                goal = cleanGoal,
+                leadResponse = "Council critic raised a concrete blocking concern. No mission tools were executed. " + criticReport.take(1200),
+                handoffHistory = handoffs,
+                executionStepsCount = 0,
+                isVerifiedIndependently = false,
+                failureReason = "SUB_AGENT_CRITIC_BLOCK",
+                agentReports = agentReview.reports,
+                subAgentCallsUsed = agentReview.callsUsed
+            )
+        }
+        // Lead reconciliation: retain the MissionEngine plan and safety gates as authoritative;
+        // advisory model output can add review context but cannot grant tool permissions.
         // 4. Lead assigns Executor for mutating operations
         _activeRole.value = AgentRole.EXECUTOR
         handoffs.add(
@@ -305,7 +399,9 @@ object MultiAgentCouncil {
                 handoffHistory = handoffs,
                 executionStepsCount = executedStepCount,
                 isVerifiedIndependently = false,
-                failureReason = lastEvidence?.details
+                failureReason = lastEvidence?.details,
+                agentReports = agentReview.reports,
+                subAgentCallsUsed = agentReview.callsUsed
             )
         }
 
@@ -349,7 +445,9 @@ object MultiAgentCouncil {
             leadResponse = finalLeadMessage,
             handoffHistory = handoffs,
             executionStepsCount = missionPlan.steps.size,
-            isVerifiedIndependently = isIndependentVerified
+            isVerifiedIndependently = isIndependentVerified,
+            agentReports = agentReview.reports,
+            subAgentCallsUsed = agentReview.callsUsed
         )
     }
 }
