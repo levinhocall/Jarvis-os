@@ -94,12 +94,9 @@ class JarvisApp : Application() {
 
         // Memory System
         memoryDatabase = MemoryDatabase.getInstance(this)
-        memoryRepository = MemoryRepository(
-            memoryDatabase.memoryDao(),
-            embeddingProvider = com.jarvis.assistant.data.memory.vector.RemoteNeuralEmbeddingProvider(
-                com.jarvis.assistant.BuildConfig.MEMORY_SYNC_ENDPOINT
-            )
-        )
+        // Strictly on-device memory: Room + SQLCipher stores memories locally.
+        // Embeddings use the deterministic local provider; no remote endpoint is configured.
+        memoryRepository = MemoryRepository(memoryDatabase.memoryDao())
         conversationRepository = com.jarvis.assistant.data.chat.ConversationRepository(memoryDatabase.chatDao())
         memoryManager = MemoryManager(memoryRepository, preferences, appScope)
 
@@ -141,7 +138,7 @@ class JarvisApp : Application() {
             com.jarvis.assistant.automation.mission.MissionEngine.resumeNonTerminalMissions(this@JarvisApp)
         }
 
-        com.jarvis.assistant.data.memory.sync.MemorySyncScheduler.schedule(this)
+        // Cloud memory sync is intentionally not scheduled. Memory remains on this device.
         VoskModelManager.init(this, CoroutineScope(Dispatchers.Default))
         com.jarvis.assistant.audio.HeadsetWhisperManager.init(this, appScope)
 
