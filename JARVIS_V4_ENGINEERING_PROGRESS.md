@@ -459,3 +459,16 @@ Status: **VOICE OWNERSHIP IS NOW WIRED IN SOURCE; build/device verification is s
 - Gemini Live, ElevenLabs, neural embedding model and remote memory round-trip: NOT LIVE-TESTED.
 - Android 16 physical-device acceptance: NOT TESTED.
 - APK: NOT BUILT, as requested.
+
+### Final hardening after the V4 scope update
+
+- Production council preflight now calls the parallel reviewer pipeline from the path used by JarvisUnifiedRuntime; ordinary one-step commands bypass delegation to preserve responsiveness. Critic blocking, result reporting and bounded failure isolation remain enabled.
+- Room deletion APIs now preserve local tombstones for sync instead of physically erasing rows before the remote can receive the deletion. User edits and pinned/status changes update timestamps used by the sync worker.
+- Cross-device merge keys only on stable sync IDs; device-local SQLite row IDs are not used to identify remote records. Server update order is authoritative after the local push phase, avoiding device-clock skew.
+- Privacy guard: a remote tombstone created by the local secret-scrubbing path cannot erase the original sensitive local-only memory.
+- Added backend unit tests for same-timestamp keyset pagination and tombstone visibility. Test command is documented in memory-backend/README.md.
+- Added systemd startup and periodic health-recovery units/scripts for an Ubuntu/Debian VPS. They are deployment assets only; no host has been installed or provisioned.
+- Latest Android CI inspection remains run #274, `startup_failure`, zero jobs: https://github.com/levinhocall/Jarvis-os/actions/runs/41463592905.
+- Additional commits: `0d15efa`, `3dcd46d`, `91f29d2`, `4fcbf3c`, `f8e13c0`, `d98eae8`, `7efe64c`, `286c896`, `b9fbc09`, `e40f759`, `3038671`, `90107ce`, `6752619`, `ab58472`, `01d7c4e`, `663dfdc`, `3a76979`, `f88ee1c`, `3155418`, `a2b6edf`, `63c2300`, `cfde06c`, `6a6394e`.
+
+APK assembly/signing/publishing remains deliberately outside this phase.
