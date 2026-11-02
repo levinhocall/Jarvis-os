@@ -317,3 +317,5 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - Change: idle avatar visibility is now controlled only by `taskOverlayMode == "always"`. A real `AgentTaskSnapshot` continues to display task progress in either mode. Removed unrelated app-foreground/session/standby flows from the idle-visibility combine path and removed those values from the overlay refresh fingerprint.
 - Commits: `7447c6670188aafb2110485023f7c53c95bc3a24`, `0a83d7c775dedd34c98c00e3b57ae7290d9d57c7`.
 - Verification: updated service source still requires compile/unit verification and manual Android 16 overlay lifecycle checks.
+- Added `concurrentFailuresAtomicallyOpenCircuitBreaker` to `UniversalActionTest` to exercise simultaneous failing tool calls and assert subsequent calls are blocked once the threshold is reached.
+- Test commit: `fdae4785797df2c4420c650a54173debcc8a7e22`. Test source was fetched back and inspected; execution remains pending.
