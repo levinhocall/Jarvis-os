@@ -219,7 +219,7 @@ class GeminiLiveWebSocket(
                         listener.onConnectionStateChanged("OFFLINE")
                     } else if (!isManuallyStopped.get()) {
                         listener.onConnectionStateChanged("RECONNECTING...")
-                        scheduleReconnect()
+                        requestReconnect()
                     } else {
                         listener.onConnectionStateChanged("OFFLINE")
                     }
@@ -254,7 +254,7 @@ class GeminiLiveWebSocket(
                         Log.e(TAG, "Gemini explicitly rejected the active API credential (HTTP $code)")
                         listener.onError("Google explicitly rejected this Gemini API key. Check the key and project restrictions.", isFatal = true, errorCode = "API_KEY_INVALID")
                         listener.onConnectionStateChanged("ERROR • INVALID KEY")
-                        if (!isManuallyStopped.get()) reconnectWithNextKey()
+                        if (!isManuallyStopped.get()) requestReconnect(rotateKey = true)
                         return
                     }
 
