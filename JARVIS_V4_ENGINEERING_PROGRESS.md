@@ -295,3 +295,11 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - Confirmed from current `main` source that Chat History no longer reads the legacy preference store, the main chat UI observes Room, and MemoryManager no longer receives ChatRepository.
 - Commits: `09d7154`, `a65cdff`, `d0048a5`, `326c7d9`, `9876242`, `5ab37ac`, `778dbe9`, `b22371d`, `5ff9e94`, `d703fea`.
 - Automated CI triggers are configured for main pushes/PRs affecting Part 7 and the workflow. The GitHub status endpoint returned no status records for the inspected commits at the time of the last check. CI is therefore **not verified**.
+
+
+### Universal action dispatcher concurrency remediation
+
+- Finding: circuit-breaker state used mutable fields inside a `ConcurrentHashMap`. Concurrent tool executions could race while incrementing failure counts, opening/resetting a breaker, or reading its state.
+- Change: `CircuitState` is now immutable. Breaker creation/expiry transitions, failure increments, and explicit resets use atomic map `compute` operations; successful execution replaces the state with a clean immutable snapshot.
+- Commit: `80507531d6e397eb756b23321082f5d030c08d46`.
+- Verification: the updated source was fetched back from `main` and inspected. Unit tests and compilation have not been run.
