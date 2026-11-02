@@ -14,7 +14,6 @@ import java.util.Locale
 class MemoryManager(
     private val repository: MemoryRepository,
     private val preferences: AppPreferences,
-    private val chatRepository: com.jarvis.assistant.data.repository.ChatRepository,
     private val scope: CoroutineScope
 ) {
     companion object {
@@ -26,15 +25,6 @@ class MemoryManager(
     private val _shortTermHistory = MutableStateFlow<List<ChatTurn>>(emptyList())
     val shortTermHistory: StateFlow<List<ChatTurn>> = _shortTermHistory.asStateFlow()
     private val shortTermSummary = StringBuilder()
-
-    init {
-        // Preload recent persistent chat turns so memory is continuous across app restarts
-        scope.launch(Dispatchers.IO) {
-            val savedTurns = chatRepository.turns.value
-            _shortTermHistory.value = savedTurns.takeLast(MAX_SHORT_TERM_TURNS)
-            Log.i(TAG, "Preloaded ${_shortTermHistory.value.size} persistent turns into active memory.")
-        }
-    }
 
     fun addShortTermTurn(userText: String, jarvisText: String) {
         val cleanUser = userText.trim()
@@ -105,7 +95,6 @@ class MemoryManager(
         )
                     Log.i(TAG, "Saved long-term memory (category=$category, length=${clean.length})")
         val response = "Sir, I have permanently committed that to memory: $clean."
-        chatRepository.addTurn(clean, response)
         return response
     }
 
@@ -124,7 +113,6 @@ class MemoryManager(
         } else {
             "I couldn't find any memory matching '$clean'."
         }
-        chatRepository.addTurn(clean, response)
         return response
     }
 
@@ -137,7 +125,6 @@ class MemoryManager(
         val count = all.size
         val topFacts = all.take(6).joinToString(". ") { it.rawText }
         val response = "Sir, I remember $count key facts about you in my Memory Core, including: $topFacts."
-        chatRepository.addTurn("What do you remember about me?", response)
         return response
     }
 
@@ -147,7 +134,6 @@ class MemoryManager(
         val bday = preferences.userBirthday
         if (bday.isNotBlank()) {
             val reply = "Sir, your birthday is $bday."
-            chatRepository.addTurn("When is my birthday?", reply)
             return reply
         }
         val memories = repository.searchMemories("birthday")
@@ -155,18 +141,15 @@ class MemoryManager(
         if (mem != null) {
             preferences.userBirthday = mem.value
             val reply = "Sir, your birthday is ${mem.value}."
-            chatRepository.addTurn("When is my birthday?", reply)
             return reply
         }
         val notSet = "Sir, you haven't told me your birthday yet. You can tell me 'My birthday is 15th August' and I will save it."
-        chatRepository.addTurn("When is my birthday?", notSet)
         return notSet
     }
 
     fun getFavoriteSongResponse(): String {
         val song = resolveSongQuery("my favorite song")
         val reply = "Sir, your favorite song is $song."
-        chatRepository.addTurn("What is my favorite song?", reply)
         return reply
     }
 
@@ -176,16 +159,13 @@ class MemoryManager(
         if (routines.isNotEmpty()) {
             val summary = routines.joinToString("; ") { it.rawText }
             val reply = "Sir, here is your recorded daily routine: $summary."
-            chatRepository.addTurn("What is my routine?", reply)
             return reply
         }
         if (preferences.dailyRoutine.isNotBlank()) {
             val reply = "Sir, your daily routine is: ${preferences.dailyRoutine}."
-            chatRepository.addTurn("What is my routine?", reply)
             return reply
         }
         val notSet = "Sir, you haven't recorded your routine yet. Tell me 'I wake up at 7 am' or 'I go to the gym at 6 pm' and I will save it."
-        chatRepository.addTurn("What is my routine?", notSet)
         return notSet
     }
 
