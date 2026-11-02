@@ -90,6 +90,14 @@ class ConversationRepository(
     fun getMessagesFlow(sessionId: String): Flow<List<ChatMessageEntity>> =
         chatDao.getMessagesForSessionFlow(sessionId)
 
+    fun getRecentMessagesFlow(): Flow<List<ChatMessageEntity>> =
+        chatDao.getRecentMessagesFlow()
+
+    suspend fun clearAllConversationData() {
+        chatDao.clearAllConversationData()
+        _currentSessionId.value = null
+    }
+
     suspend fun getMessages(sessionId: String): List<ChatMessageEntity> =
         chatDao.getMessagesForSession(sessionId)
 
