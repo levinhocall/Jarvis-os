@@ -55,8 +55,8 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
     }
 
     /** Upload only local changes; deletions and private records are always propagated as tombstones. */
-    private fun pushLocalChanges(base: HttpUrl, dao: com.jarvis.assistant.data.memory.MemoryDao): Result? {
-        val memories = kotlinx.coroutines.runBlocking { dao.getAllMemoriesForSync() }
+    private suspend fun pushLocalChanges(base: HttpUrl, dao: com.jarvis.assistant.data.memory.MemoryDao): Result? {
+        val memories = dao.getAllMemoriesForSync()
         for (memory in memories) {
             val sensitive = memory.sensitivity.uppercase() in setOf("SECRET", "CREDENTIAL", "AUTHENTICATION", "CONFIDENTIAL")
             val mustDelete = memory.status != MemoryEntity.STATUS_ACTIVE || sensitive || memory.isExpired
@@ -72,7 +72,7 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
                         return if (response.code >= 500 || response.code == 429) Result.retry() else Result.failure()
                     }
                 }
-                kotlinx.coroutines.runBlocking { dao.markMemorySynced(memory.id, memory.timestamp) }
+                dao.markMemorySynced(memory.id, memory.timestamp)
                 continue
             }
 
@@ -118,8 +118,8 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
     }
 
     /** Pull changed records including tombstones and persist a compound (updated_at,id) cursor per page. */
-    private fun pullRemoteChanges(base: HttpUrl, dao: com.jarvis.assistant.data.memory.MemoryDao): Result? {
-        var state = kotlinx.coroutines.runBlocking { dao.getMemorySyncState(SCOPE) }
+    private suspend fun pullRemoteChanges(base: HttpUrl, dao: com.jarvis.assistant.data.memory.MemoryDao): Result? {
+        var state = dao.getMemorySyncState(SCOPE)
             ?: MemorySyncStateEntity(syncKey = SCOPE)
         repeat(MAX_PULL_PAGES_PER_RUN) {
             val urlBuilder = base.newBuilder()
@@ -155,23 +155,21 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
                 cursorId = nextId,
                 updatedAt = System.currentTimeMillis()
             )
-            kotlinx.coroutines.runBlocking { dao.saveMemorySyncState(state) }
+            dao.saveMemorySyncState(state)
             if (rows.size() < PAGE_SIZE) return null
         }
         // More pages remain; retry soon rather than holding a worker indefinitely.
         return Result.retry()
     }
 
-    private fun mergeRemoteRecord(remote: JsonObject, dao: com.jarvis.assistant.data.memory.MemoryDao) {
+    private suspend fun mergeRemoteRecord(remote: JsonObject, dao: com.jarvis.assistant.data.memory.MemoryDao) {
         val remoteId = remote.stringOrNull("id") ?: return
         val content = remote.stringOrNull("memory").orEmpty()
         val metadata = remote.getAsJsonObject("metadata") ?: JsonObject()
         val remoteTimestamp = parseTimestamp(remote.stringOrNull("updated_at"))
         val deleted = remote.stringOrNull("deleted_at") != null
         val localId = metadata.longOrNull("local_id")
-        val existing = kotlinx.coroutines.runBlocking {
-            (localId?.let { dao.getMemoryById(it) }) ?: dao.getMemoryBySyncId(remoteId)
-        }
+        val existing = (localId?.let { dao.getMemoryById(it) }) ?: dao.getMemoryBySyncId(remoteId)
         if (existing != null && existing.timestamp > remoteTimestamp) return
 
         val key = metadata.stringOrNull("key") ?: content.substringBefore(':').trim().ifBlank { "remote-memory-$remoteId" }
@@ -182,12 +180,12 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
         val merged = MemoryEntity(
             id = existing?.id ?: 0L,
             syncId = remoteId,
-            lastSyncedAt = localTimestamp,
+            lastSyncedAt = remoteTimestamp,
             category = metadata.stringOrNull("category") ?: MemoryEntity.CATEGORY_NOTES,
             key = key,
             value = value,
             rawText = content,
-            timestamp = maxOf(localTimestamp, remoteTimestamp),
+            timestamp = remoteTimestamp,
             provenance = metadata.stringOrNull("provenance") ?: "REMOTE_SYNC",
             sensitivity = sensitivity,
             expiryTimeMs = metadata.longOrNull("expiry_time_ms"),
@@ -202,9 +200,7 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
             embeddingDimension = 0,
             pinned = metadata.booleanOrNull("pinned") ?: false
         )
-        kotlinx.coroutines.runBlocking {
-            if (existing == null) dao.insertMemory(merged) else dao.updateMemory(merged)
-        }
+        if (existing == null) dao.insertMemory(merged) else dao.updateMemory(merged)
     }
 
     private fun parseTimestamp(value: String?): Long = runCatching {
