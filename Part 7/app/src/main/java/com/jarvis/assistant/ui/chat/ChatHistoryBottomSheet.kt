@@ -78,6 +78,7 @@ class ChatHistoryBottomSheet : BottomSheetDialogFragment() {
 
     private fun updateList(turns: List<com.jarvis.assistant.data.model.ChatTurn>) {
         if (turns.isEmpty()) {
+            adapter.submitList(emptyList())
             binding.tvEmptyHistory.visibility = View.VISIBLE
             binding.rvChatHistory.visibility = View.GONE
         } else {
