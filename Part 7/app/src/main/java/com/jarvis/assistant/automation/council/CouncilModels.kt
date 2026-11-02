@@ -10,6 +10,7 @@ enum class AgentRole {
     LEAD_SYNTHESIZER,
     PLANNER,
     RESEARCHER,
+    CRITIC,
     EXECUTOR,
     VERIFIER
 }
@@ -39,5 +40,7 @@ data class CouncilExecutionOutcome(
     val handoffHistory: List<AgentHandoff>,
     val executionStepsCount: Int,
     val isVerifiedIndependently: Boolean,
-    val failureReason: String? = null
+    val failureReason: String? = null,
+    val agentReports: Map<String, String> = emptyMap(),
+    val subAgentCallsUsed: Int = 0
 )
