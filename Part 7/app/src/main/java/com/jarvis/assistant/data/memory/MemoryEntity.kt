@@ -1,6 +1,7 @@
 package com.jarvis.assistant.data.memory
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -12,6 +13,7 @@ data class MemoryEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     /** Stable cross-device identifier; independent of the local SQLite row ID. */
+    @ColumnInfo(defaultValue = "''")
     val syncId: String = UUID.randomUUID().toString(),
     /** Local modification timestamp successfully acknowledged by the remote service. */
     val lastSyncedAt: Long? = null,
