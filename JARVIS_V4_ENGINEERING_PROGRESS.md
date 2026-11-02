@@ -310,3 +310,10 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - GitHub reported `startup_failure`; the run created **zero jobs**. This is not a Gradle compile/test failure because no job started, and it is not a passing verification.
 - Run URL: https://github.com/levinhocall/Jarvis-os/actions/runs/41412161267
 - The underlying Actions runner/service issue remains an external verification blocker. No APK task is configured or requested.
+
+### Floating avatar WORKING / ALWAYS mode correction
+
+- Finding: the service treated an idle session/standby while the app was backgrounded as sufficient to keep the avatar visible in `working` mode. That contradicted the preference contract that WORKING mode shows the overlay only while an actual task snapshot exists.
+- Change: idle avatar visibility is now controlled only by `taskOverlayMode == "always"`. A real `AgentTaskSnapshot` continues to display task progress in either mode. Removed unrelated app-foreground/session/standby flows from the idle-visibility combine path and removed those values from the overlay refresh fingerprint.
+- Commits: `7447c6670188aafb2110485023f7c53c95bc3a24`, `0a83d7c775dedd34c98c00e3b57ae7290d9d57c7`.
+- Verification: updated service source still requires compile/unit verification and manual Android 16 overlay lifecycle checks.
