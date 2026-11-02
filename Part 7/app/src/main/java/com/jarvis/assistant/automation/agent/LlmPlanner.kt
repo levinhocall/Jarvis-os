@@ -76,6 +76,9 @@ interface LlmFunctionCallProvider {
         history: List<LlmPlannerStepRecord>,
         availableTools: List<ToolDefinition>
     ): LlmStepDecision
+
+    /** Text-only reasoning for bounded advisory sub-agents; it cannot execute tools. */
+    suspend fun reason(prompt: String): String? = null
 }
 
 /**
@@ -158,6 +161,42 @@ class GeminiFunctionCallProvider(
         return apiKeyProvider().isNotBlank()
     }
 
+    override suspend fun reason(prompt: String): String? = withContext(Dispatchers.IO) {
+        val apiKey = apiKeyProvider()
+        if (apiKey.isBlank() || prompt.isBlank()) return@withContext null
+        try {
+            val model = modelProvider().removePrefix("models/").ifBlank {
+                com.jarvis.assistant.data.model.GeminiConstants.MODEL_3_8_FLASH.removePrefix("models/")
+            }
+            val payload = mapOf(
+                "contents" to listOf(mapOf("role" to "user", "parts" to listOf(mapOf("text" to prompt.take(12000))))),
+                "generationConfig" to mapOf("temperature" to 0.2, "maxOutputTokens" to 400)
+            )
+            val request = Request.Builder()
+                .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
+                .header("x-goog-api-key", apiKey)
+                .post(gson.toJson(payload).toRequestBody("application/json".toMediaType()))
+                .build()
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    if (response.code == 401 || body.contains("API_KEY_INVALID", true)) runCatching { onApiKeyInvalid(apiKey) }
+                    else if (response.code == 429 || body.contains("RESOURCE_EXHAUSTED", true)) runCatching { onApiKeyRateLimited(apiKey) }
+                    return@withContext null
+                }
+                runCatching { onApiKeySuccess(apiKey) }
+                val json = gson.fromJson(body, JsonObject::class.java)
+                val candidates = json.getAsJsonArray("candidates") ?: return@withContext null
+                val parts = candidates.firstOrNull()?.asJsonObject?.getAsJsonObject("content")?.getAsJsonArray("parts")
+                    ?: return@withContext null
+                parts.mapNotNull { part -> part.asJsonObject.get("text")?.takeIf { it.isJsonPrimitive }?.asString }
+                    .joinToString("\n").trim().takeIf { it.isNotBlank() }
+            }
+        } catch (error: Exception) {
+            Log.w("GeminiCouncilAgent", "Advisory reasoning unavailable (" + error.javaClass.simpleName + ").")
+            null
+        }
+    }
     override suspend fun predictStep(
         goal: String,
         history: List<LlmPlannerStepRecord>,
@@ -325,6 +364,12 @@ class LlmPlanner(
 
     suspend fun isProviderReady(): Boolean =
         !isCancelled.get() && provider.isAvailable()
+
+    /** Bounded text-only model call for advisory council sub-agents. */
+    suspend fun reasonAsSubAgent(prompt: String): String? {
+        if (isCancelled.get() || !provider.isAvailable()) return null
+        return provider.reason(prompt)
+    }
 
     /**
      * Executes the autonomous reasoning-action loop.
