@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.jarvis.assistant.JarvisApp
 import com.jarvis.assistant.background.JarvisConversationService
 import com.jarvis.assistant.data.model.ChatTurn
+import com.jarvis.assistant.data.chat.ConversationTurnMapper
 import com.jarvis.assistant.data.model.ConversationState
 import com.jarvis.assistant.data.preferences.AppPreferences
 import com.jarvis.assistant.util.PermissionHelper
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -50,7 +52,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val liveUserTranscript: StateFlow<String> = JarvisConversationService.liveUserTranscript
     val liveAssistantResponse: StateFlow<String> = JarvisConversationService.liveAssistantResponse
     val liveError: StateFlow<com.jarvis.assistant.background.JarvisLiveError?> = JarvisConversationService.liveError
-    val chatTurns: StateFlow<List<ChatTurn>> = (application as JarvisApp).chatRepository.turns
+    private val conversationRepository = (application as JarvisApp).conversationRepository
+    private val _chatTurns = MutableStateFlow<List<ChatTurn>>(emptyList())
+    val chatTurns: StateFlow<List<ChatTurn>> = _chatTurns.asStateFlow()
 
     fun clearLiveError() {
         JarvisConversationService.clearLiveError()
@@ -79,6 +83,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         startTimeClock()
         observeServiceStatus()
         observeServiceEvents()
+        observeConversationHistory()
+    }
+
+    private fun observeConversationHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { conversationRepository.restoreMostRecentActiveSession() }
+                .onFailure { android.util.Log.e("MainViewModel", "Could not restore Room chat session", it) }
+            conversationRepository.currentSessionId.collectLatest { sessionId ->
+                if (sessionId == null) {
+                    _chatTurns.value = emptyList()
+                } else {
+                    conversationRepository.getMessagesFlow(sessionId).collect { messages ->
+                        _chatTurns.value = ConversationTurnMapper.toTurns(messages)
+                    }
+                }
+            }
+        }
     }
 
     private fun startTimeClock() {
