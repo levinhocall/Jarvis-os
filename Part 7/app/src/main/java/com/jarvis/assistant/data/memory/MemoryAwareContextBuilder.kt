@@ -18,6 +18,8 @@ class MemoryAwareContextBuilder(
     private val maxHistoryTurns: Int = 10,
     private val minMemoryScoreThreshold: Double = 0.35
 ) {
+    private val json = com.google.gson.Gson()
+
     /**
      * Builds a grounded, memory-augmented context for the AI model before response generation.
      */
@@ -45,7 +47,7 @@ class MemoryAwareContextBuilder(
             for (scored in scoredMemories) {
                 val mem = scored.memory
                 val sourceRef = if (!mem.sourceConversationId.isNullOrBlank()) " [Source: ${mem.sourceConversationId}]" else ""
-                systemContextBuilder.append("- (${mem.memoryType}) ${org.json.JSONObject.quote(mem.value)}$sourceRef\n")
+                systemContextBuilder.append("- (${mem.memoryType}) ${json.toJson(mem.value)}$sourceRef\n")
             }
             systemContextBuilder.append("[END MEMORY CONTEXT]\n")
         }
