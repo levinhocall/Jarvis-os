@@ -877,11 +877,11 @@ class JarvisConversationService : Service() {
                         ?: repository.createNewSession("Voice Conversation").id
                     // Idempotently merge the complete legacy transcript into the canonical Room session.
                     // Clear the old preference payload only after the Room import succeeds.
-                    val legacyTurns = app.chatRepository.turns.value
-                    if (legacyTurns.isNotEmpty()) {
-                        repository.mergeHistoricalTurns(sessionId, legacyTurns)
-                        app.chatRepository.clearHistory()
-                    }
+                    repository.migrateLegacyHistory(
+                        sessionId = sessionId,
+                        loadLegacyTurns = { app.chatRepository.turns.value },
+                        clearLegacyHistory = { app.chatRepository.clearHistory() }
+                    )
                     val recentMessages = repository.getMessagesPaged(sessionId, limit = 20, offset = 0).reversed()
                     val latestUserQuery = recentMessages.lastOrNull { it.role.equals("USER", ignoreCase = true) }?.content.orEmpty()
                     val memoryPrompt = com.jarvis.assistant.data.memory.MemoryAwareContextBuilder(
