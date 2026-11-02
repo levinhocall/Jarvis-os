@@ -7,7 +7,6 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import com.jarvis.assistant.data.chat.ChatDao
 import com.jarvis.assistant.data.chat.ChatMessageEntity
 import com.jarvis.assistant.data.chat.ChatSessionEntity
