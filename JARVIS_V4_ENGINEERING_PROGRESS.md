@@ -435,7 +435,7 @@ Status: **VOICE OWNERSHIP IS NOW WIRED IN SOURCE; build/device verification is s
 
 ### Backend health monitoring
 
-- Added a Docker Compose healthcheck against /health, with 30-second intervals, retries and a 10-minute startup grace period for the first MiniLM model download.
+- Added a Docker Compose healthcheck against /health, with 30-second intervals, retries and a 20-minute startup grace period for the first MiniLM model download.
 - Kept the default loopback-only bind and persistent Docker volumes.
 - Added setup documentation for checking backend health.
 - Key commits: 8869b09, 5f3afb7, 14384cf.
