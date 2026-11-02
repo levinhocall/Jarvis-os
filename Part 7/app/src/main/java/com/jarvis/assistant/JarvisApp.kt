@@ -96,7 +96,7 @@ class JarvisApp : Application() {
         memoryDatabase = MemoryDatabase.getInstance(this)
         memoryRepository = MemoryRepository(memoryDatabase.memoryDao())
         conversationRepository = com.jarvis.assistant.data.chat.ConversationRepository(memoryDatabase.chatDao())
-        memoryManager = MemoryManager(memoryRepository, preferences, chatRepository, appScope)
+        memoryManager = MemoryManager(memoryRepository, preferences, appScope)
 
         // Automation Systems
         youTubePreferences = YouTubePreferences(this)
