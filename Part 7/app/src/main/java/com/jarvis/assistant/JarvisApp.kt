@@ -13,6 +13,8 @@ import com.jarvis.assistant.automation.command.CommandExecutor
 import com.jarvis.assistant.automation.agent.GeminiFunctionCallProvider
 import com.jarvis.assistant.automation.agent.LlmPlanner
 import com.jarvis.assistant.automation.mission.MissionEngine
+import com.jarvis.assistant.automation.mission.LongHorizonMissionCoordinator
+import com.jarvis.assistant.automation.mission.PersistentMissionCheckpointStorage
 import com.jarvis.assistant.data.model.GeminiConstants
 import com.jarvis.assistant.automation.contacts.ContactResolver
 import com.jarvis.assistant.automation.phone.PhoneControlManager
@@ -112,7 +114,11 @@ class JarvisApp : Application() {
         )
 
         // Unified Runtime & Self-Diagnostics
-        unifiedRuntime = com.jarvis.assistant.core.runtime.JarvisUnifiedRuntime()
+        unifiedRuntime = com.jarvis.assistant.core.runtime.JarvisUnifiedRuntime(
+            missionCoordinator = LongHorizonMissionCoordinator(
+                PersistentMissionCheckpointStorage(applicationContext)
+            )
+        )
         MissionEngine.missionDao = memoryDatabase.missionDao()
         MissionEngine.llmPlanner = LlmPlanner(
             GeminiFunctionCallProvider(
