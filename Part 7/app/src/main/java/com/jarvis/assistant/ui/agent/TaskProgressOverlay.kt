@@ -220,6 +220,9 @@ class TaskProgressOverlay(private val context: Context) {
     }
 
     fun remove() {
+        if (activeInstance === this) activeInstance = null
+        statusPill.animate().cancel()
+        avatar.animate().cancel()
         if (attached) {
             try { windowManager.removeView(root) } catch (_: Exception) {}
             attached = false

@@ -131,7 +131,8 @@ internal object DatabaseEncryption {
             val db = FrameworkSQLiteDatabase.openDatabase(
                 file.absolutePath,
                 null,
-                FrameworkSQLiteDatabase.OPEN_READONLY
+                FrameworkSQLiteDatabase.OPEN_READONLY,
+                android.database.DatabaseErrorHandler { error("Corrupt plaintext database retained for recovery.") }
             )
             try {
                 db.rawQuery("PRAGMA integrity_check", null).use { cursor ->
@@ -155,6 +156,7 @@ internal object DatabaseEncryption {
                     cipherKey,
                     null,
                     CipherDatabase.OPEN_READWRITE,
+                    net.zetetic.database.DatabaseErrorHandler { _, exception -> throw exception },
                     null
                 )
             } finally {
@@ -186,7 +188,8 @@ internal object DatabaseEncryption {
         val source = FrameworkSQLiteDatabase.openDatabase(
             original.absolutePath,
             null,
-            FrameworkSQLiteDatabase.OPEN_READWRITE
+            FrameworkSQLiteDatabase.OPEN_READWRITE,
+            android.database.DatabaseErrorHandler { error("Corrupt plaintext database retained for recovery.") }
         )
         val oldVersion: Int
         try {
@@ -222,6 +225,7 @@ internal object DatabaseEncryption {
             ByteArray(0),
             null,
             CipherDatabase.OPEN_READWRITE,
+            net.zetetic.database.DatabaseErrorHandler { _, exception -> throw exception },
             null
         )
         try {
@@ -245,6 +249,7 @@ internal object DatabaseEncryption {
             rawPassphraseForCipher(rawPassphrase),
             null,
             CipherDatabase.OPEN_READWRITE,
+            net.zetetic.database.DatabaseErrorHandler { _, exception -> throw exception },
             null
         )
         try {
@@ -276,7 +281,8 @@ internal object DatabaseEncryption {
         val plain = FrameworkSQLiteDatabase.openDatabase(
             original.absolutePath,
             null,
-            FrameworkSQLiteDatabase.OPEN_READONLY
+            FrameworkSQLiteDatabase.OPEN_READONLY,
+                android.database.DatabaseErrorHandler { error("Corrupt plaintext database retained for recovery.") }
         )
         try {
             plain.rawQuery(

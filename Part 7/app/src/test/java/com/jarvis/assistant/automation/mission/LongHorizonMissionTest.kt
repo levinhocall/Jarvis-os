@@ -20,6 +20,24 @@ class LongHorizonMissionTest {
 
 
     @Test
+    fun `older checkpoint never discards newer non idempotent replay guards`() {
+        val storage = InMemoryCheckpointStorage()
+        val engine = LongHorizonMissionCoordinator(storage)
+        val step = MissionStep(stepId = "send", title = "Send", toolName = "send_message", isIdempotent = false)
+        val milestone = MilestoneDefinition(id = "m", title = "Send", steps = listOf(step))
+        val mission = engine.createMission("Send once", listOf(milestone))
+        engine.startOrResume(mission.missionId)
+        val oldCheckpoint = engine.createCheckpoint(mission.missionId, "Before action")
+        engine.recordStepExecution(mission.missionId, "m", "send", true, true)
+        // Simulate a stale checkpoint being selected after a partial checkpoint-store write.
+        storage.saveCheckpoint(oldCheckpoint)
+        val restored = engine.restoreFromLatestCheckpoint(mission.missionId)
+        assertTrue(restored.executedNonIdempotentStepIds.contains("send"))
+        assertTrue(engine.checkStepEligibility(mission.missionId, "m", step) is StepExecutionEligibility.ReplayPrevented)
+        assertEquals(LongHorizonStatus.PAUSED, restored.status)
+    }
+
+    @Test
     fun `mission state and non-idempotent replay guard survive coordinator recreation`() {
         val step = MissionStep(
             stepId = "transfer_once",

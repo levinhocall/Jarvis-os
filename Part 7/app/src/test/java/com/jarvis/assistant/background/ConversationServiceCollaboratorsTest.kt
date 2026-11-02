@@ -1,6 +1,8 @@
 package com.jarvis.assistant.background
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -13,6 +15,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConversationServiceCollaboratorsTest {
+
+    @Test
+    fun `late session establishment cannot revive a stopped session`() = runBlocking {
+        val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        val manager = VoiceSessionManager(scope, { true }, {})
+        manager.onSessionEstablished()
+        assertEquals(SessionLifecycleState.DISCONNECTED, manager.sessionState.value)
+        manager.stopSession()
+        manager.awaitStopped()
+        manager.onSessionEstablished()
+        assertEquals(SessionLifecycleState.DISCONNECTED, manager.sessionState.value)
+        scope.cancel()
+    }
 
     // --- 1. VoiceSessionManager Tests ---
 

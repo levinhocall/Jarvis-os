@@ -269,15 +269,16 @@ class MemoryRepository(
         // records: superseded/deleted rows must never be resurrected by a backup restore.
         if (jsonStr.length > 5_000_000) return 0
         val list = try {
-            val type = object : com.google.gson.reflect.TypeToken<List<MemoryEntity>>() {}.type
-            gson.fromJson<List<MemoryEntity>>(jsonStr, type) ?: emptyList()
+            val type = object : com.google.gson.reflect.TypeToken<List<MemoryEntity?>>() {}.type
+            gson.fromJson<List<MemoryEntity?>>(jsonStr, type) ?: emptyList()
         } catch (_: Exception) {
             return 0
         }
         if (list.size > 10_000) return 0
 
         val activeRecords = list.asSequence()
-            .filter { it.status == MemoryEntity.STATUS_ACTIVE && it.key.isNotBlank() }
+            .filterNotNull()
+            .filter { it.status == MemoryEntity.STATUS_ACTIVE && !it.key.isNullOrBlank() }
             .groupBy { it.key.trim().lowercase(Locale.ROOT) }
             .values
             .mapNotNull { versions -> versions.maxByOrNull { it.timestamp } }

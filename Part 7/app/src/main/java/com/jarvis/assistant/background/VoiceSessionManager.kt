@@ -5,6 +5,8 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,7 +101,7 @@ class VoiceSessionManager(
                     if (generation != sessionGeneration.get()) {
                         false
                     } else {
-                        val connected = onConnectRequest()
+                        val connected = withTimeoutOrNull(30_000L) { onConnectRequest() } ?: false
                         if (generation != sessionGeneration.get() && connected) {
                             // Tear down a late handshake before releasing the connection lock.
                             runCatching { onDisconnectRequest() }
@@ -114,6 +116,8 @@ class VoiceSessionManager(
                 } else {
                     handleConnectionFailure("Initial connection handshake failed")
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 if (generation == sessionGeneration.get()) {
                     Log.e(TAG, "Error starting voice session", e)
@@ -162,6 +166,7 @@ class VoiceSessionManager(
      */
     @Synchronized
     fun onSessionEstablished() {
+        if (!isSessionActive) return // Ignore late transport callbacks after stop/fatal teardown.
         consecutiveFailures.set(0)
         transitionState(SessionLifecycleState.LIVE, "LIVE")
     }
@@ -211,7 +216,7 @@ class VoiceSessionManager(
                     if (generation != sessionGeneration.get()) {
                         false
                     } else {
-                        val connected = onConnectRequest()
+                        val connected = withTimeoutOrNull(30_000L) { onConnectRequest() } ?: false
                         if (generation != sessionGeneration.get() && connected) {
                             runCatching { onDisconnectRequest() }
                         }
@@ -225,6 +230,8 @@ class VoiceSessionManager(
                 } else {
                     handleConnectionFailure("Reconnect attempt #$attempts failed")
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 if (generation == sessionGeneration.get()) {
                     handleConnectionFailure(e.message ?: "Reconnect exception")

@@ -524,3 +524,14 @@ The supplied checkout branch was `work`; a local `main` was created at that comm
 - Initial Gradle attempts: blocked before compilation by unwritable default Gradle cache, then direct JVM network/DNS failures. Retried with a workspace cache and explicit JVM proxy configuration; final outcome recorded in the next entry.
 - No Android runtime, emulator or physical-device testing. No APK-producing task invoked.
 - Source changes are not proof of runtime privacy: local command outputs, external TTS, screen tools and user-directed search still require a broader outbound-payload audit.
+
+### Implementation batch 2 — lifecycle, recovery and untrusted import hardening
+
+- `VoiceSessionManager.kt`: cap each connection callback at 30 seconds, propagate coroutine cancellation, ignore establishment callbacks after stop/fatal error. Added stopped-session regression in `ConversationServiceCollaboratorsTest.kt`.
+- `DatabaseEncryption.kt`: explicit non-destructive corruption handlers on every framework SQLite and SQLCipher migration/probe handle. This closes a second destructive-default path before Room creates its helper. API signatures checked against SQLCipher's tagged v4.20.0 source; Android execution still pending.
+- `LongHorizonMissionCoordinator.kt`: checkpoint restoration preserves the union of current and checkpoint non-idempotent replay guards; restoring older state cannot authorize a completed consequential action again. Added stale-checkpoint regression in `LongHorizonMissionTest.kt`. Removed mission-goal text from creation logs.
+- `LocationWeatherHelper.kt`: cancellable location continuation unregisters listeners on timeout/cancellation, late completion and registration races. No location permission bypass added.
+- `TaskProgressOverlay.kt`: clear the active overlay reference and cancel animations on removal, avoiding status callbacks targeting a detached overlay.
+- `MemoryRepository.kt`: ignore JSON null rows/null keys before import grouping. Gson can construct these despite Kotlin non-null declarations. Added malformed-backup regression in `MultiChatAndMemoryEngineTest.kt`.
+
+These fixes are source changes pending the verification results below. No UI redesign, schema change or changes to Parts 1–6.

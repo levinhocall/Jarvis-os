@@ -40,7 +40,7 @@ class LongHorizonMissionCoordinator(
             currentMilestoneId = milestones.firstOrNull()?.id
         )
         storeMission(mission)
-        log(mission.missionId, "INFO", message = "Mission created: '$goal' with ${milestones.size} milestones.")
+        log(mission.missionId, "INFO", message = "Mission created with ${milestones.size} milestones.")
         return mission
     }
 
@@ -313,7 +313,8 @@ class LongHorizonMissionCoordinator(
         val restored = current.copy(
             milestones = restoredMilestones,
             currentMilestoneId = checkpoint.currentMilestoneId,
-            executedNonIdempotentStepIds = checkpoint.executedNonIdempotentStepIds,
+            // Replay guards are monotonic, even when restoring an older checkpoint.
+            executedNonIdempotentStepIds = current.executedNonIdempotentStepIds + checkpoint.executedNonIdempotentStepIds,
             stateVariables = checkpoint.stateVariables,
             status = LongHorizonStatus.PAUSED, // Restores safely in PAUSED state
             updatedAt = System.currentTimeMillis()

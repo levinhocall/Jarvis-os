@@ -47,6 +47,12 @@ class MultiChatAndMemoryEngineTest {
     // =========================================================================
 
     @Test
+    fun `malformed backup null rows and null keys cannot crash import`() = runBlocking {
+        assertEquals(0, memoryRepo.importMemoriesFromJson("[null, {\"status\":\"ACTIVE\",\"key\":null}]"))
+        assertEquals(0, memoryRepo.getAllMemories().size)
+    }
+
+    @Test
     fun `test creating multiple independent chat sessions`() = runBlocking {
         val session1 = conversationRepo.createNewSession("Researching Jetpack Compose")
         val session2 = conversationRepo.createNewSession("Android Architecture Review")

@@ -21,7 +21,7 @@ import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 data class WeatherData(
     val temperature: String,
@@ -94,37 +94,38 @@ object LocationWeatherHelper {
 
         // 2. Request a quick single location update with 4-second timeout
         val freshLocation = withTimeoutOrNull(4000L) {
-            suspendCoroutine<Location?> { cont ->
+            suspendCancellableCoroutine<Location?> { cont ->
+                val listener = object : LocationListenerCompat {
+                    override fun onLocationChanged(loc: Location) {
+                        runCatching { LocationManagerCompat.removeUpdates(locationManager, this) }
+                        if (cont.isActive) cont.resume(loc)
+                    }
+                }
+                cont.invokeOnCancellation {
+                    runCatching { LocationManagerCompat.removeUpdates(locationManager, listener) }
+                }
                 try {
                     val request = LocationRequestCompat.Builder(1000L)
                         .setQuality(LocationRequestCompat.QUALITY_BALANCED_POWER_ACCURACY)
                         .setMaxUpdates(1)
                         .build()
-
-                    val listener = object : LocationListenerCompat {
-                        override fun onLocationChanged(loc: Location) {
-                            try {
-                                LocationManagerCompat.removeUpdates(locationManager, this)
-                            } catch (_: Exception) {}
-                            cont.resume(loc)
-                        }
+                    val provider = when {
+                        locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+                        locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+                        else -> null
                     }
-
-                    val provider = if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                        LocationManager.NETWORK_PROVIDER
-                    } else if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                        LocationManager.GPS_PROVIDER
-                    } else {
-                        null
-                    }
-
-                    if (provider != null) {
+                    if (provider != null && cont.isActive) {
                         LocationManagerCompat.requestLocationUpdates(locationManager, provider, request, listener, Looper.getMainLooper())
-                    } else {
+                        // Cancellation can race listener registration; unregister on either side.
+                        if (!cont.isActive) {
+                            runCatching { LocationManagerCompat.removeUpdates(locationManager, listener) }
+                        }
+                    } else if (cont.isActive) {
                         cont.resume(null)
                     }
                 } catch (e: Exception) {
-                    cont.resume(null)
+                    runCatching { LocationManagerCompat.removeUpdates(locationManager, listener) }
+                    if (cont.isActive) cont.resume(null)
                 }
             }
         }
