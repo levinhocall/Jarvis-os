@@ -60,7 +60,7 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
         for (memory in memories) {
             val sensitive = memory.sensitivity.uppercase() in setOf("SECRET", "CREDENTIAL", "AUTHENTICATION", "CONFIDENTIAL")
             val mustDelete = memory.status != MemoryEntity.STATUS_ACTIVE || sensitive || memory.isExpired
-            if (!mustDelete && memory.lastSyncedAt != null && memory.timestamp <= memory.lastSyncedAt) continue
+            if (memory.lastSyncedAt != null && memory.timestamp <= memory.lastSyncedAt && !(memory.isExpired && mustDelete)) continue
             val remoteId = memory.syncId.ifBlank { "jarvis-local-${memory.id}" }
             if (mustDelete) {
                 val deleteUrl = base.newBuilder()
