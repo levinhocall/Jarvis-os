@@ -1,6 +1,6 @@
 # JARVIS OS V4 Engineering Progress
 
-Last updated: 2026-11-02
+Last updated: 2026-11-03
 Repository: https://github.com/levinhocall/Jarvis-os
 Branch: main
 Active project inspected: `Part 7/`
@@ -583,3 +583,7 @@ Verification setup: installed SDK platform 36/build tools and a JDK 17 into `/wo
 - Found that `forget(permanent=true)` called a tombstone-only DAO method. Added a separate explicit SQL DELETE path, wired the existing permanent flag and an extra confirmation action in the existing memory dialog. It removes all stored versions of the selected fact without resetting the database or affecting unrelated records. Soft deletion remains available. Added instrumentation coverage for version removal and unrelated-record preservation; updated fake DAOs for the new contract.
 - Permanent SQL deletion is logical record removal. This is not a claim of forensic flash erasure, WAL sanitization or deletion of copies in prior exports. Android runtime validation remains required.
 - Room generated the previously missing schema-v6 export, now retained under `app/schemas/com.jarvis.assistant.data.memory.MemoryDatabase/6.json`; no historical migration or database version was changed.
+
+### Test-harness repairs after production compilation succeeded
+
+Production Kotlin compilation passed after the compatibility/source repairs. Test compilation then found stale fake-DAO contracts, a reference to the removed personalized SMS auto-reply constant, and a missing result subtype cast. Updated fake DAOs to implement the actual memory-version and chat-clear operations; retained command parsing assertions while removing the assertion against an API that no longer exists. Corrected instrumentation restore assertions to test active-record state without demanding deletion of intentionally retained tombstones. These changes do not bypass production validation or weaken encryption.

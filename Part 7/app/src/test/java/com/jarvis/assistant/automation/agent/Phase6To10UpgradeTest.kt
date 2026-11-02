@@ -6,7 +6,6 @@ import com.jarvis.assistant.automation.command.JarvisCommand
 import com.jarvis.assistant.automation.ledger.ExpenseLedgerTracker
 import com.jarvis.assistant.automation.ledger.LedgerEntry
 import com.jarvis.assistant.automation.ledger.TransactionType
-import com.jarvis.assistant.automation.phone.CallScreeningReceiver
 import com.jarvis.assistant.security.SecurityAction
 import com.jarvis.assistant.security.SecurityGuardManager
 import org.junit.Assert.assertEquals
@@ -88,7 +87,7 @@ class Phase6To10UpgradeTest {
 
     // --- PHASE 10 TESTS: Smart Call Screening & Expense Ledger ---
     @Test
-    fun testPhase10CallScreeningParsingAndDefaults() {
+    fun testPhase10CallScreeningParsing() {
         val busyCmd = CommandParser.parse("busy hoon message daal do").command
         assertTrue(busyCmd is JarvisCommand.CallScreeningAction)
         assertEquals("REJECT_WITH_SMS", (busyCmd as JarvisCommand.CallScreeningAction).action)
@@ -96,7 +95,6 @@ class Phase6To10UpgradeTest {
         val rejectCmd = CommandParser.parse("reject call and send message").command
         assertTrue(rejectCmd is JarvisCommand.CallScreeningAction)
 
-        assertEquals("Nazib Sir is currently in a meeting, will call back soon.", CallScreeningReceiver.DEFAULT_AUTO_REPLY)
     }
 
     @Test

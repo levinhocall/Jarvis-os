@@ -27,7 +27,7 @@ class OfflineIntelligenceTest {
     fun `local notes save to temporary cache when persistent app storage is unavailable`() = runBlocking {
         val noteResult = coordinator.handleCommandOffline("remember flight confirmation code is XYZ-789")
         assertTrue(noteResult is OfflineExecutionResult.ExecutedLocally)
-        assertTrue(noteResult.userFeedback.contains("temporary offline cache"))
+        assertTrue((noteResult as OfflineExecutionResult.ExecutedLocally).userFeedback.contains("temporary offline cache"))
 
         val found = coordinator.searchLocalKnowledge("XYZ-789")
         assertEquals(1, found.size)

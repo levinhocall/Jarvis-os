@@ -56,9 +56,9 @@ class MemoryRepositoryTransactionInstrumentedTest {
             val restoredCount = repository.importMemoriesFromJson(backup)
 
             assertEquals(2, restoredCount)
-            assertEquals(1, dao.getMemoriesByKeyIncludingInactive(activeKey).size)
-            assertTrue(dao.getMemoriesByKeyIncludingInactive(deletedKey).isEmpty())
-            val restoredVersion = dao.getMemoriesByKeyIncludingInactive(versionedKey).single()
+            assertEquals(1, dao.getMemoriesByKeyIncludingInactive(activeKey).count { it.status == MemoryEntity.STATUS_ACTIVE })
+            assertTrue(dao.getMemoriesByKeyIncludingInactive(deletedKey).none { it.status == MemoryEntity.STATUS_ACTIVE })
+            val restoredVersion = dao.getMemoriesByKeyIncludingInactive(versionedKey).single { it.status == MemoryEntity.STATUS_ACTIVE }
             assertEquals("Current active value", restoredVersion.value)
             assertEquals(MemoryEntity.STATUS_ACTIVE, restoredVersion.status)
         } finally {

@@ -70,6 +70,14 @@ class AutonomousSoftwareEngineeringAgentTest {
             memories.removeIf { it.id == memory.id }
         }
 
+        override suspend fun updateActiveMemoriesByKey(key: String, status: String) {
+            memories.indices.filter { memories[it].key == key && memories[it].status == MemoryEntity.STATUS_ACTIVE }
+                .forEach { index -> memories[index] = memories[index].copy(status = status) }
+        }
+
+        override suspend fun getMemoriesByKeyIncludingInactive(key: String): List<MemoryEntity> =
+            memories.filter { it.key == key }.sortedByDescending { it.timestamp }
+
         override suspend fun permanentlyDeleteMemoryById(id: Long): Int {
             val key = memories.firstOrNull { it.id == id }?.key ?: return 0
             val removed = memories.count { it.key == key }

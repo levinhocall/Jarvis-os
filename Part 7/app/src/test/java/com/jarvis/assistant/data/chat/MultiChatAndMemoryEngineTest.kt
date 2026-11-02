@@ -337,6 +337,11 @@ class FakeChatDao : ChatDao {
     private val sessions = ConcurrentHashMap<String, ChatSessionEntity>()
     private val messages = mutableListOf<ChatMessageEntity>()
 
+    override fun getRecentMessagesFlow(): Flow<List<ChatMessageEntity>> =
+        flowOf(messages.sortedByDescending { it.timestamp }.take(100))
+    override suspend fun deleteAllMessages() { messages.clear() }
+    override suspend fun deleteAllSessions() { sessions.clear() }
+
     override fun getAllSessionsFlow(): Flow<List<ChatSessionEntity>> =
         flowOf(sessions.values.sortedByDescending { it.updatedAt })
 
@@ -476,6 +481,14 @@ class FakeMemoryDao : MemoryDao {
     override suspend fun deleteMemory(memory: MemoryEntity) {
         allRawMemories.removeAll { it.id == memory.id }
     }
+
+    override suspend fun updateActiveMemoriesByKey(key: String, status: String) {
+        allRawMemories.indices.filter { allRawMemories[it].key == key && allRawMemories[it].status == MemoryEntity.STATUS_ACTIVE }
+            .forEach { index -> allRawMemories[index] = allRawMemories[index].copy(status = status) }
+    }
+
+    override suspend fun getMemoriesByKeyIncludingInactive(key: String): List<MemoryEntity> =
+        allRawMemories.filter { it.key == key }.sortedByDescending { it.timestamp }
 
     override suspend fun permanentlyDeleteMemoryById(id: Long): Int {
         val key = allRawMemories.firstOrNull { it.id == id }?.key ?: return 0
