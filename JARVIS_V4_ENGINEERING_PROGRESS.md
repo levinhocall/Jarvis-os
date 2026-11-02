@@ -472,3 +472,32 @@ Status: **VOICE OWNERSHIP IS NOW WIRED IN SOURCE; build/device verification is s
 - Additional commits: `0d15efa`, `3dcd46d`, `91f29d2`, `4fcbf3c`, `f8e13c0`, `d98eae8`, `7efe64c`, `286c896`, `b9fbc09`, `e40f759`, `3038671`, `90107ce`, `6752619`, `ab58472`, `01d7c4e`, `663dfdc`, `3a76979`, `f88ee1c`, `3155418`, `a2b6edf`, `63c2300`, `cfde06c`, `6a6394e`.
 
 APK assembly/signing/publishing remains deliberately outside this phase.
+
+
+## 2026-11-03 — User decision: strictly on-device memory
+
+Status: SOURCE CHANGE COMMITTED TO MAIN; runtime/build verification NOT RUN.
+
+- User explicitly chose phone-local memory instead of cloud/Claude/hosted memory storage.
+- Part 7 production wiring now constructs `MemoryRepository(memoryDatabase.memoryDao())`, which selects the existing `DeterministicLocalEmbeddingProvider` default. Memory records and embeddings remain in the existing Room database protected by the SQLCipher-backed open-helper path.
+- Removed the production call that scheduled `MemorySyncScheduler`; no periodic or initial remote memory sync is enqueued by application startup.
+- Gradle now hard-sets `MEMORY_SYNC_ENDPOINT` to an empty string. The legacy sync worker/provider and schema-v6 sync metadata are retained but dormant to avoid destructive schema changes and preserve existing user data. They are not part of the active production path.
+- Cloudflare D1 is not required for JARVIS personal memory. The newly created `jarvis_memory` D1 database is unused and may be left empty or deleted by the owner.
+- This is a local-only storage decision, not proof of successful SQLCipher runtime encryption, migration, recovery, or device persistence. Those still require execution tests.
+- No APK was built. No Gradle, unit, instrumentation, lint, or physical-device test was run in this session.
+
+### V4 remaining work after local-memory decision
+
+1. **Memory security and persistence — OPEN:** execute SQLCipher + Room tests on a real Android runtime; verify keystore key lifecycle, plaintext-to-encrypted migration, rollback/crash recovery, corruption recovery, backup/export policy, and confirm no memory network traffic.
+2. **Voice/runtime — OPEN:** physical-device tests for Gemini Live connection/auth, continuous conversation, interruption/barge-in, echo cancellation, TTS routing, microphone foreground-service behavior, and Android 16 restrictions. ElevenLabs integration remains absent/unverified unless separately prioritized.
+3. **Accessibility/device control — OPEN:** Android 16 restricted-settings flow, service connection/reconnection, node discovery, event filtering, gestures, overlay permission/lifecycle, and real device-control execution.
+4. **Multi-agent orchestration — SOURCE INTEGRATED, NOT VERIFIED:** run bounded-concurrency/budget/council reconciliation tests; verify failure/timeouts and ensure agents cannot invoke device tools without the mission executor's approval boundary.
+5. **Missions and recovery — PARTIALLY IMPLEMENTED:** execute process-death restoration, interrupted-step safety, idempotency and checkpoint durability tests; verify every action result is reconciled rather than simulated.
+6. **Camera/OCR/GPS/navigation — NOT RUNTIME VERIFIED:** test camera preview/capture, OCR accuracy, location permissions, route calculation and offline/error states on-device.
+7. **Settings/profile/account/subscription — PARTIAL/BLOCKED:** verify every settings control's actual effect; no real hosted identity/subscription/credits verification backend is established, so do not show fabricated entitlement states.
+8. **Build/CI — OPEN:** fix GitHub Actions startup_failure, run Gradle wrapper validation, unit tests and lint. Instrumentation tests need an emulator/device. APK build remains deferred by user request.
+9. **Full integration audit — OPEN:** trace all production call paths, remove simulated-success paths, inspect secrets/logging/permissions, reconcile stale documentation and update the final V4 acceptance matrix.
+
+### Verification truth
+
+The above is a source-level configuration change only. It is not a claim that V4 is complete, that tests pass, or that the phone has been runtime-verified. Current baseline remains GitHub main HEAD plus these commits; build and device verification are still outstanding.
