@@ -53,8 +53,9 @@ interface MemoryDao {
     @Update
     suspend fun updateMemory(memory: MemoryEntity)
 
-    @Delete
-    suspend fun deleteMemory(memory: MemoryEntity)
+    suspend fun deleteMemory(memory: MemoryEntity) {
+        softDeleteMemory(memory.id)
+    }
 
     @Query("UPDATE memories SET status = 'DELETED', timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE id = :id")
     suspend fun deleteMemoryById(id: Long)
