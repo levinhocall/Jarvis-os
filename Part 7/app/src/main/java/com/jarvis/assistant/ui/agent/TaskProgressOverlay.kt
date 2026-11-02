@@ -310,9 +310,10 @@ class TaskProgressOverlay(private val context: Context) {
             MotionEvent.ACTION_UP -> {
                 if (dragging) {
                     dragging = false
-                    clampPosition()
+                    snapToNearestEdge()
                     val preferences = JarvisApp.instance.preferences
                     preferences.taskOverlayFreePosition = true
+                    preferences.taskOverlayEdge = currentEdge
                     preferences.taskOverlayX = params.x
                     preferences.taskOverlayY = params.y
                     return true
@@ -343,6 +344,31 @@ class TaskProgressOverlay(private val context: Context) {
             }
         }
         return false
+    }
+
+    /**
+     * Dock the dragged overlay to its nearest screen edge while preserving its
+     * position along that edge. Coordinates are persisted in top/left gravity.
+     */
+    private fun snapToNearestEdge() {
+        val metrics = context.resources.displayMetrics
+        val width = root.width.takeIf { it > 0 } ?: params.width.takeIf { it > 0 } ?: dp(88)
+        val height = root.height.takeIf { it > 0 } ?: params.height.takeIf { it > 0 } ?: dp(88)
+        val snapped = OverlayDockingPolicy.snap(
+            x = params.x,
+            y = params.y,
+            overlayWidth = width,
+            overlayHeight = height,
+            screenWidth = metrics.widthPixels,
+            screenHeight = metrics.heightPixels,
+            horizontalInset = dp(8),
+            topInset = dp(24)
+        )
+        params.gravity = Gravity.TOP or Gravity.LEFT
+        params.x = snapped.x
+        params.y = snapped.y
+        currentEdge = snapped.edge
+        try { if (attached) windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
     }
 
     private fun applyEdge(edge: String) {
