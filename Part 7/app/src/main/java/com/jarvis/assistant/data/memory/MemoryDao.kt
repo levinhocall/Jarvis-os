@@ -56,14 +56,14 @@ interface MemoryDao {
     @Delete
     suspend fun deleteMemory(memory: MemoryEntity)
 
-    @Query("UPDATE memories SET status = 'DELETED', timestamp = :timestamp WHERE id = :id")
-    suspend fun deleteMemoryById(id: Long, timestamp: Long = System.currentTimeMillis())
+    @Query("UPDATE memories SET status = 'DELETED', timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE id = :id")
+    suspend fun deleteMemoryById(id: Long)
 
-    @Query("UPDATE memories SET status = :status, timestamp = :timestamp WHERE id = :id")
-    suspend fun updateMemoryStatus(id: Long, status: String, timestamp: Long = System.currentTimeMillis())
+    @Query("UPDATE memories SET status = :status, timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE id = :id")
+    suspend fun updateMemoryStatus(id: Long, status: String)
 
-    @Query("UPDATE memories SET status = :status, timestamp = :timestamp WHERE `key` = :key AND status = 'ACTIVE'")
-    suspend fun updateActiveMemoriesByKey(key: String, status: String, timestamp: Long = System.currentTimeMillis())
+    @Query("UPDATE memories SET status = :status, timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE `key` = :key AND status = 'ACTIVE'")
+    suspend fun updateActiveMemoriesByKey(key: String, status: String)
 
     /** Supersede the previous active value and insert its replacement atomically. */
     @Transaction
@@ -72,11 +72,11 @@ interface MemoryDao {
         return insertMemory(memory)
     }
 
-    @Query("UPDATE memories SET status = 'DELETED', timestamp = :timestamp WHERE id = :id")
-    suspend fun softDeleteMemory(id: Long, timestamp: Long = System.currentTimeMillis())
+    @Query("UPDATE memories SET status = 'DELETED', timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE id = :id")
+    suspend fun softDeleteMemory(id: Long)
 
-    @Query("UPDATE memories SET pinned = :pinned, timestamp = :timestamp WHERE id = :id")
-    suspend fun setPinned(id: Long, pinned: Boolean, timestamp: Long = System.currentTimeMillis())
+    @Query("UPDATE memories SET pinned = :pinned, timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE id = :id")
+    suspend fun setPinned(id: Long, pinned: Boolean)
 
     @Query("UPDATE memories SET embeddingJson = :embeddingJson, embeddingModel = :model, embeddingDimension = :dimension WHERE id = :id")
     suspend fun updateEmbedding(id: Long, embeddingJson: String, model: String, dimension: Int)
@@ -84,8 +84,8 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE status = 'ACTIVE' AND embeddingJson IS NOT NULL")
     suspend fun getActiveMemoriesWithEmbeddings(): List<MemoryEntity>
 
-    @Query("UPDATE memories SET status = 'DELETED', timestamp = :timestamp WHERE status != 'DELETED' AND (rawText LIKE '%' || :keyword || '%' OR `key` LIKE '%' || :keyword || '%' OR `value` LIKE '%' || :keyword || '%')")
-    suspend fun deleteMemoriesByKeyword(keyword: String, timestamp: Long = System.currentTimeMillis()): Int
+    @Query("UPDATE memories SET status = 'DELETED', timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE status != 'DELETED' AND (rawText LIKE '%' || :keyword || '%' OR `key` LIKE '%' || :keyword || '%' OR `value` LIKE '%' || :keyword || '%')")
+    suspend fun deleteMemoriesByKeyword(keyword: String): Int
 
     @Query("SELECT * FROM memories WHERE `key` = :key AND category = :category AND status = 'ACTIVE' LIMIT 1")
     suspend fun getMemoryByKeyAndCategory(key: String, category: String): MemoryEntity?
@@ -99,6 +99,6 @@ interface MemoryDao {
     @Query("UPDATE memories SET status = 'DELETED', timestamp = :currentTime WHERE status != 'DELETED' AND expiryTimeMs IS NOT NULL AND expiryTimeMs < :currentTime")
     suspend fun deleteExpiredMemories(currentTime: Long): Int
 
-    @Query("UPDATE memories SET status = 'DELETED', timestamp = :timestamp WHERE status != 'DELETED'")
-    suspend fun clearAllMemories(timestamp: Long = System.currentTimeMillis())
+    @Query("UPDATE memories SET status = 'DELETED', timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE status != 'DELETED'")
+    suspend fun clearAllMemories()
 }
