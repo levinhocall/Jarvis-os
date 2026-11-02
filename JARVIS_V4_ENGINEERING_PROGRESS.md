@@ -415,3 +415,49 @@ Status: **SOURCE IMPLEMENTED IN PART; runtime verification and remaining integra
 - ElevenLabs playback now cancels the previous HTTP request/player before starting a new utterance, reports external playback as speaking, and stops stale external audio when switching back to local TTS. Commit: `050bfaf`, `a28ec5c`.
 - Overlay-only boot restoration now returns `START_NOT_STICKY` so a system null-intent restart cannot accidentally enter the normal microphone standby path. Commit: `0d52367`.
 - These are source-level hardening changes; they have not been compiled or device-tested.
+
+## Follow-up integration batch — production voice ownership and backend health
+
+Status: **VOICE OWNERSHIP IS NOW WIRED IN SOURCE; build/device verification is still pending.** No APK was built.
+
+### Production voice manager wiring
+
+- JarvisConversationService now constructs VoiceSessionManager as the single WebSocket session/reconnect authority for the live conversation.
+- GeminiLiveWebSocket has an explicit external reconnect-owner mode. In that mode, transport failures, quota/key rotation and session renewal notify the service/session manager instead of scheduling a second internal retry loop.
+- API-key rotation is preserved across manager-driven reconnects.
+- Fatal provider access/model/configuration errors move the session manager to ERROR rather than retrying indefinitely. Invalid individual keys can still rotate to another configured key.
+- VoiceSessionManager ignores duplicate close/drop callbacks after the first LIVE→RECONNECTING transition and exposes a teardown barrier so a new session waits for the previous socket to close.
+- Added AudioPipelineManager adapter construction around the existing AudioRecorder. The production service now uses this adapter while preserving the recorder's existing AEC/AGC/noise-suppression, VAD metadata, pre-speech buffering and barge-in callback. The adapter does not create a second AudioRecord.
+- Microphone hardware initialization now runs on the IO dispatcher, and an asynchronous start/stop race explicitly closes the recorder if the conversation has already ended.
+- Added regression tests for duplicate socket drops, fatal transport failures, waiting for socket teardown, and delegated recorder ownership.
+- Key commits: 69e4be6, 9fc92b6, b3a710b, 389de5a, 4a1c126, e2d083d, b93b27a, d7eefd7, 824010f, 5c032db, c19e579, 4726e01, 0dc5510, d81d903, 08030fe, aac487a.
+- This is a source-level production wiring change. It has NOT been compiled, executed against Gemini Live, or tested on the target Android 16 device.
+
+### Backend health monitoring
+
+- Added a Docker Compose healthcheck against /health, with 30-second intervals, retries and a 10-minute startup grace period for the first MiniLM model download.
+- Kept the default loopback-only bind and persistent Docker volumes.
+- Added setup documentation for checking backend health.
+- Key commits: 8869b09, 5f3afb7, 14384cf.
+- Healthcheck and restart policy do not make the service publicly hosted or guarantee an unhealthy container is automatically restarted by Compose. A real VPS deployment and operational monitoring still require a host.
+
+### Still open — do not mark V4 complete yet
+
+- Multi-agent execution: JarvisUnifiedRuntime calls the council's advisory deliberation, and MissionEngine uses the shared self-healing step policy. The separate MultiAgentCouncil.executeCouncilTask path is not the production mission executor. Independent LLM sub-agent scheduling, bounded parallel workers, shared budgets and result reconciliation are not fully wired. MissionEngine/ToolRegistry remains the single execution authority.
+- Bidirectional memory sync: current Android worker is local-authoritative push sync. Remote-to-local pull, durable remote-ID mapping, tombstone download, conflict resolution and cursor persistence still need a Room migration and end-to-end test.
+- Backend deployment: Docker service and healthcheck are committed, but no VPS/always-on host has been provisioned or deployed. Android JARVIS_MEMORY_SYNC_ENDPOINT remains unset by default. Do not expose the unauthenticated personal-memory API directly to the public internet.
+- Neural embedding runtime: Android uses the remote MiniLM provider only when the endpoint is configured and reachable; otherwise it intentionally falls back to deterministic local vectors. The backend model has not been downloaded or exercised in this environment.
+- External TTS: ElevenLabs source integration is present, but live provider response and playback require a real provider key and device test.
+- Android 16 acceptance: microphone routing/AEC, barge-in, overlay boot restoration, foreground-service policy and OEM background behavior require a physical-device test.
+- Build/test verification: no Gradle compile, unit test, instrumentation test or lint run has completed in this pass. No APK was assembled, per instruction.
+- CI: latest inspected GitHub Actions runs #232–#239 ended in startup_failure before jobs were created. Latest run #239: https://github.com/levinhocall/Jarvis-os/actions/runs/41432051730. Zero jobs means Gradle/tests/lint did not run; this is neither a code failure nor a passing verification.
+
+### Verification boundary
+
+- New voice/backend source commits: pushed to main.
+- Source re-fetch: performed for the changed files.
+- Kotlin compilation and tests: not verified.
+- Live WebSocket/recorder operation: not verified.
+- Backend container/model runtime and remote sync: not verified.
+- Physical Android 16 acceptance: not verified.
+- APK: not built.
