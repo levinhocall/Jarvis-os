@@ -133,6 +133,28 @@ def health() -> dict[str, Any]:
     return {"status": "ok", "model": MODEL_NAME, "embedding_dimension": model().get_sentence_embedding_dimension()}
 
 
+
+class EmbeddingRequest(BaseModel):
+    text: str | None = Field(default=None, max_length=4000)
+    texts: list[str] = Field(default_factory=list, max_length=64)
+
+
+@app.post("/v1/embeddings")
+def create_embeddings(request: EmbeddingRequest) -> dict[str, Any]:
+    texts = [value.strip() for value in request.texts if value.strip()]
+    if request.text and request.text.strip():
+        texts = [request.text.strip()]
+    if not texts:
+        raise HTTPException(status_code=400, detail="At least one text is required")
+    if any(len(value) > 4000 for value in texts):
+        raise HTTPException(status_code=413, detail="Embedding input exceeds 4000 characters")
+    vectors = model().encode(texts, normalize_embeddings=True, convert_to_numpy=True)
+    return {
+        "model": MODEL_NAME,
+        "dimension": int(vectors.shape[1]),
+        "embeddings": [vector.astype(np.float32).tolist() for vector in vectors],
+    }
+
 @app.post("/v1/memories")
 def add_memory(request: AddRequest) -> dict[str, Any]:
     scope = scope_value(request.user_id or request.agent_id)
