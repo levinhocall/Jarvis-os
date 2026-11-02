@@ -627,11 +627,8 @@ class JarvisConversationService : Service() {
         taskProgressOverlayJob = serviceScope.launch(Dispatchers.Main.immediate) {
             combine(
                 com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState,
-                JarvisApp.isAppForeground,
-                _isSessionOn,
-                _isStandby,
                 conversationState
-            ) { snapshot, appForeground, sessionOn, standbyOn, state ->
+            ) { snapshot, state ->
                 Triple(
                     snapshot,
                     JarvisApp.instance.preferences.taskOverlayMode == "always",
@@ -664,7 +661,6 @@ class JarvisConversationService : Service() {
                 }
                 val snapshot = com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.value
                 val prefs = (application as JarvisApp).preferences
-                val appForeground = JarvisApp.isAppForeground.value
                 val showIdleAvatar = prefs.taskOverlayMode == "always"
                 val availability = listOf(
                     prefs.isTaskOverlayEnabled,
@@ -672,9 +668,6 @@ class JarvisConversationService : Service() {
                     prefs.taskOverlayAvatar,
                     prefs.taskOverlayMode,
                     prefs.taskOverlayEdge,
-                    appForeground,
-                    _isSessionOn.value,
-                    _isStandby.value,
                     conversationState.value
                 )
                 if (availability != previousAvailability) {
