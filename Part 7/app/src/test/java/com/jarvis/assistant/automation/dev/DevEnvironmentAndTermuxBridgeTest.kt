@@ -48,7 +48,7 @@ class DevEnvironmentAndTermuxBridgeTest {
         assertFalse("GitHub token was not redacted!", masked.contains(gitHubToken))
         assertTrue(masked.contains("AIza[MASKED]"))
         assertTrue(masked.contains("sk-[MASKED]"))
-        assertTrue(masked.contains("ghp_[MASKED]"))
+        assertTrue(masked.contains("gh-token-[MASKED]"))
     }
 
     // --- 2. Termux Result Handling Tests ---
@@ -109,6 +109,7 @@ class DevEnvironmentAndTermuxBridgeTest {
     @Test
     fun `detectEnvironment correctly identifies host dev environment`() {
         val hostDir = "/root/jarvis-os-ref/Part 7"
+        org.junit.Assume.assumeTrue("Host toolchain fixture is unavailable", File(hostDir).isDirectory)
         val capability = DevToolRegistry.detectEnvironment(hostDir, context = null)
 
         // In Linux host container where /root/jarvis-os-ref and /usr/bin/git exist

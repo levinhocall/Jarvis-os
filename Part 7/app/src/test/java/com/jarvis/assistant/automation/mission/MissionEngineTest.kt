@@ -211,32 +211,38 @@ class MissionEngineTest {
 
         assertTrue(MissionEngine.resumeMission(null, mission.missionId))
         kotlinx.coroutines.withTimeout(3_000L) {
-            while (MissionEngine.activeMission.value?.status != MissionOverallStatus.COMPLETED) {
+            while (MissionEngine.activeMission.value?.isFinished != true) {
                 kotlinx.coroutines.delay(20L)
             }
         }
-        assertEquals(MissionOverallStatus.COMPLETED, MissionEngine.activeMission.value?.status)
+        // The prepared step must not repeat; the pending send cannot execute without Accessibility.
+        val resumed = MissionEngine.activeMission.value!!
+        assertEquals(MissionOverallStatus.PARTIALLY_COMPLETED, resumed.status)
+        assertEquals(1, resumed.steps.count { it.status == MissionStepStatus.COMPLETED })
+        assertEquals(MissionStepStatus.BLOCKED, resumed.steps.single { it.toolName == "whatsapp_send" }.status)
     }
+
     @Test
     fun testMissionCancellation_inFlight() = runBlocking {
-        // Mock step that simulates latency
-        MissionEngine.toolExecutor = { _, _ ->
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val executedTools = mutableListOf<String>()
+        MissionEngine.toolExecutor = { step, _ ->
+            executedTools.add(step.toolName)
+            started.complete(Unit)
             kotlinx.coroutines.delay(500L)
-            Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, "OK"))
+            Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Prepared"))
         }
-
-        val mission = MissionEngine.startMission(null, "play AC/DC Back in Black")
+        val mission = MissionEngine.startMission(null, "Send WhatsApp to Tony saying Cancel test")
+        MissionEngine.resolveApproval(mission.missionId, approved = true, context = null)
+        kotlinx.coroutines.withTimeout(3_000L) { started.await() }
         MissionEngine.cancelMission(mission.missionId, "User said stop")
-
         kotlinx.coroutines.withTimeout(3_000L) {
             while (MissionEngine.activeMission.value?.status != MissionOverallStatus.CANCELLED) {
                 kotlinx.coroutines.delay(20L)
             }
         }
-        val active = MissionEngine.activeMission.value
-        assertEquals(MissionOverallStatus.CANCELLED, active?.status)
-        assertTrue(active?.steps?.any { it.verificationEvidence?.isVerified == true } == true ||
-            active?.steps?.any { it.status == MissionStepStatus.CANCELLED } == true)
+        assertEquals(listOf("whatsapp_prepare"), executedTools)
+        assertEquals(MissionOverallStatus.CANCELLED, MissionEngine.activeMission.value?.status)
     }
 
     @Test

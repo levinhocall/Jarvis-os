@@ -27,6 +27,7 @@ class CapabilitySandbox(
         // NFKC normalization and removal of invisible formatting characters prevent
         // common full-width / zero-width character evasions of phrase checks.
         val normalized = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFKC)
+            .replace(Regex("""\\u(?:200[b-d]|feff)""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("[\\u200B-\\u200D\\uFEFF]"), "")
             .replace(Regex("[\\p{Cc}&&[^\\r\\n\\t]]"), " ")
             .lowercase(java.util.Locale.ROOT)
@@ -50,7 +51,7 @@ class CapabilitySandbox(
         )
 
         for ((phrase, reason) in maliciousPhrases) {
-            if (normalized.contains(phrase)) {
+            if (normalized.contains(phrase) || normalized.replace(" ", "").contains(phrase.replace(" ", ""))) {
                 return SandboxCheckResult.Blocked(
                     threatType = ThreatType.PROMPT_INJECTION,
                     reason = reason,

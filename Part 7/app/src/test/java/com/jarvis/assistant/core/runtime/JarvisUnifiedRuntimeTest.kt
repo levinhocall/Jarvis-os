@@ -107,7 +107,8 @@ class JarvisUnifiedRuntimeTest {
         val fakeException = RuntimeException("Simulated unexpected NullPointerException")
         val recovered = runtime.recoverFromCrash(fakeException)
 
-        assertTrue(recovered.errorSummary.contains("Simulated unexpected NullPointerException"))
+        assertFalse(recovered.errorSummary.contains("Simulated unexpected NullPointerException"))
+        assertTrue(recovered.errorSummary.contains("could not be completed"))
         assertEquals(
             com.jarvis.assistant.data.model.ConversationState.IDLE,
             runtime.ambientCoordinator.conversationState.value
@@ -117,7 +118,8 @@ class JarvisUnifiedRuntimeTest {
     @Test
     fun `crash in a handler during processUserRequest triggers RecoveredCrash and state reset`() = runBlocking {
         val recovered = runtime.recoverFromCrash(IllegalStateException("Simulated handler crash"))
-        assertTrue(recovered.errorSummary.contains("IllegalStateException"))
+        assertFalse(recovered.errorSummary.contains("IllegalStateException"))
+        assertTrue(recovered.errorSummary.contains("internal error"))
         assertEquals(
             com.jarvis.assistant.data.model.ConversationState.IDLE,
             runtime.ambientCoordinator.conversationState.value

@@ -278,7 +278,11 @@ class AutonomousSoftwareEngineeringAgentTest {
             devAgent,
             isApprovedByUser = true
         )
-        assertTrue(approvedSafeResult is DevToolResult.Success)
+        if (DevToolRegistry.detectEnvironment(project.workspaceRoot).canExecuteCommands) {
+            assertTrue(approvedSafeResult is DevToolResult.Success)
+        } else {
+            assertTrue("Approval must not fabricate an unavailable toolchain", approvedSafeResult is DevToolResult.EnvironmentUnsupported)
+        }
 
         val mismatchedApproval = cmdTool.execute(
             project,
@@ -374,7 +378,7 @@ class AutonomousSoftwareEngineeringAgentTest {
         assertEquals(DevStepStatus.FAILED, plan.status)
         assertEquals("class MainActivity { val appName = \"Jarvis\" }", srcFile.readText())
         assertTrue(report.testResultsSummary.contains("Not run"))
-        assertTrue(report.limitations.any { it.contains("proposal provider") })
+        assertTrue(report.limitations.any { it.contains("Proposal stage") && it.contains("not integrated") })
 
         // Verify project facts were persisted in Memory with the truthful final status.
         val allMemories = memoryRepo.getAllMemories()

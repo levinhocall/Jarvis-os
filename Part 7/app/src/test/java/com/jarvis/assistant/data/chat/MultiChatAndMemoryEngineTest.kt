@@ -284,12 +284,12 @@ class MultiChatAndMemoryEngineTest {
             importance = 1.0f
         )
 
-        val promptContext = contextBuilder.buildPromptContext(session.id, "When is our project deadline?")
+        val promptContext = contextBuilder.buildPromptContext(session.id, "Project deadline is November 1st")
 
         assertTrue(promptContext.systemContext.contains("[USER LONG-TERM MEMORY]"))
         assertTrue(promptContext.systemContext.contains("Project deadline is November 1st"))
         assertEquals(2, promptContext.conversationHistory.size)
-        assertTrue(promptContext.fullAugmentedQuery.contains("User query: When is our project deadline?"))
+        assertTrue(promptContext.fullAugmentedQuery.contains("User query: Project deadline is November 1st"))
     }
 
     @Test

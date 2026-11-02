@@ -180,7 +180,7 @@ class MemoryManager(
         if (clean.isBlank() || clean.equals("my favorite song", ignoreCase = true) || clean.equals("favorite song", ignoreCase = true)) return
 
         val currentFav = preferences.recordSongPlay(clean)
-                    Log.i(TAG, "Updated song play statistics (title and listening history omitted)")
+        Log.i(TAG, "Updated song play statistics (title and listening history omitted)")
 
         scope.launch(Dispatchers.IO) {
             repository.saveMemory(

@@ -261,7 +261,12 @@ class MemoryRepository(
 
     suspend fun exportMemoriesAsJson(): String {
         val list = memoryDao.getAllMemories()
-        return gson.toJson(list)
+        require(list.size <= 10_000) { "Memory backup exceeds the import record limit." }
+        val json = gson.toJson(list)
+        require(json.toByteArray(Charsets.UTF_8).size <= 5_000_000) {
+            "Memory backup exceeds the import size limit."
+        }
+        return json
     }
 
     suspend fun importMemoriesFromJson(jsonStr: String): Int {

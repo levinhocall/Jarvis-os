@@ -21,14 +21,15 @@ class ConversationTurnMapperTest {
     fun preservesPendingUserTurnAndAssistantOnlyMessages() {
         val turns = ConversationTurnMapper.toTurns(
             listOf(
-                ChatMessageEntity(id = "u1", sessionId = "s", role = "USER", content = "Pending", timestamp = 10),
-                ChatMessageEntity(id = "a1", sessionId = "s", role = "ASSISTANT", content = "Unpaired", timestamp = 20)
+                ChatMessageEntity(id = "a1", sessionId = "s", role = "ASSISTANT", content = "Unpaired", timestamp = 10),
+                ChatMessageEntity(id = "u1", sessionId = "s", role = "USER", content = "Pending", timestamp = 20)
             )
         )
         assertEquals(2, turns.size)
-        assertEquals("", turns[0].jarvisResponse)
-        assertEquals("", turns[1].userTranscript)
-        assertEquals("Unpaired", turns[1].jarvisResponse)
+        assertEquals("", turns[0].userTranscript)
+        assertEquals("Unpaired", turns[0].jarvisResponse)
+        assertEquals("Pending", turns[1].userTranscript)
+        assertEquals("", turns[1].jarvisResponse)
     }
 
     @Test

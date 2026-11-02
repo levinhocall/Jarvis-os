@@ -123,7 +123,7 @@ class ProactiveIntelligenceTest {
     }
 
     @Test
-    fun testLowBatteryEventTrigger_deliversHighConfidenceAlert() {
+    fun testLowBatteryEventTrigger_doesNotClaimDeliveryWithoutAndroidContext() {
         // Battery at 12% and not charging during daytime
         val decision = ProactiveAssistantCoordinator.onLowBatteryDetected(
             batteryPct = 12,
@@ -131,7 +131,8 @@ class ProactiveIntelligenceTest {
             currentHourOverride = 14
         )
         assertNotNull(decision)
-        assertTrue(decision?.isAllowed == true)
+        assertTrue(decision?.isAllowed == false)
+        assertTrue(decision?.reason?.contains("No application context") == true)
 
         // Battery at 80% -> No alert triggered (returns null)
         val normalDecision = ProactiveAssistantCoordinator.onLowBatteryDetected(

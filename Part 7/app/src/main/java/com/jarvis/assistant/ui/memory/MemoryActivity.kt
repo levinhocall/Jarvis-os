@@ -21,6 +21,10 @@ import com.jarvis.assistant.data.memory.MemoryEntity
 import com.jarvis.assistant.databinding.ActivityMemoryBinding
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.activity.result.contract.ActivityResultContracts
+import com.jarvis.assistant.data.memory.MemoryBackupPolicy
 import java.util.Locale
 
 class MemoryActivity : AppCompatActivity() {
@@ -32,6 +36,42 @@ class MemoryActivity : AppCompatActivity() {
     private var allMemories: List<MemoryEntity> = emptyList()
     private var selectedCategory: String = "All"
     private var searchQuery: String = ""
+
+    private val exportBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) transferBackup(uri, export = true)
+    }
+    private val importBackup = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) transferBackup(uri, export = false)
+    }
+
+    private fun transferBackup(uri: android.net.Uri, export: Boolean) {
+        if (!MemoryBackupPolicy.isOnDeviceDocument(uri.scheme, uri.authority)) {
+            Toast.makeText(this, "Choose an on-device Documents or Downloads location. Cloud providers are disabled for memory backups.", Toast.LENGTH_LONG).show()
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                val message = withContext(Dispatchers.IO) {
+                    if (export) {
+                        val json = memoryRepo.exportMemoriesAsJson()
+                        val output = contentResolver.openOutputStream(uri, "wt") ?: error("Output unavailable")
+                        output.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+                        "Memory backup saved on this device"
+                    } else {
+                        val input = contentResolver.openInputStream(uri) ?: error("Input unavailable")
+                        val json = input.use { MemoryBackupPolicy.readBoundedJson(it) }
+                        val count = memoryRepo.importMemoriesFromJson(json)
+                        if (count > 0) "Imported $count memories" else "No valid active memories were imported"
+                    }
+                }
+                Toast.makeText(this@MemoryActivity, message, Toast.LENGTH_LONG).show()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                Toast.makeText(this@MemoryActivity, "Memory backup could not be processed", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.jarvis.assistant.util.ThemeManager.applyTheme(this)
@@ -50,6 +90,15 @@ class MemoryActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.btnBack.setOnClickListener { finish() }
         binding.btnAddMemory.setOnClickListener { showAddMemoryDialog() }
+        binding.btnImportMemories.setOnClickListener { importBackup.launch(arrayOf("application/json", "text/plain")) }
+        binding.btnExportMemories.setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Export private memories?")
+                .setMessage("This creates a readable JSON backup on this device. Anyone with access to the file can read it. Cloud destinations are disabled.")
+                .setPositiveButton("EXPORT") { _, _ -> exportBackup.launch("jarvis-memory.json") }
+                .setNegativeButton("CANCEL", null)
+                .show()
+        }
     }
 
     private fun setupRecyclerView() {

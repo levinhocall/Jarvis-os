@@ -901,6 +901,8 @@ class JarvisConversationService : Service() {
     private suspend fun generateCurrentSystemPrompt(): String {
         val app = application as? JarvisApp ?: return ""
         return withContext(Dispatchers.IO) {
+            // Preserve local expiry housekeeping without including its records in cloud context.
+            app.memoryRepository.cleanupExpiredMemories()
             // Stored memories, profiles and prior transcripts must never enter cloud prompts.
             com.jarvis.assistant.util.PromptGenerator.generateSystemPrompt(
                 personality = preferences.personality,

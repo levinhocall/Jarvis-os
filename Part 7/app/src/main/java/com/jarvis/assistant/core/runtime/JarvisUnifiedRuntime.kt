@@ -402,7 +402,7 @@ class JarvisUnifiedRuntime(
      * Uncaught crash recovery: safe forensics capture and state machine reset.
      */
     fun recoverFromCrash(t: Throwable): UnifiedExecutionResult.RecoveredCrash {
-        Log.e("JarvisUnifiedRuntime", "Request execution failed; returning runtime to a safe state.", t)
+        Log.e("JarvisUnifiedRuntime", "Request execution failed; returning runtime to a safe state (${t.javaClass.simpleName}).")
         ambientCoordinator.transitionTo(ConversationState.RECOVERING, "request_recovery")
         ambientCoordinator.transitionTo(ConversationState.IDLE, "recovery_complete")
         // Keep exception messages and possible prompt/provider payloads out of user-visible responses.

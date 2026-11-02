@@ -111,11 +111,10 @@ class MissionPersistenceAndTriggerTest {
         // Strict verification: Consequential in-flight step must NEVER be silently retried!
         assertEquals("In-flight non-idempotent step must be marked UNVERIFIED",
             MissionStepStatus.UNVERIFIED, inFlightStepAfterResume.status)
-        assertEquals("Mission overall must halt for user approval",
-            MissionOverallStatus.WAITING_FOR_APPROVAL, resumedMission.status)
-        assertEquals("Approval state must revert to PENDING_APPROVAL",
-            MissionApprovalState.PENDING_APPROVAL, resumedMission.approvalState)
-        assertTrue(inFlightStepAfterResume.failureReason?.contains("Process died while step was in flight") == true)
+        assertEquals("Unknown outcomes must halt for review rather than invite replay approval",
+            MissionOverallStatus.UNVERIFIED, resumedMission.status)
+        assertTrue(resumedMission.outcomeSummary?.contains("No automatic retry was performed") == true)
+        assertTrue(inFlightStepAfterResume.failureReason?.contains("will not replay it automatically") == true)
     }
 
     @Test

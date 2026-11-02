@@ -61,6 +61,26 @@
         android:orientation="vertical"
         android:paddingHorizontal="16dp">
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/btnImportMemories"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Import backup" />
+            <Button
+                android:id="@+id/btnExportMemories"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Export backup" />
+        </LinearLayout>
+
         <!-- Search Input -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/tilSearch"

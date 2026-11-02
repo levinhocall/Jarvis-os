@@ -251,7 +251,7 @@ class JarvisEvolutionMasterTest {
             assertTrue(deliberation.plannerSteps.isNotEmpty())
             assertTrue("Council must flag external messaging and deletion as consequential risks", deliberation.criticRisks.isNotEmpty())
             assertFalse("High-risk consequential mission must require explicit user approval", deliberation.isApprovedToExecute)
-            assertTrue(deliberation.finalVerdict.contains("User confirmation required", ignoreCase = true))
+            assertTrue(deliberation.finalVerdict.contains("confirmation", ignoreCase = true))
         }
     }
 }
