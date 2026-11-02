@@ -82,7 +82,7 @@ class ChatFragment : Fragment() {
         binding.btnChatNew.setOnClickListener {
             AlertDialog.Builder(requireContext())
                 .setTitle("New Conversation")
-                .setMessage("Start a new conversation and clear current history?")
+                .setMessage("Start a new conversation? Your previous chats will remain available in History.")
                 .setPositiveButton("New Chat") { _, _ ->
                     val app = JarvisApp.instance
                     viewLifecycleOwner.lifecycleScope.launch {
