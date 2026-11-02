@@ -233,6 +233,17 @@ class VoiceSessionManager(
         }
     }
 
+    /** Stops retrying when the transport reports a non-recoverable configuration/access error. */
+    @Synchronized
+    fun onFatalConnectionError(reason: String) {
+        if (_sessionState.value == SessionLifecycleState.DISCONNECTED) return
+        sessionGeneration.incrementAndGet()
+        reconnectJob?.cancel()
+        reconnectJob = null
+        _lastError.value = reason
+        transitionState(SessionLifecycleState.ERROR, "ERROR")
+    }
+
     /**
      * Clears cached live error state.
      */
