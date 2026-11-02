@@ -18,6 +18,41 @@ class LongHorizonMissionTest {
         coordinator = LongHorizonMissionCoordinator(storage)
     }
 
+
+    @Test
+    fun `mission state and non-idempotent replay guard survive coordinator recreation`() {
+        val step = MissionStep(
+            stepId = "transfer_once",
+            title = "Transfer",
+            toolName = "transfer",
+            isIdempotent = false
+        )
+        val mission = coordinator.createMission(
+            "Persistent mission",
+            listOf(MilestoneDefinition(id = "billing", title = "Billing", steps = listOf(step)))
+        )
+        coordinator.startOrResume(mission.missionId)
+        coordinator.recordStepExecution(
+            mission.missionId,
+            "billing",
+            step.stepId,
+            isSuccess = true,
+            isNonIdempotent = true,
+            outputVariables = mapOf("receipt" to "R-100")
+        )
+
+        val recreatedCoordinator = LongHorizonMissionCoordinator(storage)
+        val restored = recreatedCoordinator.getMission(mission.missionId)
+
+        assertNotNull(restored)
+        assertEquals("R-100", restored!!.stateVariables["receipt"])
+        assertTrue(restored.executedNonIdempotentStepIds.contains(step.stepId))
+        assertTrue(
+            recreatedCoordinator.checkStepEligibility(mission.missionId, "billing", step)
+                is StepExecutionEligibility.ReplayPrevented
+        )
+    }
+
     @Test
     fun `milestone dependency blocks execution until prerequisite milestone completes`() {
         val m1 = MilestoneDefinition(
