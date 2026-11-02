@@ -355,6 +355,14 @@ class JarvisUnifiedRuntime(
 
             val resultSummary = mission.outcomeSummary?.ifBlank { null }
                 ?: "Mission ${mission.status.name.lowercase().replace('_', ' ')}: ${mission.goal}"
+            // Reconcile advisory sub-agent findings into the user-visible result without
+            // treating model text as execution evidence or granting it tool authority.
+            val advisoryReview = councilReview.agentReports.entries.joinToString(" | ") { (role, report) ->
+                role + ": " + report.take(180)
+            }.take(700)
+            val reconciledSummary = if (advisoryReview.isNotBlank()) {
+                resultSummary + "\n\nCouncil review (advisory): " + advisoryReview
+            } else resultSummary
 
             when (mission.status) {
                 MissionOverallStatus.COMPLETED -> {
@@ -366,7 +374,7 @@ class JarvisUnifiedRuntime(
                         excerpt = input
                     )
                     UnifiedExecutionResult.Success(
-                        outputMessage = resultSummary,
+                        outputMessage = reconciledSummary,
                         specialistHandled = route.specialistTarget,
                         provenanceRecordId = record.id
                     )
