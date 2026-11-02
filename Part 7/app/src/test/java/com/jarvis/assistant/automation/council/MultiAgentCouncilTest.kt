@@ -2,6 +2,14 @@ package com.jarvis.assistant.automation.council
 
 import com.jarvis.assistant.automation.mission.EvidenceType
 import com.jarvis.assistant.automation.mission.MissionVerificationEvidence
+import com.jarvis.assistant.automation.mission.MissionEngine
+import com.jarvis.assistant.automation.mission.ToolDefinition
+import com.jarvis.assistant.automation.agent.LlmFunctionCallProvider
+import com.jarvis.assistant.automation.agent.LlmPlanner
+import com.jarvis.assistant.automation.agent.LlmPlannerStepRecord
+import com.jarvis.assistant.automation.agent.LlmStepDecision
+import kotlinx.coroutines.delay
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -107,5 +115,46 @@ class MultiAgentCouncilTest {
         assertEquals(0, outcome.executionStepsCount)
         assertTrue(outcome.failureReason?.contains("Clarification required") == true)
         assertTrue(outcome.leadResponse.contains("contact", ignoreCase = true))
+    }
+    @Test
+    fun testCouncilRunsIndependentSubAgentsInParallelWithinSharedBudget() = runBlocking {
+        val previousPlanner = MissionEngine.llmPlanner
+        val activeCalls = AtomicInteger(0)
+        val maxConcurrent = AtomicInteger(0)
+        val totalCalls = AtomicInteger(0)
+        val provider = object : LlmFunctionCallProvider {
+            override val providerId: String = "council-test-provider"
+            override suspend fun isAvailable(): Boolean = true
+            override suspend fun predictStep(goal: String, history: List<LlmPlannerStepRecord>, availableTools: List<ToolDefinition>): LlmStepDecision =
+                LlmStepDecision.Abort("Not used by advisory test")
+            override suspend fun reason(prompt: String): String? {
+                totalCalls.incrementAndGet()
+                val active = activeCalls.incrementAndGet()
+                maxConcurrent.updateAndGet { current -> maxOf(current, active) }
+                try {
+                    delay(120L)
+                    return "REVIEW: independent findings recorded"
+                } finally {
+                    activeCalls.decrementAndGet()
+                }
+            }
+        }
+        MissionEngine.llmPlanner = LlmPlanner(provider)
+        try {
+            val outcome = MultiAgentCouncil.executeCouncilTaskForTest(
+                goal = "Search recent Android security updates",
+                simulatedExecutor = {
+                    true to MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Test action verified")
+                }
+            )
+            assertTrue(outcome.isSuccess)
+            assertEquals(3, outcome.subAgentCallsUsed)
+            assertEquals(3, totalCalls.get())
+            assertEquals(3, outcome.agentReports.size)
+            assertTrue("Sub-agents should overlap in time", maxConcurrent.get() > 1)
+        } finally {
+            MissionEngine.llmPlanner = previousPlanner
+            assertTrue(MultiAgentCouncil.activeSubAgents.value.isEmpty())
+        }
     }
 }
