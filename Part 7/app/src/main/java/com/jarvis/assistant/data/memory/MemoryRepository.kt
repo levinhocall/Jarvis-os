@@ -307,7 +307,7 @@ class MemoryRepository(
     }
 
     suspend fun updateMemory(memory: MemoryEntity) {
-        memoryDao.updateMemory(memory)
+        memoryDao.updateMemory(memory.copy(timestamp = System.currentTimeMillis()))
     }
 
     suspend fun deleteMemoryById(id: Long) {
