@@ -337,3 +337,75 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - `AutonomousGoalAgent` remains a narrow legacy product-search flow; the production general mission path is `JarvisUnifiedRuntime` → `MissionEngine`/`LongHorizonMissionCoordinator`. `SelfHealingAgentLoop` and `UniversalActionDispatcher` remain separate frameworks without a safe one-to-one adapter to the production `ToolRegistry`; they were not wired as a second execution authority.
 - CI remains blocked before job creation. Latest runs #197–#204 all concluded `startup_failure`; run #204 is https://github.com/levinhocall/Jarvis-os/actions/runs/41416628979. GitHub returned zero jobs for the inspected run, so Gradle, lint, and tests did not execute. This is not a code test failure and not a pass.
 - No APK was assembled.
+
+## V4 integration batch — voice, mission recovery, overlay boot recovery, neural memory and external TTS
+
+Status: **SOURCE IMPLEMENTED IN PART; runtime verification and remaining integrations are still open.** No APK was built.
+
+### Implemented in source
+
+1. **Overlay boot/app-update recovery**
+   - Added `OverlayBootReceiver` for `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED`.
+   - It starts an overlay-only service path only when the existing overlay is enabled, set to `always`, and Android's draw-over-other-apps access is already granted.
+   - The new `ACTION_RESTORE_OVERLAY` path starts the service as media-playback-only and deliberately does not start microphone capture, wake-word listening, or a voice session from boot.
+   - Commits: `26854ab`, `adf7256`, `417dcf6`.
+   - Not yet verified on Android 16 hardware. Android may still defer/block startup under OEM battery policies or foreground-service policy; the permission must already be granted.
+
+2. **MissionEngine + self-healing orchestration**
+   - Production `MissionEngine.executeMission` now invokes the shared `SelfHealingAgentLoop` around the existing `executeSingleStep`/ToolRegistry authority. It does not introduce a second tool executor.
+   - Idempotent failures can retry only after the recovery callback re-captures a fresh, non-secure Accessibility screen for accessibility tools.
+   - A tool result that may have mutated state but lacks verification is never retried. The mission is marked UNVERIFIED and later steps are stopped.
+   - Failed recovery stops before a blind retry.
+   - Added regression tests for mutation-without-verification and failed recovery.
+   - Commits: `3a7f052`, `7e6c5ef`, `47397fb`.
+   - This wires self-healing into the production sequential mission engine. A general multi-agent/sub-agent delegation scheduler is **not** yet implemented; the current LLM planner and ToolRegistry remain the production planning/execution path.
+
+3. **Self-hosted Mem0-style personal memory backend**
+   - Added `memory-backend/` FastAPI service using SQLite/WAL and pretrained `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional neural embeddings).
+   - Added add/search/list/get/update/soft-delete APIs plus batch `/v1/embeddings`.
+   - Docker Compose persists the database and model cache. Port 8765 binds to loopback by default.
+   - This is a Mem0-style, self-hosted alternative, **not** the official Mem0 Cloud product and not a claim of full Mem0 API parity.
+   - No login, signup, account, subscription, or application authentication layer was added. `user_id` is only a data-partition label, not a login identity.
+   - Commits: `d50c1fe`, `472019d`, `d20459c`, `f7f5a61`, `5a3ed7b`, `f6524d4`.
+
+4. **Android neural embedding and sync foundation**
+   - Added `RemoteNeuralEmbeddingProvider`: uses the backend's MiniLM embeddings when configured/reachable and falls back to local 384-D deterministic vectors when offline.
+   - MemoryRepository gradually re-embeds up to 24 stale legacy rows per semantic-search request.
+   - Added Room sync query that includes deleted/superseded rows; WorkManager queues six-hour connected-network sync only when `JARVIS_MEMORY_SYNC_ENDPOINT` is configured.
+   - Stable per-row IDs make repeated uploads idempotent; local deleted/superseded/sensitive/expired memories are not uploaded and previously synced rows receive remote soft-delete.
+   - Commits: `b4bf041`, `268ba82`, `cb2007f`, `ac5661e`, `3e763bf`, `2099176`, `f6524d4`, `bb9418d`, `effb180`, `b9f8953`, `b84fe70`.
+   - Current sync is **one-way local-to-server backup/sync**, not bidirectional multi-device merge. The endpoint is not configured in this repository. Full remote-to-local reconciliation and conflict resolution remain open.
+
+5. **External voice provider**
+   - Added ElevenLabs REST TTS using the existing encrypted provider-key pool under provider ID `elevenlabs`.
+   - API Connection settings now expose an ElevenLabs key entry/management row. When a key exists, the TTS router tries ElevenLabs multilingual v2; on network/API/playback failure it falls back to Android TextToSpeech.
+   - Voice ID is configurable through `JARVIS_ELEVENLABS_VOICE_ID`; default is the provider's standard Rachel voice ID.
+   - Commits: `8891b81`, `15f9ab5`, `667aa72`.
+   - Requires the user's own ElevenLabs API key and a plan that permits the selected voice/model. No app login/auth was introduced. Provider call and playback have not been live-tested.
+
+### Still open / not to be marked complete
+
+- **Production WebSocket/recorder manager ownership:** `JarvisConversationService` still owns the active `GeminiLiveWebSocket` and `AudioRecorder`. The hardened `VoiceSessionManager` and `AudioPipelineManager` remain collaborators not yet substituted as the actual live transport/capture owners. Forcing them into the current callback-heavy voice service without an integration test would risk two reconnect loops or duplicate microphone ownership. This item remains OPEN.
+- **Full agent orchestration:** self-healing is now wired into MissionEngine, but delegated sub-agents, independent worker scheduling, shared mission budgets, and result reconciliation are not complete.
+- **Bidirectional memory sync:** remote-to-local pull, cross-device conflict resolution, remote tombstone download, and sync cursor persistence remain open. Current implementation pushes local state to the private backend.
+- **Backend deployment/configuration:** Docker service source is committed, but it has not been deployed to a host. The Android endpoint remains unset; the first backend start must download the MiniLM model. Keep the service private; the Compose default binds only to loopback.
+- **Physical Android 16 checks:** boot receiver startup, OEM background restrictions, overlay restoration, voice audio routing/AEC, and external TTS playback need device verification.
+- **Build/test verification:** no Gradle compile, unit test, instrumentation test, lint, or APK build has been run in this pass. Source commits and authored tests are not proof of a successful build.
+- **CI:** prior Actions runs failed with `startup_failure` before job creation (zero jobs). The latest commits still require a successful workflow run; do not infer success from a push trigger.
+
+### No-auth decision
+
+- No login, signup, user account, subscription, or app authentication system has been added.
+- External API keys are only provider credentials for optional ElevenLabs TTS. The memory backend's `user_id` is a partition label only.
+- The backend intentionally has no application auth. It must remain loopback/private-LAN or behind trusted network-level controls; never expose the unauthenticated memory API directly to the public internet.
+
+### Verification boundary
+
+- GitHub source commits: VERIFIED as pushed to `main`.
+- Android/Gradle compilation: NOT RUN.
+- Unit/instrumentation tests: NOT RUN.
+- Backend container/model startup: NOT RUN.
+- Remote memory round-trip: NOT RUN.
+- ElevenLabs live request/audio playback: NOT RUN.
+- Android 16 boot/overlay/voice device test: NOT RUN.
+- APK build: NOT RUN, per instruction.
