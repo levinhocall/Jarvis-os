@@ -38,6 +38,10 @@ class AudioRecorder(
     private val lifecycleGeneration = AtomicLong(0L)
     val isMuted = AtomicBoolean(false)
 
+    /** True while this recorder owns the microphone capture session. */
+    val isActive: Boolean
+        get() = isRecording.get()
+
     private fun releaseAudioEffects(reason: String) {
         val aec = echoCanceler.also { echoCanceler = null }
         val ns = noiseSuppressor.also { noiseSuppressor = null }
