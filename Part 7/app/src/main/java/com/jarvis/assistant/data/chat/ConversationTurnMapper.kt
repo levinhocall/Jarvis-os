@@ -2,9 +2,15 @@ package com.jarvis.assistant.data.chat
 
 import com.jarvis.assistant.data.model.ChatTurn
 
-/** Maps the canonical Room transcript into the legacy UI turn shape. */
+/** Maps Room messages into legacy UI turns without pairing messages across sessions. */
 object ConversationTurnMapper {
-    fun toTurns(messages: List<ChatMessageEntity>): List<ChatTurn> {
+    fun toTurns(messages: List<ChatMessageEntity>): List<ChatTurn> =
+        messages.groupBy { it.sessionId }
+            .values
+            .flatMap(::toSessionTurns)
+            .sortedBy { it.timestamp }
+
+    private fun toSessionTurns(messages: List<ChatMessageEntity>): List<ChatTurn> {
         val turns = mutableListOf<ChatTurn>()
         messages.sortedBy { it.timestamp }.forEach { message ->
             when (message.role.uppercase()) {
