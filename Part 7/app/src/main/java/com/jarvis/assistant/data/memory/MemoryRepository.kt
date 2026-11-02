@@ -38,7 +38,29 @@ class MemoryRepository(
      * Semantic vector search combined with keyword retrieval.
      */
     suspend fun searchMemoriesSemantic(query: String, limit: Int = 10): List<ScoredMemory> {
-        val active = memoryDao.getAllMemories()
+        var active = memoryDao.getAllMemories()
+        // Gradually re-embed older rows after switching from the legacy 128-D local vectors
+        // to the configured neural backend. A bounded batch avoids long UI/background stalls.
+        val stale = active.filter {
+            it.embeddingJson.isNullOrBlank() ||
+                it.embeddingDimension != embeddingProvider.dimension ||
+                it.embeddingModel != embeddingProvider.modelName
+        }.take(24)
+        if (stale.isNotEmpty()) {
+            val vectors = embeddingProvider.generateEmbeddings(stale.map { "${it.key} ${it.value} ${it.rawText}" })
+            stale.forEachIndexed { index, memory ->
+                val vector = vectors.getOrNull(index)
+                if (vector != null && vector.size == embeddingProvider.dimension) {
+                    memoryDao.updateEmbedding(
+                        memory.id,
+                        vectorSearchEngine.serializeEmbedding(vector),
+                        embeddingProvider.modelName,
+                        embeddingProvider.dimension
+                    )
+                }
+            }
+            active = memoryDao.getAllMemories()
+        }
         return vectorSearchEngine.search(query, active, embeddingProvider, limit)
     }
 
