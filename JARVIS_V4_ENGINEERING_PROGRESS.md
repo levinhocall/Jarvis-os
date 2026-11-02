@@ -154,6 +154,16 @@ Status: VERIFIED (static repository audit and architecture inventory).
 - Audit report commit: `8bdafb11e3cd4af5597bb021f60e5d77e9427c40`.
 - No Gradle task, APK build, unit test, instrumentation test, lint, or physical-device test was executed.
 
+## Follow-up remediation checkpoint — overlay docking
+
+- Finding P0-09 (overlay drag did not snap to a dock edge) is now **FIXED IN SOURCE**.
+- Added pure geometry policy `OverlayDockingPolicy` that clamps off-screen coordinates, chooses the nearest of four edges deterministically, applies an 8dp horizontal inset, and preserves the along-edge position.
+- Connected drag release in `TaskProgressOverlay` to snap and persist the selected edge plus final coordinates.
+- Added three JVM regression tests: left-edge snap, top-edge snap, and out-of-bounds coordinate clamping.
+- Commits: `466d969` (policy), `2190961` (tests), `8aaaa27` (overlay integration), `35af3a3` (deterministic corner tie-break).
+- Tests are authored but **NOT RUN**. No APK build or device test was performed.
+- Remaining parts of P0-09 (mode semantics, lifecycle/process recovery, display insets and service restart) remain OPEN.
+
 ## Verification ledger
 
 - GitHub repository metadata read: VERIFIED.
