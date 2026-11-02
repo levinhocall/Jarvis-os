@@ -5,11 +5,16 @@ import androidx.room.PrimaryKey
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 @Entity(tableName = "memories")
 data class MemoryEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    /** Stable cross-device identifier; independent of the local SQLite row ID. */
+    val syncId: String = UUID.randomUUID().toString(),
+    /** Local modification timestamp successfully acknowledged by the remote service. */
+    val lastSyncedAt: Long? = null,
     val category: String,
     val key: String,
     val value: String,
