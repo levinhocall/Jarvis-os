@@ -23,6 +23,33 @@ Compose now checks the `/health` endpoint every 30 seconds with a 10-minute star
 
 The first start downloads the embedding model and may take several minutes. The SQLite database and model cache persist in named Docker volumes.
 
+## Always-on VPS deployment
+
+The repository now includes a systemd boot unit and a periodic unhealthy-container recovery timer. These files prepare the service for a Linux VPS; they do **not** provision a VPS or make it live until installed on a host.
+
+On an Ubuntu/Debian VPS with Docker Engine and the Compose plugin installed:
+
+```bash
+sudo mkdir -p /opt/jarvis-memory
+sudo cp -a memory-backend /opt/jarvis-memory/
+sudo cp /opt/jarvis-memory/memory-backend/deploy/jarvis-memory.service /etc/systemd/system/
+sudo cp /opt/jarvis-memory/memory-backend/deploy/jarvis-memory-health.service /etc/systemd/system/
+sudo cp /opt/jarvis-memory/memory-backend/deploy/jarvis-memory-health.timer /etc/systemd/system/
+sudo systemctl enable --now docker
+sudo systemctl daemon-reload
+sudo systemctl enable --now jarvis-memory.service
+sudo systemctl enable --now jarvis-memory-health.timer
+sudo systemctl status jarvis-memory.service
+sudo systemctl status jarvis-memory-health.timer
+docker compose -f /opt/jarvis-memory/memory-backend/docker-compose.yml ps
+```
+
+The container uses `restart: unless-stopped`, persistent Docker volumes, a startup grace period for the first embedding-model download, and a systemd timer that restarts the container if Docker reports it unhealthy. Backups of the named `jarvis-memory-data` volume should be scheduled separately.
+
+The API binds to loopback only. For phone access, put a TLS reverse proxy on a private VPN/network in front of `127.0.0.1:8765`; do not expose port 8765 directly to the public internet. Set `JARVIS_MEMORY_SYNC_ENDPOINT` to that private HTTPS endpoint. The app has no login/account system; keep access limited at the network boundary.
+
+A host, DNS/VPN route, TLS endpoint and actual installation are still required. No VPS has been provisioned or deployed from this repository session.
+
 ## Android integration
 
 Set `JARVIS_MEMORY_SYNC_ENDPOINT` in `Part 7/gradle.properties` or the Gradle environment to this service's HTTPS URL (or a trusted private-LAN URL). Example:
