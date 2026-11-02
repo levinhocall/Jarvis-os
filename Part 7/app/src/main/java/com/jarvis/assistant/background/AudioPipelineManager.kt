@@ -33,6 +33,12 @@ class AudioPipelineManager(
                 errorCode == AudioRecord.ERROR_BAD_VALUE ||
                 errorCode == AudioRecord.ERROR_INVALID_OPERATION ||
                 errorCode == AudioRecord.ERROR_DEAD_OBJECT
+
+        /** Returns an owned frame so consumers may safely queue it after this callback returns. */
+        internal fun copyFrameForDispatch(buffer: ByteArray, bytesRead: Int): ByteArray {
+            require(bytesRead in 0..buffer.size) { "Invalid audio frame length: $bytesRead" }
+            return buffer.copyOf(bytesRead)
+        }
     }
 
     private var audioRecord: AudioRecord? = null
@@ -179,7 +185,7 @@ class AudioPipelineManager(
                         if (isMuted.get()) {
                             // Deliver zeroed buffer to keep WebSocket pipeline timing intact.
                             buffer.fill(0)
-                            onAudioChunkReady(buffer, bytesRead)
+                            onAudioChunkReady(copyFrameForDispatch(buffer, bytesRead), bytesRead)
                         } else if (isBargeInSuppressed.get()) {
                             // Assistant is actively speaking: only forward likely user speech.
                             if (calculateRms(buffer, bytesRead) > 2200.0) {
