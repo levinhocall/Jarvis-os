@@ -188,4 +188,33 @@ class MultiAgentCouncilTest {
             MissionEngine.llmPlanner = previousPlanner
         }
     }
+    @Test
+    fun testProductionPreflightRunsIndependentReviewers() = runBlocking {
+        val previousPlanner = MissionEngine.llmPlanner
+        val calls = AtomicInteger(0)
+        val provider = object : LlmFunctionCallProvider {
+            override val providerId: String = "production-preflight-test-provider"
+            override suspend fun isAvailable(): Boolean = true
+            override suspend fun predictStep(goal: String, history: List<LlmPlannerStepRecord>, availableTools: List<ToolDefinition>): LlmStepDecision =
+                LlmStepDecision.Abort("Not used by preflight test")
+            override suspend fun reason(prompt: String): String? {
+                calls.incrementAndGet()
+                return "REVIEW: independent preflight review completed"
+            }
+        }
+        MissionEngine.llmPlanner = LlmPlanner(provider)
+        try {
+            val result = MultiAgentCouncil.deliberate(
+                context = null,
+                userGoal = "Search recent Android platform security changes"
+            )
+            assertEquals(3, calls.get())
+            assertEquals(3, result.subAgentCallsUsed)
+            assertEquals(3, result.agentReports.size)
+            assertTrue(result.verifierCheck.contains("Independent verifier"))
+        } finally {
+            MissionEngine.llmPlanner = previousPlanner
+            assertTrue(MultiAgentCouncil.activeSubAgents.value.isEmpty())
+        }
+    }
 }
