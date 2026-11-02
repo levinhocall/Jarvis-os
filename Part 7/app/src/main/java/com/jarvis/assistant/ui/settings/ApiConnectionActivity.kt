@@ -94,11 +94,12 @@ class ApiConnectionActivity : AppCompatActivity() {
 
         if (pool.isEmpty()) {
             val emptyTv = TextView(this).apply {
-                text = "No secondary keys in pool. Primary key above is used."
+                text = "No secondary Gemini keys in pool. Primary key above is used."
                 setTextColor(Color.parseColor("#94A3B8"))
                 textSize = 13f
             }
             binding.layoutKeyPoolContainer.addView(emptyTv)
+            loadExternalVoiceProviderRow()
             return
         }
 
@@ -152,6 +153,44 @@ class ApiConnectionActivity : AppCompatActivity() {
             row.addView(deleteBtn)
             binding.layoutKeyPoolContainer.addView(row)
         }
+        loadExternalVoiceProviderRow()
+    }
+
+    private fun loadExternalVoiceProviderRow() {
+        val pool = preferences.getApiKeyPool("elevenlabs")
+        val row = TextView(this).apply {
+            text = if (pool.isEmpty()) {
+                "ELEVENLABS VOICE • NOT CONFIGURED • TAP TO ADD KEY"
+            } else {
+                "ELEVENLABS VOICE • ${pool.size} KEY(S) CONFIGURED • TAP TO MANAGE"
+            }
+            setTextColor(Color.parseColor("#93C5FD"))
+            textSize = 12f
+            setPadding(0, 18, 0, 12)
+            setOnClickListener {
+                val keys = preferences.getApiKeyPool("elevenlabs")
+                val actions = if (keys.isEmpty()) arrayOf("Add ElevenLabs key") else arrayOf("Add another key", "Remove configured keys")
+                MaterialAlertDialogBuilder(this@ApiConnectionActivity)
+                    .setTitle("External Voice Provider")
+                    .setItems(actions) { _, which ->
+                        if (keys.isEmpty() || which == 0) {
+                            showAddPoolKeyDialog("elevenlabs")
+                        } else {
+                            MaterialAlertDialogBuilder(this@ApiConnectionActivity)
+                                .setTitle("Remove ElevenLabs key")
+                                .setItems(keys.map { item ->
+                                    if (item.key.length > 8) "${item.key.take(4)}...****...${item.key.takeLast(4)}" else "****"
+                                }.toTypedArray()) { _, index ->
+                                    preferences.removeApiKeyFromPool("elevenlabs", keys[index].key)
+                                    loadKeyPool()
+                                }
+                                .show()
+                        }
+                    }
+                    .show()
+            }
+        }
+        binding.layoutKeyPoolContainer.addView(row)
     }
 
     private fun loadUsageStats() {
@@ -167,15 +206,16 @@ class ApiConnectionActivity : AppCompatActivity() {
             "OpenAI Compatible: ${openAiStats.totalPromptTokens} prompt / ${openAiStats.totalCompletionTokens} comp tokens ($$openAiCostFormatted)"
     }
 
-    private fun showAddPoolKeyDialog() {
+    private fun showAddPoolKeyDialog(providerId: String = "gemini") {
+        val isElevenLabs = providerId == "elevenlabs"
         val input = EditText(this).apply {
-            hint = "Enter Gemini API key (AIzaSy...)"
+            hint = if (isElevenLabs) "Enter ElevenLabs API key" else "Enter Gemini API key (AIzaSy...)"
             setSingleLine(true)
         }
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("Add Key to Rotation Pool")
-            .setMessage("Add an additional Gemini API key. Calls will rotate round-robin across active keys.")
+            .setTitle(if (isElevenLabs) "Add ElevenLabs Voice Key" else "Add Gemini Key to Rotation Pool")
+            .setMessage(if (isElevenLabs) "The external voice router will use ElevenLabs when a key is available and fall back to Android TextToSpeech otherwise." else "Add an additional Gemini API key. Calls will rotate round-robin across active keys.")
             .setView(input)
             .setPositiveButton("Add") { _, _ ->
                 val newKey = input.text.toString().trim()
@@ -184,9 +224,9 @@ class ApiConnectionActivity : AppCompatActivity() {
                         Snackbar.make(binding.root, "Encrypted storage is unavailable. The key was not added.", Snackbar.LENGTH_LONG).show()
                         return@setPositiveButton
                     }
-                    preferences.addApiKeyToPool("gemini", newKey)
+                    preferences.addApiKeyToPool(providerId, newKey)
                     loadKeyPool()
-                    Toast.makeText(this, "Key added to rotation pool", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, if (isElevenLabs) "ElevenLabs voice key saved" else "Key added to Gemini rotation pool", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)
