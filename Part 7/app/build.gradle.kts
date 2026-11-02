@@ -18,6 +18,7 @@ val developerName = configuredValue("JARVIS_DEVELOPER_NAME")?.ifBlank { null } ?
 val copyrightOwner = configuredValue("JARVIS_COPYRIGHT_OWNER")?.ifBlank { null } ?: "NAZIB"
 val verificationEndpoint = configuredValue("JARVIS_VERIFICATION_ENDPOINT").orEmpty()
 val memorySyncEndpoint = configuredValue("JARVIS_MEMORY_SYNC_ENDPOINT").orEmpty()
+val elevenLabsVoiceId = configuredValue("JARVIS_ELEVENLABS_VOICE_ID")?.ifBlank { null } ?: "21m00Tcm4TlvDq8ikWAM"
 val releaseSigningReady = listOf(releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { !it.isNullOrBlank() }
 
 android {
@@ -37,6 +38,7 @@ android {
         buildConfigField("String", "PINNED_RELEASE_CERT_SHA256", buildConfigString(releaseCertSha256))
         buildConfigField("String", "VERIFICATION_ENDPOINT", buildConfigString(verificationEndpoint))
         buildConfigField("String", "MEMORY_SYNC_ENDPOINT", buildConfigString(memorySyncEndpoint))
+        buildConfigField("String", "ELEVENLABS_VOICE_ID", buildConfigString(elevenLabsVoiceId))
     }
 
     signingConfigs {
