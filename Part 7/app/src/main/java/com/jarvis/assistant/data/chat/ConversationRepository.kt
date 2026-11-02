@@ -165,8 +165,8 @@ class ConversationRepository(
     suspend fun mergeHistoricalTurns(
         sessionId: String,
         turns: List<com.jarvis.assistant.data.model.ChatTurn>
-    ) {
-        val session = chatDao.getSessionById(sessionId) ?: return
+    ) = turnWriteMutex.withLock {
+        val session = chatDao.getSessionById(sessionId) ?: return@withLock
         val existing = chatDao.getMessagesForSession(sessionId)
         val existingContent = existing.map { it.role.uppercase() to it.content }.toSet()
         val imported = mutableListOf<ChatMessageEntity>()
