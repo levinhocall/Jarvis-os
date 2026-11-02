@@ -285,3 +285,13 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - New Chat confirmation now accurately says prior conversations remain available in History (the old session is archived, not deleted).
 - Commits: `8b60385`, `b22371d`, `5ff9e94`.
 - GitHub commit status was queried immediately after enabling the push trigger and had no reported status at that moment. Do not interpret an empty status response as a passing run; check the Actions result after the runner starts.
+
+
+### Final race-safety and regression follow-up
+
+- Legacy-history read/import/clear now executes under the same repository mutex as new-session creation and full-history deletion. A clear action can no longer race with a previously-read legacy snapshot and resurrect it afterward.
+- The service's compatibility migration and the UI's startup migration both use the serialized repository API.
+- Added a mapper regression test proving pending messages are never paired across separate conversation sessions.
+- Confirmed from current `main` source that Chat History no longer reads the legacy preference store, the main chat UI observes Room, and MemoryManager no longer receives ChatRepository.
+- Commits: `09d7154`, `a65cdff`, `d0048a5`, `326c7d9`, `9876242`, `5ab37ac`, `778dbe9`, `b22371d`, `5ff9e94`, `d703fea`.
+- Automated CI triggers are configured for main pushes/PRs affecting Part 7 and the workflow. The GitHub status endpoint returned no status records for the inspected commits at the time of the last check. CI is therefore **not verified**.
