@@ -1312,12 +1312,6 @@ class JarvisConversationService : Service() {
                             if (preferences.isOwnerVoiceEnabled && preferences.hasOwnerVoiceProfile() && !isCurrentTurnOwnerVoiceVerified && !isLeaseActive && hasActualSpeechInThisTurn) {
                                 val nonOwnerUtterance = currentTurnUserText.toString().trim()
                                 Log.w("JarvisService", "Turn completed by NON-OWNER: Suppressing response and logging ignored.")
-                                val app = application as? JarvisApp
-                                val loggedQuery = if (nonOwnerUtterance.isNotEmpty()) nonOwnerUtterance else "(Unrecognized voice)"
-                                app?.chatRepository?.addTurn(
-                                    userText = "[Non-Owner Voice]: $loggedQuery",
-                                    jarvisText = "[IGNORED] Voice not recognized as owner"
-                                )
                                 audioPlayer?.flush()
                                 currentTurnAssistantText.clear()
                                 currentTurnUserText.clear()
@@ -1829,12 +1823,6 @@ class JarvisConversationService : Service() {
                                 if (preferences.isOwnerVoiceEnabled && preferences.hasOwnerVoiceProfile() && !isCurrentTurnOwnerVoiceVerified) {
                                     val nonOwnerQuery = currentTurnUserText.toString().trim()
                                     Log.w("JarvisService", "Non-owner speech rejected; transcript omitted from logs")
-                                    val app = application as? JarvisApp
-                                    val loggedQuery = if (nonOwnerQuery.isNotEmpty()) nonOwnerQuery else "(Unrecognized voice)"
-                                    app?.chatRepository?.addTurn(
-                                        userText = "[Non-Owner Voice]: $loggedQuery",
-                                        jarvisText = "[IGNORED] Voice not recognized as owner"
-                                    )
                                     audioPlayer?.flush()
                                     currentTurnAssistantText.clear()
                                     currentTurnUserText.clear()
@@ -1961,7 +1949,15 @@ class JarvisConversationService : Service() {
                     currentTurnUserText.setLength(0)
                     currentTurnUserText.append(transcript)
                     _liveUserTranscript.value = transcript
-                    app?.chatRepository?.addTurn(transcript, response)
+                    if (app != null) {
+                        serviceScope.launch(Dispatchers.IO) {
+                            runCatching {
+                                app.conversationRepository.appendTurn(transcript, response)
+                            }.onFailure { error ->
+                                Log.e("JarvisService", "Could not persist offline conversation turn", error)
+                            }
+                        }
+                    }
                 }
                 synchronized(currentTurnAssistantText) {
                     currentTurnAssistantText.setLength(0)
