@@ -12,6 +12,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.OkHttpClient
+import okhttp3.Call
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -37,6 +38,7 @@ object VoiceSynthesisRouter {
     private val externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var externalTtsJob: Job? = null
     private var externalPlayer: MediaPlayer? = null
+    @Volatile private var externalCall: Call? = null
     private var externalAudioFile: File? = null
     private val externalHttpClient = OkHttpClient.Builder()
         .callTimeout(45, TimeUnit.SECONDS)
@@ -146,6 +148,7 @@ object VoiceSynthesisRouter {
         val context = appContext ?: run { speakLocal(text, onDone); return }
         externalTtsJob?.cancel()
         stopExternalPlayback()
+        runCatching { localTts?.stop() }
         externalTtsJob = externalScope.launch {
             val audio = withContext(Dispatchers.IO) {
                 runCatching {
@@ -165,7 +168,10 @@ object VoiceSynthesisRouter {
                         .header("Accept", "audio/mpeg")
                         .post(body)
                         .build()
-                    externalHttpClient.newCall(request).execute().use { response ->
+                    val call = externalHttpClient.newCall(request)
+                    externalCall = call
+                    call.execute().use { response ->
+                        externalCall = null
                         if (!response.isSuccessful) {
                             Log.w(TAG, "ElevenLabs TTS returned HTTP ${response.code}; using Android TTS fallback.")
                             null
@@ -217,6 +223,8 @@ object VoiceSynthesisRouter {
     private fun stopExternalPlayback() {
         externalTtsJob?.cancel()
         externalTtsJob = null
+        externalCall?.cancel()
+        externalCall = null
         releaseExternalPlayer()
     }
 
@@ -230,7 +238,7 @@ object VoiceSynthesisRouter {
 
     fun isSpeaking(): Boolean {
         return try {
-            externalPlayer?.isPlaying == true || localTts?.isSpeaking == true
+            externalPlayer != null || localTts?.isSpeaking == true
         } catch (_: Exception) {
             false
         }
