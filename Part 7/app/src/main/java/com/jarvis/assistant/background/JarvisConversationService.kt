@@ -2010,7 +2010,7 @@ class JarvisConversationService : Service() {
                     finishOfflineVoiceTurn()
                 } else {
                     setConversationState(ConversationState.SPEAKING)
-                    com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(response) {
+                    com.jarvis.assistant.audio.VoiceSynthesisRouter.speakPrivate(response) {
                         serviceScope.launch(Dispatchers.Main.immediate) {
                             finishOfflineVoiceTurn()
                         }
@@ -3139,7 +3139,7 @@ class JarvisConversationService : Service() {
                             "I could not approve this mission because a previous step is still unverified. No further action was executed."
                         else -> "Mission approval was processed. Check the mission status before assuming the action completed."
                     }
-                    com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(response)
+                    com.jarvis.assistant.audio.VoiceSynthesisRouter.speakPrivate(response)
                 }
                 return
             }
@@ -3165,7 +3165,7 @@ class JarvisConversationService : Service() {
             hasExecutedCommandInCurrentTurn = true
             lastHandledCommandText = cleanSpeech
             Log.i("JarvisService", "Executed verified offline reflex action: ${reflexResult.actionName}")
-            com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(reflexResult.spokenResponse)
+            com.jarvis.assistant.audio.VoiceSynthesisRouter.speakPrivate(reflexResult.spokenResponse)
             return
         }
 
@@ -3245,7 +3245,7 @@ class JarvisConversationService : Service() {
                     }
                     withContext(Dispatchers.Main.immediate) {
                         _events.emit(response)
-                        com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(response)
+                        com.jarvis.assistant.audio.VoiceSynthesisRouter.speakPrivate(response)
                     }
                 }
             }
@@ -3468,7 +3468,7 @@ class JarvisConversationService : Service() {
         serviceScope.launch {
             try {
                 val result = app.commandExecutor.execute(command)
-                Log.i("JarvisService", "Command execution returned; output omitted from logs (source=$source)")
+                Log.i("JarvisService", "Command execution returned; output and source omitted from logs")
                 app.memoryManager.addShortTermTurn(source, result)
             } catch (e: Exception) {
                 Log.e("JarvisService", "Command execution failed; error details omitted", e)
@@ -3914,7 +3914,7 @@ class JarvisConversationService : Service() {
             else ->
                 "Yes, $userName?"
         }
-        com.jarvis.assistant.audio.VoiceSynthesisRouter.speak(wakeGreeting)
+        com.jarvis.assistant.audio.VoiceSynthesisRouter.speakPrivate(wakeGreeting)
         VoiceFlightRecorder.recordWakeAckSpoken()
 
         beginActiveConversation(wakeTriggered = false)

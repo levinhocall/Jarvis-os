@@ -535,3 +535,12 @@ The supplied checkout branch was `work`; a local `main` was created at that comm
 - `MemoryRepository.kt`: ignore JSON null rows/null keys before import grouping. Gson can construct these despite Kotlin non-null declarations. Added malformed-backup regression in `MultiChatAndMemoryEngineTest.kt`.
 
 These fixes are source changes pending the verification results below. No UI redesign, schema change or changes to Parts 1–6.
+
+### Implementation batch 3 — close outbound memory-result paths
+
+- `LlmPlanner.kt`: cloud tool-history serialization now omits both arguments and observations for memory read/write tools. Local execution records remain intact for on-device evidence. Added `LlmPlannerTest.kt` regression asserting secret values never appear in serialized cloud history.
+- `VoiceSynthesisRouter.kt`, `JarvisConversationService.kt`: private/offline responses and wake greetings bypass ElevenLabs and require an Android voice marked as not requiring a network connection. If no offline voice exists, the private result stays on screen; no external provider fallback is attempted. Queued utterances retain their privacy route, and stop clears queued speech. External TTS remains available to existing non-private callers.
+- Removed command source text from a service log (it can contain the spoken private query).
+- `SqlCipherRuntimeInstrumentedTest.kt`: wrong-key probe uses a preserving handler and asserts the database still exists with identical bytes after rejection. This test requires Android; it has NOT been run.
+
+Verification setup: installed SDK platform 36/build tools and a JDK 17 into `/workspace/work` only. Initial attempts exposed missing SDK, JRE-only toolchain, and JDK trust-store setup blockers. Retrying with the system CA trust store; no TLS verification was disabled. No APK task invoked.

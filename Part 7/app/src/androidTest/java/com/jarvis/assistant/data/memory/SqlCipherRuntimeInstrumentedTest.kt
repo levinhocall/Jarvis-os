@@ -4,6 +4,7 @@ import android.util.Base64
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import net.zetetic.database.sqlcipher.SQLiteDatabase as CipherDatabase
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,9 +54,11 @@ class SqlCipherRuntimeInstrumentedTest {
                 reopened.close()
             }
 
+            val preservedBytes = file.readBytes()
             val wrongKeyRejected = runCatching {
                 val wrong = CipherDatabase.openDatabase(
-                    file.absolutePath, wrongKey, null, CipherDatabase.OPEN_READWRITE, null
+                    file.absolutePath, wrongKey, null, CipherDatabase.OPEN_READWRITE,
+                    net.zetetic.database.DatabaseErrorHandler { _, exception -> throw exception }, null
                 )
                 try {
                     wrong.rawQuery("SELECT value FROM secret_payload", emptyArray()).use { cursor ->
@@ -66,6 +69,8 @@ class SqlCipherRuntimeInstrumentedTest {
                 }
             }.isFailure
             assertTrue("Wrong-key open must not expose the encrypted payload", wrongKeyRejected)
+            assertTrue("Wrong-key rejection must preserve the database", file.isFile)
+            assertArrayEquals(preservedBytes, file.readBytes())
         } finally {
             rawKey.fill(0)
             cipherKey.fill(0)

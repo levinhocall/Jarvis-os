@@ -30,6 +30,18 @@ class LlmPlannerTest {
     }
 
     @Test
+    fun `cloud history excludes private memory arguments and observations`() {
+        for (tool in listOf("query_recall_core", "log_recall_core")) {
+            val record = LlmPlannerStepRecord(1, tool, mapOf("key" to "private-key"), true, "private-value")
+            val line = cloudHistoryLine(record)
+            assertFalse(line.contains("private-key"))
+            assertFalse(line.contains("private-value"))
+            assertTrue(line.contains("Verified=true"))
+            assertTrue(record.observation.contains("private-value")) // Local evidence is preserved.
+        }
+    }
+
+    @Test
     fun testToolExecutionInCorrectOrder() = runBlocking {
         val executedTools = mutableListOf<String>()
 

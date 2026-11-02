@@ -34,6 +34,7 @@ object VoiceSynthesisRouter {
     @Volatile
     private var isInitialized = false
     private var pendingSpeech: Pair<String, (() -> Unit)?>? = null
+    private var pendingSpeechIsPrivate = false
     @Volatile private var appContext: Context? = null
     private val externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var externalTtsJob: Job? = null
@@ -57,7 +58,8 @@ object VoiceSynthesisRouter {
                 val queued = pendingSpeech
                 if (queued != null) {
                     pendingSpeech = null
-                    speak(queued.first, queued.second)
+                    if (pendingSpeechIsPrivate) speakPrivate(queued.first, queued.second)
+                    else speak(queued.first, queued.second)
                 }
             } else {
                 isInitialized = false
@@ -117,6 +119,7 @@ object VoiceSynthesisRouter {
         val tts = localTts
         if (tts == null || !isInitialized) {
             Log.w(TAG, "TTS not ready yet; queuing one pending utterance (content omitted).")
+            pendingSpeechIsPrivate = false
             pendingSpeech = Pair(text, onDone)
             return
         }
@@ -129,6 +132,25 @@ object VoiceSynthesisRouter {
             stopExternalPlayback()
             speakLocal(text, onDone)
         }
+    }
+
+    /** Local memory/reflex results must never reach an external TTS provider or network voice. */
+    fun speakPrivate(text: String, onDone: (() -> Unit)? = null) {
+        stopExternalPlayback()
+        val tts = localTts
+        if (tts == null || !isInitialized) {
+            pendingSpeechIsPrivate = true
+            pendingSpeech = Pair(text, onDone)
+            return
+        }
+        val voices = tts.voices.orEmpty().filter { !it.isNetworkConnectionRequired }
+        val offlineVoice = voices.firstOrNull { it.locale.language == Locale.getDefault().language }
+            ?: voices.firstOrNull()
+        if (offlineVoice == null || tts.setVoice(offlineVoice) != TextToSpeech.SUCCESS) {
+            Log.w(TAG, "No offline TTS voice is available for private speech; text remains on screen.")
+            return
+        }
+        speakLocal(text, onDone)
     }
 
     private fun speakLocal(text: String, onDone: (() -> Unit)?) {
@@ -245,6 +267,8 @@ object VoiceSynthesisRouter {
     }
 
     fun stop() {
+        pendingSpeech = null
+        pendingSpeechIsPrivate = false
         stopExternalPlayback()
         try {
             localTts?.stop()

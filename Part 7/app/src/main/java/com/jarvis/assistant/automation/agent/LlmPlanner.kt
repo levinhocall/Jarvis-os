@@ -31,6 +31,16 @@ data class LlmPlannerStepRecord(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+/** Keep private memory tool payloads out of subsequent cloud reasoning requests. */
+internal fun cloudHistoryLine(record: LlmPlannerStepRecord): String {
+    val tool = ToolRegistry.resolveToolName(record.toolName)
+    return if (tool in setOf("query_recall_core", "log_recall_core")) {
+        "Step ${record.stepIndex}: Tool '$tool' -> Verified=${record.isVerified}, private result retained on device."
+    } else {
+        "Step ${record.stepIndex}: Tool '${record.toolName}' with args ${record.arguments} -> Verified=${record.isVerified}, Observation: ${record.observation}"
+    }
+}
+
 /**
  * Discrete decision outcome produced by an LLM function-calling provider.
  */
@@ -222,7 +232,7 @@ class GeminiFunctionCallProvider(
                     appendLine("Goal: $goal")
                     appendLine("Action History & Observations:")
                     history.forEach { rec ->
-                        appendLine("Step ${rec.stepIndex}: Tool '${rec.toolName}' with args ${rec.arguments} -> Verified=${rec.isVerified}, Observation: ${rec.observation}")
+                        appendLine(cloudHistoryLine(rec))
                     }
                     appendLine("Based on the above observation, choose the next tool or replan if previous failed, or call 'task_completed'.")
                 }
