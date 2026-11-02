@@ -21,8 +21,17 @@ import java.util.concurrent.atomic.AtomicBoolean
 class AudioPipelineManager(
     private val scope: CoroutineScope,
     private val sampleRateHz: Int = 16000,
-    private val onAudioChunkReady: (ByteArray, Int) -> Unit
+    private val onAudioChunkReady: (ByteArray, Int) -> Unit,
+    /** Optional existing recorder; when supplied this manager never opens a second microphone. */
+    private val delegatedRecorder: AudioRecorder? = null
 ) {
+    /** Production adapter constructor: preserves AudioRecorder DSP/VAD callbacks and single ownership. */
+    constructor(scope: CoroutineScope, recorder: AudioRecorder) : this(
+        scope = scope,
+        sampleRateHz = AudioRecorder.SAMPLE_RATE,
+        onAudioChunkReady = { _, _ -> },
+        delegatedRecorder = recorder
+    )
     companion object {
         private const val TAG = "AudioPipelineManager"
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
@@ -51,7 +60,7 @@ class AudioPipelineManager(
     private val isBargeInSuppressed = AtomicBoolean(false)
 
     val isActive: Boolean
-        get() = isRecording.get()
+        get() = delegatedRecorder?.isActive ?: isRecording.get()
 
     /**
      * Initializes and starts continuous audio recording.
@@ -59,6 +68,7 @@ class AudioPipelineManager(
     @SuppressLint("MissingPermission")
     @Synchronized
     fun startRecording(): Boolean {
+        delegatedRecorder?.let { return it.start(scope) }
         if (isRecording.get()) {
             Log.d(TAG, "Audio recording already in progress.")
             return true
@@ -135,6 +145,10 @@ class AudioPipelineManager(
      */
     @Synchronized
     fun stopRecording() {
+        delegatedRecorder?.let {
+            it.stop()
+            return
+        }
         isRecording.set(false)
         recordingJob?.cancel()
         recordingJob = null
@@ -169,6 +183,7 @@ class AudioPipelineManager(
      * Mutes microphone audio dispatch.
      */
     fun setMuted(muted: Boolean) {
+        delegatedRecorder?.setMuted(muted)
         isMuted.set(muted)
     }
 
