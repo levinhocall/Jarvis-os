@@ -144,7 +144,9 @@ class JarvisConversationService : Service() {
         val wakeEvents: SharedFlow<Unit> = _wakeEvents.asSharedFlow()
 
         fun setMicMuted(muted: Boolean) {
-            activeInstance?.audioRecorder?.setMuted(muted)
+            activeInstance?.let { service ->
+                service.audioPipelineManager?.setMuted(muted) ?: service.audioRecorder?.setMuted(muted)
+            }
         }
 
         fun interruptPlayback() {
@@ -268,6 +270,8 @@ class JarvisConversationService : Service() {
 
     // --- Active-conversation components ---
     private var audioRecorder: AudioRecorder? = null
+    private var audioPipelineManager: AudioPipelineManager? = null
+    private var voiceSessionManager: VoiceSessionManager? = null
     @Volatile private var microphoneForegroundReady = false
     private var audioPlayer: AudioPlayer? = null
     private var liveWebSocket: GeminiLiveWebSocket? = null
@@ -1073,6 +1077,11 @@ class JarvisConversationService : Service() {
                     systemPrompt = systemPrompt,
                     listener = object : GeminiLiveWebSocket.Listener {
                         override fun onConnectionStateChanged(status: String) {
+                            if (status == "LIVE") {
+                                voiceSessionManager?.onSessionEstablished()
+                            } else if (status == "OFFLINE" && voiceSessionManager?.isLive == true) {
+                                voiceSessionManager?.onConnectionDropped("Gemini Live WebSocket transport disconnected")
+                            }
                             _connectionStatus.value = status
                             ConversationState.fromConnectionStatus(status)?.let { lifecycleState ->
                                 if (lifecycleState == ConversationState.ERROR ||
@@ -1620,16 +1629,29 @@ class JarvisConversationService : Service() {
                     apiKeyProvider = { preferences.getNextActiveKey("gemini")?.trim() ?: preferences.apiKey.trim() },
                     onApiKeyRateLimited = { key -> preferences.reportKeyRateLimit("gemini", key) },
                     onApiKeyInvalid = { key -> preferences.reportKeyInvalid("gemini", key) },
-                    onApiKeySuccess = { key -> preferences.reportKeySuccess("gemini", key) }
-                ).apply {
-                    // System prompt is already baked into the constructor; no need to regenerate on reconnect.
-                    // promptProvider removed to eliminate double-generation latency.
-                    connect(serviceScope)
-                }
+                    onApiKeySuccess = { key -> preferences.reportKeySuccess("gemini", key) },
+                    externalReconnectOwner = true
+                )
+                val socket = liveWebSocket ?: return@withContext
+                // VoiceSessionManager is the sole reconnect authority. The WebSocket remains
+                // the transport only; its internal retry loop is disabled for this session.
+                voiceSessionManager?.stopSession()
+                voiceSessionManager = VoiceSessionManager(
+                    scope = serviceScope,
+                    onConnectRequest = {
+                        socket.connect(serviceScope)
+                        kotlinx.coroutines.withTimeoutOrNull(20_000L) {
+                            while (!socket.isSessionReady()) delay(50L)
+                            true
+                        } ?: false
+                    },
+                    onDisconnectRequest = { socket.disconnect() }
+                )
+                voiceSessionManager?.startSession()
             }
         }
 
-        audioRecorder = AudioRecorder { chunk, amplitude, frequencyData ->
+        val recorder = AudioRecorder { chunk, amplitude, frequencyData ->
             if (_isSessionOn.value) {
                 val now = System.currentTimeMillis()
 
@@ -1915,21 +1937,29 @@ class JarvisConversationService : Service() {
                     }
                 }
             }
-        }.apply {
+        }
+        audioRecorder = recorder
+        // The pipeline manager delegates to the existing AudioRecorder so AEC, AGC,
+        // noise suppression, VAD metadata and the service's barge-in callback stay intact.
+        // It never opens a second AudioRecord while the delegated recorder is active.
+        audioPipelineManager = AudioPipelineManager(serviceScope, recorder).apply {
             setMuted(preferences.isMicMuted)
-            val microphoneStarted = start(serviceScope)
+        }
+        serviceScope.launch(Dispatchers.IO) {
+            val microphoneStarted = audioPipelineManager?.startRecording() == true
             if (!microphoneStarted) {
-                Log.e("JarvisService", "Microphone capture could not be started; ending the incomplete live session.")
-                _liveError.value = JarvisLiveError(
-                    title = "MICROPHONE UNAVAILABLE",
-                    message = "Android could not initialize microphone capture. Check microphone permission and close other apps using the microphone, then retry.",
-                    errorCode = "MICROPHONE_START_FAILED",
-                    actionText = "RETRY"
-                )
-                stopActiveConversation()
-                setConversationState(ConversationState.ERROR)
-                updateNotification()
-                serviceScope.launch {
+                withContext(Dispatchers.Main.immediate) {
+                    if (!_isSessionOn.value) return@withContext
+                    Log.e("JarvisService", "Microphone capture could not be started; ending the incomplete live session.")
+                    _liveError.value = JarvisLiveError(
+                        title = "MICROPHONE UNAVAILABLE",
+                        message = "Android could not initialize microphone capture. Check microphone permission and close other apps using the microphone, then retry.",
+                        errorCode = "MICROPHONE_START_FAILED",
+                        actionText = "RETRY"
+                    )
+                    stopActiveConversation()
+                    setConversationState(ConversationState.ERROR)
+                    updateNotification()
                     _events.emit("Microphone could not start. Check permission and other apps using the microphone, then retry.")
                 }
             }
@@ -3532,14 +3562,21 @@ class JarvisConversationService : Service() {
         adaptiveVad.reset()
         adaptiveVad.reset()
 
-        audioRecorder?.stop()
+        audioPipelineManager?.stopRecording()
+        audioPipelineManager = null
         audioRecorder = null
 
         audioPlayer?.flush()
         audioPlayer?.release()
         audioPlayer = null
 
-        liveWebSocket?.disconnect()
+        val sessionManager = voiceSessionManager
+        voiceSessionManager = null
+        if (sessionManager != null) {
+            sessionManager.stopSession()
+        } else {
+            liveWebSocket?.disconnect()
+        }
         liveWebSocket = null
 
         setConversationState(ConversationState.IDLE)
