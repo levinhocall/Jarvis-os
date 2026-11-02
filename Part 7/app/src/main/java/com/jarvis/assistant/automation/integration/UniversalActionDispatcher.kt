@@ -13,9 +13,9 @@ object UniversalActionDispatcher {
     private const val CIRCUIT_BREAKER_RESET_MS = 30000L
 
     data class CircuitState(
-        var failureCount: Int = 0,
-        var lastFailureTime: Long = 0L,
-        var isOpen: Boolean = false
+        val failureCount: Int = 0,
+        val lastFailureTime: Long = 0L,
+        val isOpen: Boolean = false
     )
 
     private val circuitBreakers = ConcurrentHashMap<String, CircuitState>()
@@ -38,21 +38,21 @@ object UniversalActionDispatcher {
             )
 
         // 1. Check Circuit Breaker
-        val circuit = circuitBreakers.getOrPut(identifier) { CircuitState() }
         val now = System.currentTimeMillis()
+        // Atomically transition an expired OPEN breaker into a clean HALF-OPEN trial state.
+        val circuit = circuitBreakers.compute(identifier) { _, existing ->
+            val current = existing ?: CircuitState()
+            if (current.isOpen && now - current.lastFailureTime > CIRCUIT_BREAKER_RESET_MS) {
+                Log.i(TAG, "Circuit breaker for '$identifier' entering half-open trial.")
+                CircuitState()
+            } else current
+        } ?: CircuitState()
         if (circuit.isOpen) {
-            if (now - circuit.lastFailureTime > CIRCUIT_BREAKER_RESET_MS) {
-                // Half-open: allow a trial attempt
-                circuit.isOpen = false
-                circuit.failureCount = 0
-                Log.i(TAG, "Circuit breaker for '$identifier' reset to half-open.")
-            } else {
-                return@withContext UniversalExecutionResult.ServiceUnavailable(
-                    toolIdentifier = identifier,
-                    reason = "Circuit breaker is OPEN. Integration '$identifier' is temporarily disabled due to consecutive failures.",
-                    guidance = "Please wait a moment before retrying, or check device connectivity."
-                )
-            }
+            return@withContext UniversalExecutionResult.ServiceUnavailable(
+                toolIdentifier = identifier,
+                reason = "Circuit breaker is OPEN. Integration '$identifier' is temporarily disabled due to consecutive failures.",
+                guidance = "Please wait a moment before retrying, or check device connectivity."
+            )
         }
 
         // 2. Pre-execution Validation
@@ -93,9 +93,8 @@ object UniversalActionDispatcher {
             )
         }
 
-        // Success: Reset circuit breaker
-        circuit.failureCount = 0
-        circuit.isOpen = false
+        // Success: atomically close the breaker and clear its failure history.
+        circuitBreakers[identifier] = CircuitState()
 
         val duration = System.currentTimeMillis() - startTime
         UniversalExecutionResult.Success(
@@ -107,19 +106,19 @@ object UniversalActionDispatcher {
     }
 
     private fun recordFailure(identifier: String) {
-        val circuit = circuitBreakers.getOrPut(identifier) { CircuitState() }
-        circuit.failureCount++
-        circuit.lastFailureTime = System.currentTimeMillis()
-        if (circuit.failureCount >= MAX_CONSECUTIVE_FAILURES) {
-            circuit.isOpen = true
-            Log.w(TAG, "Circuit breaker TRIPPED for '$identifier' after ${circuit.failureCount} failures.")
+        val failureTime = System.currentTimeMillis()
+        circuitBreakers.compute(identifier) { _, existing ->
+            val previous = existing ?: CircuitState()
+            val failures = previous.failureCount + 1
+            val isOpen = failures >= MAX_CONSECUTIVE_FAILURES
+            if (isOpen && !previous.isOpen) {
+                Log.w(TAG, "Circuit breaker TRIPPED for '$identifier' after $failures failures.")
+            }
+            CircuitState(failureCount = failures, lastFailureTime = failureTime, isOpen = isOpen)
         }
     }
 
     fun resetCircuitBreaker(identifier: String) {
-        circuitBreakers[identifier]?.let {
-            it.failureCount = 0
-            it.isOpen = false
-        }
+        circuitBreakers.computeIfPresent(identifier) { _, _ -> CircuitState() }
     }
 }
