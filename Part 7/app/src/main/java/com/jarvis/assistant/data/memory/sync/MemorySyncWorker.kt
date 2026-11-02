@@ -112,7 +112,7 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
                     return if (response.code >= 500 || response.code == 429) Result.retry() else Result.failure()
                 }
             }
-            kotlinx.coroutines.runBlocking { dao.markMemorySynced(memory.id, memory.timestamp) }
+            dao.markMemorySynced(memory.id, memory.timestamp)
         }
         return null
     }
@@ -176,7 +176,6 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
         val value = metadata.stringOrNull("value") ?: content.substringAfter(':', content).trim()
         val sensitivity = metadata.stringOrNull("sensitivity") ?: "PREFERENCE"
         if (sensitivity.uppercase() in setOf("SECRET", "CREDENTIAL", "AUTHENTICATION", "CONFIDENTIAL") && !deleted) return
-        val localTimestamp = metadata.longOrNull("local_timestamp") ?: remoteTimestamp
         val merged = MemoryEntity(
             id = existing?.id ?: 0L,
             syncId = remoteId,
