@@ -865,7 +865,9 @@ class JarvisConversationService : Service() {
                 return START_NOT_STICKY
             }
             // onCreate() owns the overlay collector; it will attach the saved avatar/position.
-            return START_STICKY
+            // Do not request sticky restart: a null-intent restart would enter the normal
+            // standby path and could incorrectly request microphone foreground-service access.
+            return START_NOT_STICKY
         }
 
         when (intent?.action) {
