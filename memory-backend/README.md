@@ -60,6 +60,14 @@ JARVIS_MEMORY_SYNC_ENDPOINT=https://your-private-memory-host
 
 When this value is blank, Android keeps local embeddings and does not schedule cloud sync. When configured, Android uses the neural embedding endpoint for new/search vectors, gradually re-indexes up to 24 older memories per semantic-search request, and queues local-to-server memory sync every six hours while connected. The Android sync worker now performs **bidirectional sync**: stable per-memory sync IDs, local change uploads, remote change downloads, soft-delete/tombstone propagation, timestamp-based last-writer conflict handling, and a durable Room cursor ordered by `(updated_at, id)`. Remote pages are merged idempotently; a failed page is safely replayed because the cursor is committed only after its records merge. Sensitive local memories are never uploaded and are sent as remote deletion requests. This is source-level integration; validate it against a running backend before relying on multi-device recovery.
 
+## Backend tests
+
+Run the sync API cursor/tombstone tests from this directory after installing `requirements.txt`:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ## API
 
 For sync clients, request `GET /v1/memories?user_id=jarvis-os-personal&limit=200&include_deleted=true`. Subsequent pages use both `updated_after` and `after_id` from `next_cursor`. The compound cursor prevents records sharing the same timestamp from being skipped. The endpoint includes `deleted_at` for tombstones when `include_deleted=true`.
