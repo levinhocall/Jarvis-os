@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically recover unhealthy JARVIS memory backend
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Unit=jarvis-memory-health.service
+
+[Install]
+WantedBy=timers.target
