@@ -143,7 +143,7 @@ class MultiAgentCouncilTest {
         MissionEngine.llmPlanner = LlmPlanner(provider)
         try {
             val outcome = MultiAgentCouncil.executeCouncilTaskForTest(
-                goal = "Search recent Android security updates",
+                goal = "Search recent Android 16 platform security updates, compare official release notes with current vulnerability guidance, and summarize the practical changes",
                 simulatedExecutor = {
                     true to MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Test action verified")
                 }
@@ -174,7 +174,7 @@ class MultiAgentCouncilTest {
         MissionEngine.llmPlanner = LlmPlanner(provider)
         try {
             val outcome = MultiAgentCouncil.executeCouncilTaskForTest(
-                goal = "Search and remove duplicate records",
+                goal = "Search the local records, identify duplicate entries, assess whether removal is safe, and prepare a verified cleanup plan for the duplicate records",
                 simulatedExecutor = {
                     executions.incrementAndGet()
                     true to MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Should never execute")
@@ -206,7 +206,7 @@ class MultiAgentCouncilTest {
         try {
             val result = MultiAgentCouncil.deliberate(
                 context = null,
-                userGoal = "Search recent Android platform security changes"
+                userGoal = "Search recent Android platform security changes, compare official release notes with security bulletins, and identify the practical impact for this device"
             )
             assertEquals(3, calls.get())
             assertEquals(3, result.subAgentCallsUsed)
