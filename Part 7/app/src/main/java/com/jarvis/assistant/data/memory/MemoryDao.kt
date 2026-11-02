@@ -75,8 +75,8 @@ interface MemoryDao {
     @Query("UPDATE memories SET status = 'DELETED', timestamp = :timestamp WHERE id = :id")
     suspend fun softDeleteMemory(id: Long, timestamp: Long = System.currentTimeMillis())
 
-    @Query("UPDATE memories SET pinned = :pinned WHERE id = :id")
-    suspend fun setPinned(id: Long, pinned: Boolean)
+    @Query("UPDATE memories SET pinned = :pinned, timestamp = :timestamp WHERE id = :id")
+    suspend fun setPinned(id: Long, pinned: Boolean, timestamp: Long = System.currentTimeMillis())
 
     @Query("UPDATE memories SET embeddingJson = :embeddingJson, embeddingModel = :model, embeddingDimension = :dimension WHERE id = :id")
     suspend fun updateEmbedding(id: Long, embeddingJson: String, model: String, dimension: Int)
