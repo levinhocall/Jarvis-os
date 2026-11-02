@@ -150,6 +150,51 @@ class ConversationRepository(
         session.id
     }
 
+    /**
+     * Idempotently imports the previous preference-backed transcript into Room.
+     * Stable IDs make retries safe if the process stops during migration.
+     */
+    suspend fun mergeHistoricalTurns(
+        sessionId: String,
+        turns: List<com.jarvis.assistant.data.model.ChatTurn>
+    ) {
+        val session = chatDao.getSessionById(sessionId) ?: return
+        val existing = chatDao.getMessagesForSession(sessionId)
+        val existingContent = existing.map { it.role.uppercase() to it.content }.toSet()
+        val imported = mutableListOf<ChatMessageEntity>()
+        turns.forEach { turn ->
+            val user = turn.userTranscript.trim()
+            val assistant = turn.jarvisResponse.trim()
+            if (user.isNotBlank() && ("USER" to user) !in existingContent) {
+                imported.add(
+                    ChatMessageEntity(
+                        id = UUID.nameUUIDFromBytes(("old:" + turn.id + ":user").toByteArray()).toString(),
+                        sessionId = sessionId,
+                        role = "USER",
+                        content = user,
+                        timestamp = turn.timestamp
+                    )
+                )
+            }
+            if (assistant.isNotBlank() && ("ASSISTANT" to assistant) !in existingContent) {
+                imported.add(
+                    ChatMessageEntity(
+                        id = UUID.nameUUIDFromBytes(("old:" + turn.id + ":assistant").toByteArray()).toString(),
+                        sessionId = sessionId,
+                        role = "ASSISTANT",
+                        content = assistant,
+                        timestamp = turn.timestamp + 1L
+                    )
+                )
+            }
+        }
+        if (imported.isNotEmpty()) {
+            chatDao.insertMessages(imported)
+            val latest = imported.maxOf { it.timestamp }
+            chatDao.updateSessionTimestamp(sessionId, maxOf(session.updatedAt, latest))
+        }
+    }
+
     suspend fun deleteMessage(messageId: String) {
         chatDao.deleteMessage(messageId)
     }
