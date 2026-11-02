@@ -441,23 +441,21 @@ Status: **VOICE OWNERSHIP IS NOW WIRED IN SOURCE; build/device verification is s
 - Key commits: 8869b09, 5f3afb7, 14384cf.
 - Healthcheck and restart policy do not make the service publicly hosted or guarantee an unhealthy container is automatically restarted by Compose. A real VPS deployment and operational monitoring still require a host.
 
-### Still open — do not mark V4 complete yet
+### Remaining V4 work — current status
 
-- Multi-agent execution: JarvisUnifiedRuntime calls the council's advisory deliberation, and MissionEngine uses the shared self-healing step policy. The separate MultiAgentCouncil.executeCouncilTask path is not the production mission executor. Independent LLM sub-agent scheduling, bounded parallel workers, shared budgets and result reconciliation are not fully wired. MissionEngine/ToolRegistry remains the single execution authority.
-- Bidirectional memory sync: current Android worker is local-authoritative push sync. Remote-to-local pull, durable remote-ID mapping, tombstone download, conflict resolution and cursor persistence still need a Room migration and end-to-end test.
-- Backend deployment: Docker service and healthcheck are committed, but no VPS/always-on host has been provisioned or deployed. Android JARVIS_MEMORY_SYNC_ENDPOINT remains unset by default. Do not expose the unauthenticated personal-memory API directly to the public internet.
-- Neural embedding runtime: Android uses the remote MiniLM provider only when the endpoint is configured and reachable; otherwise it intentionally falls back to deterministic local vectors. The backend model has not been downloaded or exercised in this environment.
-- External TTS: ElevenLabs source integration is present, but live provider response and playback require a real provider key and device test.
-- Android 16 acceptance: microphone routing/AEC, barge-in, overlay boot restoration, foreground-service policy and OEM background behavior require a physical-device test.
-- Build/test verification: no Gradle compile, unit test, instrumentation test or lint run has completed in this pass. No APK was assembled, per instruction.
-- CI: latest inspected GitHub Actions runs #232–#242 ended in startup_failure before jobs were created. Latest run #242: https://github.com/levinhocall/Jarvis-os/actions/runs/41432305301 (zero jobs). Gradle/tests/lint did not run; this is neither a code failure nor a passing verification.
+- **Multi-agent orchestration — source integrated:** the production `JarvisUnifiedRuntime` preflight now invokes three independent Gemini text-only reviewers (Planner, Critic, Verifier) concurrently. The shared per-mission budget is capped at 3 calls, 3 concurrent workers, 24 seconds overall, and 400 output tokens per reviewer. Reports are reconciled into `CouncilDeliberation`; a Critic `BLOCK:` result stops execution. Sub-agents have no ToolRegistry executor and cannot directly operate the device. MissionEngine/ToolRegistry remains the sole execution authority. Tests were added for parallelism, shared budget, production preflight and critic blocking; they have not run.
+- **Bidirectional memory sync — source integrated:** Room database version 6 adds stable per-memory sync IDs, sync acknowledgements and a durable compound pull cursor. The Android worker now uploads local changes, downloads remote changes, merges by stable sync ID, uses server update order after local push for conflict resolution, and propagates remote/local tombstones. Backend listing supports `include_deleted=true` and stable `(updated_at,id)` keyset pagination. Local secrets remain local; their remote copies are tombstoned without erasing the local secret. Backend cursor/tombstone tests were added. End-to-end multi-device sync has not been run.
+- **Always-on backend deployment — deployment package prepared, host deployment still open:** added systemd boot startup, periodic health recovery service/timer, and a recovery script, in addition to Docker restart policy, persistent volumes and healthcheck. No VPS/host has been provisioned or deployed from this session. Android `JARVIS_MEMORY_SYNC_ENDPOINT` remains unset by default. Actual 24/7 operation requires a host and private TLS/VPN route; do not expose the personal-memory API directly to the public internet.
+- **Runtime verification — open:** Gemini Live, ElevenLabs TTS, MiniLM model download/embeddings, remote sync round-trip, and Android 16 microphone/AEC/barge-in/overlay/boot behavior still require live credentials, a running backend and a physical device.
+- **Build verification — open:** Gradle compilation, unit tests, instrumentation tests and lint have not completed. GitHub Actions run #274 ended in `startup_failure` before any job was created (zero jobs): https://github.com/levinhocall/Jarvis-os/actions/runs/41463592905. This is not a code test failure and not a passing verification.
+- **APK generation remains excluded from the current work scope:** do not assemble, sign or publish an APK in this phase. The user will handle APK generation last.
 
 ### Verification boundary
 
-- New voice/backend source commits: pushed to main.
-- Source re-fetch: performed for the changed files.
-- Kotlin compilation and tests: not verified.
-- Live WebSocket/recorder operation: not verified.
-- Backend container/model runtime and remote sync: not verified.
-- Physical Android 16 acceptance: not verified.
-- APK: not built.
+- Multi-agent orchestration source and tests: pushed to `main`; not compiled or executed.
+- Bidirectional sync source, Room v5→v6 migration, backend cursor/tombstone API and backend tests: pushed to `main`; not run against a live backend.
+- VPS deployment units/scripts: pushed to `main`; not installed on a host.
+- Kotlin compilation, unit/instrumentation tests and lint: NOT VERIFIED.
+- Gemini Live, ElevenLabs, neural embedding model and remote memory round-trip: NOT LIVE-TESTED.
+- Android 16 physical-device acceptance: NOT TESTED.
+- APK: NOT BUILT, as requested.
