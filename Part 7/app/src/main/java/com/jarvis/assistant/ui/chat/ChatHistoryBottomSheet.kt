@@ -57,9 +57,9 @@ class ChatHistoryBottomSheet : BottomSheetDialogFragment() {
                     viewLifecycleOwner.lifecycleScope.launch {
                         runCatching {
                             withContext(Dispatchers.IO) {
-                                conversationRepository.clearAllConversationData()
-                                // Clear the legacy source only after the canonical Room clear succeeds.
-                                JarvisApp.instance.chatRepository.clearHistory()
+                                conversationRepository.clearAllConversationData {
+                                    JarvisApp.instance.chatRepository.clearHistory()
+                                }
                             }
                         }.onFailure { error ->
                             android.util.Log.e(TAG, "Could not clear Room conversation history", error)
