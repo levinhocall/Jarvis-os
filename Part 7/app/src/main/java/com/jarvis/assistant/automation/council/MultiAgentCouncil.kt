@@ -63,7 +63,7 @@ object MultiAgentCouncil {
                     registeredTool.riskLevel == MissionRisk.LOW &&
                     registeredTool.isIdempotent &&
                     !registeredTool.requiresAccessibility
-            AgentRole.PLANNER, AgentRole.VERIFIER, AgentRole.LEAD_SYNTHESIZER -> false
+            AgentRole.PLANNER, AgentRole.CRITIC, AgentRole.VERIFIER, AgentRole.LEAD_SYNTHESIZER -> false
         }
     }
 
