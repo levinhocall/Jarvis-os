@@ -634,7 +634,7 @@ class JarvisConversationService : Service() {
             ) { snapshot, appForeground, sessionOn, standbyOn, state ->
                 Triple(
                     snapshot,
-                    JarvisApp.instance.preferences.taskOverlayMode == "always" || (!appForeground && (sessionOn || standbyOn)),
+                    JarvisApp.instance.preferences.taskOverlayMode == "always",
                     state
                 )
             }.collect { (snapshot, showIdleAvatar, state) ->
@@ -665,7 +665,7 @@ class JarvisConversationService : Service() {
                 val snapshot = com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.value
                 val prefs = (application as JarvisApp).preferences
                 val appForeground = JarvisApp.isAppForeground.value
-                val showIdleAvatar = prefs.taskOverlayMode == "always" || (!appForeground && (_isSessionOn.value || _isStandby.value))
+                val showIdleAvatar = prefs.taskOverlayMode == "always"
                 val availability = listOf(
                     prefs.isTaskOverlayEnabled,
                     PermissionHelper.hasOverlayPermission(this@JarvisConversationService),
