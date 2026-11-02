@@ -1,8 +1,10 @@
 package com.jarvis.assistant.background
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -68,6 +70,51 @@ class ConversationServiceCollaboratorsTest {
         assertTrue(disconnectCalled)
         assertEquals(SessionLifecycleState.DISCONNECTED, manager.sessionState.value)
         assertFalse(manager.isLive)
+    }
+
+
+    @Test
+    fun `restart waits until previous voice connection teardown completes`() = runBlocking {
+        val disconnectStarted = CompletableDeferred<Unit>()
+        val allowDisconnect = CompletableDeferred<Unit>()
+        val events = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val manager = VoiceSessionManager(
+            scope = this,
+            onConnectRequest = { events += "connect"; true },
+            onDisconnectRequest = {
+                events += "disconnect-start"
+                disconnectStarted.complete(Unit)
+                allowDisconnect.await()
+                events += "disconnect-end"
+            }
+        )
+
+        manager.startSession()
+        withTimeout(2_000L) {
+            while (!manager.isLive) kotlinx.coroutines.delay(10L)
+        }
+        manager.stopSession()
+        withTimeout(2_000L) { disconnectStarted.await() }
+        manager.startSession()
+        kotlinx.coroutines.delay(50L)
+        assertEquals("A restart must wait for the previous socket teardown", 1, events.count { it == "connect" })
+
+        allowDisconnect.complete(Unit)
+        withTimeout(2_000L) {
+            while (!manager.isLive) kotlinx.coroutines.delay(10L)
+        }
+        assertTrue(events.indexOf("disconnect-end") < events.lastIndexOf("connect"))
+        manager.stopSession()
+    }
+
+    @Test
+    fun `audio pipeline dispatch frames are independent of reusable capture buffer`() {
+        val captureBuffer = byteArrayOf(1, 2, 3, 4, 5, 6)
+        val dispatched = AudioPipelineManager.copyFrameForDispatch(captureBuffer, 4)
+        captureBuffer.fill(0)
+
+        assertTrue(dispatched.contentEquals(byteArrayOf(1, 2, 3, 4)))
+        assertEquals(4, dispatched.size)
     }
 
     // --- 2. ScreenCaptureBridge Tests ---
