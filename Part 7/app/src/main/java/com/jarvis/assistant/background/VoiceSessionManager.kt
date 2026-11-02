@@ -150,6 +150,14 @@ class VoiceSessionManager(
     }
 
     /**
+     * Suspends until an asynchronous stopSession() teardown has released the previous socket.
+     * Call before replacing the transport for a rapid stop/start cycle.
+     */
+    suspend fun awaitStopped() {
+        disconnectBarrier?.await()
+    }
+
+    /**
      * Reports successful authentication and session readiness.
      */
     @Synchronized
