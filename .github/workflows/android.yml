@@ -1,8 +1,18 @@
 name: Android CI
 
-# Manual-only workflow. Main pushes must not start remote CI during the
-# user-directed local verification phase.
+# Verify source changes automatically. This workflow runs tests and lint only;
+# it does not assemble or publish an APK.
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - "Part 7/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "Part 7/**"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:
