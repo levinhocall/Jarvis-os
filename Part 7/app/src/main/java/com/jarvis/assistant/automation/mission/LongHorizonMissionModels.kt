@@ -93,10 +93,22 @@ interface CheckpointStorage {
     fun getLatestCheckpoint(missionId: String): MissionCheckpoint?
     fun getAllCheckpoints(missionId: String): List<MissionCheckpoint>
     fun clear(missionId: String)
+
+    fun saveMissionState(mission: LongHorizonMissionState) = Unit
+    fun getAllMissionStates(): List<LongHorizonMissionState> = emptyList()
 }
 
 class InMemoryCheckpointStorage : CheckpointStorage {
     private val checkpoints = mutableMapOf<String, MutableList<MissionCheckpoint>>()
+    private val missionStates = mutableMapOf<String, LongHorizonMissionState>()
+
+    @Synchronized
+    override fun saveMissionState(mission: LongHorizonMissionState) {
+        missionStates[mission.missionId] = mission
+    }
+
+    @Synchronized
+    override fun getAllMissionStates(): List<LongHorizonMissionState> = missionStates.values.toList()
 
     @Synchronized
     override fun saveCheckpoint(checkpoint: MissionCheckpoint) {
@@ -117,5 +129,6 @@ class InMemoryCheckpointStorage : CheckpointStorage {
     @Synchronized
     override fun clear(missionId: String) {
         checkpoints.remove(missionId)
+        missionStates.remove(missionId)
     }
 }
