@@ -17,8 +17,9 @@ class LongHorizonMissionCoordinator(
     }
 
     private fun storeMission(mission: LongHorizonMissionState) {
-        missions[mission.missionId] = mission
+        // Persist first: do not publish an in-memory state that the durable store rejected.
         checkpointStorage.saveMissionState(mission)
+        missions[mission.missionId] = mission
     }
 
     @Synchronized
