@@ -131,6 +131,29 @@ class ConversationServiceCollaboratorsTest {
     }
 
     @Test
+    fun `fatal voice transport error stops automatic reconnects`() = runBlocking {
+        var connectCount = 0
+        val manager = VoiceSessionManager(
+            scope = this,
+            onConnectRequest = { connectCount++; true },
+            onDisconnectRequest = {}
+        )
+        manager.startSession()
+        withTimeout(2_000L) {
+            while (!manager.isLive) kotlinx.coroutines.delay(10L)
+        }
+
+        manager.onFatalConnectionError("API access denied")
+        manager.onConnectionDropped("late duplicate close callback")
+        kotlinx.coroutines.delay(50L)
+
+        assertEquals(1, connectCount)
+        assertEquals(SessionLifecycleState.ERROR, manager.sessionState.value)
+        assertFalse(manager.isLive)
+        manager.stopSession()
+    }
+
+    @Test
     fun `await stopped blocks until previous socket teardown finishes`() = runBlocking {
         val disconnectStarted = CompletableDeferred<Unit>()
         val allowDisconnect = CompletableDeferred<Unit>()
