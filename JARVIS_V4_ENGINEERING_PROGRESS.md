@@ -262,3 +262,17 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - Voice-session startup validation now accepts the active rotated Gemini key before falling back to the primary API key, matching the key-selection path used by the foreground conversation service.
 - The encrypted mission persistence instrumentation test now leaves a second pending milestone step so it verifies the intended interrupted-EXECUTING → PAUSED recovery path rather than a naturally completed mission.
 - Commits: `29743c0`, `01ab4eb`.
+
+
+### Chat-history UI and race-condition follow-up
+
+- Fixed the remaining legacy-store UI paths:
+  - Chat History bottom sheet now reads the last 100 Room messages across sessions.
+  - Clear History now transactionally deletes all Room messages and sessions, then clears the legacy preference store.
+  - New Chat no longer clears legacy history prematurely; it archives the current Room session and starts a fresh one.
+- Legacy history migration now runs when the main ViewModel restores the conversation, before normal new-session use. Service startup retains the same idempotent fallback.
+- Serialized legacy-history read/import/clear, new-session creation, and full-history deletion with the repository write mutex. This closes a race where an in-progress migration could restore messages immediately after the user cleared history.
+- ConversationTurnMapper now groups by session ID before pairing user/assistant messages, preventing a pending user message from one session being paired with an assistant message from another.
+- Added instrumentation coverage for clearing all sessions/messages and a JVM regression test for cross-session message pairing.
+- Commits: `cece692`, `ac5d05d`, `379b8dd`, `13b6b03`, `17a68e4`, `bb95b1a`, `a7f69b8`, `9876242`, `5ab37ac`, `778dbe9`.
+- Verification remains pending: these tests were added but not executed in this session.
