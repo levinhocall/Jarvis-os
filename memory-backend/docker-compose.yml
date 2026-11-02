@@ -14,6 +14,16 @@ services:
     ports:
       # Bind to loopback by default. Change only for a trusted private-network deployment.
       - "127.0.0.1:8765:8765"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=5).read()"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
 
 volumes:
   jarvis-memory-data:
