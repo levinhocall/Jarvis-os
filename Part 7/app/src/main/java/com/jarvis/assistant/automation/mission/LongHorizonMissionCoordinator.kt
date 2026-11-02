@@ -17,7 +17,7 @@ class LongHorizonMissionCoordinator(
     }
 
     private fun storeMission(mission: LongHorizonMissionState) {
-        storeMission(mission)
+        missions[mission.missionId] = mission
         checkpointStorage.saveMissionState(mission)
     }
 
