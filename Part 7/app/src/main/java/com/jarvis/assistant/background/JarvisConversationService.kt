@@ -92,6 +92,7 @@ class JarvisConversationService : Service() {
         const val ACTION_START_CONVERSATION = "com.jarvis.assistant.START_CONVERSATION"
         const val ACTION_STOP_ALL = "com.jarvis.assistant.STOP_ALL"
         const val ACTION_ENTER_STANDBY = "com.jarvis.assistant.ENTER_STANDBY"
+        const val ACTION_RESTORE_OVERLAY = "com.jarvis.assistant.RESTORE_OVERLAY"
 
         private const val CHANNEL_ID = "jarvis_conversation"
         private const val NOTIFICATION_ID = 41
@@ -827,13 +828,45 @@ class JarvisConversationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        ensureMicrophoneForegroundService()
+        val overlayRestoreOnly = intent?.action == ACTION_RESTORE_OVERLAY
+        if (overlayRestoreOnly) {
+            // Boot recovery restores only the visual overlay. Never request microphone
+            // foreground-service access or start wake-word/audio capture from BOOT_COMPLETED.
+            microphoneForegroundReady = false
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        buildNotification(),
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, buildNotification())
+                }
+            } catch (e: Exception) {
+                Log.w("JarvisService", "Overlay-only foreground startup failed", e)
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
+        } else {
+            ensureMicrophoneForegroundService()
+        }
         if (!com.jarvis.assistant.security.AppIdentityVerifier.isTrustedRelease(this)) {
             Log.e("JarvisService", "Blocked service start: release signing certificate did not match the configured pin")
             stopSelf(startId)
             return START_NOT_STICKY
         }
-        acquireWakeLock()
+        if (!overlayRestoreOnly) acquireWakeLock()
+
+        if (overlayRestoreOnly) {
+            val prefs = (application as JarvisApp).preferences
+            if (!prefs.isTaskOverlayEnabled || prefs.taskOverlayMode != "always" || !PermissionHelper.hasOverlayPermission(this)) {
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
+            // onCreate() owns the overlay collector; it will attach the saved avatar/position.
+            return START_STICKY
+        }
 
         when (intent?.action) {
             ACTION_START_CONVERSATION -> {
