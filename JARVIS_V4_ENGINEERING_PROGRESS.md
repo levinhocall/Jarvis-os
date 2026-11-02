@@ -447,7 +447,7 @@ Status: **VOICE OWNERSHIP IS NOW WIRED IN SOURCE; build/device verification is s
 - **Bidirectional memory sync — source integrated:** Room database version 6 adds stable per-memory sync IDs, sync acknowledgements and a durable compound pull cursor. The Android worker now uploads local changes, downloads remote changes, merges by stable sync ID, uses server update order after local push for conflict resolution, and propagates remote/local tombstones. Backend listing supports `include_deleted=true` and stable `(updated_at,id)` keyset pagination. Local secrets remain local; their remote copies are tombstoned without erasing the local secret. Backend cursor/tombstone tests were added. End-to-end multi-device sync has not been run.
 - **Always-on backend deployment — deployment package prepared, host deployment still open:** added systemd boot startup, periodic health recovery service/timer, and a recovery script, in addition to Docker restart policy, persistent volumes and healthcheck. No VPS/host has been provisioned or deployed from this session. Android `JARVIS_MEMORY_SYNC_ENDPOINT` remains unset by default. Actual 24/7 operation requires a host and private TLS/VPN route; do not expose the personal-memory API directly to the public internet.
 - **Runtime verification — open:** Gemini Live, ElevenLabs TTS, MiniLM model download/embeddings, remote sync round-trip, and Android 16 microphone/AEC/barge-in/overlay/boot behavior still require live credentials, a running backend and a physical device.
-- **Build verification — open:** Gradle compilation, unit tests, instrumentation tests and lint have not completed. GitHub Actions run #274 ended in `startup_failure` before any job was created (zero jobs): https://github.com/levinhocall/Jarvis-os/actions/runs/41463592905. This is not a code test failure and not a passing verification.
+- **Build verification — open:** Gradle compilation, unit tests, instrumentation tests and lint have not completed. GitHub Actions run #279 ended in `startup_failure` before any job was created (zero jobs): https://github.com/levinhocall/Jarvis-os/actions/runs/41464103330. This is not a code test failure and not a passing verification.
 - **APK generation remains excluded from the current work scope:** do not assemble, sign or publish an APK in this phase. The user will handle APK generation last.
 
 ### Verification boundary
@@ -462,13 +462,13 @@ Status: **VOICE OWNERSHIP IS NOW WIRED IN SOURCE; build/device verification is s
 
 ### Final hardening after the V4 scope update
 
-- Production council preflight now calls the parallel reviewer pipeline from the path used by JarvisUnifiedRuntime; ordinary one-step commands bypass delegation to preserve responsiveness. Critic blocking, result reporting and bounded failure isolation remain enabled.
+- Production council preflight now calls the parallel reviewer pipeline from the path used by JarvisUnifiedRuntime; ordinary one-step commands bypass delegation to preserve responsiveness. Critic blocking, bounded failure isolation and advisory review summaries in successful mission results are enabled.
 - Room deletion APIs now preserve local tombstones for sync instead of physically erasing rows before the remote can receive the deletion. User edits and pinned/status changes update timestamps used by the sync worker.
 - Cross-device merge keys only on stable sync IDs; device-local SQLite row IDs are not used to identify remote records. Server update order is authoritative after the local push phase, avoiding device-clock skew.
 - Privacy guard: a remote tombstone created by the local secret-scrubbing path cannot erase the original sensitive local-only memory.
 - Added backend unit tests for same-timestamp keyset pagination and tombstone visibility. Test command is documented in memory-backend/README.md.
 - Added systemd startup and periodic health-recovery units/scripts for an Ubuntu/Debian VPS. They are deployment assets only; no host has been installed or provisioned.
-- Latest Android CI inspection remains run #274, `startup_failure`, zero jobs: https://github.com/levinhocall/Jarvis-os/actions/runs/41463592905.
+- Latest Android CI inspection remains run #279, `startup_failure`, zero jobs: https://github.com/levinhocall/Jarvis-os/actions/runs/41464103330.
 - Additional commits: `0d15efa`, `3dcd46d`, `91f29d2`, `4fcbf3c`, `f8e13c0`, `d98eae8`, `7efe64c`, `286c896`, `b9fbc09`, `e40f759`, `3038671`, `90107ce`, `6752619`, `ab58472`, `01d7c4e`, `663dfdc`, `3a76979`, `f88ee1c`, `3155418`, `a2b6edf`, `63c2300`, `cfde06c`, `6a6394e`.
 
 APK assembly/signing/publishing remains deliberately outside this phase.
