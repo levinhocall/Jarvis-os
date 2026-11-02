@@ -32,6 +32,21 @@ class ConversationTurnMapperTest {
     }
 
     @Test
+    fun doesNotPairMessagesAcrossDifferentSessions() {
+        val turns = ConversationTurnMapper.toTurns(
+            listOf(
+                ChatMessageEntity(id = "u1", sessionId = "old", role = "USER", content = "Old pending", timestamp = 10),
+                ChatMessageEntity(id = "a2", sessionId = "new", role = "ASSISTANT", content = "New answer", timestamp = 11)
+            )
+        )
+        assertEquals(2, turns.size)
+        assertEquals("Old pending", turns[0].userTranscript)
+        assertEquals("", turns[0].jarvisResponse)
+        assertEquals("", turns[1].userTranscript)
+        assertEquals("New answer", turns[1].jarvisResponse)
+    }
+
+    @Test
     fun ignoresSystemMessagesAndSortsByTimestamp() {
         val turns = ConversationTurnMapper.toTurns(
             listOf(
