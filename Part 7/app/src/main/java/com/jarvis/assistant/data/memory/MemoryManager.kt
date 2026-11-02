@@ -21,7 +21,7 @@ class MemoryManager(
         private const val MAX_SHORT_TERM_TURNS = 30
     }
 
-    // --- Short-Term Memory (Preloaded with persistent history) ---
+    // --- Short-Term Memory (current process); durable transcript lives in Room ---
     private val _shortTermHistory = MutableStateFlow<List<ChatTurn>>(emptyList())
     val shortTermHistory: StateFlow<List<ChatTurn>> = _shortTermHistory.asStateFlow()
     private val shortTermSummary = StringBuilder()
