@@ -17,7 +17,8 @@ val releaseCertSha256 = configuredValue("JARVIS_RELEASE_CERT_SHA256")?.replace("
 val developerName = configuredValue("JARVIS_DEVELOPER_NAME")?.ifBlank { null } ?: "NAZIB"
 val copyrightOwner = configuredValue("JARVIS_COPYRIGHT_OWNER")?.ifBlank { null } ?: "NAZIB"
 val verificationEndpoint = configuredValue("JARVIS_VERIFICATION_ENDPOINT").orEmpty()
-val memorySyncEndpoint = configuredValue("JARVIS_MEMORY_SYNC_ENDPOINT").orEmpty()
+// Cloud memory sync is disabled: all personal memory stays on-device.
+val memorySyncEndpoint = ""
 val elevenLabsVoiceId = configuredValue("JARVIS_ELEVENLABS_VOICE_ID")?.ifBlank { null } ?: "21m00Tcm4TlvDq8ikWAM"
 val releaseSigningReady = listOf(releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { !it.isNullOrBlank() }
 
