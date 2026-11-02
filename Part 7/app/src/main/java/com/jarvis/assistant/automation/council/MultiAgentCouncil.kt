@@ -144,8 +144,13 @@ object MultiAgentCouncil {
                     _activeSubAgents.update { it + role }
                     try {
                         val prompt = prompts.getValue(role) + "\nShared mission budget: maximum 3 sub-agent calls, no delegation, no tool execution, output under 400 words."
-                        withTimeoutOrNull(18_000L) { planner.reasonAsSubAgent(prompt) }?.take(4000)?.let { role to it }
-                            ?: (role to null)
+                        val report = withTimeoutOrNull(18_000L) { planner.reasonAsSubAgent(prompt) }
+                        role to report?.take(4000)
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        Log.w(TAG, "Sub-agent " + role.name + " failed; other reviewers continue (" + error.javaClass.simpleName + ").")
+                        role to null
                     } finally {
                         _activeSubAgents.update { it - role }
                     }
