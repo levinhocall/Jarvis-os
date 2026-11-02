@@ -5,6 +5,8 @@ import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
@@ -13,12 +15,25 @@ object MemorySyncScheduler {
 
     fun schedule(context: Context) {
         if (com.jarvis.assistant.BuildConfig.MEMORY_SYNC_ENDPOINT.isBlank()) return
-        val request = PeriodicWorkRequestBuilder<MemorySyncWorker>(6, TimeUnit.HOURS)
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        val workManager = WorkManager.getInstance(context.applicationContext)
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val immediate = OneTimeWorkRequestBuilder<MemorySyncWorker>()
+            .setConstraints(constraints)
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
-        WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
-            UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request
+        workManager.enqueueUniqueWork(
+            "$UNIQUE_WORK_NAME-initial",
+            ExistingWorkPolicy.KEEP,
+            immediate
+        )
+        val periodic = PeriodicWorkRequestBuilder<MemorySyncWorker>(6, TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+        workManager.enqueueUniquePeriodicWork(
+            UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic
         )
     }
 }
