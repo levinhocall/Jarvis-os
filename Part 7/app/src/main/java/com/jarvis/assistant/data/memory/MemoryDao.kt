@@ -15,6 +15,10 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE status = 'ACTIVE' ORDER BY pinned DESC, timestamp DESC")
     suspend fun getAllMemories(): List<MemoryEntity>
 
+    /** Includes tombstones and superseded rows so remote sync can propagate deletions. */
+    @Query("SELECT * FROM memories ORDER BY timestamp ASC, id ASC")
+    suspend fun getAllMemoriesForSync(): List<MemoryEntity>
+
     @Query("SELECT * FROM memories WHERE category = :category AND status != 'DELETED' ORDER BY timestamp DESC")
     fun getMemoriesByCategoryFlow(category: String): Flow<List<MemoryEntity>>
 
