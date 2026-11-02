@@ -6,6 +6,13 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.jarvis.assistant.data.chat.ConversationTurnMapper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.jarvis.assistant.JarvisApp
 import com.jarvis.assistant.databinding.SheetChatHistoryBinding
@@ -33,18 +40,34 @@ class ChatHistoryBottomSheet : BottomSheetDialogFragment() {
         }
         binding.rvChatHistory.adapter = adapter
 
-        val chatRepo = JarvisApp.instance.chatRepository
-        val turns = chatRepo.turns.value
-
-        updateList(turns)
+        val conversationRepository = JarvisApp.instance.conversationRepository
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                conversationRepository.getRecentMessagesFlow().collect { messages ->
+                    updateList(ConversationTurnMapper.toTurns(messages.reversed()))
+                }
+            }
+        }
 
         binding.btnClearHistory.setOnClickListener {
             AlertDialog.Builder(requireContext())
                 .setTitle("Clear History")
                 .setMessage("Are you sure you want to clear the conversation history?")
                 .setPositiveButton("Clear") { _, _ ->
-                    chatRepo.clearHistory()
-                    updateList(emptyList())
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                conversationRepository.clearAllConversationData()
+                            }
+                        }.onFailure { error ->
+                            android.util.Log.e(TAG, "Could not clear Room conversation history", error)
+                            android.widget.Toast.makeText(
+                                requireContext(),
+                                "Could not clear conversation history. Please try again.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
