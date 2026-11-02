@@ -77,6 +77,22 @@ class ConversationRepositoryInstrumentedTest {
     }
 
     @Test
+    fun clearAllConversationDataRemovesEverySessionAndMessage() = runBlocking {
+        val repository = ConversationRepository(database.chatDao())
+        val first = repository.createNewSession("First")
+        repository.appendTurn("Hello", "Hi")
+        repository.startNewSession("Second")
+        repository.appendTurn("Another", "Answer")
+
+        repository.clearAllConversationData()
+
+        assertNull(repository.currentSessionId.value)
+        assertTrue(repository.getActiveSessionsFlow().first().isEmpty())
+        assertTrue(repository.getArchivedSessionsFlow().first().isEmpty())
+        assertTrue(repository.getMessages(first.id).isEmpty())
+    }
+
+    @Test
     fun repositoryRestoresLatestActiveSessionAfterRecreation() = runBlocking {
         val firstRepository = ConversationRepository(database.chatDao())
         val originalId = firstRepository.appendTurn("First question", "First answer")
