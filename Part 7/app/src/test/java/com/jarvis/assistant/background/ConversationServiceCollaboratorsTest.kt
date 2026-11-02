@@ -108,6 +108,71 @@ class ConversationServiceCollaboratorsTest {
     }
 
     @Test
+    fun `repeated socket drop callbacks do not multiply reconnect attempts`() = runBlocking {
+        var connectCount = 0
+        val manager = VoiceSessionManager(
+            scope = this,
+            onConnectRequest = { connectCount++; true },
+            onDisconnectRequest = {}
+        )
+        manager.startSession()
+        withTimeout(2_000L) {
+            while (!manager.isLive) kotlinx.coroutines.delay(10L)
+        }
+
+        manager.onConnectionDropped("first drop")
+        manager.onConnectionDropped("duplicate close callback")
+        kotlinx.coroutines.delay(50L)
+
+        assertEquals(1, connectCount)
+        assertEquals(SessionLifecycleState.RECONNECTING, manager.sessionState.value)
+        manager.stopSession()
+    }
+
+    @Test
+    fun `await stopped blocks until previous socket teardown finishes`() = runBlocking {
+        val disconnectStarted = CompletableDeferred<Unit>()
+        val allowDisconnect = CompletableDeferred<Unit>()
+        val manager = VoiceSessionManager(
+            scope = this,
+            onConnectRequest = { true },
+            onDisconnectRequest = {
+                disconnectStarted.complete(Unit)
+                allowDisconnect.await()
+            }
+        )
+        manager.startSession()
+        withTimeout(2_000L) {
+            while (!manager.isLive) kotlinx.coroutines.delay(10L)
+        }
+        manager.stopSession()
+        withTimeout(2_000L) { disconnectStarted.await() }
+
+        var awaitCompleted = false
+        val waiter = kotlinx.coroutines.launch {
+            manager.awaitStopped()
+            awaitCompleted = true
+        }
+        kotlinx.coroutines.delay(50L)
+        assertFalse(awaitCompleted)
+        allowDisconnect.complete(Unit)
+        withTimeout(2_000L) { waiter.join() }
+        assertTrue(awaitCompleted)
+    }
+
+    @Test
+    fun `audio pipeline manager delegates mute and lifecycle to existing recorder`() = runBlocking {
+        val recorder = com.jarvis.assistant.audio.AudioRecorder { _, _, _ -> }
+        val pipeline = AudioPipelineManager(this, recorder)
+        pipeline.setMuted(true)
+
+        assertTrue(recorder.isMuted.get())
+        assertFalse(pipeline.isActive)
+        pipeline.stopRecording()
+        assertFalse(recorder.isActive)
+    }
+
+    @Test
     fun `audio pipeline dispatch frames are independent of reusable capture buffer`() {
         val captureBuffer = byteArrayOf(1, 2, 3, 4, 5, 6)
         val dispatched = AudioPipelineManager.copyFrameForDispatch(captureBuffer, 4)
