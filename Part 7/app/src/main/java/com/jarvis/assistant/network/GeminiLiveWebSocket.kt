@@ -111,9 +111,10 @@ class GeminiLiveWebSocket(
         coroutineScope = scope
         isManuallyStopped.set(false)
         reconnectAttempts = 0
+        val queuedKey = pendingApiKey
         pendingApiKey = null
         val selectedKey = runCatching { apiKeyProvider().trim() }.getOrDefault("")
-        activeApiKey = selectedKey.ifBlank { apiKey.trim() }
+        activeApiKey = queuedKey?.takeIf { it.isNotBlank() } ?: selectedKey.ifBlank { apiKey.trim() }
         initiateConnection()
     }
 
