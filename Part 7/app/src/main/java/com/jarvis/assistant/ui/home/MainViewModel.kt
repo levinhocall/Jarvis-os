@@ -92,13 +92,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching {
                 val sessionId = conversationRepository.restoreMostRecentActiveSession()
                     ?: conversationRepository.createNewSession("Voice Conversation").id
-                // Migrate old preference history before a user can create a new Room session.
-                // Clear legacy data only after the complete Room import succeeds.
-                val legacyTurns = app.chatRepository.turns.value
-                if (legacyTurns.isNotEmpty()) {
-                    conversationRepository.mergeHistoricalTurns(sessionId, legacyTurns)
-                    app.chatRepository.clearHistory()
-                }
+                // Read/import/clear legacy history under the repository's write lock so
+                // a concurrent Clear History action cannot resurrect deleted messages.
+                conversationRepository.migrateLegacyHistory(
+                    sessionId = sessionId,
+                    loadLegacyTurns = { app.chatRepository.turns.value },
+                    clearLegacyHistory = { app.chatRepository.clearHistory() }
+                )
             }.onFailure {
                 android.util.Log.e("MainViewModel", "Could not restore/migrate Room chat history", it)
             }
