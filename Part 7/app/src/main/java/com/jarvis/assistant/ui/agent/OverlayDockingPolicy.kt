@@ -22,11 +22,12 @@ internal object OverlayDockingPolicy {
         val safeX = x.coerceIn(0, maxX)
         val safeY = y.coerceIn(topInset.coerceAtLeast(0), maxY)
 
+        // Prefer vertical docking on exact corner ties for deterministic results.
         val distances = listOf(
-            "left" to safeX,
-            "right" to (maxX - safeX),
             "top" to (safeY - topInset.coerceAtLeast(0)),
-            "bottom" to (maxY - safeY)
+            "bottom" to (maxY - safeY),
+            "left" to safeX,
+            "right" to (maxX - safeX)
         )
         val edge = distances.minByOrNull { it.second }?.first ?: "right"
         val snappedX = when (edge) {
