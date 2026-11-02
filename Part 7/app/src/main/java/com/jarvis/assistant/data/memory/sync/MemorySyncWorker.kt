@@ -102,6 +102,6 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
         if (value == "localhost" || value == "127.0.0.1" || value.endsWith(".local")) return true
         if (value.startsWith("10.") || value.startsWith("192.168.")) return true
         val parts = value.split(".")
-        return parts.size == 4 && parts[0] == "172" && (parts[1].toIntOrNull() in 16..31)
+        return parts.size == 4 && parts[0] == "172" && (parts[1].toIntOrNull()?.let { it in 16..31 } == true)
     }
 }
