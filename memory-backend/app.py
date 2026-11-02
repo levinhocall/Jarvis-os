@@ -223,28 +223,44 @@ def list_memories(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     updated_after: str | None = Query(default=None),
+    after_id: str | None = Query(default=None),
+    include_deleted: bool = Query(default=False),
 ) -> dict[str, Any]:
+    """Stable keyset pagination; deleted rows remain visible to sync clients."""
     scope = scope_value(user_id or agent_id)
-    sql = "SELECT id, content, metadata_json, created_at, updated_at FROM memories WHERE scope=? AND deleted_at IS NULL"
+    sql = "SELECT id, content, metadata_json, created_at, updated_at, deleted_at FROM memories WHERE scope=?"
     args: list[Any] = [scope]
+    if not include_deleted:
+        sql += " AND deleted_at IS NULL"
     if updated_after:
-        sql += " AND updated_at>?"
-        args.append(updated_after)
-    sql += " ORDER BY updated_at ASC LIMIT ? OFFSET ?"
+        if after_id:
+            sql += " AND (updated_at>? OR (updated_at=? AND id>?))"
+            args.extend([updated_after, updated_after, after_id])
+        else:
+            sql += " AND updated_at>?"
+            args.append(updated_after)
+    sql += " ORDER BY updated_at ASC, id ASC LIMIT ? OFFSET ?"
     args.extend([limit, offset])
     with connect() as db:
         rows = db.execute(sql, args).fetchall()
+    results = [{
+        "id": row["id"],
+        "memory": row["content"],
+        "metadata": json.loads(row["metadata_json"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "deleted_at": row["deleted_at"],
+    } for row in rows]
+    last = rows[-1] if rows else None
     return {
-        "results": [{
-            "id": row["id"],
-            "memory": row["content"],
-            "metadata": json.loads(row["metadata_json"]),
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        } for row in rows],
+        "results": results,
         "user_id": scope,
         "limit": limit,
         "offset": offset,
+        "next_cursor": {
+            "updated_at": last["updated_at"],
+            "id": last["id"],
+        } if last else None,
     }
 
 
