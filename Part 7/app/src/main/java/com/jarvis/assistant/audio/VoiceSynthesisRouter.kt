@@ -8,7 +8,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -125,6 +124,7 @@ object VoiceSynthesisRouter {
         if (!elevenLabsKey.isNullOrBlank() && BuildConfig.ELEVENLABS_VOICE_ID.isNotBlank()) {
             speakWithElevenLabs(text, elevenLabsKey, onDone)
         } else {
+            stopExternalPlayback()
             speakLocal(text, onDone)
         }
     }
@@ -230,7 +230,7 @@ object VoiceSynthesisRouter {
 
     fun isSpeaking(): Boolean {
         return try {
-            localTts?.isSpeaking == true
+            externalPlayer?.isPlaying == true || localTts?.isSpeaking == true
         } catch (_: Exception) {
             false
         }
