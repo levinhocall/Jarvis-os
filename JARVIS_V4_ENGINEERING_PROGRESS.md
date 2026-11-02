@@ -74,7 +74,7 @@ Status: IN PROGRESS
 | Workstream | Status | Notes |
 |---|---|---|
 | Phase 0 — Repository and architecture audit | IN PROGRESS | Initial source/config inspection recorded; full tree and execution-path audit pending |
-| Phase 1 — Avatar ecosystem | IN PROGRESS | Existing gallery, overlay, positioning, and state reactions found; ALWAYS/WORKING lifecycle and edge cases need complete review |
+| Phase 1 — Avatar ecosystem | IN PROGRESS | Existing gallery, overlay, positioning, and state reactions found; persisted avatar identifier validation implemented and regression test added; mode/lifecycle review pending |
 | Phase 2 — Memory ecosystem | IN PROGRESS | Local Room, chat, vector retrieval, deletion and migrations found; cloud consent/sync and recovery need review |
 | Phase 3 — Profile/account/subscription | NOT STARTED | Backend capabilities and existing local profile data need verification |
 | Phase 4 — AI model and voice ecosystem | IN PROGRESS | Gemini Live/Vosk exist; model identifiers, personality wiring, ElevenLabs and provider lifecycle need review |
@@ -84,6 +84,21 @@ Status: IN PROGRESS
 | Phase 8 — Cross-module integration | NOT STARTED | Requires workstream implementation |
 | Phase 9 — Automated tests and code review | IN PROGRESS | Existing migration instrumentation test found; test inventory and execution capability pending |
 | Phase 10 — Bug-fix loop | NOT STARTED | Begin as defects are confirmed |
+
+## Implementation checkpoint — avatar preference validation
+
+Status: IMPLEMENTED (source committed); TESTED status remains pending.
+
+- Finding: `AppPreferences.taskOverlayAvatar` validated values in its setter, but its getter returned the raw SharedPreferences value. A stale, manually modified, or malformed stored value could therefore bypass the setter allowlist and be interpolated into the WebView asset URL by `TaskProgressOverlay`.
+- Change: centralized the 17 permitted bundled avatar identifiers in `AppPreferences`; getter now falls back to `ghost` unless the stored value is allowlisted; setter uses the same allowlist.
+- Regression test added to `AppPreferencesSecurityInstrumentedTest.invalidPersistedAvatarFallsBackToBundledDefault`: seeds an invalid persisted path, asserts the getter returns `ghost`, and verifies invalid writes also resolve to `ghost`.
+- Commits:
+  - `d6cfffe78a35f10d9dda804f3d2cd8ae06461687` — preference validation fix.
+  - `82250afe237a26499de7866a6facdb9c0961ba1c` — regression test.
+- Files modified:
+  - `Part 7/app/src/main/java/com/jarvis/assistant/data/preferences/AppPreferences.kt`
+  - `Part 7/app/src/androidTest/java/com/jarvis/assistant/data/preferences/AppPreferencesSecurityInstrumentedTest.kt`
+- Verification: both changed source regions and the test insertion were fetched again from `main`. No test task was executed. No APK was built.
 
 ## Verification ledger
 
@@ -97,7 +112,7 @@ Status: IN PROGRESS
 - Unit/instrumentation tests executed: NOT RUN.
 - APK build: PROHIBITED / NOT RUN.
 - Physical-device testing: OUT OF SCOPE / NOT RUN.
-- GitHub write/commit for this progress checkpoint: PENDING.
+- GitHub write/commit for progress checkpoint: VERIFIED (`0d5089b742ac926889921e3174bc79b207c84008`).
 
 ## Next execution steps
 
