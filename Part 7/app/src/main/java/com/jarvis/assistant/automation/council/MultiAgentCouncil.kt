@@ -151,8 +151,8 @@ object MultiAgentCouncil {
         plan: List<MissionStep>,
         researchedContext: String
     ): AgentReviewBatch = coroutineScope {
-        // Keep ordinary one-step commands fast; delegate only multi-step missions.
-        if (plan.size < 2) return@coroutineScope AgentReviewBatch(emptyMap(), 0)
+        // Keep ordinary one-step commands fast; delegate multi-step or explicitly complex goals.
+        if (plan.size < 2 && goal.length < 80) return@coroutineScope AgentReviewBatch(emptyMap(), 0)
         val planner = MissionEngine.llmPlanner
             ?: return@coroutineScope AgentReviewBatch(emptyMap(), 0)
         val budget = AtomicInteger(0)
