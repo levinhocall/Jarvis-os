@@ -20,8 +20,19 @@ curl http://127.0.0.1:8765/health
 
 The first start downloads the embedding model and may take several minutes. The SQLite database and model cache persist in named Docker volumes.
 
+## Android integration
+
+Set `JARVIS_MEMORY_SYNC_ENDPOINT` in `Part 7/gradle.properties` or the Gradle environment to this service's HTTPS URL (or a trusted private-LAN URL). Example:
+
+```properties
+JARVIS_MEMORY_SYNC_ENDPOINT=https://your-private-memory-host
+```
+
+When this value is blank, Android keeps local embeddings and does not schedule cloud sync. When configured, Android uses the neural embedding endpoint for new/search vectors, gradually re-indexes up to 24 older memories per semantic-search request, and queues local-to-server memory sync every six hours while connected. The Android sync worker is currently **local-authoritative push sync**: local updates are uploaded idempotently and local deletions are propagated, but remote edits are not pulled back into Room yet. Do not treat it as full multi-device bidirectional sync.
+
 ## API
 
+- `POST /v1/embeddings` — batch neural embeddings
 - `POST /v1/memories` — add/update a memory
 - `POST /v1/memories/search` — neural semantic search
 - `GET /v1/memories` — paginated list; supports `updated_after`
