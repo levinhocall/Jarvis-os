@@ -276,3 +276,12 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - Added instrumentation coverage for clearing all sessions/messages and a JVM regression test for cross-session message pairing.
 - Commits: `cece692`, `ac5d05d`, `379b8dd`, `13b6b03`, `17a68e4`, `bb95b1a`, `a7f69b8`, `9876242`, `5ab37ac`, `778dbe9`.
 - Verification remains pending: these tests were added but not executed in this session.
+
+
+### Verification trigger and final chat UI polish
+
+- Android CI now triggers on pushes and pull requests affecting `Part 7/**` or the workflow itself, while retaining manual dispatch. It runs unit tests and lint only; it does not assemble an APK.
+- Chat History now clears the adapter's retained list when the result becomes empty.
+- New Chat confirmation now accurately says prior conversations remain available in History (the old session is archived, not deleted).
+- Commits: `8b60385`, `b22371d`, `5ff9e94`.
+- GitHub commit status was queried immediately after enabling the push trigger and had no reported status at that moment. Do not interpret an empty status response as a passing run; check the Actions result after the runner starts.
