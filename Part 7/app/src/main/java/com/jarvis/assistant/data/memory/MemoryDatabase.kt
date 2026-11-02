@@ -14,6 +14,7 @@ import com.jarvis.assistant.data.mission.MissionDao
 import com.jarvis.assistant.data.mission.MissionEntity
 import com.jarvis.assistant.data.notification.NotificationHistoryEntity
 import com.jarvis.assistant.data.notification.NotificationHistoryDao
+import com.jarvis.assistant.data.memory.sync.MemorySyncStateEntity
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.SupportSQLiteDatabase
 import android.os.Looper
@@ -24,9 +25,10 @@ import android.os.Looper
         ChatSessionEntity::class,
         ChatMessageEntity::class,
         MissionEntity::class,
-        NotificationHistoryEntity::class
+        NotificationHistoryEntity::class,
+        MemorySyncStateEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class MemoryDatabase : RoomDatabase() {
@@ -129,6 +131,22 @@ abstract class MemoryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE memories ADD COLUMN syncId TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE memories ADD COLUMN lastSyncedAt INTEGER DEFAULT NULL")
+                // Preserve the existing remote identity scheme for rows already synced.
+                db.execSQL("UPDATE memories SET syncId = 'jarvis-local-' || id WHERE syncId = ''")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS memory_sync_state (
+                        syncKey TEXT NOT NULL PRIMARY KEY,
+                        cursorUpdatedAt TEXT NOT NULL DEFAULT '',
+                        cursorId TEXT NOT NULL DEFAULT '',
+                        updatedAt INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
         @Volatile
         private var instance: MemoryDatabase? = null
 
@@ -235,7 +253,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .openHelperFactory(DeferredSqlCipherOpenHelperFactory(context.applicationContext))
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()
