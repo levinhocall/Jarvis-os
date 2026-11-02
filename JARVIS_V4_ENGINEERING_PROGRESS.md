@@ -409,3 +409,9 @@ Status: **SOURCE IMPLEMENTED IN PART; runtime verification and remaining integra
 - ElevenLabs live request/audio playback: NOT RUN.
 - Android 16 boot/overlay/voice device test: NOT RUN.
 - APK build: NOT RUN, per instruction.
+
+
+### Follow-up hardening after the integration batch
+- ElevenLabs playback now cancels the previous HTTP request/player before starting a new utterance, reports external playback as speaking, and stops stale external audio when switching back to local TTS. Commit: `050bfaf`, `a28ec5c`.
+- Overlay-only boot restoration now returns `START_NOT_STICKY` so a system null-intent restart cannot accidentally enter the normal microphone standby path. Commit: `0d52367`.
+- These are source-level hardening changes; they have not been compiled or device-tested.
