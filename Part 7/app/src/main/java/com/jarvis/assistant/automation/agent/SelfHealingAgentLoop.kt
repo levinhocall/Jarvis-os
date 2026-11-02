@@ -185,11 +185,15 @@ object SelfHealingAgentLoop {
                 return StepOutcome.SUCCESS
             }
 
-            // If the action was consequential (e.g. money transfer or message dispatch),
-            // do not blindly retry to avoid duplicate side-effects!
-            if (step.isConsequential) {
+            // Never retry after a tool reports that it mutated real state but could not
+            // verify the outcome. This avoids duplicate taps, sends, toggles, or submissions.
+            if (result.stateMutated || step.isConsequential) {
                 step.outcome = StepOutcome.UNVERIFIED_TIMEOUT
-                step.executionMessage = "Consequential action timed out or unverified; suppressed automatic retry to prevent duplicate side effects."
+                step.executionMessage = if (result.stateMutated) {
+                    "Action may have changed real state but verification is incomplete; automatic retry suppressed."
+                } else {
+                    "Consequential action failed or timed out; automatic retry suppressed to prevent duplicate side effects."
+                }
                 return StepOutcome.UNVERIFIED_TIMEOUT
             }
 
@@ -198,8 +202,14 @@ object SelfHealingAgentLoop {
                 val backoffMs = 150L * (1 shl (step.currentRetry - 1))
                 Log.w(TAG, "Step '${step.title}' failed: ${result.message}. Attempting recovery and waiting ${backoffMs}ms")
 
-                // Trigger self-healing recovery (e.g. dismiss system dialog, re-ground screen)
-                attemptRecovery(result.message)
+                // Retry only after the recovery hook confirms that the execution context
+                // has been re-established. A failed recovery is a hard stop, not a blind retry.
+                val recovered = attemptRecovery(result.message)
+                if (!recovered) {
+                    step.outcome = StepOutcome.RECOVERABLE_FAILURE
+                    step.executionMessage = "Recovery could not re-establish a safe execution context: ${result.message}"
+                    return StepOutcome.RECOVERABLE_FAILURE
+                }
                 delay(backoffMs)
             } else {
                 step.outcome = StepOutcome.FATAL_FAILURE
