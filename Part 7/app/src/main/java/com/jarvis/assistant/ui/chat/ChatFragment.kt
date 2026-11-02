@@ -85,7 +85,6 @@ class ChatFragment : Fragment() {
                 .setMessage("Start a new conversation and clear current history?")
                 .setPositiveButton("New Chat") { _, _ ->
                     val app = JarvisApp.instance
-                    app.chatRepository.clearHistory()
                     viewLifecycleOwner.lifecycleScope.launch {
                         runCatching {
                             withContext(Dispatchers.IO) {
@@ -94,7 +93,7 @@ class ChatFragment : Fragment() {
                         }.onFailure { error ->
                             Toast.makeText(
                                 requireContext(),
-                                "Legacy chat history was cleared, but the structured conversation could not be reset.",
+                                "The new conversation could not be started. Your previous history is still saved.",
                                 Toast.LENGTH_LONG
                             ).show()
                             android.util.Log.e("ChatFragment", "Could not start a fresh structured conversation", error)
