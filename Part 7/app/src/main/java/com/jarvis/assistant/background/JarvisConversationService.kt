@@ -1066,6 +1066,10 @@ class JarvisConversationService : Service() {
                 }
                 return@launch
             }
+            // A stopped manager owns the previous socket until its disconnect callback completes.
+            // Wait before replacing the transport so a rapid restart cannot overlap sessions.
+            voiceSessionManager?.awaitStopped()
+            voiceSessionManager = null
             val systemPrompt = generateCurrentSystemPrompt()
 
             withContext(Dispatchers.Main) {
@@ -3570,14 +3574,13 @@ class JarvisConversationService : Service() {
         audioPlayer?.release()
         audioPlayer = null
 
-        val sessionManager = voiceSessionManager
-        voiceSessionManager = null
-        if (sessionManager != null) {
-            sessionManager.stopSession()
+        // Keep the socket reference until the manager's asynchronous teardown completes.
+        // A subsequent start awaits that teardown before replacing the transport.
+        if (voiceSessionManager != null) {
+            voiceSessionManager?.stopSession()
         } else {
             liveWebSocket?.disconnect()
         }
-        liveWebSocket = null
 
         setConversationState(ConversationState.IDLE)
         _connectionStatus.value = "READY"
@@ -3963,6 +3966,10 @@ class JarvisConversationService : Service() {
 
     private fun fullStop() {
         stopActiveConversation()
+        // onDestroy is synchronous; close the transport before cancelling serviceScope,
+        // which also owns the manager's asynchronous teardown callback.
+        liveWebSocket?.disconnect()
+        liveWebSocket = null
         exitStandbyListening()
         _isStandby.value = false
         releaseWakeLock()
