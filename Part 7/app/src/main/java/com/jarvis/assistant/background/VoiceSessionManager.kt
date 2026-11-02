@@ -4,12 +4,15 @@ import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -54,6 +57,10 @@ class VoiceSessionManager(
     // Invalidates in-flight connect/reconnect callbacks when the user stops or restarts a session.
     private val sessionGeneration = AtomicLong(0L)
     private var reconnectJob: Job? = null
+    // Serializes socket connect/disconnect and prevents a new session from being
+    // connected before the previous session's asynchronous teardown has finished.
+    private val connectionMutex = Mutex()
+    @Volatile private var disconnectBarrier: CompletableDeferred<Unit>? = null
     private var lastStateChangeTimestamp = SystemClock.elapsedRealtime()
 
     val isLive: Boolean
@@ -70,6 +77,7 @@ class VoiceSessionManager(
     /**
      * Initiates a new conversation session.
      */
+    @Synchronized
     fun startSession() {
         if (isSessionActive) {
             Log.d(TAG, "Session already active or connecting.")
@@ -82,9 +90,14 @@ class VoiceSessionManager(
         _lastError.value = null
         transitionState(SessionLifecycleState.CONNECTING, "STARTING")
 
+        val pendingDisconnect = disconnectBarrier
         reconnectJob = scope.launch(Dispatchers.IO) {
             try {
-                val success = onConnectRequest()
+                pendingDisconnect?.await()
+                if (generation != sessionGeneration.get()) return@launch
+                val success = connectionMutex.withLock {
+                    if (generation != sessionGeneration.get()) false else onConnectRequest()
+                }
                 if (generation != sessionGeneration.get()) {
                     // A stop/restart happened while the handshake was suspended.
                     // Tear down any late connection instead of resurrecting the old session.
@@ -109,17 +122,25 @@ class VoiceSessionManager(
     /**
      * Stops the conversation session and cancels scheduled reconnects.
      */
+    @Synchronized
     fun stopSession() {
         // Invalidate pending handshakes immediately, before asynchronous disconnect starts.
         sessionGeneration.incrementAndGet()
         reconnectJob?.cancel()
         reconnectJob = null
         transitionState(SessionLifecycleState.DISCONNECTED, "OFFLINE")
+        val barrier = CompletableDeferred<Unit>()
+        disconnectBarrier = barrier
         scope.launch(Dispatchers.IO) {
             try {
-                onDisconnectRequest()
+                connectionMutex.withLock { onDisconnectRequest() }
             } catch (e: Exception) {
                 Log.w(TAG, "Error disconnecting session", e)
+            } finally {
+                barrier.complete(Unit)
+                synchronized(this@VoiceSessionManager) {
+                    if (disconnectBarrier === barrier) disconnectBarrier = null
+                }
             }
         }
     }
@@ -170,7 +191,9 @@ class VoiceSessionManager(
             ) return@launch
 
             try {
-                val reconnected = onConnectRequest()
+                val reconnected = connectionMutex.withLock {
+                    if (generation != sessionGeneration.get()) false else onConnectRequest()
+                }
                 if (generation != sessionGeneration.get()) {
                     // The connection completed after a stop/restart. Do not publish LIVE.
                     if (reconnected) runCatching { onDisconnectRequest() }
