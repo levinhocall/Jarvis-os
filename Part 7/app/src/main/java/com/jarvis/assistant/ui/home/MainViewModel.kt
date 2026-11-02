@@ -88,8 +88,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun observeConversationHistory() {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { conversationRepository.restoreMostRecentActiveSession() }
-                .onFailure { android.util.Log.e("MainViewModel", "Could not restore Room chat session", it) }
+            val app = getApplication<JarvisApp>()
+            runCatching {
+                val sessionId = conversationRepository.restoreMostRecentActiveSession()
+                    ?: conversationRepository.createNewSession("Voice Conversation").id
+                // Migrate old preference history before a user can create a new Room session.
+                // Clear legacy data only after the complete Room import succeeds.
+                val legacyTurns = app.chatRepository.turns.value
+                if (legacyTurns.isNotEmpty()) {
+                    conversationRepository.mergeHistoricalTurns(sessionId, legacyTurns)
+                    app.chatRepository.clearHistory()
+                }
+            }.onFailure {
+                android.util.Log.e("MainViewModel", "Could not restore/migrate Room chat history", it)
+            }
             conversationRepository.currentSessionId.collectLatest { sessionId ->
                 if (sessionId == null) {
                     _chatTurns.value = emptyList()
