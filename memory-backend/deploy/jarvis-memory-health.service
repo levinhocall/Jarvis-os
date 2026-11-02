@@ -1,0 +1,7 @@
+[Unit]
+Description=Check JARVIS memory container health
+After=docker.service jarvis-memory.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/jarvis-memory/memory-backend/deploy/health-restart.sh
