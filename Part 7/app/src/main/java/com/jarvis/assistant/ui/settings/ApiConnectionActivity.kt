@@ -299,9 +299,9 @@ class ApiConnectionActivity : AppCompatActivity() {
             if (result.first) {
                 val ping = result.second
                 binding.tvPingResult.text = "Ping: ${ping}ms • Valid"
-                binding.tvLiveStatus.text = "CONNECTED • HANDSHAKE OK"
+                binding.tvLiveStatus.text = "API KEY ACCEPTED • LIVE NOT TESTED"
                 binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#22C55E"))
-                Snackbar.make(binding.root, "Connection verified! Ping: ${ping}ms", Snackbar.LENGTH_LONG).show()
+                Snackbar.make(binding.root, "Model listing accepted the key (${ping}ms). Live voice has not been tested.", Snackbar.LENGTH_LONG).show()
             } else {
                 val code = result.second
                 binding.tvPingResult.text = if (code == -1) "Network Timeout" else "HTTP $code Error"

@@ -1799,7 +1799,7 @@ object MissionEngine {
                     else -> "large"
                 }
                 val result = visual.handleScroll(direction, distance)
-                Pair(result.success && result.verified, MissionVerificationEvidence(EvidenceType.UI_STATE_CHANGE, result.verified, result.message))
+                Pair(result.success && result.verified == true, MissionVerificationEvidence(EvidenceType.UI_STATE_CHANGE, result.verified == true, result.message))
             }
 
             "navigate_back" -> {
@@ -1998,8 +1998,7 @@ object MissionEngine {
                 val target = File(root, relativePath).canonicalFile
                 if (!target.toPath().startsWith(root.toPath()) || !target.isFile) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Requested file does not exist inside the selected workspace."))
                 val text = target.readText().take(40_000)
-                Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Read $relativePath (${text.length} characters):
-${text.take(3_000)}"))
+                Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Read $relativePath (${text.length} characters):\n${text.take(3_000)}"))
             }
 
             "edit_code" -> {
@@ -2093,5 +2092,4 @@ ${text.take(3_000)}"))
             ))
         }
     }
-}
 }

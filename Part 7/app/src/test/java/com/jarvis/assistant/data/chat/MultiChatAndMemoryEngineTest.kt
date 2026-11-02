@@ -47,6 +47,16 @@ class MultiChatAndMemoryEngineTest {
     // =========================================================================
 
     @Test
+    fun `permanent forget removes stored versions without erasing unrelated facts`() = runBlocking {
+        memoryRepo.remember("Old preference", key = "erase-me")
+        val id = memoryRepo.remember("New preference", key = "erase-me")
+        val otherId = memoryRepo.remember("Keep this fact", key = "keep-me")
+        memoryRepo.forget(id, permanent = true)
+        assertFalse(fakeMemoryDao.getAllMemoriesForSync().any { it.key == "erase-me" })
+        assertNotNull(fakeMemoryDao.getMemoryById(otherId))
+    }
+
+    @Test
     fun `malformed backup null rows and null keys cannot crash import`() = runBlocking {
         assertEquals(0, memoryRepo.importMemoriesFromJson("[null, {\"status\":\"ACTIVE\",\"key\":null}]"))
         assertEquals(0, memoryRepo.getAllMemories().size)
@@ -465,6 +475,13 @@ class FakeMemoryDao : MemoryDao {
 
     override suspend fun deleteMemory(memory: MemoryEntity) {
         allRawMemories.removeAll { it.id == memory.id }
+    }
+
+    override suspend fun permanentlyDeleteMemoryById(id: Long): Int {
+        val key = allRawMemories.firstOrNull { it.id == id }?.key ?: return 0
+        val removed = allRawMemories.count { it.key == key }
+        allRawMemories.removeAll { it.key == key }
+        return removed
     }
 
     override suspend fun deleteMemoryById(id: Long) {

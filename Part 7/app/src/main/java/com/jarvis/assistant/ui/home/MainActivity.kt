@@ -100,7 +100,7 @@ class MainActivity : AppCompatActivity() {
                 val metrics = android.util.DisplayMetrics()
                 @Suppress("DEPRECATION")
                 windowManager.defaultDisplay.getRealMetrics(metrics)
-                val started = JarvisConversationService.startScreenCapture(projection, metrics)
+                val started = projection != null && JarvisConversationService.startScreenCapture(projection, metrics)
                 if (!started) {
                     JarvisConversationService.demoteFromMediaProjection()
                     Toast.makeText(this, "Android did not start screen capture. Please try again.", Toast.LENGTH_LONG).show()

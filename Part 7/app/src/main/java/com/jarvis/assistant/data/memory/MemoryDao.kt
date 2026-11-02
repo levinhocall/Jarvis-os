@@ -57,6 +57,10 @@ interface MemoryDao {
         softDeleteMemory(memory.id)
     }
 
+    /** Explicit user erasure includes superseded versions of the same fact. */
+    @Query("DELETE FROM memories WHERE `key` = (SELECT `key` FROM memories WHERE id = :id)")
+    suspend fun permanentlyDeleteMemoryById(id: Long): Int
+
     @Query("UPDATE memories SET status = 'DELETED', timestamp = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) WHERE id = :id")
     suspend fun deleteMemoryById(id: Long)
 

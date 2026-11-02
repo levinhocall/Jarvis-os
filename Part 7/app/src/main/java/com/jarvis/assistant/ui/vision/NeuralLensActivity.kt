@@ -130,7 +130,7 @@ class NeuralLensActivity : AppCompatActivity() {
             textSize = 14f
             setTextColor(color(R.attr.themeTextPrimary))
             setPadding(0, dp(8), 0, dp(12))
-            textIsSelectable = true
+            setTextIsSelectable(true)
         }
         root.addView(result)
         setContentView(android.widget.ScrollView(this).apply { addView(root) })

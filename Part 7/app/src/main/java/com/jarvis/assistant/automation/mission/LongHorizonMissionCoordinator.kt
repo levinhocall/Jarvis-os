@@ -192,7 +192,8 @@ class LongHorizonMissionCoordinator(
     ): LongHorizonMissionState {
         val current = missions[missionId] ?: throw IllegalArgumentException("Mission not found: $missionId")
 
-        val newExecutedNonIdempotent = if (isSuccess && isNonIdempotent) {
+        // A failed acknowledgement does not prove the external action did not happen.
+        val newExecutedNonIdempotent = if (isNonIdempotent) {
             current.executedNonIdempotentStepIds + stepId
         } else {
             current.executedNonIdempotentStepIds

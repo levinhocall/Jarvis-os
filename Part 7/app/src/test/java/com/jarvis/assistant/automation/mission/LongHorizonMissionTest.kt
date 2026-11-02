@@ -20,6 +20,16 @@ class LongHorizonMissionTest {
 
 
     @Test
+    fun `failed non idempotent acknowledgement cannot be blindly retried`() {
+        val step = MissionStep(stepId = "send", title = "Send", toolName = "send_message", isIdempotent = false)
+        val mission = coordinator.createMission("Send once", listOf(MilestoneDefinition(id = "m", title = "Send", steps = listOf(step))))
+        coordinator.startOrResume(mission.missionId)
+        coordinator.recordStepExecution(mission.missionId, "m", "send", false, true, failureReason = "Acknowledgement timed out")
+        coordinator.startOrResume(mission.missionId)
+        assertTrue(coordinator.checkStepEligibility(mission.missionId, "m", step) is StepExecutionEligibility.ReplayPrevented)
+    }
+
+    @Test
     fun `older checkpoint never discards newer non idempotent replay guards`() {
         val storage = InMemoryCheckpointStorage()
         val engine = LongHorizonMissionCoordinator(storage)

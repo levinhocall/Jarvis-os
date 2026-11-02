@@ -1160,7 +1160,7 @@ class JarvisConversationService : Service() {
                             }
                             _liveAssistantResponse.value = currentTurnAssistantText.toString().trim()
                             val assistantText = currentTurnAssistantText.toString().lowercase(Locale.ROOT)
-                            Log.d("JarvisService", "Assistant response chunk received (length=${chunkToAppend.length})")
+                            Log.d("JarvisService", "Assistant response chunk received (length=${textChunk.length})")
                         }
 
                         override fun onUserTextReceived(textChunk: String) {
@@ -2010,10 +2010,14 @@ class JarvisConversationService : Service() {
                     finishOfflineVoiceTurn()
                 } else {
                     setConversationState(ConversationState.SPEAKING)
-                    com.jarvis.assistant.audio.VoiceSynthesisRouter.speakPrivate(response) {
+                    val speechQueued = com.jarvis.assistant.audio.VoiceSynthesisRouter.speakPrivate(response) {
                         serviceScope.launch(Dispatchers.Main.immediate) {
                             finishOfflineVoiceTurn()
                         }
+                    }
+                    if (!speechQueued) {
+                        _events.tryEmit("Offline voice unavailable; the private response is shown as text.")
+                        finishOfflineVoiceTurn()
                     }
                 }
             }

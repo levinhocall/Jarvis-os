@@ -605,7 +605,7 @@ class LlmPlanner(
                         )
                         return LlmMissionExecutionResult(
                             isSuccess = false,
-                            summary = risk.confirmationSummary.ifBlank { "Approval required before JARVIS can execute '$resolvedName'. No action has been performed." },
+                            summary = risk.confirmationSummary.orEmpty().ifBlank { "Approval required before JARVIS can execute '$resolvedName'. No action has been performed." },
                             stepsExecuted = history.size,
                             history = history,
                             abortReason = "APPROVAL_REQUIRED",

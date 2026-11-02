@@ -107,7 +107,7 @@ class TriggerRepository(
                     "Encrypted trigger migration write failed."
                 }
             }
-            check(secure.getString(KEY_TRIGGERS, null).isNotBlank()) {
+            check(!secure.getString(KEY_TRIGGERS, null).isNullOrBlank()) {
                 "Encrypted trigger migration verification failed."
             }
             check(legacy.edit().remove(KEY_TRIGGERS).commit()) {

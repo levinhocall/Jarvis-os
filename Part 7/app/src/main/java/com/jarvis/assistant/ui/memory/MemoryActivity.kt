@@ -253,6 +253,23 @@ class MemoryActivity : AppCompatActivity() {
                     Toast.makeText(this@MemoryActivity, "Memory deleted", Toast.LENGTH_SHORT).show()
                 }
             }
+            .setNeutralButton("ERASE PERMANENTLY") { _, _ ->
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("Erase this fact permanently?")
+                    .setMessage("This removes all stored versions of this fact. Existing exports are unaffected.")
+                    .setPositiveButton("ERASE") { _, _ ->
+                        lifecycleScope.launch {
+                            try {
+                                val removed = memoryRepo.permanentlyDeleteMemoryById(memory.id)
+                                Toast.makeText(this@MemoryActivity, if (removed > 0) "Stored fact erased" else "Fact was already removed", Toast.LENGTH_SHORT).show()
+                            } catch (_: Exception) {
+                                Toast.makeText(this@MemoryActivity, "Could not erase the fact", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                    .setNegativeButton("CANCEL", null)
+                    .show()
+            }
             .setNegativeButton("CANCEL", null)
             .show()
     }

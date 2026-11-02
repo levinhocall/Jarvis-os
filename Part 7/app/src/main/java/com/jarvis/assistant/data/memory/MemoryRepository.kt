@@ -170,7 +170,7 @@ class MemoryRepository(
      */
     suspend fun forget(memoryId: Long, permanent: Boolean = false) {
         if (permanent) {
-            memoryDao.deleteMemoryById(memoryId)
+            memoryDao.permanentlyDeleteMemoryById(memoryId)
         } else {
             memoryDao.softDeleteMemory(memoryId)
         }
@@ -310,6 +310,8 @@ class MemoryRepository(
     suspend fun updateMemory(memory: MemoryEntity) {
         memoryDao.updateMemory(memory.copy(timestamp = System.currentTimeMillis()))
     }
+
+    suspend fun permanentlyDeleteMemoryById(id: Long): Int = memoryDao.permanentlyDeleteMemoryById(id)
 
     suspend fun deleteMemoryById(id: Long) {
         memoryDao.deleteMemoryById(id)

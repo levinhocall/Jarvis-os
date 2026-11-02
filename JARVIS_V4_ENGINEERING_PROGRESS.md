@@ -544,3 +544,42 @@ These fixes are source changes pending the verification results below. No UI red
 - `SqlCipherRuntimeInstrumentedTest.kt`: wrong-key probe uses a preserving handler and asserts the database still exists with identical bytes after rejection. This test requires Android; it has NOT been run.
 
 Verification setup: installed SDK platform 36/build tools and a JDK 17 into `/workspace/work` only. Initial attempts exposed missing SDK, JRE-only toolchain, and JDK trust-store setup blockers. Retrying with the system CA trust store; no TLS verification was disabled. No APK task invoked.
+
+### Implementation batch 4 — build compatibility and truthful failure states
+
+- Room's 2.6.1 annotation processor failed on this project's Kotlin 2.2.20 metadata: `Provided Metadata instance has version 2.2.0, while maximum supported version is 2.0.0`. Updated the existing Room runtime/ktx/compiler dependencies together to 2.8.4. This is a compatibility repair, not a database version bump or destructive migration.
+- Non-idempotent steps with a failed acknowledgement now retain replay guards: a missing acknowledgement cannot establish that the real-world action did not happen. Added regression coverage.
+- Private speech reports whether a local voice could be selected; an unavailable voice no longer leaves the immediate offline-response path in a speaking state. Queued-initialization and OEM TTS behavior remain device-test items.
+- API connection test now says the key was accepted by model listing and explicitly says Live is untested. An HTTP model-list response is not a WebSocket handshake.
+
+### Phase-by-phase acceptance matrix (source audit; runtime acceptance remains open)
+
+| Phase | Classification | Evidence and remaining work |
+|---|---|---|
+| A — memory | PARTIAL | Room/SQLCipher/Keystore production path retained; all legacy worker uploads removed, legacy remote embedding adapters made local, automatic prompt/council injection removed, memory tool history redacted, private TTS isolated. Corruption defaults now fail closed; null-row imports handled. Encryption, plaintext migration, crash recovery, wrong-key preservation and restart persistence still need Android execution. No claim of zero traffic from device instrumentation. |
+| B — voice | PARTIAL | Production service uses VoiceSessionManager/AudioPipelineManager; bounded connect callbacks, stopped-session callback guard, cancellation propagation and private TTS added. Gemini Live key rotation, AEC, barge-in, audio focus, mic restrictions and reconnection need live credentials and Android 16 hardware. ElevenLabs IS implemented in VoiceSynthesisRouter and API settings; no live request was made. |
+| C — accessibility | PARTIAL | Manifest has BIND_ACCESSIBILITY_SERVICE and metadata; service has onServiceConnected/onDestroy, node actions and gesture dispatch callbacks. No security bypass added. Event filtering, callback threading, restricted settings, denial/reconnect and actual device-action verification require Android runtime acceptance. Source inspection does not certify every action. |
+| D — overlay | PARTIAL | TYPE_APPLICATION_OVERLAY, settings permission round-trip, persisted avatar/position and docking paths exist. Removal now clears active reference/animations. Window insets, rotation, permission revocation, process restoration and OEM behavior still need Android 16 tests. |
+| E — orchestration | PARTIAL | JarvisUnifiedRuntime calls council preflight; three reviewers, shared atomic call budget, 18s per-reviewer/24s overall limits and deterministic role-keyed reconciliation exist. Reviewers have no direct device executor. Private memory removed from their context. Full cancellation, duplicate execution and approval regression suite still needs successful execution; model output remains advisory. |
+| F — recovery | PARTIAL | MissionEngine persists in-flight steps and restores unknown consequential outcomes without automatic replay. LongHorizonMissionCoordinator restores executing states paused; replay guards now survive stale checkpoints and failed acknowledgements. Its checkStepEligibility/recordStepExecution methods have no production call sites: extended milestone execution is not source complete. Existing MissionEngine remains the production action authority. |
+| G — camera/OCR/GPS/maps | PARTIAL | NeuralLensActivity has CameraX capture, selected-image ownership, analysis copy/finally release and lifecycle unbinding; CameraVisionAnalyzer has real provider HTTP calls. AmoledMapActivity uses osmdroid, live Android location, geocoding and OSRM route geometry, with error states and stale-response guards. Weather location timeout now unregisters. OCR accuracy, permissions, offline tiles/routing availability and hardware resource behavior remain untested. No paid map service added. |
+| H — settings | PARTIAL | Settings routes to API, voice, memory, permissions, avatars, privacy and theme; model-list test no longer claims Live handshake. No account/subscription/credit system introduced. Exhaustive control-to-effect and provider/model/voice behavior remains to be verified on-device. |
+
+### Security review boundary and remaining risks
+
+- Manifest disables Android backup; Keystore-wrapped database key remains in no-backup storage. No encryption downgrade, schema reset or destructive Room fallback added.
+- Explicit memory export remains user-directed JSON; choose a private destination. Encryption of exported files is not implemented by this batch.
+- Accessibility and notification services retain platform binding permissions; avatar WebViews disable file/content access and use appassets. This is not a full penetration test of every exported component or embedded page.
+- Local semantic vectors use deterministic hashing, not an on-device neural model. Remote embeddings are disabled rather than substituted with fabricated neural output.
+- Unknown/corrupt databases now remain available for manual recovery; automatic salvage and a recovery UI are not implemented here.
+- Current user speech still goes to the selected cloud conversation provider. Stored memory is not automatically injected. A comprehensive device packet capture and all tool/screen/private-output payload checks remain outstanding; do not claim complete privacy verification from static inspection.
+- No physical device/emulator is attached (`adb devices`: empty list). Instrumentation cannot be executed, and this session must not generate its APK as a workaround.
+- The complete V4 directive is NOT accepted as complete. Remaining source gaps, live-provider tests, hardware behavior and full settings acceptance are explicitly open.
+
+### Additional defects exposed by actual compilation and call-path tracing
+
+- After the Room metadata repair, Kotlin compilation exposed pre-existing defects in approval null handling, nullable scroll verification, a broken multiline string and extra trailing brace in MissionEngine, encrypted trigger verification, assistant-text logging scope, nullable MediaProjection handling, map destination-variable shadowing, Android text setter usage, and missing WhatsApp return statements. Fixed these defects; nullable verification fails closed.
+- WhatsApp contact selection previously accepted an exact match but then selected the first candidate. Both message and call paths now require a unique exact match (or a single candidate), and duplicate exact names require clarification. Added two contact-selection regressions. Existing mission callers still label queued WhatsApp dispatch as UNVERIFIED, not delivered.
+- Found that `forget(permanent=true)` called a tombstone-only DAO method. Added a separate explicit SQL DELETE path, wired the existing permanent flag and an extra confirmation action in the existing memory dialog. It removes all stored versions of the selected fact without resetting the database or affecting unrelated records. Soft deletion remains available. Added instrumentation coverage for version removal and unrelated-record preservation; updated fake DAOs for the new contract.
+- Permanent SQL deletion is logical record removal. This is not a claim of forensic flash erasure, WAL sanitization or deletion of copies in prior exports. Android runtime validation remains required.
+- Room generated the previously missing schema-v6 export, now retained under `app/schemas/com.jarvis.assistant.data.memory.MemoryDatabase/6.json`; no historical migration or database version was changed.

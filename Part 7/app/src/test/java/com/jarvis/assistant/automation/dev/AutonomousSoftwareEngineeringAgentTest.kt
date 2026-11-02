@@ -70,6 +70,13 @@ class AutonomousSoftwareEngineeringAgentTest {
             memories.removeIf { it.id == memory.id }
         }
 
+        override suspend fun permanentlyDeleteMemoryById(id: Long): Int {
+            val key = memories.firstOrNull { it.id == id }?.key ?: return 0
+            val removed = memories.count { it.key == key }
+            memories.removeAll { it.key == key }
+            return removed
+        }
+
         override suspend fun deleteMemoryById(id: Long) {
             memories.removeIf { it.id == id }
         }

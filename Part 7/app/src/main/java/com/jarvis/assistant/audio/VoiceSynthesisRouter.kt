@@ -135,22 +135,23 @@ object VoiceSynthesisRouter {
     }
 
     /** Local memory/reflex results must never reach an external TTS provider or network voice. */
-    fun speakPrivate(text: String, onDone: (() -> Unit)? = null) {
+    fun speakPrivate(text: String, onDone: (() -> Unit)? = null): Boolean {
         stopExternalPlayback()
         val tts = localTts
         if (tts == null || !isInitialized) {
             pendingSpeechIsPrivate = true
             pendingSpeech = Pair(text, onDone)
-            return
+            return true
         }
         val voices = tts.voices.orEmpty().filter { !it.isNetworkConnectionRequired }
         val offlineVoice = voices.firstOrNull { it.locale.language == Locale.getDefault().language }
             ?: voices.firstOrNull()
         if (offlineVoice == null || tts.setVoice(offlineVoice) != TextToSpeech.SUCCESS) {
             Log.w(TAG, "No offline TTS voice is available for private speech; text remains on screen.")
-            return
+            return false
         }
         speakLocal(text, onDone)
+        return true
     }
 
     private fun speakLocal(text: String, onDone: (() -> Unit)?) {

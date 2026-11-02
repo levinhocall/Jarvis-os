@@ -140,11 +140,11 @@ dependencies {
     implementation("com.alphacephei:vosk-android:0.3.75@aar")
 
     // Room Database
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
+    implementation("androidx.room:room-runtime:2.8.4")
+    implementation("androidx.room:room-ktx:2.8.4")
     implementation("androidx.sqlite:sqlite:2.7.0")
     implementation("net.zetetic:sqlcipher-android:4.20.0@aar")
-    kapt("androidx.room:room-compiler:2.6.1")
+    kapt("androidx.room:room-compiler:2.8.4")
 
     // WorkManager for background and scheduled triggers
     implementation("androidx.work:work-runtime-ktx:2.9.1")

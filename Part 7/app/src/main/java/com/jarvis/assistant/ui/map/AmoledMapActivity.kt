@@ -82,7 +82,7 @@ class AmoledMapActivity : AppCompatActivity() {
         }
         destination = EditText(this).apply {
             hint = "Search destination"
-            singleLine = true
+            setSingleLine(true)
             setTextColor(color(R.attr.themeTextPrimary))
             setHintTextColor(color(R.attr.themeTextMuted))
         }
@@ -266,7 +266,7 @@ class AmoledMapActivity : AppCompatActivity() {
         val searchGeneration = ++destinationSearchGeneration
         lifecycleScope.launch {
             try {
-                val point = withContext(Dispatchers.IO) {
+                val searchResult = withContext(Dispatchers.IO) {
                     val encoded = URLEncoder.encode(query, "UTF-8")
                     val request = Request.Builder()
                         .url("https://nominatim.openstreetmap.org/search?q=$encoded&format=jsonv2&limit=1")
@@ -281,7 +281,7 @@ class AmoledMapActivity : AppCompatActivity() {
                     }
                 }
                 if (searchGeneration != destinationSearchGeneration || isFinishing || isDestroyed) return@launch
-                val (point, label) = point
+                val (point, label) = searchResult
                 selectedDestination = point
                 map.overlays.removeAll { it is Marker && it.title == "Destination" }
                 map.overlays.add(Marker(map).apply {

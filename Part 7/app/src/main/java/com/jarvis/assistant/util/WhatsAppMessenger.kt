@@ -32,6 +32,11 @@ object WhatsAppMessenger {
         data class Error(val reason: String) : CallResult()
     }
 
+    internal fun selectUniqueContact(matches: List<ContactCaller.Contact>, recipientName: String): ContactCaller.Contact? {
+        val exact = matches.filter { it.name.equals(recipientName.trim(), ignoreCase = true) }
+        return if (exact.isNotEmpty()) exact.singleOrNull() else matches.singleOrNull()
+    }
+
     /**
      * Attempts to send a WhatsApp message to [recipientName].
      */
@@ -48,14 +53,8 @@ object WhatsAppMessenger {
         if (matches.isEmpty()) {
             return SendResult.ContactNotFound(recipientName)
         }
-        if (matches.size > 1) {
-            val exactMatch = matches.firstOrNull { it.name.equals(recipientName.trim(), ignoreCase = true) }
-            if (exactMatch == null) {
-                return SendResult.MultipleContactsFound(recipientName, matches.map { "${it.name} (${it.number})" })
-            }
-        }
-
-        val targetContact = matches.first()
+        val targetContact = selectUniqueContact(matches, recipientName)
+            ?: return SendResult.MultipleContactsFound(recipientName, matches.map { "${it.name} (${it.number})" })
         val rawNumber = targetContact.number.filter { it.isDigit() || it == '+' }
         var phoneDigits = rawNumber.filter { it.isDigit() }
 
@@ -135,7 +134,7 @@ object WhatsAppMessenger {
         }
 
         accessibility.scheduleWhatsAppAutoSend()
-        SendResult.Success(targetContact.name, phoneDigits, "WhatsApp")
+        return SendResult.Success(targetContact.name, phoneDigits, "WhatsApp")
     }
 
     /**
@@ -155,14 +154,8 @@ object WhatsAppMessenger {
         if (matches.isEmpty()) {
             return CallResult.ContactNotFound(recipientName)
         }
-        if (matches.size > 1) {
-            val exactMatch = matches.firstOrNull { it.name.equals(recipientName.trim(), ignoreCase = true) }
-            if (exactMatch == null) {
-                return CallResult.MultipleContactsFound(recipientName, matches.map { "${it.name} (${it.number})" })
-            }
-        }
-
-        val targetContact = matches.first()
+        val targetContact = selectUniqueContact(matches, recipientName)
+            ?: return CallResult.MultipleContactsFound(recipientName, matches.map { "${it.name} (${it.number})" })
         val rawNumber = targetContact.number.filter { it.isDigit() || it == '+' }
         var phoneDigits = rawNumber.filter { it.isDigit() }
 
@@ -240,7 +233,7 @@ object WhatsAppMessenger {
             return CallResult.Error("Could not open WhatsApp for the $normalizedType call; no call was started.")
         }
         accessibility.scheduleWhatsAppCallAutoTap(normalizedType)
-        CallResult.Success(targetContact.name, normalizedType, targetAppName)
+        return CallResult.Success(targetContact.name, normalizedType, targetAppName)
     }
 
     private fun findWhatsAppContactDataId(context: Context, phoneDigits: String, mimeType: String): Long? {

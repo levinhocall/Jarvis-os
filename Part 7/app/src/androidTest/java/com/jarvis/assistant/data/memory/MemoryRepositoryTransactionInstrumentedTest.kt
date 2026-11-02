@@ -15,6 +15,26 @@ import java.util.UUID
 class MemoryRepositoryTransactionInstrumentedTest {
 
     @Test
+    fun permanentErasureRemovesAllVersionsOfOnlyTheSelectedFact() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dao = MemoryDatabase.getInstance(context).memoryDao()
+        val repository = MemoryRepository(dao)
+        val key = "erase_${UUID.randomUUID()}"
+        val other = "keep_${UUID.randomUUID()}"
+        try {
+            repository.remember("Old version", key = key)
+            val id = repository.remember("New version", key = key)
+            val otherId = repository.remember("Keep this record", key = other)
+            assertEquals(2, repository.permanentlyDeleteMemoryById(id))
+            assertTrue(dao.getMemoriesByKeyIncludingInactive(key).isEmpty())
+            assertTrue(dao.getMemoryById(otherId) != null)
+        } finally {
+            dao.getMemoriesByKeyIncludingInactive(key).firstOrNull()?.let { dao.permanentlyDeleteMemoryById(it.id) }
+            dao.getMemoriesByKeyIncludingInactive(other).firstOrNull()?.let { dao.permanentlyDeleteMemoryById(it.id) }
+        }
+    }
+
+    @Test
     fun backupImportDoesNotResurrectDeletedOrSupersededMemories() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val dao = MemoryDatabase.getInstance(context).memoryDao()
