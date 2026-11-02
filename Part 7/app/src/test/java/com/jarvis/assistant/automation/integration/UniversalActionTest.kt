@@ -1,5 +1,8 @@
 package com.jarvis.assistant.automation.integration
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -15,6 +18,7 @@ class UniversalActionTest {
         UniversalActionDispatcher.resetCircuitBreaker("test_flaky_action")
         UniversalActionDispatcher.resetCircuitBreaker("whatsapp_send")
         UniversalActionDispatcher.resetCircuitBreaker("launch_app")
+        UniversalActionDispatcher.resetCircuitBreaker("test_concurrent_breaker")
     }
 
     @Test
@@ -165,5 +169,39 @@ class UniversalActionTest {
         assertTrue("Expected ServiceUnavailable due to open circuit", fourthCall is UniversalExecutionResult.ServiceUnavailable)
         val unavailable = fourthCall as UniversalExecutionResult.ServiceUnavailable
         assertTrue(unavailable.reason.contains("Circuit breaker is OPEN"))
+    }
+    @Test
+    fun concurrentFailuresAtomicallyOpenCircuitBreaker() = runBlocking {
+        UniversalActionRegistry.register(
+            UniversalToolContract(
+                identifier = "test_concurrent_breaker",
+                description = "Exercises concurrent circuit-breaker updates",
+                parameterSchemas = emptyList(),
+                defaultTimeoutMs = 1000L
+            )
+        )
+
+        val results = coroutineScope {
+            (1..12).map {
+                async {
+                    UniversalActionDispatcher.executeAction(
+                        identifier = "test_concurrent_breaker",
+                        parameters = emptyMap(),
+                        isConfirmedByUser = true
+                    ) {
+                        delay(25L)
+                        throw IllegalStateException("simulated concurrent failure")
+                    }
+                }
+            }.awaitAll()
+        }
+
+        assertTrue(results.any { it is UniversalExecutionResult.Failure })
+        val blocked = UniversalActionDispatcher.executeAction(
+            identifier = "test_concurrent_breaker",
+            parameters = emptyMap(),
+            isConfirmedByUser = true
+        ) { "must not execute while breaker is open" }
+        assertTrue(blocked is UniversalExecutionResult.ServiceUnavailable)
     }
 }
