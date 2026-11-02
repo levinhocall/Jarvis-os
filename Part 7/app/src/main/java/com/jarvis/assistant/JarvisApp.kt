@@ -136,6 +136,7 @@ class JarvisApp : Application() {
             com.jarvis.assistant.automation.mission.MissionEngine.resumeNonTerminalMissions(this@JarvisApp)
         }
 
+        com.jarvis.assistant.data.memory.sync.MemorySyncScheduler.schedule(this)
         VoskModelManager.init(this, CoroutineScope(Dispatchers.Default))
         com.jarvis.assistant.audio.HeadsetWhisperManager.init(this, appScope)
 
