@@ -56,8 +56,8 @@ interface MemoryDao {
     @Delete
     suspend fun deleteMemory(memory: MemoryEntity)
 
-    @Query("DELETE FROM memories WHERE id = :id")
-    suspend fun deleteMemoryById(id: Long)
+    @Query("UPDATE memories SET status = 'DELETED', timestamp = :timestamp WHERE id = :id")
+    suspend fun deleteMemoryById(id: Long, timestamp: Long = System.currentTimeMillis())
 
     @Query("UPDATE memories SET status = :status, timestamp = :timestamp WHERE id = :id")
     suspend fun updateMemoryStatus(id: Long, status: String, timestamp: Long = System.currentTimeMillis())
@@ -84,8 +84,8 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE status = 'ACTIVE' AND embeddingJson IS NOT NULL")
     suspend fun getActiveMemoriesWithEmbeddings(): List<MemoryEntity>
 
-    @Query("DELETE FROM memories WHERE rawText LIKE '%' || :keyword || '%' OR `key` LIKE '%' || :keyword || '%' OR `value` LIKE '%' || :keyword || '%'")
-    suspend fun deleteMemoriesByKeyword(keyword: String): Int
+    @Query("UPDATE memories SET status = 'DELETED', timestamp = :timestamp WHERE status != 'DELETED' AND (rawText LIKE '%' || :keyword || '%' OR `key` LIKE '%' || :keyword || '%' OR `value` LIKE '%' || :keyword || '%')")
+    suspend fun deleteMemoriesByKeyword(keyword: String, timestamp: Long = System.currentTimeMillis()): Int
 
     @Query("SELECT * FROM memories WHERE `key` = :key AND category = :category AND status = 'ACTIVE' LIMIT 1")
     suspend fun getMemoryByKeyAndCategory(key: String, category: String): MemoryEntity?
@@ -96,9 +96,9 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE `key` = :key ORDER BY timestamp DESC")
     suspend fun getMemoriesByKeyIncludingInactive(key: String): List<MemoryEntity>
 
-    @Query("DELETE FROM memories WHERE expiryTimeMs IS NOT NULL AND expiryTimeMs < :currentTime")
+    @Query("UPDATE memories SET status = 'DELETED', timestamp = :currentTime WHERE status != 'DELETED' AND expiryTimeMs IS NOT NULL AND expiryTimeMs < :currentTime")
     suspend fun deleteExpiredMemories(currentTime: Long): Int
 
-    @Query("DELETE FROM memories")
-    suspend fun clearAllMemories()
+    @Query("UPDATE memories SET status = 'DELETED', timestamp = :timestamp WHERE status != 'DELETED'")
+    suspend fun clearAllMemories(timestamp: Long = System.currentTimeMillis())
 }
