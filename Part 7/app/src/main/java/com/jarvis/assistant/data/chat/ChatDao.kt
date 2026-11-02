@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -56,6 +57,21 @@ interface ChatDao {
 
     @Query("SELECT * FROM chat_messages WHERE sessionId = :sessionId ORDER BY timestamp ASC")
     suspend fun getMessagesForSession(sessionId: String): List<ChatMessageEntity>
+
+    @Query("SELECT * FROM chat_messages ORDER BY timestamp DESC LIMIT 100")
+    fun getRecentMessagesFlow(): Flow<List<ChatMessageEntity>>
+
+    @Query("DELETE FROM chat_messages")
+    suspend fun deleteAllMessages()
+
+    @Query("DELETE FROM chat_sessions")
+    suspend fun deleteAllSessions()
+
+    @Transaction
+    suspend fun clearAllConversationData() {
+        deleteAllMessages()
+        deleteAllSessions()
+    }
 
     @Query("SELECT * FROM chat_messages WHERE sessionId = :sessionId ORDER BY timestamp DESC LIMIT :limit OFFSET :offset")
     suspend fun getMessagesPaged(sessionId: String, limit: Int, offset: Int): List<ChatMessageEntity>
