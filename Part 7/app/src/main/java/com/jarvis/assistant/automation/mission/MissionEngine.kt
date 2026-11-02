@@ -10,6 +10,9 @@ import com.jarvis.assistant.core.reliability.ReliabilityCoordinator
 import com.jarvis.assistant.core.reliability.SystemHealthState
 import com.jarvis.assistant.automation.command.JarvisCommand
 import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
+import com.jarvis.assistant.automation.agent.SelfHealingAgentLoop
+import com.jarvis.assistant.automation.grounding.ActionOutcomeResult
+import com.jarvis.assistant.automation.grounding.ScreenGroundingEngine
 import com.jarvis.assistant.automation.notification.JarvisNotificationListenerService
 import com.jarvis.assistant.automation.dev.TermuxBridge
 import com.jarvis.assistant.automation.dev.DevToolResult
@@ -1309,7 +1312,8 @@ object MissionEngine {
                 return
             }
 
-            // 5. Execute Step with Bounded Retry and Timeout
+            // 5. Execute through the shared self-healing policy while retaining
+            // MissionEngine as the sole mission/ToolRegistry execution authority.
             var stepSuccess = false
             var actionAttempted = false
             var evidence = MissionVerificationEvidence(
@@ -1317,51 +1321,102 @@ object MissionEngine {
                 isVerified = false,
                 details = "No verifier attached."
             )
+            val selfHealingStep = SelfHealingAgentLoop.TaskStep(
+                stepId = currentStep.stepId,
+                title = currentStep.title,
+                toolName = ToolRegistry.resolveToolName(currentStep.toolName),
+                arguments = currentStep.parameters.filterValues { it != null }.mapValues { it.value!! },
+                expectedOutcome = currentStep.expectedEvidence,
+                isConsequential = !currentStep.isIdempotent || currentStep.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL,
+                maxRetries = currentStep.maxRetries
+            )
+            val selfHealingMission = SelfHealingAgentLoop.MissionPlan(
+                missionId = mission.missionId,
+                goal = mission.goal,
+                steps = listOf(selfHealingStep)
+            )
+            var lastActionEvidence = evidence
+            actionAttempted = true
+            val selfHealingOutcome = withTimeoutOrNull(
+                currentStep.timeoutMs * (currentStep.maxRetries + 1L) + 2_000L
+            ) {
+                SelfHealingAgentLoop.executeStepWithSelfHealing(
+                    step = selfHealingStep,
+                    mission = selfHealingMission,
+                    isCancelled = { cancelRequestedMissions.contains(missionId) },
+                    userApproved = mission.approvalState == MissionApprovalState.APPROVED,
+                    executeAction = {
+                        val actionResult = executeSingleStep(
+                            currentStep,
+                            context,
+                            mission.approvalState == MissionApprovalState.APPROVED
+                        )
+                        lastActionEvidence = actionResult.second
+                        ActionOutcomeResult(
+                            isVerified = actionResult.first && actionResult.second.isVerified,
+                            stateMutated = actionResult.first,
+                            message = actionResult.second.details
+                        )
+                    },
+                    attemptRecovery = {
+                        val tool = ToolRegistry.getTool(currentStep.toolName)
+                        if (tool?.requiresAccessibility == true) {
+                            val refreshed = ScreenGroundingEngine.captureScreen(JarvisAccessibilityService.instance)
+                            refreshed.isFresh && refreshed.elements.isNotEmpty() && !refreshed.isSecureWindow
+                        } else {
+                            delay(150L)
+                            true
+                        }
+                    }
+                )
+            }
 
-            for (attempt in 0..currentStep.maxRetries) {
-                if (cancelRequestedMissions.contains(missionId)) break
-                if (_activeMission.value?.status == MissionOverallStatus.CANCELLED) {
-                    currentStep = currentStep.copy(status = MissionStepStatus.CANCELLED)
-                    updatedSteps[index] = currentStep
-                    val cancelledMission = mission.copy(steps = updatedSteps.toList(), currentStepIndex = index)
-                    _activeMission.value = cancelledMission
-                    persistMission(cancelledMission, index)
-                    return
-                }
-
-                val timeout = currentStep.timeoutMs
-                actionAttempted = true
-                val result = withTimeoutOrNull(timeout) {
-                    executeSingleStep(currentStep, context, mission.approvalState == MissionApprovalState.APPROVED)
-                }
-
-                if (result != null) {
-                    stepSuccess = result.first
-                    evidence = result.second
-                } else {
+            when (selfHealingOutcome) {
+                null -> {
                     stepSuccess = false
                     evidence = MissionVerificationEvidence(
                         evidenceType = EvidenceType.UNVERIFIED,
                         isVerified = false,
-                        details = "Step timed out after ${timeout}ms"
+                        details = "Self-healing execution exceeded the bounded mission timeout."
                     )
-                    if (toolExecutor == null && currentStep.isIdempotent) {
-                        ReliabilityCoordinator.reportDiagnostic(
-                            DiagnosticEvent(
-                                category = ErrorCategory.NETWORK_TIMEOUT,
-                                component = "mission_tool:${currentStep.toolName}",
-                                rawMessage = evidence.details,
-                                isRecoverable = true
-                            )
-                        )
-                    }
                 }
-
-                if (stepSuccess) {
-                    break
+                SelfHealingAgentLoop.StepOutcome.SUCCESS -> {
+                    stepSuccess = true
+                    evidence = lastActionEvidence
                 }
-                if (attempt < currentStep.maxRetries) {
-                    delay(200L * (attempt + 1))
+                SelfHealingAgentLoop.StepOutcome.UNVERIFIED_TIMEOUT -> {
+                    // Preserve a possibly-mutated action as unverified and stop the mission below.
+                    stepSuccess = true
+                    evidence = lastActionEvidence.copy(
+                        evidenceType = EvidenceType.UNVERIFIED,
+                        isVerified = false,
+                        details = selfHealingStep.executionMessage.ifBlank { lastActionEvidence.details }
+                    )
+                }
+                SelfHealingAgentLoop.StepOutcome.CANCELLED -> {
+                    stepSuccess = false
+                    evidence = lastActionEvidence.copy(
+                        evidenceType = EvidenceType.UNVERIFIED,
+                        isVerified = false,
+                        details = selfHealingStep.executionMessage.ifBlank { "Execution cancelled." }
+                    )
+                }
+                SelfHealingAgentLoop.StepOutcome.APPROVAL_REQUIRED -> {
+                    stepSuccess = false
+                    evidence = lastActionEvidence.copy(
+                        evidenceType = EvidenceType.UNVERIFIED,
+                        isVerified = false,
+                        details = selfHealingStep.executionMessage.ifBlank { "Action requires approval." }
+                    )
+                }
+                SelfHealingAgentLoop.StepOutcome.RECOVERABLE_FAILURE,
+                SelfHealingAgentLoop.StepOutcome.FATAL_FAILURE -> {
+                    stepSuccess = false
+                    evidence = lastActionEvidence.copy(
+                        evidenceType = EvidenceType.UNVERIFIED,
+                        isVerified = false,
+                        details = selfHealingStep.executionMessage.ifBlank { lastActionEvidence.details }
+                    )
                 }
             }
 
@@ -1448,6 +1503,17 @@ object MissionEngine {
                     status = MissionOverallStatus.UNVERIFIED,
                     outcomeSummary = "Mission stopped because an action result could not be durably saved. No later steps were executed.",
                     unverifiedDisclaimers = unverifiedNotes + persistenceFailure.failureReason.orEmpty(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                _activeMission.value = unresolved
+                persistMission(unresolved, index)
+                return
+            }
+            if (currentStep.status == MissionStepStatus.UNVERIFIED) {
+                val unresolved = mission.copy(
+                    status = MissionOverallStatus.UNVERIFIED,
+                    outcomeSummary = "Mission stopped because an action may have changed real state but could not be verified. Later steps were not executed.",
+                    unverifiedDisclaimers = unverifiedNotes.toList(),
                     updatedAt = System.currentTimeMillis()
                 )
                 _activeMission.value = unresolved
