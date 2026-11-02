@@ -110,7 +110,7 @@ Official references:
 
 | Workstream | Status | Notes |
 |---|---|---|
-| Phase 0 — Repository and architecture audit | IN PROGRESS | Initial source/config inspection recorded; full tree and execution-path audit pending |
+| Phase 0 — Repository and architecture audit | VERIFIED | Recursive repository inventory, Part 7 build/manifest/source/test/CI/branch audit, architecture map, findings register, and follow-up priorities documented in PHASE_0_REPOSITORY_AUDIT.md; runtime/build verification remains NOT RUN |
 | Phase 1 — Avatar ecosystem | IN PROGRESS | Existing gallery, overlay, positioning, and state reactions found; persisted avatar identifier validation implemented and regression test added; mode/lifecycle review pending |
 | Phase 2 — Memory ecosystem | IN PROGRESS | Local Room, chat, vector retrieval, deletion and migrations found; cloud consent/sync and recovery need review |
 | Phase 3 — Profile/account/subscription | BLOCKED | Local name edit/voice enrollment exist; account identity, email/photo, subscription/credits, and license backend not found in targeted audit; backend contract required |
@@ -136,6 +136,23 @@ Status: IMPLEMENTED (source committed); TESTED status remains pending.
   - `Part 7/app/src/main/java/com/jarvis/assistant/data/preferences/AppPreferences.kt`
   - `Part 7/app/src/androidTest/java/com/jarvis/assistant/data/preferences/AppPreferencesSecurityInstrumentedTest.kt`
 - Verification: both changed source regions and the test insertion were fetched again from `main`. No test task was executed. No APK was built.
+
+## Phase 0 completion checkpoint — deep static audit
+
+Status: VERIFIED (static repository audit and architecture inventory).
+
+- Audited main HEAD before report: `838f63b9bd3a46994eab7e206954f9fc6dbbfc8b`.
+- Recursive Git tree: 1,575 entries; seven independent project snapshots identified.
+- Part 7 inventory: 466 tracked files, 195 production Kotlin files, 55 unit-test source files, 6 instrumentation-test source files, 132 resource XML files, and 43 asset entries.
+- Confirmed Part 7 is Kotlin 2.2.20 / AGP 8.9.1 / Gradle 8.11.1 / compileSdk 36 / targetSdk 36 / minSdk 26 / Java 17 / application ID `com.jarvis.assistant`.
+- Confirmed Part 7 uses XML/AppCompat/ViewBinding and does not declare Jetpack Compose dependencies. Preserve the actual active project rather than force a rewrite.
+- Reviewed application bootstrap, foreground conversation service, Gemini Live transport/model constants, accessibility service/config, overlay, mission engine, unified runtime, Room/SQLCipher database and key handling, migration tests, memory/vector code, chat repositories, manifest permissions, CI workflow, branch list, open PRs, and recent Actions run outcomes.
+- Identified and documented P1/P2 risks: synchronous Room/SQLCipher startup; Room schema export disabled; SharedPreferences + Room dual chat history; in-memory default long-horizon mission checkpoints; migration tests not end-to-end Room/SQLCipher; unverified production call sites for several agent/voice collaborators; overlay lifecycle/mode/edge-snap gaps; deterministic hashed embeddings rather than a pretrained semantic model; broad special permissions; stale architecture docs; absent Mem0/ElevenLabs/account/subscription backends.
+- Found 15 branches and reviewed relevant open PRs. PR #6/#7 contain APK assembly and are incompatible with the no-APK directive. PR #3 includes unrelated features, compileSdk downgrade, and a privileged permission; do not merge as an audit-only change.
+- Current main workflow is manual-only and runs unit tests plus non-blocking lint, without APK assembly. Recent Actions runs fail at startup before creating jobs; no current-head verification exists.
+- Created `PHASE_0_REPOSITORY_AUDIT.md` with architecture map, inventory, findings register, do-not-merge list, and next engineering order.
+- Audit report commit: `8bdafb11e3cd4af5597bb021f60e5d77e9427c40`.
+- No Gradle task, APK build, unit test, instrumentation test, lint, or physical-device test was executed.
 
 ## Verification ledger
 
