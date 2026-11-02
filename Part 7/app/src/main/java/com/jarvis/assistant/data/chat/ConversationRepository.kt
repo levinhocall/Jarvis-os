@@ -93,9 +93,27 @@ class ConversationRepository(
     fun getRecentMessagesFlow(): Flow<List<ChatMessageEntity>> =
         chatDao.getRecentMessagesFlow()
 
-    suspend fun clearAllConversationData() {
+    suspend fun clearAllConversationData(clearLegacyHistory: () -> Unit = {}) = turnWriteMutex.withLock {
         chatDao.clearAllConversationData()
         _currentSessionId.value = null
+        clearLegacyHistory()
+    }
+
+    /**
+     * Reads, imports, and clears the legacy history while holding the same mutex used by
+     * new-session creation and full-history deletion. This prevents a concurrent clear
+     * from being followed by a stale migration that resurrects deleted messages.
+     */
+    suspend fun migrateLegacyHistory(
+        sessionId: String,
+        loadLegacyTurns: () -> List<com.jarvis.assistant.data.model.ChatTurn>,
+        clearLegacyHistory: () -> Unit
+    ) = turnWriteMutex.withLock {
+        val legacyTurns = loadLegacyTurns()
+        if (legacyTurns.isNotEmpty()) {
+            mergeHistoricalTurnsLocked(sessionId, legacyTurns)
+            clearLegacyHistory()
+        }
     }
 
     suspend fun getMessages(sessionId: String): List<ChatMessageEntity> =
@@ -166,7 +184,14 @@ class ConversationRepository(
         sessionId: String,
         turns: List<com.jarvis.assistant.data.model.ChatTurn>
     ) = turnWriteMutex.withLock {
-        val session = chatDao.getSessionById(sessionId) ?: return@withLock
+        mergeHistoricalTurnsLocked(sessionId, turns)
+    }
+
+    private suspend fun mergeHistoricalTurnsLocked(
+        sessionId: String,
+        turns: List<com.jarvis.assistant.data.model.ChatTurn>
+    ) {
+        val session = chatDao.getSessionById(sessionId) ?: return
         val existing = chatDao.getMessagesForSession(sessionId)
         val existingContent = existing.map { it.role.uppercase() to it.content }.toSet()
         val imported = mutableListOf<ChatMessageEntity>()
