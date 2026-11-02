@@ -5,7 +5,21 @@ import java.util.concurrent.ConcurrentHashMap
 class LongHorizonMissionCoordinator(
     private val checkpointStorage: CheckpointStorage = InMemoryCheckpointStorage()
 ) {
-    private val missions = ConcurrentHashMap<String, LongHorizonMissionState>()
+    private val missions = ConcurrentHashMap<String, LongHorizonMissionState>().apply {
+        checkpointStorage.getAllMissionStates().forEach { restored ->
+            val safeState = if (restored.status == LongHorizonStatus.EXECUTING ||
+                restored.status == LongHorizonStatus.PLANNING ||
+                restored.status == LongHorizonStatus.REPLANNING
+            ) restored.copy(status = LongHorizonStatus.PAUSED) else restored
+            put(safeState.missionId, safeState)
+            if (safeState != restored) checkpointStorage.saveMissionState(safeState)
+        }
+    }
+
+    private fun storeMission(mission: LongHorizonMissionState) {
+        storeMission(mission)
+        checkpointStorage.saveMissionState(mission)
+    }
 
     @Synchronized
     fun createMission(
@@ -24,7 +38,7 @@ class LongHorizonMissionCoordinator(
             maxTotalSteps = maxTotalSteps,
             currentMilestoneId = milestones.firstOrNull()?.id
         )
-        missions[mission.missionId] = mission
+        storeMission(mission)
         log(mission.missionId, "INFO", message = "Mission created: '$goal' with ${milestones.size} milestones.")
         return mission
     }
@@ -47,7 +61,7 @@ class LongHorizonMissionCoordinator(
             currentMilestoneId = nextMilestone?.id ?: current.currentMilestoneId,
             updatedAt = System.currentTimeMillis()
         )
-        missions[missionId] = updated
+        storeMission(updated)
         createCheckpoint(missionId, "Resumed execution at milestone ${nextMilestone?.title ?: "none"}")
         log(missionId, "INFO", milestoneId = nextMilestone?.id, message = "Mission resumed. Current milestone: ${nextMilestone?.title}")
         return updated
@@ -62,7 +76,7 @@ class LongHorizonMissionCoordinator(
             status = LongHorizonStatus.PAUSED,
             updatedAt = System.currentTimeMillis()
         )
-        missions[missionId] = updated
+        storeMission(updated)
         createCheckpoint(missionId, "Paused: $reason")
         log(missionId, "WARN", message = "Mission paused: $reason")
         return updated
@@ -76,7 +90,7 @@ class LongHorizonMissionCoordinator(
             failureReason = reason,
             updatedAt = System.currentTimeMillis()
         )
-        missions[missionId] = updated
+        storeMission(updated)
         createCheckpoint(missionId, "Cancelled: $reason")
         log(missionId, "WARN", message = "Mission cancelled: $reason")
         return updated
@@ -97,7 +111,7 @@ class LongHorizonMissionCoordinator(
                 failureReason = "Max replan limit exceeded (${current.maxReplans}). Aborting to avoid drifting loop.",
                 updatedAt = System.currentTimeMillis()
             )
-            missions[missionId] = failed
+            storeMission(failed)
             log(missionId, "ERROR", message = "Replanning rejected: max replans reached.")
             return failed
         }
@@ -117,7 +131,7 @@ class LongHorizonMissionCoordinator(
             currentMilestoneId = mergedMilestones.firstOrNull { it.status == MilestoneStatus.PENDING }?.id,
             updatedAt = System.currentTimeMillis()
         )
-        missions[missionId] = updated
+        storeMission(updated)
         createCheckpoint(missionId, "Replanned (attempt ${updated.replanCount}): $reason")
         log(missionId, "INFO", message = "Mission replanned: $reason. New milestone count: ${mergedMilestones.size}")
         return updated
@@ -226,7 +240,7 @@ class LongHorizonMissionCoordinator(
             currentMilestoneId = nextMilestone?.id,
             updatedAt = System.currentTimeMillis()
         )
-        missions[missionId] = updatedMission
+        storeMission(updated)Mission
 
         log(
             missionId,
@@ -265,7 +279,7 @@ class LongHorizonMissionCoordinator(
             checkpointHistory = mission.checkpointHistory + checkpoint,
             updatedAt = System.currentTimeMillis()
         )
-        missions[missionId] = updatedMission
+        storeMission(updated)Mission
         return checkpoint
     }
 
@@ -303,7 +317,7 @@ class LongHorizonMissionCoordinator(
             status = LongHorizonStatus.PAUSED, // Restores safely in PAUSED state
             updatedAt = System.currentTimeMillis()
         )
-        missions[missionId] = restored
+        storeMission(restored)
         log(missionId, "INFO", message = "Restored safely from checkpoint ${checkpoint.checkpointId} in PAUSED state")
         return restored
     }
@@ -353,6 +367,6 @@ class LongHorizonMissionCoordinator(
             stepId = stepId,
             message = message
         )
-        missions[missionId] = current.copy(logs = current.logs + entry)
+        storeMission(current.copy(logs = current.logs + entry))
     }
 }
