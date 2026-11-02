@@ -96,14 +96,18 @@ class VoiceSessionManager(
                 pendingDisconnect?.await()
                 if (generation != sessionGeneration.get()) return@launch
                 val success = connectionMutex.withLock {
-                    if (generation != sessionGeneration.get()) false else onConnectRequest()
+                    if (generation != sessionGeneration.get()) {
+                        false
+                    } else {
+                        val connected = onConnectRequest()
+                        if (generation != sessionGeneration.get() && connected) {
+                            // Tear down a late handshake before releasing the connection lock.
+                            runCatching { onDisconnectRequest() }
+                        }
+                        connected
+                    }
                 }
-                if (generation != sessionGeneration.get()) {
-                    // A stop/restart happened while the handshake was suspended.
-                    // Tear down any late connection instead of resurrecting the old session.
-                    if (success) runCatching { onDisconnectRequest() }
-                    return@launch
-                }
+                if (generation != sessionGeneration.get()) return@launch
                 if (success) {
                     transitionState(SessionLifecycleState.LIVE, "LIVE")
                     consecutiveFailures.set(0)
@@ -148,6 +152,7 @@ class VoiceSessionManager(
     /**
      * Reports successful authentication and session readiness.
      */
+    @Synchronized
     fun onSessionEstablished() {
         consecutiveFailures.set(0)
         transitionState(SessionLifecycleState.LIVE, "LIVE")
@@ -156,6 +161,7 @@ class VoiceSessionManager(
     /**
      * Reports an unexpected connection disruption.
      */
+    @Synchronized
     fun onConnectionDropped(reason: String) {
         if (!isSessionActive) return
         Log.w(TAG, "Connection dropped: $reason")
@@ -192,13 +198,17 @@ class VoiceSessionManager(
 
             try {
                 val reconnected = connectionMutex.withLock {
-                    if (generation != sessionGeneration.get()) false else onConnectRequest()
+                    if (generation != sessionGeneration.get()) {
+                        false
+                    } else {
+                        val connected = onConnectRequest()
+                        if (generation != sessionGeneration.get() && connected) {
+                            runCatching { onDisconnectRequest() }
+                        }
+                        connected
+                    }
                 }
-                if (generation != sessionGeneration.get()) {
-                    // The connection completed after a stop/restart. Do not publish LIVE.
-                    if (reconnected) runCatching { onDisconnectRequest() }
-                    return@launch
-                }
+                if (generation != sessionGeneration.get()) return@launch
                 if (reconnected) {
                     transitionState(SessionLifecycleState.LIVE, "LIVE")
                     consecutiveFailures.set(0)
@@ -216,6 +226,7 @@ class VoiceSessionManager(
     /**
      * Clears cached live error state.
      */
+    @Synchronized
     fun clearError() {
         _lastError.value = null
         if (_sessionState.value == SessionLifecycleState.ERROR) {
