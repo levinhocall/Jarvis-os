@@ -75,6 +75,10 @@ class AppPreferences internal constructor(
         private const val KEY_TASK_OVERLAY_FREE_POSITION = "key_task_overlay_free_position"
         private const val KEY_TASK_OVERLAY_X = "key_task_overlay_x"
         private const val KEY_TASK_OVERLAY_Y = "key_task_overlay_y"
+        private val ALLOWED_TASK_OVERLAY_AVATARS = setOf(
+            "alien", "blob", "cat", "circle", "cloud", "droid", "drop", "flower",
+            "ghost", "hexagon", "mech", "pebble", "pill", "puddle", "square", "star", "triangle"
+        )
         private const val KEY_APP_THEME = "key_app_theme"
         private const val KEY_CUSTOM_THEME_COLOR = "key_custom_theme_color"
         private const val KEY_ORB_ANIMATION = "key_orb_animation"
@@ -541,10 +545,13 @@ class AppPreferences internal constructor(
         set(value) = prefs.edit().putBoolean(KEY_TASK_OVERLAY_ENABLED, value).apply()
 
     var taskOverlayAvatar: String
-        get() = prefs.getString(KEY_TASK_OVERLAY_AVATAR, "ghost") ?: "ghost"
+        get() = prefs.getString(KEY_TASK_OVERLAY_AVATAR, "ghost")
+            ?.takeIf { it in ALLOWED_TASK_OVERLAY_AVATARS }
+            ?: "ghost"
         set(value) {
-            val available = listOf("alien", "blob", "cat", "circle", "cloud", "droid", "drop", "flower", "ghost", "hexagon", "mech", "pebble", "pill", "puddle", "square", "star", "triangle")
-            prefs.edit().putString(KEY_TASK_OVERLAY_AVATAR, value.takeIf { it in available } ?: "ghost").apply()
+            prefs.edit()
+                .putString(KEY_TASK_OVERLAY_AVATAR, value.takeIf { it in ALLOWED_TASK_OVERLAY_AVATARS } ?: "ghost")
+                .apply()
         }
 
     /** always keeps the avatar visible while the service is alive; working limits it to active tasks. */
