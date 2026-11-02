@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.jarvis.assistant.data.model.ChatTurn
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import org.junit.After
@@ -55,6 +56,24 @@ class ConversationRepositoryInstrumentedTest {
         assertEquals("Hello JARVIS", messages[0].content)
         assertEquals("ASSISTANT", messages[1].role)
         assertEquals("Hello. How can I help?", messages[1].content)
+    }
+
+    @Test
+    fun historicalTurnImportIsIdempotentAcrossRetries() = runBlocking {
+        val repository = ConversationRepository(database.chatDao())
+        val session = repository.createNewSession("Imported history")
+        val oldTurns = listOf(
+            ChatTurn(id = "old-turn-1", userTranscript = "Question", jarvisResponse = "Answer", timestamp = 100L),
+            ChatTurn(id = "old-turn-2", userTranscript = "Second", jarvisResponse = "Second answer", timestamp = 200L)
+        )
+
+        repository.mergeHistoricalTurns(session.id, oldTurns)
+        repository.mergeHistoricalTurns(session.id, oldTurns)
+
+        val messages = repository.getMessages(session.id)
+        assertEquals(4, messages.size)
+        assertEquals(listOf("USER", "ASSISTANT", "USER", "ASSISTANT"), messages.map { it.role })
+        assertEquals(listOf("Question", "Answer", "Second", "Second answer"), messages.map { it.content })
     }
 
     @Test
