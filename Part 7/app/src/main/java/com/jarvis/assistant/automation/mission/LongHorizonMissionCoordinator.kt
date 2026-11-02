@@ -240,7 +240,7 @@ class LongHorizonMissionCoordinator(
             currentMilestoneId = nextMilestone?.id,
             updatedAt = System.currentTimeMillis()
         )
-        storeMission(updated)Mission
+        storeMission(updatedMission)
 
         log(
             missionId,
@@ -279,7 +279,7 @@ class LongHorizonMissionCoordinator(
             checkpointHistory = mission.checkpointHistory + checkpoint,
             updatedAt = System.currentTimeMillis()
         )
-        storeMission(updated)Mission
+        storeMission(updatedMission)
         return checkpoint
     }
 
