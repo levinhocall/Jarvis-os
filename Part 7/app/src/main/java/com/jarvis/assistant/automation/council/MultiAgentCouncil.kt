@@ -23,7 +23,9 @@ data class CouncilDeliberation(
     val criticRisks: List<String>,
     val verifierCheck: String,
     val isApprovedToExecute: Boolean,
-    val finalVerdict: String
+    val finalVerdict: String,
+    val agentReports: Map<String, String> = emptyMap(),
+    val subAgentCallsUsed: Int = 0
 )
 
 object MultiAgentCouncil {
@@ -84,27 +86,47 @@ object MultiAgentCouncil {
         val memories = PersonalMemoryGraph.queryRelevantMemories(context, cleanGoal, limit = 2)
         val researcherFindings = memories.map { "Memory [${it.key}]: ${it.value}" }
 
-        // 3. Critic Stage: Identify ambiguities, permissions, or security risks
-        val criticRisks = evaluateRisks(cleanGoal, plannerSteps)
+        // 3. Build the authoritative MissionEngine plan, then run bounded model reviewers.
+        // This is the production preflight path called by JarvisUnifiedRuntime.
+        val missionPlan = MissionEngine.planMission(cleanGoal, context = context)
+        val agentReview = runIndependentSubAgents(
+            cleanGoal,
+            missionPlan.steps,
+            researcherFindings.joinToString("; ").take(2500)
+        )
 
-        // 4. Verifier Pre-Check: Determine whether success criteria can be physically verified
+        // 4. Critic stage combines deterministic policy checks with the independent LLM critic.
+        val criticRisks = evaluateRisks(cleanGoal, plannerSteps).toMutableList()
+        val criticReport = agentReview.reports[AgentRole.CRITIC.name].orEmpty()
+        val criticBlocked = criticReport.trimStart().startsWith("BLOCK:", ignoreCase = true)
+        if (criticBlocked) criticRisks.add("Independent critic blocked execution: " + criticReport.take(700))
+
+        // 5. Verifier review supplements, but never replaces, concrete runtime evidence checks.
         val canVerify = plannerSteps.all { step ->
             !step.contains("arbitrary", ignoreCase = true)
         }
-        val verifierCheck = if (canVerify) {
+        val verifierReview = agentReview.reports[AgentRole.VERIFIER.name].orEmpty()
+        val verifierCheck = (if (canVerify) {
             "Verification criteria confirmed: Steps have concrete sensors/outcomes."
         } else {
             "Verification caution: Some steps cannot be physically confirmed by platform sensors."
-        }
+        }) + if (verifierReview.isNotBlank()) " Independent verifier: " + verifierReview.take(900) else ""
 
-        // 5. Consensus & Safety Evaluation
-        val hasHighRisk = criticRisks.any { it.contains("Consequential", ignoreCase = true) || it.contains("Permission", ignoreCase = true) }
-        val isApproved = !hasHighRisk
+        // 6. Consensus & Safety Evaluation. Model reviewers can add a block, never grant authority.
+        val hasHighRisk = criticRisks.any {
+            it.contains("Consequential", ignoreCase = true) ||
+                it.contains("Permission", ignoreCase = true) ||
+                it.contains("blocked execution", ignoreCase = true)
+        }
+        val isApproved = !hasHighRisk &&
+            missionPlan.status != MissionOverallStatus.CLARIFICATION_REQUIRED &&
+            missionPlan.status != MissionOverallStatus.WAITING_FOR_APPROVAL
 
         val finalVerdict = when {
-            hasHighRisk -> "Council evaluated plan: User confirmation required due to high-consequential actions."
+            criticBlocked -> "Council critic raised a blocking concern: " + criticReport.take(900)
+            hasHighRisk -> "Council evaluated plan: User confirmation or safety review is required."
             criticRisks.isNotEmpty() -> "Council approved plan with observations: ${criticRisks.first()}."
-            else -> "Council consensus: Plan is sound, bounded, and verified for execution."
+            else -> "Council consensus: Plan is bounded; MissionEngine remains the execution authority."
         }
 
         CouncilDeliberation(
@@ -114,7 +136,9 @@ object MultiAgentCouncil {
             criticRisks = criticRisks,
             verifierCheck = verifierCheck,
             isApprovedToExecute = isApproved,
-            finalVerdict = finalVerdict
+            finalVerdict = finalVerdict,
+            agentReports = agentReview.reports,
+            subAgentCallsUsed = agentReview.callsUsed
         )
     }
 
