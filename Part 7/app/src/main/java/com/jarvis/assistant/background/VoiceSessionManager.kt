@@ -171,7 +171,9 @@ class VoiceSessionManager(
      */
     @Synchronized
     fun onConnectionDropped(reason: String) {
-        if (!isSessionActive) return
+        // Only the first drop from LIVE owns a reconnect transition. Repeated OFFLINE
+        // callbacks while already reconnecting must not multiply retry attempts.
+        if (_sessionState.value != SessionLifecycleState.LIVE) return
         Log.w(TAG, "Connection dropped: $reason")
         handleConnectionFailure(reason)
     }
