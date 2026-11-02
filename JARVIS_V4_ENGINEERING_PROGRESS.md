@@ -69,6 +69,43 @@ Status: IN PROGRESS
 - Existing phase reports for avatar work state that build and device acceptance are pending. No build or device verification is claimed here.
 - Repository-wide tree enumeration, full source review, test inventory, security review, and full wiring trace are not yet complete.
 
+## Provider and feature compatibility checkpoint
+
+### Gemini model catalog — official documentation checked 2026-11-02
+
+- `gemini-3.8-live` is listed as the stable/default Live API model.
+- `gemini-3.8-live-extended-thinking` is also listed as a Live API model.
+- `gemini-3.1-flash-live-preview` is listed as a legacy preview model; Google recommends migration to Gemini 3.8 Live.
+- The current official catalog does not list `gemini-3.1-flash-agent` as a public Gemini API model. In the inspected app code this appears to be an internal UI preference sentinel that is translated to the legacy 3.1 Live ID before the WebSocket setup. Do not send that sentinel to the API.
+- The Live API docs show the same BidiGenerateContent WebSocket protocol family used by the project. The current project authenticates the WebSocket with an `x-goog-api-key` header; the official raw-WebSocket quickstart currently documents a `key=` query parameter (and ephemeral-token option). This auth-method difference needs an explicit compatibility test and a safer client credential strategy; do not silently move permanent keys into URLs.
+- The current Gemini model catalog should be treated as the source of truth before expanding the selector.
+
+Official references:
+- https://ai.google.dev/gemini-api/docs/models
+- https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live
+- https://ai.google.dev/gemini-api/docs/live-api/get-started-websocket
+
+### Voice providers
+
+- Existing `VoiceSynthesisRouter` uses Android `TextToSpeech`; the Gemini Live WebSocket is a separate native audio conversation path.
+- No ElevenLabs provider/API-key implementation was found in targeted Part 7 searches.
+- ElevenLabs documents a REST streaming TTS endpoint at `POST /v1/text-to-speech/{voice_id}/stream`, with `xi-api-key`, `model_id`, and streamed audio bytes. The endpoint/model/output format must be selected against actual account entitlements; do not assume every PCM format or voice-library operation is available to every plan.
+- Official references:
+  - https://elevenlabs.io/docs/api-reference/text-to-speech/stream
+  - https://elevenlabs.io/docs/api-reference/streaming
+
+### Mem0 cloud memory
+
+- No Mem0 implementation was found in targeted Part 7 source searches.
+- Mem0 Platform's official quickstart documents authenticated API calls, add-memory, search-memory, and per-user scoping via `user_id`. This supports an optional cloud adapter design, but it does not remove the need for local-first operation, explicit opt-in, conflict rules, deletion propagation, and secure credential handling in JARVIS.
+- Official reference: https://docs.mem0.ai/platform/quickstart
+
+### Profile, account, and subscription
+
+- Existing settings expose a local profile-name edit and voice-enrollment state; this is not a full account/profile system.
+- Targeted source searches did not identify email/profile-image management, a deployed authentication backend, subscription entitlement service, credits ledger, or license verification endpoint. The Part 7 README itself states there is no deployed verification backend or agreed verification protocol.
+- These features must remain clearly unavailable/unverified until a real backend contract exists. UI must not fabricate subscription, credit, or verification status.
+
 ## Phase tracker
 
 | Workstream | Status | Notes |
@@ -76,8 +113,8 @@ Status: IN PROGRESS
 | Phase 0 — Repository and architecture audit | IN PROGRESS | Initial source/config inspection recorded; full tree and execution-path audit pending |
 | Phase 1 — Avatar ecosystem | IN PROGRESS | Existing gallery, overlay, positioning, and state reactions found; persisted avatar identifier validation implemented and regression test added; mode/lifecycle review pending |
 | Phase 2 — Memory ecosystem | IN PROGRESS | Local Room, chat, vector retrieval, deletion and migrations found; cloud consent/sync and recovery need review |
-| Phase 3 — Profile/account/subscription | NOT STARTED | Backend capabilities and existing local profile data need verification |
-| Phase 4 — AI model and voice ecosystem | IN PROGRESS | Gemini Live/Vosk exist; model identifiers, personality wiring, ElevenLabs and provider lifecycle need review |
+| Phase 3 — Profile/account/subscription | BLOCKED | Local name edit/voice enrollment exist; account identity, email/photo, subscription/credits, and license backend not found in targeted audit; backend contract required |
+| Phase 4 — AI model and voice ecosystem | IN PROGRESS | Gemini 3.8 Live verified as stable; 3.1 Live is legacy preview; ElevenLabs absent; current voice router is Android TTS plus Gemini Live; integration paths need design/review |
 | Phase 5 — Settings integration | IN PROGRESS | Existing settings activities found; all controls need execution-path verification |
 | Phase 6 — Deep implementation | NOT STARTED | Begin after source inventory and interface map |
 | Phase 7 — Sub-agent engineering | BLOCKED | No multi-agent execution tool has been established in this session; sequential work is available |
