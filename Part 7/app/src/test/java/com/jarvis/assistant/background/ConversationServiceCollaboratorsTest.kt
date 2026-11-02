@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -149,7 +150,7 @@ class ConversationServiceCollaboratorsTest {
         withTimeout(2_000L) { disconnectStarted.await() }
 
         var awaitCompleted = false
-        val waiter = kotlinx.coroutines.launch {
+        val waiter = launch {
             manager.awaitStopped()
             awaitCompleted = true
         }
