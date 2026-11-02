@@ -1,0 +1,20 @@
+services:
+  jarvis-memory:
+    build: .
+    container_name: jarvis-memory
+    restart: unless-stopped
+    environment:
+      JARVIS_MEMORY_DATA: /data
+      JARVIS_MEMORY_SCOPE: jarvis-os-personal
+      JARVIS_EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+      JARVIS_EMBEDDING_DEVICE: cpu
+    volumes:
+      - jarvis-memory-data:/data
+      - jarvis-model-cache:/models
+    ports:
+      # Bind to loopback by default. Change only for a trusted private-network deployment.
+      - "127.0.0.1:8765:8765"
+
+volumes:
+  jarvis-memory-data:
+  jarvis-model-cache:
