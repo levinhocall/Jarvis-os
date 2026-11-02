@@ -157,7 +157,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 return
             }
-            val apiKey = preferences.apiKey.trim()
+            val apiKey = (preferences.getNextActiveKey("gemini") ?: preferences.apiKey).trim()
             if (apiKey.isBlank()) {
                 viewModelScope.launch {
                     _eventFlow.emit("Please configure your Gemini API Key in Settings first.")
