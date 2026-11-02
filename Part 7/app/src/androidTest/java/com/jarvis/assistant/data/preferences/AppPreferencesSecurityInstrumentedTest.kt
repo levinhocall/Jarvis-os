@@ -44,6 +44,25 @@ class AppPreferencesSecurityInstrumentedTest {
         assertEquals(firstKey, preferences.getNextActiveKey("gemini"))
     }
 
+
+    @Test
+    fun invalidPersistedAvatarFallsBackToBundledDefault() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val suffix = UUID.randomUUID().toString()
+        val preferenceName = "jarvis_avatar_$suffix"
+        val encryptedName = "jarvis_secure_avatar_$suffix"
+        context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)
+            .edit()
+            .putString("key_task_overlay_avatar", "../untrusted/remote-content")
+            .commit()
+
+        val preferences = AppPreferences(context, preferenceName, encryptedName)
+        assertEquals("ghost", preferences.taskOverlayAvatar)
+
+        preferences.taskOverlayAvatar = "../untrusted/remote-content"
+        assertEquals("ghost", preferences.taskOverlayAvatar)
+    }
+
     @Test
     fun ownerVoiceProfileMigratesToEncryptedStorageAndNeverWritesPlaintext() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
