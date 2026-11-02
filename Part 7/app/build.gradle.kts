@@ -101,6 +101,13 @@ tasks.matching { it.name == "packageRelease" }.configureEach {
     dependsOn("verifyReleaseSecurityInputs")
 }
 
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+        arg("room.incremental", "true")
+    }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
