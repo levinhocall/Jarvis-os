@@ -177,7 +177,9 @@ class GeminiFunctionCallProvider(
                 .header("x-goog-api-key", apiKey)
                 .post(gson.toJson(payload).toRequestBody("application/json".toMediaType()))
                 .build()
-            client.newCall(request).execute().use { response ->
+            val call = client.newCall(request)
+            call.timeout().timeout(17, TimeUnit.SECONDS)
+            call.execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     if (response.code == 401 || body.contains("API_KEY_INVALID", true)) runCatching { onApiKeyInvalid(apiKey) }
