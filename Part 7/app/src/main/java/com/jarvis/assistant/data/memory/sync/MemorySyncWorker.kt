@@ -168,8 +168,9 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
         val metadata = remote.getAsJsonObject("metadata") ?: JsonObject()
         val remoteTimestamp = parseTimestamp(remote.stringOrNull("updated_at"))
         val deleted = remote.stringOrNull("deleted_at") != null
-        val localId = metadata.longOrNull("local_id")
-        val existing = (localId?.let { dao.getMemoryById(it) }) ?: dao.getMemoryBySyncId(remoteId)
+        // Local SQLite row IDs are device-specific. Only the stable syncId may identify
+        // a record across devices; metadata.local_id is diagnostic and never used as a key.
+        val existing = dao.getMemoryBySyncId(remoteId)
         if (existing != null && existing.timestamp > remoteTimestamp) return
 
         val key = metadata.stringOrNull("key") ?: content.substringBefore(':').trim().ifBlank { "remote-memory-$remoteId" }
