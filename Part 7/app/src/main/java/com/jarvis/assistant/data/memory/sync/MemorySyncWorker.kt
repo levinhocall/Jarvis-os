@@ -171,7 +171,8 @@ class MemorySyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
         // Local SQLite row IDs are device-specific. Only the stable syncId may identify
         // a record across devices; metadata.local_id is diagnostic and never used as a key.
         val existing = dao.getMemoryBySyncId(remoteId)
-        if (existing != null && existing.timestamp > remoteTimestamp) return
+        // Local pending writes are uploaded before this pull phase. Once here, the server's
+        // updated_at is the authoritative order, avoiding cross-device wall-clock skew.
 
         val key = metadata.stringOrNull("key") ?: content.substringBefore(':').trim().ifBlank { "remote-memory-$remoteId" }
         val value = metadata.stringOrNull("value") ?: content.substringAfter(':', content).trim()
