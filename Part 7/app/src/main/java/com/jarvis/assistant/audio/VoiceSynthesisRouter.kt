@@ -2,6 +2,20 @@ package com.jarvis.assistant.audio
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.MediaPlayer
+import com.jarvis.assistant.BuildConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.OkHttpClient
+import org.json.JSONObject
+import java.io.File
+import java.util.concurrent.TimeUnit
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -20,8 +34,19 @@ object VoiceSynthesisRouter {
     @Volatile
     private var isInitialized = false
     private var pendingSpeech: Pair<String, (() -> Unit)?>? = null
+    @Volatile private var appContext: Context? = null
+    private val externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var externalTtsJob: Job? = null
+    private var externalPlayer: MediaPlayer? = null
+    private var externalAudioFile: File? = null
+    private val externalHttpClient = OkHttpClient.Builder()
+        .callTimeout(45, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(40, TimeUnit.SECONDS)
+        .build()
 
     fun init(context: Context) {
+        appContext = context.applicationContext
         if (localTts != null) return
         localTts = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
@@ -94,19 +119,113 @@ object VoiceSynthesisRouter {
             pendingSpeech = Pair(text, onDone)
             return
         }
-        val normalized = normalizeForSpeech(text)
 
+        val preferences = (appContext as? JarvisApp)?.preferences
+        val elevenLabsKey = preferences?.getNextActiveKey("elevenlabs")
+        if (!elevenLabsKey.isNullOrBlank() && BuildConfig.ELEVENLABS_VOICE_ID.isNotBlank()) {
+            speakWithElevenLabs(text, elevenLabsKey, onDone)
+        } else {
+            speakLocal(text, onDone)
+        }
+    }
+
+    private fun speakLocal(text: String, onDone: (() -> Unit)?) {
+        val tts = localTts ?: return
+        val normalized = normalizeForSpeech(text)
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) { onDone?.invoke() }
             override fun onError(utteranceId: String?) {
-                // A failed utterance is not completion; do not run callbacks that start
-                // follow-up capture or report a spoken confirmation.
-                Log.w(TAG, "TTS utterance failed; follow-up callback was not invoked.")
+                Log.w(TAG, "Local TTS utterance failed; completion callback suppressed.")
             }
         })
-
         tts.speak(normalized, TextToSpeech.QUEUE_FLUSH, null, "utterance_${System.currentTimeMillis()}")
+    }
+
+    private fun speakWithElevenLabs(text: String, apiKey: String, onDone: (() -> Unit)?) {
+        val context = appContext ?: run { speakLocal(text, onDone); return }
+        externalTtsJob?.cancel()
+        stopExternalPlayback()
+        externalTtsJob = externalScope.launch {
+            val audio = withContext(Dispatchers.IO) {
+                runCatching {
+                    val body = JSONObject()
+                        .put("text", normalizeForSpeech(text))
+                        .put("model_id", "eleven_multilingual_v2")
+                        .put("voice_settings", JSONObject()
+                            .put("stability", 0.45)
+                            .put("similarity_boost", 0.78)
+                            .put("style", 0.15)
+                            .put("use_speaker_boost", true))
+                        .toString()
+                        .toRequestBody("application/json; charset=utf-8".toMediaType())
+                    val request = Request.Builder()
+                        .url("https://api.elevenlabs.io/v1/text-to-speech/${BuildConfig.ELEVENLABS_VOICE_ID}")
+                        .header("xi-api-key", apiKey)
+                        .header("Accept", "audio/mpeg")
+                        .post(body)
+                        .build()
+                    externalHttpClient.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            Log.w(TAG, "ElevenLabs TTS returned HTTP ${response.code}; using Android TTS fallback.")
+                            null
+                        } else {
+                            response.body?.bytes()?.takeIf { it.isNotEmpty() && it.size <= 12_000_000 }
+                        }
+                    }
+                }.getOrNull()
+            }
+            if (audio == null) {
+                speakLocal(text, onDone)
+                return@launch
+            }
+            val file = File(context.cacheDir, "jarvis_tts_${System.currentTimeMillis()}.mp3")
+            try {
+                file.writeBytes(audio)
+                externalAudioFile = file
+                val player = MediaPlayer()
+                externalPlayer = player
+                player.setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build())
+                player.setDataSource(file.absolutePath)
+                player.setOnPreparedListener { prepared ->
+                    runCatching { prepared.start() }.onFailure {
+                        releaseExternalPlayer()
+                        speakLocal(text, onDone)
+                    }
+                }
+                player.setOnCompletionListener {
+                    releaseExternalPlayer()
+                    onDone?.invoke()
+                }
+                player.setOnErrorListener { _, _, _ ->
+                    releaseExternalPlayer()
+                    speakLocal(text, onDone)
+                    true
+                }
+                player.prepareAsync()
+            } catch (error: Exception) {
+                Log.w(TAG, "ElevenLabs audio playback failed; using Android TTS fallback.", error)
+                releaseExternalPlayer()
+                speakLocal(text, onDone)
+            }
+        }
+    }
+
+    private fun stopExternalPlayback() {
+        externalTtsJob?.cancel()
+        externalTtsJob = null
+        releaseExternalPlayer()
+    }
+
+    private fun releaseExternalPlayer() {
+        runCatching { externalPlayer?.stop() }
+        runCatching { externalPlayer?.release() }
+        externalPlayer = null
+        runCatching { externalAudioFile?.delete() }
+        externalAudioFile = null
     }
 
     fun isSpeaking(): Boolean {
@@ -118,12 +237,14 @@ object VoiceSynthesisRouter {
     }
 
     fun stop() {
+        stopExternalPlayback()
         try {
             localTts?.stop()
         } catch (_: Exception) {}
     }
 
     fun release() {
+        stopExternalPlayback()
         try {
             localTts?.stop()
             localTts?.shutdown()
