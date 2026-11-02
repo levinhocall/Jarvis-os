@@ -249,7 +249,6 @@ class JarvisConversationService : Service() {
         fun sendTextMessage(text: String) {
             val instance = activeInstance ?: return
             instance.liveWebSocket?.sendClientContent(text)
-            JarvisApp.instance.chatRepository.addTurn(text, "")
         }
 
         fun cancelActiveTaskFromOverlay() {
@@ -876,14 +875,12 @@ class JarvisConversationService : Service() {
                     val repository = app.conversationRepository
                     val sessionId = repository.restoreMostRecentActiveSession()
                         ?: repository.createNewSession("Voice Conversation").id
-                    // One-time compatibility migration: preserve legacy DataStore chat turns
-                    // when the restored Room session has no messages yet.
-                    if (repository.getMessagesPaged(sessionId, limit = 1, offset = 0).isEmpty()) {
-                        app.chatRepository.turns.value.takeLast(15).forEach { turn ->
-                            if (turn.userTranscript.isNotBlank() && turn.jarvisResponse.isNotBlank()) {
-                                repository.appendTurn(turn.userTranscript, turn.jarvisResponse)
-                            }
-                        }
+                    // Idempotently merge the complete legacy transcript into the canonical Room session.
+                    // Clear the old preference payload only after the Room import succeeds.
+                    val legacyTurns = app.chatRepository.turns.value
+                    if (legacyTurns.isNotEmpty()) {
+                        repository.mergeHistoricalTurns(sessionId, legacyTurns)
+                        app.chatRepository.clearHistory()
                     }
                     val recentMessages = repository.getMessagesPaged(sessionId, limit = 20, offset = 0).reversed()
                     val latestUserQuery = recentMessages.lastOrNull { it.role.equals("USER", ignoreCase = true) }?.content.orEmpty()
@@ -3457,10 +3454,6 @@ class JarvisConversationService : Service() {
         if (reply.isNotEmpty() && app != null) {
             val isOwnerCheckPassed = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile() || isCurrentTurnOwnerVoiceVerified
             if (isOwnerCheckPassed) {
-                app.chatRepository.addTurn(
-                    userText = query.ifEmpty { "Spoken user query" },
-                    jarvisText = reply
-                )
                 app.memoryManager.addShortTermTurn(
                     userText = query.ifEmpty { "Spoken user query" },
                     jarvisText = reply
