@@ -94,7 +94,12 @@ class JarvisApp : Application() {
 
         // Memory System
         memoryDatabase = MemoryDatabase.getInstance(this)
-        memoryRepository = MemoryRepository(memoryDatabase.memoryDao())
+        memoryRepository = MemoryRepository(
+            memoryDatabase.memoryDao(),
+            embeddingProvider = com.jarvis.assistant.data.memory.vector.RemoteNeuralEmbeddingProvider(
+                com.jarvis.assistant.BuildConfig.MEMORY_SYNC_ENDPOINT
+            )
+        )
         conversationRepository = com.jarvis.assistant.data.chat.ConversationRepository(memoryDatabase.chatDao())
         memoryManager = MemoryManager(memoryRepository, preferences, appScope)
 
