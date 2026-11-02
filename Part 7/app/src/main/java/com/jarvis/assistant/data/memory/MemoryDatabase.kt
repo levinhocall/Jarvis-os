@@ -134,14 +134,14 @@ abstract class MemoryDatabase : RoomDatabase() {
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE memories ADD COLUMN syncId TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE memories ADD COLUMN lastSyncedAt INTEGER DEFAULT NULL")
+                db.execSQL("ALTER TABLE memories ADD COLUMN lastSyncedAt INTEGER")
                 // Preserve the existing remote identity scheme for rows already synced.
                 db.execSQL("UPDATE memories SET syncId = 'jarvis-local-' || id WHERE syncId = ''")
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS memory_sync_state (
                         syncKey TEXT NOT NULL PRIMARY KEY,
-                        cursorUpdatedAt TEXT NOT NULL DEFAULT '',
-                        cursorId TEXT NOT NULL DEFAULT '',
+                        cursorUpdatedAt TEXT NOT NULL,
+                        cursorId TEXT NOT NULL,
                         updatedAt INTEGER NOT NULL
                     )
                 """.trimIndent())
