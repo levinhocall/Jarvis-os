@@ -20,10 +20,15 @@ class PersistentMissionCheckpointStorageInstrumentedTest {
             toolName = "payment",
             isIdempotent = false
         )
+        val verificationStep = MissionStep(
+            stepId = "verify_payment",
+            title = "Verify payment",
+            toolName = "verify"
+        )
         val coordinator = LongHorizonMissionCoordinator(storage)
         val mission = coordinator.createMission(
             "Persist payment workflow",
-            listOf(MilestoneDefinition(id = "payment", title = "Payment", steps = listOf(step)))
+            listOf(MilestoneDefinition(id = "payment", title = "Payment", steps = listOf(step, verificationStep)))
         )
         coordinator.startOrResume(mission.missionId)
         coordinator.recordStepExecution(
