@@ -12,11 +12,14 @@ Requires Docker with Compose. From this directory:
 docker compose up -d --build
 ```
 
-Check health:
+Check health and container state:
 
 ```bash
 curl http://127.0.0.1:8765/health
+docker compose ps
 ```
+
+Compose now checks the `/health` endpoint every 30 seconds with a 10-minute startup grace period for the first neural-model download. The container restarts if its process exits; a health check reports readiness but does not itself deploy the service to a public host.
 
 The first start downloads the embedding model and may take several minutes. The SQLite database and model cache persist in named Docker volumes.
 
