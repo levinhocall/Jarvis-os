@@ -1,11 +1,5 @@
 package com.jarvis.assistant.data.memory.vector
 
-import com.google.gson.Gson
-import com.google.gson.JsonObject
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -90,126 +84,25 @@ class DeterministicLocalEmbeddingProvider(
     }
 }
 
-/**
- * Cloud embedding provider using Google's text-embedding-004 model.
- */
+/** Compatibility adapter: cloud embeddings are disabled by the phone-only memory policy. */
 class GeminiEmbeddingProvider(
-    private val apiKeyProvider: () -> String?,
+    @Suppress("UNUSED_PARAMETER") apiKeyProvider: () -> String?,
     override val dimension: Int = 768
 ) : EmbeddingProvider {
-
-    override val modelName: String = "gemini-text-embedding-004"
-    private val gson = Gson()
-
-    override fun isAvailable(): Boolean = !apiKeyProvider().isNullOrBlank()
-
-    override suspend fun generateEmbedding(text: String): FloatArray? {
-        val apiKey = apiKeyProvider()
-        if (apiKey.isNullOrBlank()) return null
-
-        return try {
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
-            val url = URL(endpoint)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("x-goog-api-key", apiKey.trim())
-            conn.doOutput = true
-            conn.connectTimeout = 5000
-            conn.readTimeout = 5000
-
-            val requestBody = JsonObject().apply {
-                addProperty("model", "models/text-embedding-004")
-                add("content", JsonObject().apply {
-                    val parts = com.google.gson.JsonArray().apply {
-                        add(JsonObject().apply { addProperty("text", text) })
-                    }
-                    add("parts", parts)
-                })
-            }
-
-            conn.outputStream.use { os ->
-                os.write(requestBody.toString().toByteArray(Charsets.UTF_8))
-            }
-
-            if (conn.responseCode == 200) {
-                val responseJson = conn.inputStream.bufferedReader().use { it.readText() }
-                val root = gson.fromJson(responseJson, JsonObject::class.java)
-                val values = root.getAsJsonObject("embedding")?.getAsJsonArray("values")
-                if (values != null && values.size() > 0) {
-                    val array = FloatArray(values.size())
-                    for (i in 0 until values.size()) {
-                        array[i] = values.get(i).asFloat
-                    }
-                    array
-                } else null
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
+    private val local = DeterministicLocalEmbeddingProvider(dimension)
+    override val modelName: String get() = local.modelName
+    override fun isAvailable(): Boolean = true
+    override suspend fun generateEmbedding(text: String): FloatArray? = local.generateEmbedding(text)
 }
 
-/**
- * Neural sentence embedding client for the self-hosted JARVIS memory backend.
- * Uses all-MiniLM-L6-v2 (384 dimensions) when the endpoint is configured and reachable;
- * otherwise falls back to a local 384-dimensional deterministic representation.
- */
+/** Compatibility adapter for legacy callers; never sends text to the former backend. */
 class RemoteNeuralEmbeddingProvider(
-    private val baseEndpoint: String,
-    private val fallback: EmbeddingProvider = DeterministicLocalEmbeddingProvider(384)
+    @Suppress("UNUSED_PARAMETER") baseEndpoint: String,
+    @Suppress("UNUSED_PARAMETER") fallback: EmbeddingProvider = DeterministicLocalEmbeddingProvider(384)
 ) : EmbeddingProvider {
-    override val modelName: String = "all-MiniLM-L6-v2-remote-with-local-fallback"
+    private val local = DeterministicLocalEmbeddingProvider(384)
+    override val modelName: String get() = local.modelName
     override val dimension: Int = 384
-    private val client = okhttp3.OkHttpClient.Builder()
-        .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-        .callTimeout(25, java.util.concurrent.TimeUnit.SECONDS)
-        .build()
-    private val gson = Gson()
-
     override fun isAvailable(): Boolean = true
-
-    override suspend fun generateEmbedding(text: String): FloatArray? {
-        return generateEmbeddings(listOf(text)).firstOrNull()
-    }
-
-    override suspend fun generateEmbeddings(texts: List<String>): List<FloatArray?> {
-        if (texts.isEmpty()) return emptyList()
-        val endpoint = baseEndpoint.trim().trimEnd('/')
-        if (endpoint.isBlank()) return fallback.generateEmbeddings(texts)
-        return try {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                val payload = JsonObject().apply {
-                    add("texts", com.google.gson.JsonArray().apply { texts.forEach { add(it) } })
-                }
-                val request = okhttp3.Request.Builder()
-                    .url("$endpoint/v1/embeddings")
-                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
-                    .build()
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        fallback.generateEmbeddings(texts)
-                    } else {
-                        val body = response.body?.string()
-                        val root = body?.let { gson.fromJson(it, JsonObject::class.java) }
-                        val vectors = root?.getAsJsonArray("embeddings")
-                        if (vectors == null || vectors.size() != texts.size) {
-                            fallback.generateEmbeddings(texts)
-                        } else {
-                            texts.indices.map { index ->
-                                val values = vectors[index].asJsonArray
-                                if (values.size() != dimension) null
-                                else FloatArray(values.size()) { values[it].asFloat }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (_: Exception) {
-            fallback.generateEmbeddings(texts)
-        }
-    }
+    override suspend fun generateEmbedding(text: String): FloatArray? = local.generateEmbedding(text)
 }

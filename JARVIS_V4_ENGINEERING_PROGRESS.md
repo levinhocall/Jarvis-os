@@ -501,3 +501,26 @@ Status: SOURCE CHANGE COMMITTED TO MAIN; runtime/build verification NOT RUN.
 ### Verification truth
 
 The above is a source-level configuration change only. It is not a claim that V4 is complete, that tests pass, or that the phone has been runtime-verified. Current baseline remains GitHub main HEAD plus these commits; build and device verification are still outstanding.
+
+## 2026-11-03 — Continuation: enforce phone-only memory at executable boundaries
+
+This entry supersedes earlier remote-sync deployment recommendations. Baseline checkout was clean at
+`35ddb608396d95fdfd335a5f5a81740e95aafe27`; remote `main` was confirmed at the same SHA using `git ls-remote`.
+The supplied checkout branch was `work`; a local `main` was created at that commit as directed.
+
+### Implementation batch 1
+
+- `JarvisApp.kt`, `MemorySyncScheduler.kt`, `MemorySyncWorker.kt`: cancel both legacy unique work names at startup. The persisted worker class now returns without database access or network calls. No upload implementation remains in that worker; schema-v6 metadata remains intact.
+- `EmbeddingProvider.kt`: former Gemini and self-hosted adapters retain constructor compatibility but use only deterministic local vectors. They never read provider credentials or invoke an injected fallback. Model names identify the actual local representation so older vectors are re-embedded locally.
+- `JarvisConversationService.kt`: removed automatic stored-profile, long-term-memory and historical-transcript injection into Gemini Live setup prompts. Current explicit conversation still uses the selected cloud voice provider; this is not an offline voice implementation.
+- `MultiAgentCouncil.kt`: removed personal-memory retrieval from model reviewer context and handoffs; stopped logging the request text at deliberation start.
+- `MemoryDatabase.kt`: fixed an invalid `RoomDatabase.Callback.onCorruption` override (corruption belongs to the SQLite open-helper callback). The SQLCipher helper now receives a forwarding SQLite callback that fails closed on corruption without invoking the default destructive handler. Existing migrations and database version remain unchanged. SQLCipher preparation/probe corruption behavior still needs device testing.
+- `LocalOnlyEmbeddingTest.kt`: added two JVM regressions for legacy-adapter credential isolation, endpoint isolation and rejection of an injected network-capable fallback. Authored, NOT EXECUTED yet.
+
+### Verification so far
+
+- `git diff --check`: PASS.
+- Remote baseline query: PASS after enabling command network access through the configured proxy.
+- Initial Gradle attempts: blocked before compilation by unwritable default Gradle cache, then direct JVM network/DNS failures. Retried with a workspace cache and explicit JVM proxy configuration; final outcome recorded in the next entry.
+- No Android runtime, emulator or physical-device testing. No APK-producing task invoked.
+- Source changes are not proof of runtime privacy: local command outputs, external TTS, screen tools and user-directed search still require a broader outbound-payload audit.

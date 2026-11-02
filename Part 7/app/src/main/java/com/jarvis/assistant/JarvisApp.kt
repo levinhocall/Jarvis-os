@@ -92,6 +92,9 @@ class JarvisApp : Application() {
         triggerRepository = TriggerRepository(this)
         registerBatteryLowReceiver()
 
+        // Cancel uploads persisted by older versions before initializing local memory.
+        com.jarvis.assistant.data.memory.sync.MemorySyncScheduler.cancelLegacyWork(this)
+
         // Memory System
         memoryDatabase = MemoryDatabase.getInstance(this)
         // Strictly on-device memory: Room + SQLCipher stores memories locally.

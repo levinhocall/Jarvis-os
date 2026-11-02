@@ -3,7 +3,6 @@ package com.jarvis.assistant.automation.council
 import android.content.Context
 import android.util.Log
 import com.jarvis.assistant.automation.mission.*
-import com.jarvis.assistant.data.memory.PersonalMemoryGraph
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -77,14 +76,14 @@ object MultiAgentCouncil {
         userGoal: String
     ): CouncilDeliberation = withContext(Dispatchers.Default) {
         val cleanGoal = userGoal.trim()
-        Log.i(TAG, "Multi-Agent Council convening for: '$cleanGoal'")
+        Log.i(TAG, "Multi-Agent Council convening")
 
         // 1. Planner Stage: Decompose into atomic sub-tasks
         val plannerSteps = decomposeGoal(cleanGoal)
 
         // 2. Researcher Stage: Retrieve relevant facts and memories
-        val memories = PersonalMemoryGraph.queryRelevantMemories(context, cleanGoal, limit = 2)
-        val researcherFindings = memories.map { "Memory [${it.key}]: ${it.value}" }
+        // Reviewers use only the current request; personal memory stays on-device.
+        val researcherFindings = emptyList<String>()
 
         // 3. Build the authoritative MissionEngine plan, then run bounded model reviewers.
         // This is the production preflight path called by JarvisUnifiedRuntime.
@@ -287,8 +286,7 @@ object MultiAgentCouncil {
 
         // 3. Researcher searches context
         _activeRole.value = AgentRole.RESEARCHER
-        val memories = PersonalMemoryGraph.queryRelevantMemories(context, cleanGoal, limit = 2)
-        val researchedContext = memories.joinToString("; ") { "${it.key}: ${it.value}" }
+        val researchedContext = "" // Phone-only memory is excluded from agent handoffs.
         handoffs.add(
             AgentHandoff(
                 fromRole = AgentRole.RESEARCHER,

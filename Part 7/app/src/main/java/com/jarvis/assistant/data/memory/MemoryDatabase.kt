@@ -1,8 +1,6 @@
 package com.jarvis.assistant.data.memory
 
 import android.content.Context
-import android.util.Log
-import java.io.File
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -157,41 +155,34 @@ abstract class MemoryDatabase : RoomDatabase() {
                     DatabaseKeyStore(context.applicationContext).markInitializationComplete()
                 }
 
+            }
+
+        /** The SQLite helper owns corruption handling; never delegate to its deleting default. */
+        private fun preservingConfiguration(
+            configuration: SupportSQLiteOpenHelper.Configuration
+        ): SupportSQLiteOpenHelper.Configuration {
+            val original = configuration.callback
+            val callback = object : SupportSQLiteOpenHelper.Callback(original.version) {
+                override fun onConfigure(db: SupportSQLiteDatabase) = original.onConfigure(db)
+                override fun onCreate(db: SupportSQLiteDatabase) = original.onCreate(db)
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) =
+                    original.onUpgrade(db, oldVersion, newVersion)
+                override fun onDowngrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) =
+                    original.onDowngrade(db, oldVersion, newVersion)
+                override fun onOpen(db: SupportSQLiteDatabase) = original.onOpen(db)
                 override fun onCorruption(db: SupportSQLiteDatabase) {
-                    // Room will close and remove the corrupt database after this callback.
-                    // Preserve the original bytes and SQLite sidecars inside app-private,
-                    // non-backed-up storage so support tooling can attempt a later salvage.
-                    val source = context.getDatabasePath(DATABASE_NAME)
-                    if (!source.exists()) {
-                        Log.e("MemoryDatabase", "Corruption reported but database file was not present.")
-                        return
-                    }
-
-                    val recoveryDirectory = File(context.noBackupFilesDir, "database-recovery")
-                    if (!recoveryDirectory.exists() && !recoveryDirectory.mkdirs()) {
-                        Log.e("MemoryDatabase", "Could not create private database recovery directory.")
-                        return
-                    }
-
-                    val backup = File(
-                        recoveryDirectory,
-                        "jarvis_memory_corrupt_${System.currentTimeMillis()}.db"
+                    throw IllegalStateException(
+                        "Database corruption detected; database and sidecars retained for manual recovery."
                     )
-                    try {
-                        source.copyTo(backup, overwrite = false)
-                        listOf("-wal", "-shm").forEach { suffix ->
-                            val sidecar = File(source.absolutePath + suffix)
-                            if (sidecar.exists()) {
-                                sidecar.copyTo(File(backup.absolutePath + suffix), overwrite = false)
-                            }
-                        }
-                        Log.e("MemoryDatabase", "Corrupt database snapshot preserved in app-private recovery storage.")
-                    } catch (error: Exception) {
-                        Log.e("MemoryDatabase", "Could not preserve corrupt database snapshot.", error)
-                        backup.delete()
-                    }
                 }
             }
+            return SupportSQLiteOpenHelper.Configuration.builder(configuration.context)
+                .name(configuration.name)
+                .callback(callback)
+                .noBackupDirectory(configuration.useNoBackupDirectory)
+                .allowDataLossOnRecovery(false)
+                .build()
+        }
 
         /**
          * Defers SQLCipher loading, Keystore work, and any plaintext-to-encrypted migration
@@ -213,7 +204,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                         delegate?.let { return it }
                         return synchronized(this) {
                             delegate ?: DatabaseEncryption.prepare(appContext)
-                                .create(configuration)
+                                .create(preservingConfiguration(configuration))
                                 .also { helper ->
                                     helper.setWriteAheadLoggingEnabled(writeAheadLoggingEnabled)
                                     delegate = helper
