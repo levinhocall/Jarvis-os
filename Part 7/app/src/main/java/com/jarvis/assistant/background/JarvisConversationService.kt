@@ -1545,7 +1545,14 @@ class JarvisConversationService : Service() {
                         override fun onError(message: String, isFatal: Boolean, errorCode: String?) {
                             Log.e("JarvisService", "GeminiLive error (fatal=$isFatal, code=$errorCode); server message omitted")
                             VoiceFlightRecorder.recordError(errorCode ?: if (isFatal) "FATAL_ERROR" else "WARNING", message)
-                            if (isFatal) setConversationState(ConversationState.ERROR)
+                            if (isFatal) {
+                                setConversationState(ConversationState.ERROR)
+                                // Invalid individual keys may rotate to another configured key;
+                                // access/model/configuration failures are terminal for this session.
+                                if (errorCode != "API_KEY_INVALID") {
+                                    voiceSessionManager?.onFatalConnectionError(errorCode ?: "Fatal Gemini Live transport error")
+                                }
+                            }
                             updateNotification()
                             serviceScope.launch { _events.emit(message) }
                             when (errorCode) {
