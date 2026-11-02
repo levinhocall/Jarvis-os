@@ -2,6 +2,7 @@ package com.jarvis.assistant.data.chat
 
 import com.jarvis.assistant.data.memory.MemoryDao
 import com.jarvis.assistant.data.memory.MemoryEntity
+import com.jarvis.assistant.data.memory.sync.MemorySyncStateEntity
 import com.jarvis.assistant.data.memory.MemoryRepository
 import com.jarvis.assistant.data.memory.MemoryAwareContextBuilder
 import com.jarvis.assistant.data.memory.vector.DeterministicLocalEmbeddingProvider
@@ -412,6 +413,7 @@ class FakeChatDao : ChatDao {
 class FakeMemoryDao : MemoryDao {
     val allRawMemories = mutableListOf<MemoryEntity>()
     private val idCounter = AtomicLong(1L)
+    private val syncStates = mutableMapOf<String, MemorySyncStateEntity>()
 
     override fun getAllMemoriesFlow(): Flow<List<MemoryEntity>> =
         flowOf(allRawMemories.filter { it.status != MemoryEntity.STATUS_DELETED })
@@ -421,6 +423,15 @@ class FakeMemoryDao : MemoryDao {
 
     override suspend fun getAllMemories(): List<MemoryEntity> =
         allRawMemories.filter { it.status == MemoryEntity.STATUS_ACTIVE }
+    override suspend fun getAllMemoriesForSync(): List<MemoryEntity> = allRawMemories.toList()
+    override suspend fun getMemoryBySyncId(syncId: String): MemoryEntity? = allRawMemories.firstOrNull { it.syncId == syncId }
+    override suspend fun getMemoryById(id: Long): MemoryEntity? = allRawMemories.firstOrNull { it.id == id }
+    override suspend fun markMemorySynced(id: Long, syncedAt: Long) {
+        val index = allRawMemories.indexOfFirst { it.id == id }
+        if (index >= 0) allRawMemories[index] = allRawMemories[index].copy(lastSyncedAt = syncedAt)
+    }
+    override suspend fun getMemorySyncState(syncKey: String): MemorySyncStateEntity? = syncStates[syncKey]
+    override suspend fun saveMemorySyncState(state: MemorySyncStateEntity) { syncStates[state.syncKey] = state }
 
     override fun getMemoriesByCategoryFlow(category: String): Flow<List<MemoryEntity>> =
         flowOf(allRawMemories.filter { it.category == category && it.status != MemoryEntity.STATUS_DELETED })
