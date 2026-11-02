@@ -127,6 +127,60 @@ class SelfHealingAgentLoopTest {
     }
 
     @Test
+    fun stateMutationWithoutVerificationNeverTriggersAutomaticRetry() = runBlocking {
+        val step = SelfHealingAgentLoop.TaskStep(
+            stepId = "mutated_unverified",
+            title = "Toggle a device setting",
+            toolName = "device_control",
+            arguments = mapOf("command" to "toggle"),
+            isConsequential = false,
+            maxRetries = 3
+        )
+        val mission = SelfHealingAgentLoop.MissionPlan("m_mutated", "Toggle setting", listOf(step))
+        val attempts = AtomicInteger(0)
+        val outcome = SelfHealingAgentLoop.executeStepWithSelfHealing(
+            step = step,
+            mission = mission,
+            isCancelled = { false },
+            executeAction = {
+                attempts.incrementAndGet()
+                ActionOutcomeResult(
+                    isVerified = false,
+                    stateMutated = true,
+                    message = "Setting may have changed but read-back failed"
+                )
+            },
+            attemptRecovery = { true }
+        )
+        assertEquals(SelfHealingAgentLoop.StepOutcome.UNVERIFIED_TIMEOUT, outcome)
+        assertEquals("A possibly-mutated action must never be replayed", 1, attempts.get())
+    }
+
+    @Test
+    fun failedRecoveryStopsBeforeRetryingAction() = runBlocking {
+        val step = SelfHealingAgentLoop.TaskStep(
+            stepId = "recovery_failed",
+            title = "Open screen item",
+            toolName = "click_ui_element",
+            maxRetries = 3
+        )
+        val mission = SelfHealingAgentLoop.MissionPlan("m_recovery", "Open item", listOf(step))
+        val attempts = AtomicInteger(0)
+        val outcome = SelfHealingAgentLoop.executeStepWithSelfHealing(
+            step = step,
+            mission = mission,
+            isCancelled = { false },
+            executeAction = {
+                attempts.incrementAndGet()
+                ActionOutcomeResult(false, false, "Accessibility tree unavailable")
+            },
+            attemptRecovery = { false }
+        )
+        assertEquals(SelfHealingAgentLoop.StepOutcome.RECOVERABLE_FAILURE, outcome)
+        assertEquals("A failed recovery must not be followed by a blind retry", 1, attempts.get())
+    }
+
+    @Test
     fun testTruthfulMissionReportingNeverClaimsFalseSuccess() {
         val step1 = SelfHealingAgentLoop.TaskStep("s1", "Open WhatsApp", "open_app").apply {
             outcome = SelfHealingAgentLoop.StepOutcome.SUCCESS
