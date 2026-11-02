@@ -27,7 +27,7 @@ import android.os.Looper
         NotificationHistoryEntity::class
     ],
     version = 5,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class MemoryDatabase : RoomDatabase() {
 
