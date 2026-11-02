@@ -36,6 +36,7 @@ class MultiAgentCouncilTest {
 
         // Planner, Verifier, and Lead have 0 direct mutating tool authorization
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.PLANNER, "device_control"))
+        assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.CRITIC, "device_control"))
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.VERIFIER, "whatsapp_send"))
         assertFalse(MultiAgentCouncil.isToolAuthorizedForRole(AgentRole.LEAD_SYNTHESIZER, "click_ui_element"))
     }
@@ -155,6 +156,36 @@ class MultiAgentCouncilTest {
         } finally {
             MissionEngine.llmPlanner = previousPlanner
             assertTrue(MultiAgentCouncil.activeSubAgents.value.isEmpty())
+        }
+    }
+    @Test
+    fun testCriticBlockPreventsExecutorFromRunningMissionTools() = runBlocking {
+        val previousPlanner = MissionEngine.llmPlanner
+        val executions = AtomicInteger(0)
+        val provider = object : LlmFunctionCallProvider {
+            override val providerId: String = "council-block-test-provider"
+            override suspend fun isAvailable(): Boolean = true
+            override suspend fun predictStep(goal: String, history: List<LlmPlannerStepRecord>, availableTools: List<ToolDefinition>): LlmStepDecision =
+                LlmStepDecision.Abort("Not used by advisory test")
+            override suspend fun reason(prompt: String): String? =
+                if (prompt.contains("adversarial CRITIC")) "BLOCK: concrete destructive-action concern"
+                else "REVIEW: checked"
+        }
+        MissionEngine.llmPlanner = LlmPlanner(provider)
+        try {
+            val outcome = MultiAgentCouncil.executeCouncilTaskForTest(
+                goal = "Search and remove duplicate records",
+                simulatedExecutor = {
+                    executions.incrementAndGet()
+                    true to MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "Should never execute")
+                }
+            )
+            assertFalse(outcome.isSuccess)
+            assertEquals("SUB_AGENT_CRITIC_BLOCK", outcome.failureReason)
+            assertEquals(0, executions.get())
+            assertEquals(3, outcome.subAgentCallsUsed)
+        } finally {
+            MissionEngine.llmPlanner = previousPlanner
         }
     }
 }
