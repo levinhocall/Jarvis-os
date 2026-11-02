@@ -450,7 +450,7 @@ Status: **VOICE OWNERSHIP IS NOW WIRED IN SOURCE; build/device verification is s
 - External TTS: ElevenLabs source integration is present, but live provider response and playback require a real provider key and device test.
 - Android 16 acceptance: microphone routing/AEC, barge-in, overlay boot restoration, foreground-service policy and OEM background behavior require a physical-device test.
 - Build/test verification: no Gradle compile, unit test, instrumentation test or lint run has completed in this pass. No APK was assembled, per instruction.
-- CI: latest inspected GitHub Actions runs #232–#239 ended in startup_failure before jobs were created. Latest run #239: https://github.com/levinhocall/Jarvis-os/actions/runs/41432051730. Zero jobs means Gradle/tests/lint did not run; this is neither a code failure nor a passing verification.
+- CI: latest inspected GitHub Actions runs #232–#242 ended in startup_failure before jobs were created. Latest run #242: https://github.com/levinhocall/Jarvis-os/actions/runs/41432305301 (zero jobs). Gradle/tests/lint did not run; this is neither a code failure nor a passing verification.
 
 ### Verification boundary
 
