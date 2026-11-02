@@ -22,7 +22,9 @@ class GeminiLiveWebSocket(
     private val apiKeyProvider: () -> String = { apiKey },
     private val onApiKeyRateLimited: (String) -> Unit = {},
     private val onApiKeyInvalid: (String) -> Unit = {},
-    private val onApiKeySuccess: (String) -> Unit = {}
+    private val onApiKeySuccess: (String) -> Unit = {},
+    /** When true, VoiceSessionManager is the sole reconnect authority. */
+    private val externalReconnectOwner: Boolean = false
 ) {
     @Volatile private var activeApiKey: String = apiKey
     @Volatile private var pendingApiKey: String? = null
@@ -110,7 +112,8 @@ class GeminiLiveWebSocket(
         isManuallyStopped.set(false)
         reconnectAttempts = 0
         pendingApiKey = null
-        activeApiKey = apiKey.trim()
+        val selectedKey = runCatching { apiKeyProvider().trim() }.getOrDefault("")
+        activeApiKey = selectedKey.ifBlank { apiKey.trim() }
         initiateConnection()
     }
 
@@ -183,7 +186,7 @@ class GeminiLiveWebSocket(
                         Log.e(TAG, "Gemini explicitly rejected the active API credential (code=$code)")
                         listener.onError("Google explicitly rejected this Gemini API key. Check the key and project restrictions.", isFatal = true, errorCode = "API_KEY_INVALID")
                         listener.onConnectionStateChanged("ERROR • INVALID KEY")
-                        if (!isManuallyStopped.get()) reconnectWithNextKey()
+                        if (!isManuallyStopped.get()) requestReconnect(rotateKey = true)
                         return
                     }
 
@@ -194,7 +197,7 @@ class GeminiLiveWebSocket(
                         Log.w(TAG, "Gemini rate-limited the active key (code=$code). Rotating/retrying with bounded backoff.")
                         listener.onError("Gemini rate limit or quota was reached. JARVIS will retry using an available key.", isFatal = false, errorCode = "QUOTA_EXCEEDED")
                         listener.onConnectionStateChanged("COOLDOWN • RETRYING")
-                        reconnectWithNextKey(minDelayMs = 5_000L)
+                        requestReconnect(minDelayMs = 5_000L, rotateKey = true)
                         return
                     }
 
@@ -207,7 +210,7 @@ class GeminiLiveWebSocket(
                                 Log.w(TAG, "Model rejected by Gemini (code=$code). Auto-falling back to ${GeminiConstants.MODEL_3_8_LIVE}")
                                 activeModel = GeminiConstants.MODEL_3_8_LIVE
                                 listener.onConnectionStateChanged("RECONNECTING...")
-                                scheduleReconnect()
+                                requestReconnect()
                                 return
                             }
                         }
@@ -265,7 +268,7 @@ class GeminiLiveWebSocket(
                         Log.w(TAG, "Gemini quota/rate limit hit (HTTP $code); applying cooldown and bounded retry.")
                         listener.onError("Gemini rate limit or quota reached. JARVIS will retry using an available key.", isFatal = false, errorCode = "QUOTA_EXCEEDED")
                         listener.onConnectionStateChanged("COOLDOWN • RETRYING")
-                        reconnectWithNextKey(minDelayMs = retryAfterMs ?: 5_000L)
+                        requestReconnect(minDelayMs = retryAfterMs ?: 5_000L, rotateKey = true)
                         return
                     }
 
@@ -277,7 +280,7 @@ class GeminiLiveWebSocket(
 
                     if (!isManuallyStopped.get()) {
                         listener.onError("Connection lost. Retrying with bounded backoff...", isFatal = false, errorCode = "CONNECTION_ERROR")
-                        scheduleReconnect(minDelayMs = retryAfterMs ?: 0L)
+                        requestReconnect(minDelayMs = retryAfterMs ?: 0L)
                     } else {
                         listener.onConnectionStateChanged("OFFLINE")
                     }
@@ -1043,6 +1046,22 @@ class GeminiLiveWebSocket(
                 Log.d(TAG, "9-minute session threshold reached. Seamlessly renewing session...")
                 webSocket?.close(1000, "Session renewal")
             }
+        }
+    }
+
+    /** Routes all transport retries through exactly one lifecycle owner. */
+    private fun requestReconnect(minDelayMs: Long = 0L, rotateKey: Boolean = false) {
+        if (isManuallyStopped.get()) return
+        if (externalReconnectOwner) {
+            if (rotateKey) {
+                val candidate = runCatching { apiKeyProvider().trim() }.getOrDefault("")
+                if (candidate.isNotBlank() && candidate != activeApiKey) pendingApiKey = candidate
+            }
+            listener.onConnectionStateChanged("OFFLINE")
+        } else if (rotateKey) {
+            reconnectWithNextKey(minDelayMs)
+        } else {
+            scheduleReconnect(minDelayMs)
         }
     }
 
