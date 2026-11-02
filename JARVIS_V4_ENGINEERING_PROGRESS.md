@@ -319,3 +319,21 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - Verification: updated service source still requires compile/unit verification and manual Android 16 overlay lifecycle checks.
 - Added `concurrentFailuresAtomicallyOpenCircuitBreaker` to `UniversalActionTest` to exercise simultaneous failing tool calls and assert subsequent calls are blocked once the threshold is reached.
 - Test commit: `fdae4785797df2c4420c650a54173debcc8a7e22`. Test source was fetched back and inspected; execution remains pending.
+
+### Voice collaborator hardening and regression coverage
+
+- `VoiceSessionManager` now serializes connect/disconnect callbacks with a coroutine mutex. A new session waits for an in-flight teardown barrier; stale handshakes are disconnected before releasing the connection lock; session state callbacks are synchronized.
+- Added a regression test proving a rapid stop/restart does not start the next connection before the previous disconnect callback completes.
+- `AudioPipelineManager` now transfers an owned copy of every PCM frame to its downstream callback. Previously only muted frames were copied; normal and barge-in frames reused the capture buffer and could be corrupted if a consumer retained/queued it.
+- Added a regression test for audio-frame ownership.
+- Commits: `88a42c99b3f3912524662407b168745c42808293`, `6a7462951e010ff103fb8d5af9b35a24265f85fa`, `254138cb5ebb9bcd3ff3e6242069d75ceaec9ab7`, `eabc45ffc0abf48985736d4e0a7e0601ec4fc2ae`, `e63d297c3e0d349ce11c3b73a7ae2f4be22cd8d8`.
+- These collaborators are hardened and tested in source, but they are **not yet the production audio/socket owner**. `JarvisConversationService` still owns the active `AudioRecorder` and `GeminiLiveWebSocket`. Replacing those simultaneously without an end-to-end integration test would risk breaking the live voice path; the managers are not falsely marked as production-wired.
+
+### Remaining blockers that cannot be truthfully closed from repository edits alone
+
+- Android 16 Accessibility restricted-settings, foreground-service policy, microphone routing/AEC, overlay cutouts/insets, and boot/restart recovery require a physical Android 16 device and user-granted special access. Static source review cannot certify these.
+- Neural semantic embeddings require selecting and bundling/licensing a concrete model and validating its APK/runtime footprint; the current lexical/hash representation is not a neural embedding system.
+- Mem0 cloud sync, account/authentication/subscription/credits, and external TTS/provider integrations require real endpoint contracts, credentials, and data-consent decisions. No fake backend or placeholder success path was added.
+- `AutonomousGoalAgent` remains a narrow legacy product-search flow; the production general mission path is `JarvisUnifiedRuntime` → `MissionEngine`/`LongHorizonMissionCoordinator`. `SelfHealingAgentLoop` and `UniversalActionDispatcher` remain separate frameworks without a safe one-to-one adapter to the production `ToolRegistry`; they were not wired as a second execution authority.
+- CI remains blocked before job creation. Latest runs #197–#204 all concluded `startup_failure`; run #204 is https://github.com/levinhocall/Jarvis-os/actions/runs/41416628979. GitHub returned zero jobs for the inspected run, so Gradle, lint, and tests did not execute. This is not a code test failure and not a pass.
+- No APK was assembled.
