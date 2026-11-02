@@ -255,3 +255,10 @@ Status: SOURCE CHANGES COMMITTED; execution verification pending.
 - No unit or instrumentation test was executed.
 - No APK was built.
 - Source commits are not equivalent to a successful compile or runtime acceptance.
+
+
+### Follow-up wiring correction
+
+- Voice-session startup validation now accepts the active rotated Gemini key before falling back to the primary API key, matching the key-selection path used by the foreground conversation service.
+- The encrypted mission persistence instrumentation test now leaves a second pending milestone step so it verifies the intended interrupted-EXECUTING → PAUSED recovery path rather than a naturally completed mission.
+- Commits: `29743c0`, `01ab4eb`.
