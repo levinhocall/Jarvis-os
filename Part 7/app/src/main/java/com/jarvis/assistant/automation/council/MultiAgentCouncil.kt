@@ -131,11 +131,11 @@ object MultiAgentCouncil {
             ?: return@coroutineScope AgentReviewBatch(emptyMap(), 0)
         val budget = AtomicInteger(0)
         val roles = listOf(AgentRole.PLANNER, AgentRole.CRITIC, AgentRole.VERIFIER)
-        val planSummary = plan.take(20).joinToString("\\n") { "- " + it.title + " [tool=" + it.toolName + "]" }.take(5000)
+        val planSummary = plan.take(20).joinToString("\n") { "- " + it.title + " [tool=" + it.toolName + "]" }.take(5000)
         val prompts = mapOf(
-            AgentRole.PLANNER to "You are the independent PLANNER sub-agent for JARVIS OS. Review this user goal and proposed plan. Identify missing dependencies, ordering issues and unclear requirements. Do not execute tools. Return concise findings and begin with REVIEW: unless the plan is structurally impossible, in which case begin BLOCK:.\\nGoal: " + goal.take(3000) + "\\nPlan:\\n" + planSummary,
-            AgentRole.CRITIC to "You are the adversarial CRITIC sub-agent for JARVIS OS. Inspect the goal and plan for destructive, privacy, external-communication, financial, permission and duplicate-action risks. Do not execute tools. Return concise findings beginning REVIEW:. Use BLOCK: only when the plan has a concrete severe safety flaw that should stop execution.\\nGoal: " + goal.take(3000) + "\\nPlan:\\n" + planSummary,
-            AgentRole.VERIFIER to "You are the independent VERIFIER sub-agent for JARVIS OS. Define observable evidence needed to verify the goal and identify any step whose success cannot be verified. Do not execute tools. Return concise findings beginning REVIEW:.\\nGoal: " + goal.take(3000) + "\\nResearch context: " + researchedContext.take(2500) + "\\nPlan:\\n" + planSummary
+            AgentRole.PLANNER to "You are the independent PLANNER sub-agent for JARVIS OS. Review this user goal and proposed plan. Identify missing dependencies, ordering issues and unclear requirements. Do not execute tools. Return concise findings and begin with REVIEW: unless the plan is structurally impossible, in which case begin BLOCK:.\nGoal: " + goal.take(3000) + "\nPlan:\n" + planSummary,
+            AgentRole.CRITIC to "You are the adversarial CRITIC sub-agent for JARVIS OS. Inspect the goal and plan for destructive, privacy, external-communication, financial, permission and duplicate-action risks. Do not execute tools. Return concise findings beginning REVIEW:. Use BLOCK: only when the plan has a concrete severe safety flaw that should stop execution.\nGoal: " + goal.take(3000) + "\nPlan:\n" + planSummary,
+            AgentRole.VERIFIER to "You are the independent VERIFIER sub-agent for JARVIS OS. Define observable evidence needed to verify the goal and identify any step whose success cannot be verified. Do not execute tools. Return concise findings beginning REVIEW:.\nGoal: " + goal.take(3000) + "\nResearch context: " + researchedContext.take(2500) + "\nPlan:\n" + planSummary
         )
         val results = withTimeoutOrNull(24_000L) {
             roles.map { role ->
@@ -143,7 +143,7 @@ object MultiAgentCouncil {
                     if (budget.incrementAndGet() > 3) return@async role to null
                     _activeSubAgents.update { it + role }
                     try {
-                        val prompt = prompts.getValue(role) + "\\nShared mission budget: maximum 3 sub-agent calls, no delegation, no tool execution, output under 400 words."
+                        val prompt = prompts.getValue(role) + "\nShared mission budget: maximum 3 sub-agent calls, no delegation, no tool execution, output under 400 words."
                         withTimeoutOrNull(18_000L) { planner.reasonAsSubAgent(prompt) }?.take(4000)?.let { role to it }
                             ?: (role to null)
                     } finally {
@@ -431,11 +431,14 @@ object MultiAgentCouncil {
             )
         )
 
-        val finalLeadMessage = if (isIndependentVerified) {
+        val reviewSummary = agentReview.reports.entries.joinToString(" | ") { (role, report) ->
+            "$role: " + report.take(240)
+        }.take(900)
+        val finalLeadMessage = (if (isIndependentVerified) {
             "All systems nominal, Sir. The council has executed and independently verified '${cleanGoal}' with complete success."
         } else {
             "Task executed, Sir, though physical sensor verification remains unconfirmed."
-        }
+        }) + if (reviewSummary.isNotBlank()) " Independent reviews: $reviewSummary" else ""
 
         _activeRole.value = null
 
