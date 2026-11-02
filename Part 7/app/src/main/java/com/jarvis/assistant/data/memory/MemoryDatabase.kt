@@ -15,8 +15,9 @@ import com.jarvis.assistant.data.mission.MissionDao
 import com.jarvis.assistant.data.mission.MissionEntity
 import com.jarvis.assistant.data.notification.NotificationHistoryEntity
 import com.jarvis.assistant.data.notification.NotificationHistoryDao
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.SupportSQLiteDatabase
+import android.os.Looper
 
 @Database(
     entities = [
@@ -175,29 +176,71 @@ abstract class MemoryDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * Defers SQLCipher loading, Keystore work, and any plaintext-to-encrypted migration
+         * until Room first opens the database. Room DAO operations are dispatched off-main;
+         * Application.onCreate therefore never waits for database encryption or file I/O.
+         */
+        private class DeferredSqlCipherOpenHelperFactory(context: Context) : SupportSQLiteOpenHelper.Factory {
+            private val appContext = context.applicationContext
+
+            override fun create(configuration: SupportSQLiteOpenHelper.Configuration): SupportSQLiteOpenHelper {
+                return object : SupportSQLiteOpenHelper {
+                    @Volatile private var delegate: SupportSQLiteOpenHelper? = null
+                    @Volatile private var writeAheadLoggingEnabled = false
+
+                    private fun getDelegate(): SupportSQLiteOpenHelper {
+                        check(Looper.myLooper() != Looper.getMainLooper()) {
+                            "JARVIS database must be opened from a background dispatcher."
+                        }
+                        delegate?.let { return it }
+                        return synchronized(this) {
+                            delegate ?: DatabaseEncryption.prepare(appContext)
+                                .create(configuration)
+                                .also { helper ->
+                                    helper.setWriteAheadLoggingEnabled(writeAheadLoggingEnabled)
+                                    delegate = helper
+                                }
+                        }
+                    }
+
+                    override val databaseName: String?
+                        get() = configuration.name
+
+                    override val writableDatabase: SupportSQLiteDatabase
+                        get() = getDelegate().writableDatabase
+
+                    override val readableDatabase: SupportSQLiteDatabase
+                        get() = getDelegate().readableDatabase
+
+                    override fun setWriteAheadLoggingEnabled(enabled: Boolean) {
+                        writeAheadLoggingEnabled = enabled
+                        delegate?.setWriteAheadLoggingEnabled(enabled)
+                    }
+
+                    override fun close() {
+                        synchronized(this) {
+                            delegate?.close()
+                            delegate = null
+                        }
+                    }
+                }
+            }
+        }
+
         fun getInstance(context: Context): MemoryDatabase {
             return instance ?: synchronized(this) {
-                instance ?: run {
-                    // Complete/recover encryption before Room opens the database file.
-                    val encryptedOpenHelperFactory = runBlocking(Dispatchers.IO) {
-                        DatabaseEncryption.prepare(context.applicationContext)
-                    }
-                    Room.databaseBuilder(
-                        context.applicationContext,
-                        MemoryDatabase::class.java,
-                        DATABASE_NAME
-                    )
-                    .openHelperFactory(encryptedOpenHelperFactory)
+                instance ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    MemoryDatabase::class.java,
+                    DATABASE_NAME
+                )
+                    .openHelperFactory(DeferredSqlCipherOpenHelperFactory(context.applicationContext))
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()
-                    .also { database ->
-                        database.openHelper.writableDatabase
-                        DatabaseKeyStore(context.applicationContext).markInitializationComplete()
-                        instance = database
-                    }
-                }
+                    .also { database -> instance = database }
             }
         }
     }
