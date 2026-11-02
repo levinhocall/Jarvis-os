@@ -269,12 +269,12 @@ class JarvisConversationService : Service() {
     val deviceActionDispatcher by lazy { DeviceActionDispatcher(this) }
 
     // --- Active-conversation components ---
-    private var audioRecorder: AudioRecorder? = null
-    private var audioPipelineManager: AudioPipelineManager? = null
-    private var voiceSessionManager: VoiceSessionManager? = null
+    @Volatile private var audioRecorder: AudioRecorder? = null
+    @Volatile private var audioPipelineManager: AudioPipelineManager? = null
+    @Volatile private var voiceSessionManager: VoiceSessionManager? = null
     @Volatile private var microphoneForegroundReady = false
     private var audioPlayer: AudioPlayer? = null
-    private var liveWebSocket: GeminiLiveWebSocket? = null
+    @Volatile private var liveWebSocket: GeminiLiveWebSocket? = null
     private var hotwordRecognizer: Recognizer? = null
     private var inactivityJob: Job? = null
     private val currentTurnAssistantText = StringBuilder()
@@ -1950,7 +1950,15 @@ class JarvisConversationService : Service() {
             setMuted(preferences.isMicMuted)
         }
         serviceScope.launch(Dispatchers.IO) {
-            val microphoneStarted = audioPipelineManager?.startRecording() == true
+            val pipeline = audioPipelineManager ?: return@launch
+            if (!_isSessionOn.value) return@launch
+            val microphoneStarted = pipeline.startRecording()
+            // Stop can race with hardware initialization. Never leave a newly opened
+            // microphone alive after the conversation has already been closed.
+            if (!_isSessionOn.value) {
+                pipeline.stopRecording()
+                return@launch
+            }
             if (!microphoneStarted) {
                 withContext(Dispatchers.Main.immediate) {
                     if (!_isSessionOn.value) return@withContext
