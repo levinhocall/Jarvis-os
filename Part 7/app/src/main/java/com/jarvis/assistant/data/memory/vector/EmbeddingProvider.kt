@@ -2,6 +2,8 @@ package com.jarvis.assistant.data.memory.vector
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.abs
@@ -146,6 +148,68 @@ class GeminiEmbeddingProvider(
             }
         } catch (_: Exception) {
             null
+        }
+    }
+}
+
+/**
+ * Neural sentence embedding client for the self-hosted JARVIS memory backend.
+ * Uses all-MiniLM-L6-v2 (384 dimensions) when the endpoint is configured and reachable;
+ * otherwise falls back to a local 384-dimensional deterministic representation.
+ */
+class RemoteNeuralEmbeddingProvider(
+    private val baseEndpoint: String,
+    private val fallback: EmbeddingProvider = DeterministicLocalEmbeddingProvider(384)
+) : EmbeddingProvider {
+    override val modelName: String = "all-MiniLM-L6-v2-remote-with-local-fallback"
+    override val dimension: Int = 384
+    private val client = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(25, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+    private val gson = Gson()
+
+    override fun isAvailable(): Boolean = true
+
+    override suspend fun generateEmbedding(text: String): FloatArray? {
+        return generateEmbeddings(listOf(text)).firstOrNull()
+    }
+
+    override suspend fun generateEmbeddings(texts: List<String>): List<FloatArray?> {
+        if (texts.isEmpty()) return emptyList()
+        val endpoint = baseEndpoint.trim().trimEnd('/')
+        if (endpoint.isBlank()) return fallback.generateEmbeddings(texts)
+        return try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val payload = JsonObject().apply {
+                    add("texts", com.google.gson.JsonArray().apply { texts.forEach(::add) })
+                }
+                val request = okhttp3.Request.Builder()
+                    .url("$endpoint/v1/embeddings")
+                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        fallback.generateEmbeddings(texts)
+                    } else {
+                        val body = response.body?.string()
+                        val root = body?.let { gson.fromJson(it, JsonObject::class.java) }
+                        val vectors = root?.getAsJsonArray("embeddings")
+                        if (vectors == null || vectors.size() != texts.size) {
+                            fallback.generateEmbeddings(texts)
+                        } else {
+                            texts.indices.map { index ->
+                                val values = vectors[index].asJsonArray
+                                if (values.size() != dimension) null
+                                else FloatArray(values.size()) { values[it].asFloat }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            fallback.generateEmbeddings(texts)
         }
     }
 }
