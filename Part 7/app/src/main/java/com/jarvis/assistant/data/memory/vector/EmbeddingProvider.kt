@@ -183,7 +183,7 @@ class RemoteNeuralEmbeddingProvider(
         return try {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val payload = JsonObject().apply {
-                    add("texts", com.google.gson.JsonArray().apply { texts.forEach(::add) })
+                    add("texts", com.google.gson.JsonArray().apply { texts.forEach { add(it) } })
                 }
                 val request = okhttp3.Request.Builder()
                     .url("$endpoint/v1/embeddings")
