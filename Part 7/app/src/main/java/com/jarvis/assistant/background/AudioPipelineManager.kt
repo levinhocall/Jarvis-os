@@ -189,13 +189,13 @@ class AudioPipelineManager(
                         } else if (isBargeInSuppressed.get()) {
                             // Assistant is actively speaking: only forward likely user speech.
                             if (calculateRms(buffer, bytesRead) > 2200.0) {
-                                onAudioChunkReady(buffer, bytesRead)
+                                onAudioChunkReady(copyFrameForDispatch(buffer, bytesRead), bytesRead)
                             } else {
                                 buffer.fill(0)
-                                onAudioChunkReady(buffer, bytesRead)
+                                onAudioChunkReady(copyFrameForDispatch(buffer, bytesRead), bytesRead)
                             }
                         } else {
-                            onAudioChunkReady(buffer, bytesRead)
+                            onAudioChunkReady(copyFrameForDispatch(buffer, bytesRead), bytesRead)
                         }
                     } catch (callbackError: Exception) {
                         // A downstream WebSocket/voice callback must not silently kill mic capture.
