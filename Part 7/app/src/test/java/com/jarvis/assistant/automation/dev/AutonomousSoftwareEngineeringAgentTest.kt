@@ -2,6 +2,7 @@ package com.jarvis.assistant.automation.dev
 
 import com.jarvis.assistant.data.memory.MemoryDao
 import com.jarvis.assistant.data.memory.MemoryEntity
+import com.jarvis.assistant.data.memory.sync.MemorySyncStateEntity
 import com.jarvis.assistant.data.memory.MemoryRepository
 import com.jarvis.assistant.security.sandbox.CapabilitySandbox
 import kotlinx.coroutines.flow.Flow
@@ -33,10 +34,20 @@ class AutonomousSoftwareEngineeringAgentTest {
     class FakeMemoryDaoForDev : MemoryDao {
         val memories = mutableListOf<MemoryEntity>()
         private var idCounter = 1L
+        private val syncStates = mutableMapOf<String, MemorySyncStateEntity>()
 
         override fun getAllMemoriesFlow(): Flow<List<MemoryEntity>> = flowOf(memories.filter { it.status != MemoryEntity.STATUS_DELETED })
         override fun getActiveMemoriesFlow(): Flow<List<MemoryEntity>> = flowOf(memories.filter { it.status == MemoryEntity.STATUS_ACTIVE })
         override suspend fun getAllMemories(): List<MemoryEntity> = memories.filter { it.status == MemoryEntity.STATUS_ACTIVE }
+        override suspend fun getAllMemoriesForSync(): List<MemoryEntity> = memories.toList()
+        override suspend fun getMemoryBySyncId(syncId: String): MemoryEntity? = memories.firstOrNull { it.syncId == syncId }
+        override suspend fun getMemoryById(id: Long): MemoryEntity? = memories.firstOrNull { it.id == id }
+        override suspend fun markMemorySynced(id: Long, syncedAt: Long) {
+            val index = memories.indexOfFirst { it.id == id }
+            if (index >= 0) memories[index] = memories[index].copy(lastSyncedAt = syncedAt)
+        }
+        override suspend fun getMemorySyncState(syncKey: String): MemorySyncStateEntity? = syncStates[syncKey]
+        override suspend fun saveMemorySyncState(state: MemorySyncStateEntity) { syncStates[state.syncKey] = state }
         override fun getMemoriesByCategoryFlow(category: String): Flow<List<MemoryEntity>> = flowOf(memories.filter { it.category == category && it.status != MemoryEntity.STATUS_DELETED })
         override fun getMemoriesByTypeFlow(memoryType: String): Flow<List<MemoryEntity>> = flowOf(memories.filter { it.memoryType == memoryType && it.status == MemoryEntity.STATUS_ACTIVE })
         override fun searchMemoriesFlow(query: String): Flow<List<MemoryEntity>> = flowOf(memories.filter { (it.rawText.contains(query, ignoreCase = true) || it.key.contains(query, ignoreCase = true)) && it.status != MemoryEntity.STATUS_DELETED })
