@@ -1,0 +1,156 @@
+{
+  "date": "2026-11-03",
+  "workflow": ".github/workflows/android.yml",
+  "run": {
+    "id": 41585971587,
+    "number": 292,
+    "url": "https://github.com/levinhocall/Jarvis-os/actions/runs/41585971587",
+    "conclusion": "success",
+    "source_commit": "b0f709bbfe6902afb0137c12669ae703d81ee73c"
+  },
+  "jobs": [
+    {
+      "id": 125751413710,
+      "name": "Test, build and publish APK",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 41585971587,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Fetch exact application source without a checkout action",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Verify official Gradle wrapper checksum",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Select preinstalled JDK 17",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Install Android 16 SDK",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Verify Gradle environment",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run unit tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Run Android lint",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Build debug APK",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Generate APK checksum",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Publish permanent CI APK download",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        }
+      ]
+    }
+  ],
+  "gradle_success_durations": {
+    "unit_tests": "3m 48s",
+    "lint": "1m 26s",
+    "assembleDebug": "1m 1s"
+  },
+  "release": {
+    "tag": "debug-ci-292",
+    "url": "https://github.com/levinhocall/Jarvis-os/releases/tag/debug-ci-292",
+    "prerelease": true,
+    "assets": [
+      {
+        "name": "app-debug.apk",
+        "size": 119965921,
+        "digest": "sha256:6710f501045590f3072ad9c727ba2debace6564900765747394f1cc732a3ab90",
+        "url": "https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-292/app-debug.apk"
+      },
+      {
+        "name": "app-debug.apk.sha256",
+        "size": 80,
+        "digest": "sha256:8679bcecb1deb7fa6407b47b798657e28e45cc6f00c61a520ab7773bb1e7612e",
+        "url": "https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-292/app-debug.apk.sha256"
+      },
+      {
+        "name": "output-metadata.json",
+        "size": 406,
+        "digest": "sha256:bac31088d6d8b292f1d1a50b852d3c613246d56043fcb5389fb328c33e556821",
+        "url": "https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-292/output-metadata.json"
+      }
+    ]
+  },
+  "independent_download_verification": {
+    "checksum": "PASS",
+    "apksigner": "PASS (v2)",
+    "certificate_sha256": "6ef157f8f38594e70b2617ae864a49d97be0275ba8f9c257938821aafbdb862d",
+    "package": "com.jarvis.assistant",
+    "version_name": "1.8.7",
+    "version_code": 143,
+    "minimum_sdk": 26,
+    "target_sdk": 36
+  },
+  "diagnostic": {
+    "run_id": 41585416957,
+    "conclusion": "success",
+    "scope": "No checkout, actions or build tools"
+  },
+  "repair": "Use preinstalled GitHub runner tools directly instead of action-resolution dependencies; verify official Gradle checksums; publish APK and checksum through GitHub CLI.",
+  "historical_failures": [
+    {
+      "run_id": 41584363088,
+      "conclusion": "startup_failure",
+      "jobs": 0,
+      "artifacts": 0
+    },
+    {
+      "run_id": 41585767182,
+      "conclusion": "startup_failure",
+      "note": "Current action versions alone did not resolve startup"
+    }
+  ],
+  "device_tests": "NOT RUN",
+  "chatgpt_subscription_required_for_future_builds": false
+}

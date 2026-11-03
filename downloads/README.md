@@ -1,5 +1,7 @@
 # JARVIS OS V4 test APK
 
+The verified [CI #292 APK release](https://github.com/levinhocall/Jarvis-os/releases/tag/debug-ci-292) is now available. For repeatable GitHub-hosted builds and permanent CI download links, follow [Build and download APKs without ChatGPT](../docs/CI-APK-DOWNLOAD.md). The ZIP below is the earlier local fallback, not a CI release.
+
 [Download the debug APK ZIP](https://github.com/levinhocall/Jarvis-os/raw/refs/heads/main/downloads/JARVIS-OS-V4-debug.zip) (87.2 MB).
 
 Extract the ZIP and open `JARVIS-OS-V4-debug.apk` on your Android phone. Android may ask you to allow installation from the app opening the file. This is a debug-signed test build, version 1.8.7 (143), package `com.jarvis.assistant`, minimum Android API 26, target Android 16 / API 36. It includes the application's universal native libraries and local voice assets.

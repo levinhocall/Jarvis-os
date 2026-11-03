@@ -9,6 +9,10 @@
 Welcome to the official source code repository for the **JARVIS Android AI Assistant Series** by **NAZIB**!
 Every part in this playlist is organized into its own self-contained, ready-to-run Android Studio project.
 
+### Build and download the current Part 7 APK
+
+Open [Android CI → Run workflow](https://github.com/levinhocall/Jarvis-os/actions/workflows/android.yml) on `main`. Successful runs publish the tested APK under [GitHub Releases](https://github.com/levinhocall/Jarvis-os/releases), with source/run links and a SHA-256 checksum. You can run this yourself without a ChatGPT subscription. See the [step-by-step CI download guide](docs/CI-APK-DOWNLOAD.md).
+
 ---
 
 ## 📜 LICENSE & MANDATORY VIDEO ATTRIBUTION (MUST READ)
