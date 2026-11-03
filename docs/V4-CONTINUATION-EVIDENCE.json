@@ -1,0 +1,512 @@
+{
+  "date": "2026-11-03",
+  "baseline_commit": "bb1e406abe5babaa592c718aa0f1542bcb230f53",
+  "source_commit": "e2f954f86870691c906dd10cefaeeebdb84931f2",
+  "branch": "main",
+  "scope": "Part 7 and standalone memory backend; V4 acceptance remains partial",
+  "gradle": {
+    "command": "./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts",
+    "cwd": "Part 7",
+    "exit_code": 0,
+    "duration": "5m 39s",
+    "jdk": "17.0.21+9",
+    "jvm_tests": {
+      "tests": 398,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "suites": [
+      {
+        "name": "com.jarvis.assistant.audio.AdaptiveVadEngineTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.audio.AudioRoutingAndStabilityTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.audio.BoundedAudioResponseTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.audio.LoudspeakerBargeInRegressionTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.audio.LoudspeakerBargeInTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.audio.OwnerVoiceSecurityTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.audio.VoiceInterruptionCoordinatorEnhancedTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.accessibility.AccessibilityHealthModelTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.agent.AgentTaskEngineTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.agent.BargeInAndNavigationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.agent.CancellableCouncilRequestTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.agent.GeminiFunctionArgumentsTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.agent.LlmPlannerTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.agent.Phase6To10UpgradeTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.agent.SelfHealingAgentLoopTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.agent.TonyStarkProtocolsAndReflexTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.contacts.ContactDisambiguationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.contacts.WhatsAppContactSelectionTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.council.BoundedAgentRunnerTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.council.MultiAgentCouncilTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.dev.AutonomousSoftwareEngineeringAgentTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.dev.DevEnvironmentAndTermuxBridgeTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      {
+        "name": "com.jarvis.assistant.automation.dev.SoftwareEngineeringAgentTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.grounding.ScreenGroundingEngineTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.grounding.ScreenIntelligenceTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.integration.UniversalActionTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.intelligence.UniversalInformationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.mission.LongHorizonMissionTest",
+        "tests": 10,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.mission.MissionApprovalCommandParserTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.mission.MissionEngineTest",
+        "tests": 16,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.notification.NotificationPrivacyFilterTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.offline.OfflineIntelligenceRouterTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.offline.OfflineIntelligenceTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.proactive.ProactiveIntelligenceTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.provenance.KnowledgeProvenanceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.reflex.OfflineReflexExecutorTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.routing.CognitiveRouterAndKeyPoolTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.routing.CognitiveRouterTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.automation.skills.SkillForgeTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.background.ConversationServiceCollaboratorsTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.core.ambient.AmbientExperienceTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.core.eval.BenchmarkEvaluatorTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.core.reliability.ReliabilityTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.core.runtime.JarvisUnifiedRuntimeTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.core.world.WorldModelTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.chat.ConversationTurnMapperTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.chat.MultiChatAndMemoryEngineTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.memory.DatabaseSwapRecoveryPolicyTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.memory.EpisodicVectorMemoryTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.memory.LocalOnlyEmbeddingTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.memory.MemoryBackupPolicyTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.memory.PersistentMemoryTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.mission.MissionPersistenceAndTriggerTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.model.ConversationStateTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.data.personalization.AdaptivePersonalizationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.evolution.JarvisEvolutionMasterTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.security.AppBrandingAndPersonaTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.security.sandbox.CapabilitySandboxTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.ui.agent.OverlayDockingPolicyTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.ui.vision.ImageDecodeSizingTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.vision.CameraVisionRequestSecurityTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.vision.SensitiveInputPolicyTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "name": "com.jarvis.assistant.vision.UserConsentPolicyTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "lint_severities": {
+      "Warning": 1139
+    },
+    "log": "Part 7/work/verification.log"
+  },
+  "backend": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v",
+    "cwd": "memory-backend",
+    "exit_code": 0,
+    "tests": 9,
+    "failures": 0,
+    "neural_inference": "NOT RUN; isolated from storage tests"
+  },
+  "android_xml_parse": {
+    "files": 134,
+    "status": "PASS"
+  },
+  "diff_check": "PASS",
+  "device": {
+    "command": "adb devices -l",
+    "attached_devices": 0,
+    "tests": "NOT RUN"
+  },
+  "apk_build": "PROHIBITED / NOT RUN",
+  "ci": "NOT RUN; workflow manual only",
+  "deployment": "NOT DEPLOYED",
+  "live_providers": "NOT TESTED",
+  "source_file_sha256": {
+    ".github/workflows/android.yml": "41a7c6bdfb588954b6685d75ca0ef88d366735139fe58c92b109eade8d057f66",
+    "JARVIS_V4_ENGINEERING_PROGRESS.md": "2c24c64408c24fc6496c7829925a4429cac0807b60382ede55d47988d27eddb5",
+    "Part 7/app/src/main/java/com/jarvis/assistant/audio/BoundedAudioResponse.kt": "4548893e35c6da52cfbd6ac2afa6b5fb1fb15cbc37f9db7fb5def2a45945710d",
+    "Part 7/app/src/main/java/com/jarvis/assistant/audio/VoiceSynthesisRouter.kt": "6fc8a75ff8e352c371fe93d31aea05e93d97e545234c9670dc439c97727e7473",
+    "Part 7/app/src/main/java/com/jarvis/assistant/automation/agent/CancellableCouncilRequest.kt": "5e9bc7aefac411eaf8f9844e7e5aad7d4c2bd6dc4cbbec5c563fe84794882b3a",
+    "Part 7/app/src/main/java/com/jarvis/assistant/automation/agent/LlmPlanner.kt": "aa5eee8f642d9607af2f95f8a5e61740c5220fdd90c8d098fa4c3746f09a9467",
+    "Part 7/app/src/main/java/com/jarvis/assistant/automation/council/BoundedAgentRunner.kt": "339b6149cb6066106d644d3410e8759667c9745c863b317232bbf6493f22004a",
+    "Part 7/app/src/main/java/com/jarvis/assistant/automation/council/MultiAgentCouncil.kt": "ab0db85333d70d91a71a231fe1e53e834968c0de752f8193d77987f5a4e4920a",
+    "Part 7/app/src/main/java/com/jarvis/assistant/data/memory/MemoryRepository.kt": "5b04fe65deb5e48fb17dff4eb5b23197c960a07dac958a1c6e5d0b91749b5afa",
+    "Part 7/app/src/main/java/com/jarvis/assistant/data/memory/vector/EmbeddingProvider.kt": "d690c93f82a12b5d1c5a5476c334efc5e4df17f51aeab7020cefa84fcc0b7fd7",
+    "Part 7/app/src/main/java/com/jarvis/assistant/data/preferences/AppPreferences.kt": "e3d43802f0da1943c33121128a480991f2b7fa7ecc96beca899f5a6bf51550b3",
+    "Part 7/app/src/main/java/com/jarvis/assistant/ui/settings/ApiConnectionActivity.kt": "0079d88f6306d184d66f5bb3f539d7b9e8e41bbf65e88797afb9d472a50a73d1",
+    "Part 7/app/src/main/res/layout/activity_api_connection.xml": "b71a648d34ef50b8270786460bcfc2da43d9ef279294c611ce1f0d67d8aca4e0",
+    "Part 7/app/src/test/java/com/jarvis/assistant/audio/BoundedAudioResponseTest.kt": "b6f04e7aa70954908580436a0f036b0223bc46b0aecc353bfe925002e0739081",
+    "Part 7/app/src/test/java/com/jarvis/assistant/automation/agent/CancellableCouncilRequestTest.kt": "1b38200c8e9d14dc35ff277b65462a96cef635118194407f155aa75b1f10d73f",
+    "Part 7/app/src/test/java/com/jarvis/assistant/automation/council/BoundedAgentRunnerTest.kt": "12b2a53c3c7f24fe2e9070c6ecc26989802f94cadae265f859120add08faa912",
+    "Part 7/app/src/test/java/com/jarvis/assistant/automation/council/MultiAgentCouncilTest.kt": "b00a29037448afb61f19f565f02a843cba87d93e480fdc3bc9ca70f8c0749bd2",
+    "docs/V4-CONTINUATION-CHECKLIST.md": "bf6aeab79fd8393a3f1c64037caff740e2794d30228acadf3a3ab57e1dddb391",
+    "memory-backend/README.md": "feb90f38670f8e6c0d6767eaa9883a222fbcaff306477adf6fcaa1fbdf92b621",
+    "memory-backend/app.py": "c6a47e007dfcf86d157b5d65b29e4bb016a82e1119612502b94a2a36c7bbb7cd",
+    "memory-backend/tests/test_sync_api.py": "b961d778cab277f0b7163dd550339570109194b7aa5c6eecfcfbb4ed2d437972"
+  }
+}
