@@ -94,6 +94,14 @@ class AppPreferences internal constructor(
     }
 
     /** Extra cloud review calls are opt-in; no stored memories enter their prompts. */
+    var ideasCloudReviewEnabled: Boolean
+        get() = prefs.getBoolean("ideas_cloud_review_enabled", false)
+        set(value) { check(prefs.edit().putBoolean("ideas_cloud_review_enabled", value).commit()) }
+
+    var powerProfile: String
+        get() = prefs.getString("directive_power_profile", "balanced")?.takeIf { it in setOf("balanced", "saver", "performance") } ?: "balanced"
+        set(value) { require(value in setOf("balanced", "saver", "performance")); prefs.edit().putString("directive_power_profile", value).apply() }
+
     var independentModelReviewsEnabled: Boolean
         get() = prefs.getBoolean("independent_model_reviews_enabled", false)
         set(value) { check(prefs.edit().putBoolean("independent_model_reviews_enabled", value).commit()) }
@@ -440,6 +448,7 @@ class AppPreferences internal constructor(
                 "dark", "midnight_onyx", "cyberpunk_neon", "emerald_obsidian" -> "dark"
                 "red" -> "red"
                 "sunset", "rose_gold" -> "sunset"
+                "system" -> "system"
                 "custom" -> "custom"
                 else -> "light"
             }

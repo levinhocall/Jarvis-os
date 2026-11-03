@@ -13,6 +13,10 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.ImageAnalysis
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.ObjectDetection
+import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -33,6 +37,13 @@ import kotlinx.coroutines.withContext
 
 /** Camera/gallery image capture and real-image analysis entry point for Neural Lens. */
 class NeuralLensActivity : AppCompatActivity() {
+    @Volatile private var liveScan = false
+    private var lastScanAt = 0L
+    private var imageAnalysis: ImageAnalysis? = null
+    private val scanExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val detector by lazy { ObjectDetection.getClient(ObjectDetectorOptions.Builder().setDetectorMode(ObjectDetectorOptions.STREAM_MODE).enableClassification().build()) }
+    @Volatile private var detectorUsed = false
+    private lateinit var liveScanButton: Button
     private var selectedBitmap: Bitmap? = null
     private lateinit var preview: ImageView
     private lateinit var livePreview: PreviewView
@@ -112,7 +123,16 @@ class NeuralLensActivity : AppCompatActivity() {
         }
         root.addView(previewFrame, LinearLayout.LayoutParams(-1, dp(280)))
         root.addView(action("Start live camera") { requestCameraAndStart() })
-        root.addView(action("Capture photo") { capturePhoto() })
+        liveScanButton = action("Start on-device object scan") {
+            liveScan = !liveScan
+            liveScanButton.text = if (liveScan) "Stop on-device object scan" else "Start on-device object scan"
+            requestCameraAndStart()
+        }
+        root.addView(liveScanButton)
+        root.addView(action("Capture photo") {
+            if (liveScan) { liveScan = false; liveScanButton.text = "Start on-device object scan"; startCamera(); status.text = "Scan paused. Tap capture again for a still image." }
+            else capturePhoto()
+        })
         root.addView(action("Choose image from gallery") { galleryPicker.launch(arrayOf("image/*")) })
         analyzeButton = action("Analyze selected image") { analyzeSelectedImage() }.apply { isEnabled = false }
         root.addView(analyzeButton)
@@ -134,6 +154,7 @@ class NeuralLensActivity : AppCompatActivity() {
         }
         root.addView(result)
         setContentView(android.widget.ScrollView(this).apply { addView(root) })
+        requestCameraAndStart()
     }
 
     private fun requestCameraAndStart() {
@@ -167,22 +188,51 @@ class NeuralLensActivity : AppCompatActivity() {
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .build()
                 provider.unbindAll()
-                provider.bindToLifecycle(
-                    this,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    previewUseCase,
-                    captureUseCase
-                )
+                if (liveScan) {
+                    val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .setTargetResolution(android.util.Size(640, 480)).build()
+                    imageAnalysis = analysis
+                    analysis.setAnalyzer(scanExecutor) { proxy -> analyzeFrame(proxy) }
+                    provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, previewUseCase, analysis)
+                } else {
+                    imageAnalysis?.clearAnalyzer(); imageAnalysis = null
+                    provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, previewUseCase, captureUseCase)
+                }
                 cameraProvider = provider
-                imageCapture = captureUseCase
+                imageCapture = if (liveScan) null else captureUseCase
                 livePreview.visibility = View.VISIBLE
                 preview.visibility = View.GONE
-                status.text = "Live camera ready. Capture a photo when you are ready."
+                status.text = if (liveScan) "On-device tracking and broad object categories. First use may require downloading the detector model." else "Live camera ready. Capture a photo when you are ready."
             } catch (error: Exception) {
                 imageCapture = null
                 status.text = "Could not start camera: ${error.localizedMessage ?: "camera unavailable"}"
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
+    private fun analyzeFrame(proxy: androidx.camera.core.ImageProxy) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val prefs = com.jarvis.assistant.JarvisApp.instance.preferences
+        val saver = (getSystemService(POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode
+        if (!liveScan || now - lastScanAt < com.jarvis.assistant.util.DirectivePowerPolicy.scanIntervalMs(prefs.powerProfile, saver)) { proxy.close(); return }
+        lastScanAt = now
+        val image = proxy.image ?: run { proxy.close(); return }
+        detectorUsed = true
+        try {
+            detector.process(InputImage.fromMediaImage(image, proxy.imageInfo.rotationDegrees))
+                .addOnSuccessListener { objects ->
+                    if (liveScan && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                        result.text = objects.joinToString("\n") { obj ->
+                            val labels = obj.labels.joinToString { "${it.text} ${"%.0f".format(it.confidence * 100)}%" }.ifBlank { "Category unknown" }
+                            "Track ${obj.trackingId ?: "—"}: $labels · bounds ${obj.boundingBox.toShortString()}"
+                        }.ifBlank { "No object detected in this frame." }
+                        status.text = "Live on-device metadata · detailed scene analysis remains available for captured photos."
+                    }
+                }.addOnFailureListener {
+                    if (liveScan && !isDestroyed) status.text = "Object detector unavailable. The first scan needs its model; retry after the download. Camera capture remains available."
+                }.addOnCompleteListener { proxy.close() }
+        } catch (_: Exception) { proxy.close() }
     }
 
     private fun capturePhoto() {
@@ -251,6 +301,9 @@ class NeuralLensActivity : AppCompatActivity() {
     }
 
     private fun showImage(bitmap: Bitmap, message: String) {
+        liveScan = false
+        imageAnalysis?.clearAnalyzer()
+        liveScanButton.text = "Start on-device object scan"
         // Stop camera streaming once the user switches to a still image; this releases
         // the camera promptly for other apps and avoids hidden preview battery use.
         cameraProvider?.unbindAll()
@@ -355,7 +408,10 @@ class NeuralLensActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        resumeCameraOnForeground = imageCapture != null
+        resumeCameraOnForeground = imageCapture != null || liveScan
+        liveScan = false
+        imageAnalysis?.clearAnalyzer()
+        if (::liveScanButton.isInitialized) liveScanButton.text = "Start on-device object scan"
         cameraProvider?.unbindAll()
         imageCapture = null
         super.onStop()
@@ -364,6 +420,9 @@ class NeuralLensActivity : AppCompatActivity() {
     override fun onDestroy() {
         cameraProvider?.unbindAll()
         cameraProvider = null
+        imageAnalysis?.clearAnalyzer()
+        if (detectorUsed) detector.close()
+        scanExecutor.shutdown()
         resumeCameraOnForeground = false
         pendingCaptureFile?.delete()
         pendingCaptureFile = null

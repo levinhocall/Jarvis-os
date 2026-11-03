@@ -41,9 +41,10 @@ class FeatureHubActivity : AppCompatActivity() {
             setPadding(0, dp(6), 0, dp(18))
         })
 
+        root.addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(this))
+
         entry(root, "Voice Mode", "Start or interrupt the live voice assistant", true) {
-            finish()
-            MainActivity.activeInstance?.handleMicOrOrbClick()
+            com.jarvis.assistant.ui.directives.DirectiveGrid.open(this, com.jarvis.assistant.ui.directives.DirectiveId.VOICE)
         }
         entry(root, "Neural Lens", "Capture or select a real image, run AI analysis, or scan visible screen text", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.vision.NeuralLensActivity::class.java))
@@ -54,7 +55,7 @@ class FeatureHubActivity : AppCompatActivity() {
         entry(root, "Aura Control", "Choose Classic, Aura, Crimson or Midnight Orb and customize appearance", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.settings.AuraControlActivity::class.java))
         }
-        entry(root, "Mission Mode", "Inspect and control active accessibility tasks and durable missions", true) {
+        entry(root, "Accessibility Task Controls", "Inspect and control active accessibility tasks and durable missions", true) {
             val agentEngine = com.jarvis.assistant.automation.agent.AgentTaskEngine
             val task = agentEngine.taskState.value
             val mission = com.jarvis.assistant.automation.mission.MissionEngine.activeMission.value

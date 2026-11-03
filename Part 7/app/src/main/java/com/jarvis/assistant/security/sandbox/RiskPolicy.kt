@@ -57,7 +57,10 @@ class RiskPolicy {
                 containsSensitiveKeyword(title) ||
                 arguments.values.any { it != null && containsSensitiveKeyword(it.toString()) }
 
-            if (isPaymentOrBanking) {
+            val commitsUiAction = resolvedName == "click_ui_element" &&
+                Regex("\\b(book|confirm|reserve|checkout|place order|request ride|request cab)\\b", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(arguments["target_text"]?.toString().orEmpty())
+            if (isPaymentOrBanking || commitsUiAction) {
                 return RiskEvaluation(
                     tier = MissionRisk.HIGH_CONSEQUENTIAL,
                     requiresExplicitConfirmation = true,

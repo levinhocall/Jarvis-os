@@ -61,6 +61,9 @@ jobs:
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
+      - name: Verify local-memory migration preservation
+        run: python3 scripts/verify-directive-migration.py
+
       - name: Run Android lint
         run: ./gradlew :app:lintDebug --no-daemon --stacktrace
 

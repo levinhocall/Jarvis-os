@@ -1,6 +1,12 @@
 package com.jarvis.assistant.ui.notification
 
 import android.os.Bundle
+import androidx.recyclerview.widget.*
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -19,7 +25,9 @@ import kotlinx.coroutines.withContext
 
 /** User-controlled, encrypted notification history. Persistence is opt-in and disabled by default. */
 class NotificationHistoryActivity : AppCompatActivity() {
-    private lateinit var content: LinearLayout
+    private lateinit var content: RecyclerView
+    private val notificationAdapter = NotificationAdapter()
+    private val query = MutableStateFlow("")
     private lateinit var status: TextView
     private var showUnreadOnly = false
     private var historyJob: Job? = null
@@ -96,8 +104,21 @@ class NotificationHistoryActivity : AppCompatActivity() {
             }
         })
         root.addView(actions)
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(ScrollView(this).apply { addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(Button(this).apply {
+            text = "Notification access settings"
+            setOnClickListener { startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) }
+        })
+        root.addView(android.widget.EditText(this).apply {
+            hint = "Filter by app, sender or message"; setSingleLine(true)
+            setTextColor(resolveColor(com.jarvis.assistant.R.attr.themeTextPrimary))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { query.value = s?.toString().orEmpty() }
+                override fun afterTextChanged(s: android.text.Editable?) = Unit
+            })
+        })
+        content = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@NotificationHistoryActivity); adapter = notificationAdapter }
+        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         observeHistory()
     }
@@ -110,61 +131,53 @@ class NotificationHistoryActivity : AppCompatActivity() {
         }
         historyJob = lifecycleScope.launch {
             val dao = withContext(Dispatchers.IO) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao() }
-            val stream = if (showUnreadOnly) dao.observeUnread() else dao.observeRecent()
-            stream.collect { items -> render(items) }
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val stream = if (showUnreadOnly) dao.observeUnread() else dao.observeRecent()
+                combine(stream, query) { items, search -> items to search }.collectLatest { (items, search) ->
+                    val filtered = withContext(Dispatchers.Default) {
+                        items.filter { search.isBlank() || "${it.packageName} ${it.sender} ${it.message}".contains(search, true) }
+                    }
+                    render(filtered)
+                }
+            }
         }
     }
 
-    private fun render(items: List<NotificationHistoryEntity>) {
-        content.removeAllViews()
-        if (items.isEmpty()) {
-            renderEmpty(if (showUnreadOnly) "No unread notifications." else "No saved notifications yet.")
-            return
+    private suspend fun render(items: List<NotificationHistoryEntity>) {
+        val audited = withContext(Dispatchers.Default) {
+            items.partition { !com.jarvis.assistant.automation.notification.NotificationPrivacyFilter.sanitize(it.sender, it.message).containsCredential }
         }
-        var visibleCount = 0
-        items.forEach { item ->
-            val sanitized = com.jarvis.assistant.automation.notification.NotificationPrivacyFilter
-                .sanitize(item.sender, item.message)
-            if (sanitized.containsCredential) {
-                if (pendingCredentialCleanup.add(item.id)) {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        runCatching {
-                            MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().delete(item.id)
-                        }
-                        withContext(Dispatchers.Main) { pendingCredentialCleanup.remove(item.id) }
-                    }
-                }
-                return@forEach
+        notificationAdapter.submitList(audited.first)
+        for (item in audited.second) {
+            if (pendingCredentialCleanup.add(item.id)) lifecycleScope.launch(Dispatchers.IO) {
+                try { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().delete(item.id) }
+                finally { withContext(Dispatchers.Main) { pendingCredentialCleanup.remove(item.id) } }
             }
-            visibleCount++
-            val time = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT)
-                .format(java.util.Date(item.timestamp))
-            val card = TextView(this).apply {
-                text = (if (item.isRead) "✓  " else "●  ") + (sanitized.sender.ifBlank { item.packageName }) +
-                    "\n" + sanitized.message + "\n" + time + " • " + item.packageName
-                textSize = 14f
-                setPadding(dp(12), dp(12), dp(12), dp(12))
-                setTextColor(resolveColor(com.jarvis.assistant.R.attr.themeTextPrimary))
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().markRead(item.id)
-                    }
-                }
-            }
-            content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
-        status.text = if (visibleCount == 0) {
-            "Credential notifications were removed for privacy."
-        } else {
-            visibleCount.toString() + if (showUnreadOnly) " unread saved item(s)" else " saved item(s)"
+        status.text = if (audited.first.isEmpty()) "No matching saved notifications." else "${audited.first.size} ${if (showUnreadOnly) "unread" else "saved"} notifications"
+    }
+
+    private inner class NotificationAdapter : ListAdapter<NotificationHistoryEntity, NotificationHolder>(object : DiffUtil.ItemCallback<NotificationHistoryEntity>() {
+        override fun areItemsTheSame(a: NotificationHistoryEntity, b: NotificationHistoryEntity) = a.id == b.id
+        override fun areContentsTheSame(a: NotificationHistoryEntity, b: NotificationHistoryEntity) = a == b
+    }) {
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, type: Int): NotificationHolder = NotificationHolder(TextView(parent.context).apply {
+            textSize = 14f; setPadding(dp(12), dp(12), dp(12), dp(12))
+            setTextColor(resolveColor(com.jarvis.assistant.R.attr.themeTextPrimary)); isClickable = true; isFocusable = true
+        })
+        override fun onBindViewHolder(holder: NotificationHolder, position: Int) { holder.bind(getItem(position)) }
+    }
+    private inner class NotificationHolder(private val text: TextView) : RecyclerView.ViewHolder(text) {
+        fun bind(item: NotificationHistoryEntity) {
+            val time = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(item.timestamp))
+            text.text = "${if (item.isRead) "✓" else "●"} ${item.sender.ifBlank { item.packageName }}\n${item.message}\n$time · ${item.packageName}"
+            text.setOnClickListener { lifecycleScope.launch(Dispatchers.IO) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().markRead(item.id) } }
         }
     }
 
     private fun renderEmpty(message: String) {
         if (!::content.isInitialized) return
-        content.removeAllViews()
+        notificationAdapter.submitList(emptyList())
         status.text = message
     }
 

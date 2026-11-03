@@ -41,6 +41,7 @@ object ToolRegistry {
     }
 
     private fun registerBuiltInTools() {
+        register(ToolDefinition(name = "inspect_screen", description = "Reads non-editable visible controls from the current non-private screen for UI navigation. Never reads Jarvis private screens or password windows.", parameters = emptyList(), requiresAccessibility = true, riskLevel = MissionRisk.LOW, isIdempotent = true))
         register(
             ToolDefinition(
                 name = "call_contact",

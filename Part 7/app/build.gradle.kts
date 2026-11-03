@@ -128,6 +128,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("androidx.webkit:webkit:1.12.0")
     // CameraX embedded live preview and in-app image capture.
+    implementation("com.google.mlkit:object-detection:17.0.2")
     val cameraXVersion = "1.6.2"
     implementation("androidx.camera:camera-core:$cameraXVersion")
     implementation("androidx.camera:camera-camera2:$cameraXVersion")

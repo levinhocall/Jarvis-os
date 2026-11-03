@@ -1,5 +1,6 @@
 package com.jarvis.assistant.data.memory
 
+import com.jarvis.assistant.data.directives.*
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
@@ -24,13 +25,17 @@ import android.os.Looper
         ChatMessageEntity::class,
         MissionEntity::class,
         NotificationHistoryEntity::class,
-        MemorySyncStateEntity::class
+        MemorySyncStateEntity::class,
+        IdeaEntity::class,
+        LearningProfileEntity::class,
+        LearningAttemptEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class MemoryDatabase : RoomDatabase() {
 
+    abstract fun directiveDao(): DirectiveDao
     abstract fun memoryDao(): MemoryDao
     abstract fun chatDao(): ChatDao
     abstract fun missionDao(): MissionDao
@@ -145,6 +150,15 @@ abstract class MemoryDatabase : RoomDatabase() {
                 """.trimIndent())
             }
         }
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS ideas (id TEXT NOT NULL PRIMARY KEY, content TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, refinement TEXT)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_ideas_updatedAt ON ideas(updatedAt)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS learning_profile (id INTEGER NOT NULL PRIMARY KEY, trainer TEXT NOT NULL, level TEXT NOT NULL, goal TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS learning_attempts (id TEXT NOT NULL PRIMARY KEY, createdAt INTEGER NOT NULL, trainer TEXT NOT NULL, level TEXT NOT NULL, goal TEXT NOT NULL, userText TEXT NOT NULL, reply TEXT NOT NULL, correction TEXT NOT NULL, grammar INTEGER, fluency INTEGER, pronunciation INTEGER, audioAssessed INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_attempts_createdAt ON learning_attempts(createdAt)")
+            }
+        }
         @Volatile
         private var instance: MemoryDatabase? = null
 
@@ -244,7 +258,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .openHelperFactory(DeferredSqlCipherOpenHelperFactory(context.applicationContext))
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()

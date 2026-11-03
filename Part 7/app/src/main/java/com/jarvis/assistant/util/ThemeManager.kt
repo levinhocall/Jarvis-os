@@ -10,6 +10,32 @@ import com.jarvis.assistant.R
 
 object ThemeManager {
 
+    fun resolveThemeKey(context: android.content.Context, key: String): String =
+        if (key != "system") key else if (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES) "dark" else "light"
+
+    fun applyNightPreference(key: String) {
+        val mode = when (key) {
+            "dark" -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+            "light" -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+            else -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(mode)
+    }
+
+    fun cycleHomeTheme(context: android.content.Context): String {
+        val preferences = JarvisApp.instance.preferences
+        val previous = preferences.appTheme
+        val next = HomeThemePolicy.next(previous)
+        preferences.appTheme = next
+        applyNightPreference(next)
+        // AppCompat performs the required resource rebind; voice/database services retain ownership.
+        if (context is Activity) {
+            applyTheme(context)
+            if (previous !in setOf("system", "light", "dark")) context.recreate()
+        }
+        return next
+    }
+
     fun isLight(colorInt: Int): Boolean {
         val r = Color.red(colorInt) / 255.0
         val g = Color.green(colorInt) / 255.0
@@ -19,7 +45,8 @@ object ThemeManager {
     }
 
     fun getThemeBgColor(themeKey: String, customHex: String?): Int {
-        return when (themeKey) {
+        val resolved = if (themeKey == "system") runCatching { resolveThemeKey(JarvisApp.instance, themeKey) }.getOrDefault("light") else themeKey
+        return when (resolved) {
             "dark" -> Color.parseColor("#070914")
             "red" -> Color.parseColor("#0E0307")
             "sunset" -> Color.parseColor("#FFF0EA")
@@ -30,7 +57,7 @@ object ThemeManager {
 
     fun applyTheme(activity: Activity) {
         val prefs = try { JarvisApp.instance.preferences } catch (_: Exception) { null }
-        val themeKey = prefs?.appTheme ?: "sunset"
+        val themeKey = resolveThemeKey(activity, prefs?.appTheme ?: "sunset")
 
         val (themeRes, isLightStatusBar, bgColor) = when (themeKey) {
             "dark" -> Triple(R.style.Theme_JarvisAssistant_Dark, false, Color.parseColor("#070914"))

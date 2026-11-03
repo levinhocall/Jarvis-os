@@ -37,6 +37,9 @@ import java.util.concurrent.TimeUnit
 
 /** Native OSM map. Search/route results are sourced from public geocoding/routing services. */
 class AmoledMapActivity : AppCompatActivity() {
+    private lateinit var vector: TacticalVectorView
+    private var vectorMode = true
+    private var routePoints: List<GeoPoint> = emptyList()
     private lateinit var map: MapView
     private lateinit var status: TextView
     private lateinit var destination: EditText
@@ -74,17 +77,14 @@ class AmoledMapActivity : AppCompatActivity() {
         Configuration.getInstance().userAgentValue = packageName
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(ThemeManager.getThemeBgColor(
-                com.jarvis.assistant.JarvisApp.instance.preferences.appTheme,
-                com.jarvis.assistant.JarvisApp.instance.preferences.customThemeColor
-            ))
+            setBackgroundColor(android.graphics.Color.BLACK)
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }
         destination = EditText(this).apply {
             hint = "Search destination"
             setSingleLine(true)
-            setTextColor(color(R.attr.themeTextPrimary))
-            setHintTextColor(color(R.attr.themeTextMuted))
+            setTextColor(android.graphics.Color.WHITE)
+            setHintTextColor(android.graphics.Color.LTGRAY)
         }
         root.addView(destination, LinearLayout.LayoutParams(-1, dp(52)))
         actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -97,22 +97,37 @@ class AmoledMapActivity : AppCompatActivity() {
         status = TextView(this).apply {
             text = "Loading OpenStreetMap…"
             textSize = 12f
-            setTextColor(color(R.attr.themeTextMuted))
+            setTextColor(android.graphics.Color.LTGRAY)
             setPadding(dp(4), dp(6), dp(4), dp(6))
         }
         root.addView(status)
         map = MapView(this).apply {
             setTileSource(TileSourceFactory.MAPNIK)
+            setUseDataConnection(false)
+            visibility = View.GONE
             setMultiTouchControls(true)
             setBuiltInZoomControls(true)
             // Start zoomed out until a real device location or search result is available.
             controller.setZoom(2.5)
         }
-        root.addView(map, LinearLayout.LayoutParams(-1, 0, 1f))
+        vector = TacticalVectorView(this)
+        val stage = android.widget.FrameLayout(this).apply {
+            addView(map, android.widget.FrameLayout.LayoutParams(-1, -1))
+            addView(vector, android.widget.FrameLayout.LayoutParams(-1, -1))
+        }
+        root.addView(button("Vector route / Street map") {
+            vectorMode = !vectorMode
+            vector.visibility = if (vectorMode) View.VISIBLE else View.GONE
+            map.visibility = if (vectorMode) View.GONE else View.VISIBLE
+            map.setUseDataConnection(!vectorMode)
+            if (vectorMode) map.onPause() else map.onResume()
+            status.text = if (vectorMode) "Black vector guide: GPS and route geometry; no basemap tile downloads." else "OpenStreetMap street basemap enabled."
+        })
+        root.addView(stage, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(TextView(this).apply {
             text = "© OpenStreetMap contributors · Community geocoding/routing services may be rate-limited."
             textSize = 10f
-            setTextColor(color(R.attr.themeTextMuted))
+            setTextColor(android.graphics.Color.LTGRAY)
             setPadding(dp(4), dp(5), dp(4), 0)
             setOnClickListener {
                 startActivity(android.content.Intent(
@@ -224,6 +239,7 @@ class AmoledMapActivity : AppCompatActivity() {
     private fun updateUserLocation(location: Location, moveCamera: Boolean) {
         val point = GeoPoint(location.latitude, location.longitude)
         origin = point
+        vector.show(origin, selectedDestination, routePoints)
         maybeRerouteFromLiveLocation(location)
         val marker = map.overlays.firstOrNull { it is Marker && it.title == "Your location" } as? Marker
         if (marker != null) {
@@ -237,7 +253,7 @@ class AmoledMapActivity : AppCompatActivity() {
         }
         val now = System.currentTimeMillis()
         if (moveCamera || now - lastLocationUiUpdate >= 3000L) {
-            map.controller.animateTo(point)
+            if (!vectorMode) map.controller.animateTo(point)
             lastLocationUiUpdate = now
         }
         map.invalidate()
@@ -283,6 +299,7 @@ class AmoledMapActivity : AppCompatActivity() {
                 if (searchGeneration != destinationSearchGeneration || isFinishing || isDestroyed) return@launch
                 val (point, label) = searchResult
                 selectedDestination = point
+                vector.show(origin, point, routePoints)
                 map.overlays.removeAll { it is Marker && it.title == "Destination" }
                 map.overlays.add(Marker(map).apply {
                     position = point
@@ -290,7 +307,7 @@ class AmoledMapActivity : AppCompatActivity() {
                     snippet = label
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 })
-                map.controller.animateTo(point)
+                if (!vectorMode) map.controller.animateTo(point)
                 map.invalidate()
                 status.text = "Destination found. Searching for a route…"
                 requestRoute(point)
@@ -331,6 +348,8 @@ class AmoledMapActivity : AppCompatActivity() {
                 }
                 if (requestGeneration != routeRequestGeneration || isFinishing || isDestroyed) return@launch
                 if (!automaticReroute) clearRoute()
+                routePoints = points
+                vector.show(origin, selectedDestination, routePoints)
                 val route = Polyline().apply {
                     setPoints(points)
                     outlinePaint.strokeWidth = dp(5).toFloat()
@@ -343,7 +362,7 @@ class AmoledMapActivity : AppCompatActivity() {
                 map.invalidate()
                 status.text = "Route loaded from OpenStreetMap routing service. Turn-by-turn guidance opens in your navigation app."
                 val bounds = org.osmdroid.util.BoundingBox.fromGeoPoints(points)
-                map.zoomToBoundingBox(bounds, true, dp(36))
+                if (!vectorMode) map.zoomToBoundingBox(bounds, true, dp(36))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -364,6 +383,8 @@ class AmoledMapActivity : AppCompatActivity() {
         lastRouteOrigin = null
         routeOverlay?.let { map.overlays.remove(it) }
         routeOverlay = null
+        routePoints = emptyList()
+        if (::vector.isInitialized) vector.show(origin, selectedDestination, routePoints)
         if (::navigationButton.isInitialized) navigationButton.visibility = View.GONE
         map.invalidate()
     }
@@ -398,7 +419,7 @@ class AmoledMapActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        map.onResume()
+        if (!vectorMode) map.onResume()
         if (hasLocationPermission()) startLiveLocationTracking()
     }
 

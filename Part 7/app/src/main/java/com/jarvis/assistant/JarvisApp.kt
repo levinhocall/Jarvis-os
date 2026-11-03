@@ -88,6 +88,8 @@ class JarvisApp : Application() {
         SecurityManager.verify(this)
         instance = this
         preferences = AppPreferences(this)
+        com.jarvis.assistant.util.ThemeManager.applyNightPreference(preferences.appTheme)
+        com.jarvis.assistant.data.directives.IdeaReviewWorker.schedule(this, preferences.ideasCloudReviewEnabled)
         chatRepository = ChatRepository(preferences)
         triggerRepository = TriggerRepository(this)
         registerBatteryLowReceiver()

@@ -1,0 +1,642 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 7,
+    "identityHash": "a411da95bfef8c928203e84a5bf570e7",
+    "entities": [
+      {
+        "tableName": "memories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `syncId` TEXT NOT NULL DEFAULT '', `lastSyncedAt` INTEGER, `category` TEXT NOT NULL, `key` TEXT NOT NULL, `value` TEXT NOT NULL, `rawText` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `provenance` TEXT NOT NULL, `sensitivity` TEXT NOT NULL, `expiryTimeMs` INTEGER, `memoryType` TEXT NOT NULL, `status` TEXT NOT NULL, `importance` REAL NOT NULL, `confidence` REAL NOT NULL, `sourceConversationId` TEXT, `sourceMessageId` TEXT, `embeddingJson` TEXT, `embeddingModel` TEXT, `embeddingDimension` INTEGER NOT NULL, `pinned` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncId",
+            "columnName": "syncId",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "lastSyncedAt",
+            "columnName": "lastSyncedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawText",
+            "columnName": "rawText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provenance",
+            "columnName": "provenance",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sensitivity",
+            "columnName": "sensitivity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expiryTimeMs",
+            "columnName": "expiryTimeMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "memoryType",
+            "columnName": "memoryType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importance",
+            "columnName": "importance",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceConversationId",
+            "columnName": "sourceConversationId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceMessageId",
+            "columnName": "sourceMessageId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "embeddingJson",
+            "columnName": "embeddingJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "embeddingModel",
+            "columnName": "embeddingModel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "embeddingDimension",
+            "columnName": "embeddingDimension",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pinned",
+            "columnName": "pinned",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "chat_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, `pinned` INTEGER NOT NULL, `systemPrompt` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pinned",
+            "columnName": "pinned",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "systemPrompt",
+            "columnName": "systemPrompt",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "chat_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `role` TEXT NOT NULL, `content` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `status` TEXT NOT NULL, `metadata` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "role",
+            "columnName": "role",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metadata",
+            "columnName": "metadata",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chat_messages_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_chat_messages_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          }
+        ]
+      },
+      {
+        "tableName": "missions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `goal` TEXT NOT NULL, `status` TEXT NOT NULL, `planJson` TEXT NOT NULL, `currentStepIndex` INTEGER NOT NULL, `approvalState` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, `deduplicationKeysJson` TEXT NOT NULL, `outcomeSummary` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goal",
+            "columnName": "goal",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "planJson",
+            "columnName": "planJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentStepIndex",
+            "columnName": "currentStepIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "approvalState",
+            "columnName": "approvalState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deduplicationKeysJson",
+            "columnName": "deduplicationKeysJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outcomeSummary",
+            "columnName": "outcomeSummary",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_missions_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_missions_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_missions_updatedAt",
+            "unique": false,
+            "columnNames": [
+              "updatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_missions_updatedAt` ON `${TABLE_NAME}` (`updatedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "notification_history",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `packageName` TEXT NOT NULL, `sender` TEXT NOT NULL, `message` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `isRead` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sender",
+            "columnName": "sender",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "message",
+            "columnName": "message",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRead",
+            "columnName": "isRead",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_notification_history_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_history_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          },
+          {
+            "name": "index_notification_history_packageName",
+            "unique": false,
+            "columnNames": [
+              "packageName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_history_packageName` ON `${TABLE_NAME}` (`packageName`)"
+          }
+        ]
+      },
+      {
+        "tableName": "memory_sync_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`syncKey` TEXT NOT NULL, `cursorUpdatedAt` TEXT NOT NULL, `cursorId` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`syncKey`))",
+        "fields": [
+          {
+            "fieldPath": "syncKey",
+            "columnName": "syncKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursorUpdatedAt",
+            "columnName": "cursorUpdatedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursorId",
+            "columnName": "cursorId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "syncKey"
+          ]
+        }
+      },
+      {
+        "tableName": "ideas",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `content` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `refinement` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refinement",
+            "columnName": "refinement",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_ideas_updatedAt",
+            "unique": false,
+            "columnNames": [
+              "updatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_ideas_updatedAt` ON `${TABLE_NAME}` (`updatedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "learning_profile",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `trainer` TEXT NOT NULL, `level` TEXT NOT NULL, `goal` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trainer",
+            "columnName": "trainer",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goal",
+            "columnName": "goal",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "learning_attempts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `trainer` TEXT NOT NULL, `level` TEXT NOT NULL, `goal` TEXT NOT NULL, `userText` TEXT NOT NULL, `reply` TEXT NOT NULL, `correction` TEXT NOT NULL, `grammar` INTEGER, `fluency` INTEGER, `pronunciation` INTEGER, `audioAssessed` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trainer",
+            "columnName": "trainer",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goal",
+            "columnName": "goal",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userText",
+            "columnName": "userText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reply",
+            "columnName": "reply",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "correction",
+            "columnName": "correction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grammar",
+            "columnName": "grammar",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "fluency",
+            "columnName": "fluency",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pronunciation",
+            "columnName": "pronunciation",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "audioAssessed",
+            "columnName": "audioAssessed",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_learning_attempts_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_learning_attempts_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a411da95bfef8c928203e84a5bf570e7')"
+    ]
+  }
+}

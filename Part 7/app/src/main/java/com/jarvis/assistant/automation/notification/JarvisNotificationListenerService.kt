@@ -162,7 +162,10 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         recentNotifications[sbn.key] = cached
 
         // Notification text is sensitive: persist only after an explicit in-app opt-in.
-        if (!sanitized.containsCredential && com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {
+        val archiveRelevant = NotificationArchivePolicy.keep(pkg, packageName,
+            (notif.flags and Notification.FLAG_ONGOING_EVENT) != 0,
+            (notif.flags and Notification.FLAG_GROUP_SUMMARY) != 0, title.isNotBlank() || text.isNotBlank())
+        if (archiveRelevant && !sanitized.containsCredential && com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) {
             persistenceScope.launch {
                 // Re-check opt-in on the IO dispatcher: the user may disable history
                 // after the notification callback but before this queued write runs.

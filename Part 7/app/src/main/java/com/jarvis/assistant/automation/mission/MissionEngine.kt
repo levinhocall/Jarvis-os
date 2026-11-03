@@ -460,6 +460,7 @@ object MissionEngine {
         var approvalConsumed = false
         val result = planner.planAndExecute(
             goal = buildPlannerGoal(approvedMission.goal, approvedMission.userConstraints),
+            allowedToolNames = MissionRoutePolicy.allowedTools(approvedMission.userConstraints),
             context = context,
             initialHistory = initialHistory,
             approvedToolCall = com.jarvis.assistant.automation.agent.ApprovedLlmToolCall(
@@ -496,8 +497,10 @@ object MissionEngine {
     suspend fun startMission(
         context: Context? = null,
         goal: String,
-        userConstraints: List<String> = emptyList()
+        userConstraints: List<String> = emptyList(),
+        executionRoute: MissionExecutionRoute = MissionExecutionRoute.AUTO
     ): MissionDefinition = mutex.withLock {
+        val userConstraints = if (executionRoute == MissionExecutionRoute.AUTO) userConstraints else MissionRoutePolicy.constraints(userConstraints, executionRoute)
         if (hasBlockingMission()) return@withLock blockedMission(goal)
         val planner = llmPlanner
         planner?.resetCancellation()
@@ -510,7 +513,7 @@ object MissionEngine {
                 listOf("send", "message", "call", "phone").any { normalizedGoal.contains(it) }) ||
                 Regex("^(please\\s+)?(call|phone|dial)\\b").containsMatchIn(normalizedGoal)
         if (!hasExactContactOrProfileConstraint &&
-            !isDirectConsequentialCommunication &&
+            (!isDirectConsequentialCommunication || executionRoute != MissionExecutionRoute.AUTO) &&
             planner != null &&
             planner.isAvailable() &&
             planner.isProviderReady()
@@ -531,6 +534,7 @@ object MissionEngine {
             engineScope.launch {
                 val result = planner.planAndExecute(
                     goal = buildPlannerGoal(goal, userConstraints),
+                    allowedToolNames = MissionRoutePolicy.allowedTools(userConstraints),
                     context = context,
                     onStepStarted = { toolName, args -> checkpointLlmStepStarted(initialMission, toolName, args) },
                     onStepRecorded = { record -> checkpointLlmStepRecorded(initialMission, record) }
@@ -551,6 +555,13 @@ object MissionEngine {
             return@withLock initialMission
         }
 
+        if (executionRoute != MissionExecutionRoute.AUTO) {
+            val unavailable = MissionDefinition(goal = goal, userConstraints = userConstraints, steps = emptyList(),
+                status = MissionOverallStatus.FAILED, outcomeSummary = "The selected AI route needs an available configured Gemini planner. No fallback action was run.")
+            _activeMission.value = unavailable
+            persistMission(unavailable)
+            return@withLock unavailable
+        }
         val mission = planMission(goal, userConstraints, context)
         _activeMission.value = mission
         persistMission(mission)
@@ -1047,6 +1058,7 @@ object MissionEngine {
         }
         val result = planner.planAndExecute(
             goal = buildPlannerGoal(mission.goal, mission.userConstraints),
+            allowedToolNames = MissionRoutePolicy.allowedTools(mission.userConstraints),
             context = context,
             initialHistory = history,
             onStepStarted = { toolName, args -> checkpointLlmStepStarted(mission, toolName, args) },
@@ -1740,6 +1752,19 @@ object MissionEngine {
         val visual = VisualTaskOrchestrator.getInstance()
 
         return when (step.toolName) {
+            "inspect_screen" -> {
+                val screen = com.jarvis.assistant.automation.grounding.ScreenGroundingEngine.captureScreen(JarvisAccessibilityService.instance)
+                if (screen.foregroundPackage.isBlank() || screen.foregroundPackage == context.packageName || screen.isSecureWindow || screen.elements.any { it.isPassword || it.isProtected }) {
+                    Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Private, secure or unavailable screen; no UI content shared."))
+                } else {
+                    val labels = screen.elements.filter { it.isVisibleToUser && !it.isEditable }
+                        .map { it.displayLabel.take(120) }.filter { it.isNotBlank() }
+                        .filterNot { com.jarvis.assistant.automation.notification.NotificationPrivacyFilter.sanitize("", it).containsCredential }
+                        .distinct().take(45)
+                    Pair(labels.isNotEmpty(), MissionVerificationEvidence(EvidenceType.TEXT_MATCH, labels.isNotEmpty(),
+                        "Visible controls in ${screen.foregroundPackage}: " + labels.joinToString(" | ")))
+                }
+            }
             "device_control" -> {
                 val command = step.parameters["command"] as? String ?: ""
                 val reflex = com.jarvis.assistant.automation.reflex.OfflineReflexExecutor.tryExecuteReflex(command, context, null)

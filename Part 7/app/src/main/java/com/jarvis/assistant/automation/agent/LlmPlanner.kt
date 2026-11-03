@@ -393,13 +393,14 @@ class LlmPlanner(
         context: Context? = null,
         initialHistory: List<LlmPlannerStepRecord> = emptyList(),
         approvedToolCall: ApprovedLlmToolCall? = null,
+        allowedToolNames: Set<String>? = null,
         onStepStarted: suspend (toolName: String, args: Map<String, Any?>) -> Unit = { _, _ -> },
         onStepRecorded: suspend (record: LlmPlannerStepRecord) -> Unit = {},
         executor: suspend (toolName: String, args: Map<String, Any?>) -> Pair<Boolean, String>
     ): LlmMissionExecutionResult {
         val history = initialHistory.toMutableList()
         val startTime = System.currentTimeMillis()
-        val availableTools = ToolRegistry.getAllTools()
+        val availableTools = ToolRegistry.getAllTools().filter { allowedToolNames == null || it.name in allowedToolNames }
         val recentCallSignatures = mutableListOf<String>().apply {
             initialHistory.forEach { record ->
                 add("${ToolRegistry.resolveToolName(record.toolName)}:${record.arguments.entries.sortedBy { it.key }}")
@@ -417,6 +418,7 @@ class LlmPlanner(
         // The approval is bound to the exact canonical tool name and complete argument map.
         if (approvedToolCall != null) {
             val canonicalName = ToolRegistry.resolveToolName(approvedToolCall.toolName)
+            if (allowedToolNames != null && canonicalName !in allowedToolNames) return LlmMissionExecutionResult(false, "Approved action is outside the saved mission route.", history.size, history, "ROUTE_VIOLATION")
             val definition = ToolRegistry.getTool(canonicalName)
                 ?: return LlmMissionExecutionResult(
                     false, "Approved tool is no longer registered; no action was executed.",
@@ -563,6 +565,7 @@ class LlmPlanner(
                 }
                 is LlmStepDecision.InvokeTool -> {
                     val resolvedName = ToolRegistry.resolveToolName(decision.toolName)
+                    if (allowedToolNames != null && resolvedName !in allowedToolNames) return LlmMissionExecutionResult(false, "Planner requested a tool outside the selected route; no action was executed.", history.size, history, "ROUTE_VIOLATION")
                     val toolDef = ToolRegistry.getTool(resolvedName)
                     if (toolDef == null) {
                         history.add(

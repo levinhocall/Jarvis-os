@@ -64,7 +64,17 @@ class HomeFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
-        return binding.root
+        val deck = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            addView(binding.root, android.widget.LinearLayout.LayoutParams(-1,
+                (resources.displayMetrics.heightPixels * 0.88f).toInt().coerceAtLeast((660 * resources.displayMetrics.density).toInt())))
+            addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(requireContext()))
+        }
+        return androidx.core.widget.NestedScrollView(requireContext()).apply {
+            isFillViewport = true
+            com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(this)
+            addView(deck)
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -222,7 +232,7 @@ class HomeFragment : Fragment() {
             if (themeKey == "custom" && !customHex.isNullOrBlank()) {
                 _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setBackground('$customHex');", null)
             } else {
-                val mapped = when (preferences.orbPreset) {
+                val mapped = if (themeKey in setOf("system", "light", "dark")) com.jarvis.assistant.util.ThemeManager.resolveThemeKey(requireContext(), themeKey) else when (preferences.orbPreset) {
                     "aura" -> "dark"
                     "crimson" -> "red"
                     "midnight" -> "midnight"
