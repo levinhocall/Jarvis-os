@@ -21,6 +21,7 @@ class LaunchSmokeInstrumentedTest {
             app.memoryDatabase.memoryDao().getAllMemoriesFlow().first()
             app.memoryDatabase.notificationHistoryDao().observeRecent().first()
         }
+        instrumentation.runOnMainSync { org.junit.Assert.assertFalse(app.memoryDatabase.inTransaction()) }
         for (screen in listOf(
             com.jarvis.assistant.ui.notification.NotificationHistoryActivity::class.java,
             com.jarvis.assistant.ui.memory.MemoryActivity::class.java

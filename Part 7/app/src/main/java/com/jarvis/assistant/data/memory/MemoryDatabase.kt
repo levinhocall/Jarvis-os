@@ -212,10 +212,13 @@ abstract class MemoryDatabase : RoomDatabase() {
                     @Volatile private var writeAheadLoggingEnabled = false
 
                     private fun getDelegate(): SupportSQLiteOpenHelper {
+                        // Room 2.8 checks inTransaction() on the collector's dispatcher before
+                        // moving a suspending query to its executor. A cached helper is safe;
+                        // only cold SQLCipher/Keystore initialization must stay off main.
+                        delegate?.let { return it }
                         check(Looper.myLooper() != Looper.getMainLooper()) {
                             "JARVIS database must be opened from a background dispatcher."
                         }
-                        delegate?.let { return it }
                         return synchronized(this) {
                             delegate ?: DatabaseEncryption.prepare(appContext)
                                 .create(preservingConfiguration(configuration))
