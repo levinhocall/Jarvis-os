@@ -15,6 +15,9 @@ jobs:
   runtime:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      ANDROID_AVD_HOME: /home/runner/.android/avd
+      ANDROID_USER_HOME: /home/runner/.android
     steps:
       - name: Fetch source
         run: |
@@ -27,9 +30,10 @@ jobs:
         run: |
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+          mkdir -p "$ANDROID_AVD_HOME"
           sudo chmod 666 /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0" "emulator" "system-images;android-36;google_apis;x86_64"
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name jarvis36 --package "system-images;android-36;google_apis;x86_64"
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name jarvis36 --path "$ANDROID_AVD_HOME/jarvis36.avd" --package "system-images;android-36;google_apis;x86_64"
       - name: Boot emulator
         run: |
           "$ANDROID_HOME/emulator/emulator" -avd jarvis36 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader -memory 2048 -cores 2 -no-metrics > /tmp/jarvis-emulator.log 2>&1 &
