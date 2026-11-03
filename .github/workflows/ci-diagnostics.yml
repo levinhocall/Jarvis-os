@@ -1,0 +1,21 @@
+name: CI Runner Diagnostics
+run-name: Verify GitHub-hosted runner availability
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/ci-diagnostics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  runner-check:
+    name: Start runner without checkout or external actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm runner starts
+        run: echo "GitHub-hosted runner started successfully"
