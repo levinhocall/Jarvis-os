@@ -1,13 +1,18 @@
 name: Android CI
+run-name: Build JARVIS OS APK from ${{ github.ref_name }}
 
-# APK verification was explicitly authorized by the owner on 2026-11-03.
-# Workflow edits trigger this delivery; ordinary app-source pushes remain manual.
 on:
   push:
     branches: [ main ]
     paths:
+      - "Part 7/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Keep the tested APK in a permanent GitHub prerelease"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -18,57 +23,59 @@ concurrency:
 
 jobs:
   build:
-    name: Build & Verify JARVIS OS
+    name: Test, lint and build APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
     defaults:
       run:
         working-directory: "Part 7"
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Checkout application source
+        uses: actions/checkout@v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: |
+            Part 7
+            .github
 
-      - name: Validate Gradle Wrapper
-        uses: gradle/actions/wrapper-validation@v4
+      - name: Verify official Gradle wrapper checksum
+        run: echo "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 17 and Gradle dependency cache
+        uses: actions/setup-java@v6.1.0
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+          cache: gradle
+          cache-dependency-path: |
+            Part 7/**/*.gradle*
+            Part 7/gradle/wrapper/gradle-wrapper.properties
 
       - name: Install Android 16 SDK
-        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+        run: |
+          jarvis_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          "$jarvis_sdk_root/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Gradle Environment
+      - name: Verify Gradle environment
         run: ./gradlew --version --no-daemon
 
-      - name: Run Unit Tests
+      - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
-      - name: Run Android Lint
+      - name: Run Android lint
         run: ./gradlew :app:lintDebug --no-daemon --stacktrace
 
-      - name: Build Debug APK
+      - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Generate APK Checksum
+      - name: Generate APK checksum
         working-directory: "Part 7/app/build/outputs/apk/debug"
         run: sha256sum app-debug.apk > app-debug.apk.sha256
 
-      - name: Upload Debug APK
+      - name: Upload debug APK
         id: debug-apk
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: jarvis-os-debug-${{ github.run_number }}
           path: |
@@ -76,21 +83,21 @@ jobs:
             Part 7/app/build/outputs/apk/debug/app-debug.apk.sha256
             Part 7/app/build/outputs/apk/debug/output-metadata.json
           if-no-files-found: error
-          compression-level: 0
+          compression-level: 6
           retention-days: 14
 
-      - name: Upload Test Reports
+      - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: unit-test-reports
           path: Part 7/app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload Lint Reports
+      - name: Upload lint reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: android-lint-reports
           path: |
@@ -99,3 +106,47 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  publish:
+    name: Publish permanent test APK download
+    needs: build
+    if: github.event_name != 'workflow_dispatch' || inputs.publish_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified APK from this run
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: jarvis-os-debug-${{ github.run_number }}
+          path: apk
+
+      - name: Verify downloaded APK checksum
+        working-directory: apk
+        run: sha256sum --check app-debug.apk.sha256
+
+      - name: Publish debug prerelease
+        working-directory: apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: debug-ci-${{ github.run_number }}
+          RELEASE_TITLE: JARVIS OS debug APK (CI ${{ github.run_number }})
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat > release-notes.md <<EOF_NOTES
+          Debug APK produced by GitHub Actions after unit tests and lint passed.
+          Source commit: $SOURCE_SHA
+          CI run: $RUN_URL
+
+          Download app-debug.apk to install. app-debug.apk.sha256 verifies the APK.
+          This is a development-signed test build, not a production release.
+          Back up local memories before replacing an installation signed with another key.
+          EOF_NOTES
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 output-metadata.json --clobber
+          else
+            gh release create "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 output-metadata.json --target "$SOURCE_SHA" --title "$RELEASE_TITLE" --notes-file release-notes.md --prerelease --latest=false
+          fi
+          gh release view "$RELEASE_TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
