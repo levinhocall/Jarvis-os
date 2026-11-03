@@ -23,34 +23,32 @@ concurrency:
 
 jobs:
   build:
-    name: Test, lint and build APK
+    name: Test, build and publish APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: "Part 7"
     steps:
-      - name: Checkout application source
-        uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-          sparse-checkout: |
-            Part 7
-            .github
+      - name: Fetch exact application source without a checkout action
+        working-directory: ${{ github.workspace }}
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 --filter=blob:none origin "$GITHUB_SHA"
+          git sparse-checkout set --cone "Part 7" ".github"
+          git checkout --detach FETCH_HEAD
 
       - name: Verify official Gradle wrapper checksum
         run: echo "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
 
-      - name: Set up JDK 17 and Gradle dependency cache
-        uses: actions/setup-java@v6.1.0
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
-          cache-dependency-path: |
-            Part 7/**/*.gradle*
-            Part 7/gradle/wrapper/gradle-wrapper.properties
+      - name: Select preinstalled JDK 17
+        run: |
+          test -x "$JAVA_HOME_17_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
 
       - name: Install Android 16 SDK
         run: |
@@ -73,60 +71,9 @@ jobs:
         working-directory: "Part 7/app/build/outputs/apk/debug"
         run: sha256sum app-debug.apk > app-debug.apk.sha256
 
-      - name: Upload debug APK
-        id: debug-apk
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: jarvis-os-debug-${{ github.run_number }}
-          path: |
-            Part 7/app/build/outputs/apk/debug/app-debug.apk
-            Part 7/app/build/outputs/apk/debug/app-debug.apk.sha256
-            Part 7/app/build/outputs/apk/debug/output-metadata.json
-          if-no-files-found: error
-          compression-level: 6
-          retention-days: 14
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: unit-test-reports
-          path: Part 7/app/build/reports/tests/testDebugUnitTest/
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Upload lint reports
-        if: always()
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: android-lint-reports
-          path: |
-            Part 7/app/build/reports/lint-results-debug.html
-            Part 7/app/build/reports/lint-results-debug.xml
-          if-no-files-found: ignore
-          retention-days: 14
-
-  publish:
-    name: Publish permanent test APK download
-    needs: build
-    if: github.event_name != 'workflow_dispatch' || inputs.publish_release
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    steps:
-      - name: Download verified APK from this run
-        uses: actions/download-artifact@v8.0.2
-        with:
-          name: jarvis-os-debug-${{ github.run_number }}
-          path: apk
-
-      - name: Verify downloaded APK checksum
-        working-directory: apk
-        run: sha256sum --check app-debug.apk.sha256
-
-      - name: Publish debug prerelease
-        working-directory: apk
+      - name: Publish permanent CI APK download
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_release
+        working-directory: "Part 7/app/build/outputs/apk/debug"
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
