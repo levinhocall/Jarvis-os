@@ -22,7 +22,9 @@ Host migration check: `python3 scripts/verify-directive-migration.py` (from Part
 
 New JVM tests cover trainer/level/goal choices, streak dates, empty/invalid assessment handling, audio-only pronunciation, route persistence and fail-closed tool rejection, consequential UI click approval, notification noise filtering, theme cycling and power policy.
 
-Final Gradle and GitHub CI outcomes are recorded after execution in the delivery report. No device/emulator results are claimed.
+Local `:app:testDebugUnitTest :app:lintDebug` completed successfully: 415 tests, 0 failures, 0 errors, 1 skipped (the pre-existing host/Termux environment detection test). Lint reported 0 errors and 1,194 warnings; localization and deprecated API warnings remain. Some final UI/error-handling edits followed the local run, so GitHub CI verifies the committed source independently.
+
+GitHub CI #293 verifies implementation commit `b2c439f1952e15d727134c53d85e9adeb006afd2`: unit tests, migration preservation and lint passed. APK build and permanent release publication also passed. All CI stages completed successfully. No device/emulator results are claimed.
 
 ## Remaining physical-device acceptance
 
@@ -46,3 +48,64 @@ Final Gradle and GitHub CI outcomes are recorded after execution in the delivery
 - Idea review is inexact periodic WorkManager work, at most three unreviewed ideas per execution, subject to network/battery constraints. An already transmitted request cannot be recalled by disabling the toggle.
 - Device-only dictation is offered only when Android exposes an on-device recognizer; there is no silent cloud fallback.
 - Local data is primary. New tables are not automatically synchronized remotely and no remote AI owns the stored originals.
+
+## Modified files in implementation commit
+
+Source commit: `b2c439f1952e15d727134c53d85e9adeb006afd2`.
+
+- `.github/workflows/android.yml`
+- `Part 7/app/build.gradle.kts`
+- `Part 7/app/schemas/com.jarvis.assistant.data.memory.MemoryDatabase/7.json`
+- `Part 7/app/src/main/AndroidManifest.xml`
+- `Part 7/app/src/main/java/com/jarvis/assistant/JarvisApp.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/automation/agent/LlmPlanner.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/automation/mission/MissionEngine.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/automation/mission/MissionExecutionRoute.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/automation/mission/ToolRegistry.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/automation/notification/JarvisNotificationListenerService.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/automation/notification/NotificationArchivePolicy.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/data/directives/DirectiveAiClient.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/data/directives/DirectiveData.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/data/directives/IdeaReviewWorker.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/data/directives/LearningPolicy.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/data/memory/MemoryDatabase.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/data/preferences/AppPreferences.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/security/sandbox/RiskPolicy.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/DirectiveActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/DirectiveGrid.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/EnglishTeacherActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/IdeasActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/LocalDictation.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/MissionDeskActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/VoiceModeActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/home/FeatureHubActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/home/HomeFragment.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/map/AmoledMapActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/map/TacticalVectorView.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/notification/NotificationHistoryActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/settings/AuraControlActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/ui/vision/NeuralLensActivity.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/util/DirectivePowerPolicy.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/util/HomeThemePolicy.kt`
+- `Part 7/app/src/main/java/com/jarvis/assistant/util/ThemeManager.kt`
+- `Part 7/app/src/test/java/com/jarvis/assistant/automation/mission/MissionRoutePolicyTest.kt`
+- `Part 7/app/src/test/java/com/jarvis/assistant/automation/notification/NotificationArchivePolicyTest.kt`
+- `Part 7/app/src/test/java/com/jarvis/assistant/data/directives/LearningPolicyTest.kt`
+- `Part 7/app/src/test/java/com/jarvis/assistant/util/DirectivePoliciesTest.kt`
+- `Part 7/scripts/verify-directive-migration.py`
+- `docs/MORE-DIRECTIVES-V4.md`
+
+## Published APK and provenance
+
+- CI: https://github.com/levinhocall/Jarvis-os/actions/runs/41628491276 (success).
+- Release: https://github.com/levinhocall/Jarvis-os/releases/tag/debug-ci-293
+- APK: https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-293/app-debug.apk
+- Downloaded APK size: 166,789,826 bytes.
+- SHA-256: `4c6b8311e2080708144d4ce6e22b2e426520c87110946b586bf18b7774bf40b4`. Matches the release checksum and GitHub asset digest.
+- `apksigner verify --verbose --print-certs`: passed, APK Signature Scheme v2.
+- Package: `com.jarvis.assistant`; version 1.8.7 (143); min SDK 26; target/compile SDK 36.
+- Development certificate SHA-256: `2a19f2c53ba6531914a873fb03bc09531b0431aa28c0229c02eb2aecb66232c1`.
+
+The CI runner generates a debug signing key, so this certificate differs from CI #292. Android will not install it over an APK signed with another key. Preserve/export local data before considering uninstalling; uninstalling erases app-private memory and encryption keys. Stable upgrade signing remains a release-engineering prerequisite; no production signing secret was invented or committed.
+
+The larger universal debug APK includes ML Kit object-detection dependencies; release-size/ABI optimization has not been performed. Live provider credentials, a physical phone, and performance profiling remain necessary for the acceptance checklist above.

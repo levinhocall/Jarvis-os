@@ -1,0 +1,33 @@
+{
+  "source_commit": "b2c439f1952e15d727134c53d85e9adeb006afd2",
+  "branch": "main",
+  "ci_run": 41628491276,
+  "ci_conclusion": "success",
+  "ci_steps": [
+    "unit tests",
+    "migration preservation",
+    "Android lint",
+    "assembleDebug",
+    "release publication"
+  ],
+  "local_jvm_tests": {
+    "tests": 415,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "local_lint": {
+    "errors": 0,
+    "warnings": 1194
+  },
+  "migration_seeded_tables_preserved": 6,
+  "release_tag": "debug-ci-293",
+  "apk_bytes": 166789826,
+  "apk_sha256": "4c6b8311e2080708144d4ce6e22b2e426520c87110946b586bf18b7774bf40b4",
+  "downloaded_checksum_verified": true,
+  "apk_v2_signature_verified": true,
+  "physical_device_tested": false,
+  "live_provider_end_to_end_tested": false,
+  "zero_latency_verified": false,
+  "stable_upgrade_signing_configured": false
+}
