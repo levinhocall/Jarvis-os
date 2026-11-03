@@ -629,3 +629,8 @@ Repository inventory at baseline: 1,167 tracked files; Parts 1–6 contain 57/73
 Nine backend storage/protocol tests pass, including concurrent conditional writers, clock rollback, tombstone resurrection rejection and wrong-scope delete preservation. Tests use explicitly isolated embedding fixtures for storage writes; neural inference, FastAPI deployment and live networking are not validated by that suite. Android Gradle verification and final counts are recorded in the final report after execution. `adb devices -l` returned an empty device list. No APK build/install or instrumentation task was run.
 
 Final fixed-source execution: `:app:testDebugUnitTest :app:lintDebug` exited 0, BUILD SUCCESSFUL in 5m 39s. Parsed JUnit XML: 398 tests across 63 suites, 0 failures/errors, 1 skipped (397 passed); all 14 added regressions passed. Parsed lint XML: 0 errors, 1,139 warnings. These are local JVM/compilation/static-analysis results, not APK or device verification. All 134 Android XML files parsed and git diff --check passed. No APK or CI task ran.
+
+
+## Owner-authorized APK verification — 2026-11-03
+
+The owner subsequently requested a CI run and downloadable APK for phone testing. This explicitly supersedes the earlier no-CI/no-APK restriction for this verification delivery. The workflow now installs SDK 36, runs JVM tests and lint, assembles a debug APK, generates its SHA-256, and uploads an APK artifact retained for 14 days. Workflow-file pushes on main trigger this delivery; ordinary application-source pushes still require manual dispatch. No release signing secret or API key is embedded. Build and artifact success remain unverified until the actual run completes.

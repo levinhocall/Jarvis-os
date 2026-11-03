@@ -1,7 +1,12 @@
 name: Android CI
 
-# Manual only: development must not trigger CI or APK builds on push.
+# APK verification was explicitly authorized by the owner on 2026-11-03.
+# Workflow edits trigger this delivery; ordinary app-source pushes remain manual.
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:
@@ -36,6 +41,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 16 SDK
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -47,6 +58,26 @@ jobs:
 
       - name: Run Android Lint
         run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+
+      - name: Build Debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Generate APK Checksum
+        working-directory: "Part 7/app/build/outputs/apk/debug"
+        run: sha256sum app-debug.apk > app-debug.apk.sha256
+
+      - name: Upload Debug APK
+        id: debug-apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-os-debug-${{ github.run_number }}
+          path: |
+            Part 7/app/build/outputs/apk/debug/app-debug.apk
+            Part 7/app/build/outputs/apk/debug/app-debug.apk.sha256
+            Part 7/app/build/outputs/apk/debug/output-metadata.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
 
       - name: Upload Test Reports
         if: always()
