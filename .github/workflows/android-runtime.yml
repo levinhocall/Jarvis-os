@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/android-runtime.yml'
       - 'Part 7/app/src/androidTest/**'
+concurrency:
+  group: android-runtime-main
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -29,8 +32,13 @@ jobs:
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name jarvis36 --package "system-images;android-36;google_apis;x86_64"
       - name: Boot emulator
         run: |
-          "$ANDROID_HOME/emulator/emulator" -avd jarvis36 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/jarvis-emulator.log 2>&1 &
-          "$ANDROID_HOME/platform-tools/adb" wait-for-device
+          "$ANDROID_HOME/emulator/emulator" -avd jarvis36 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader -memory 2048 -cores 2 -no-metrics > /tmp/jarvis-emulator.log 2>&1 &
+          emulator_pid=$!
+          for attempt in $(seq 1 60); do
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then tail -100 /tmp/jarvis-emulator.log; exit 1; fi
+            if "$ANDROID_HOME/platform-tools/adb" devices | grep -q "emulator.*device$"; then break; fi
+            sleep 3
+          done
           for attempt in $(seq 1 120); do
             if [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then exit 0; fi
             sleep 5
@@ -43,5 +51,6 @@ jobs:
       - name: Runtime diagnostics
         if: always()
         run: |
-          "$ANDROID_HOME/platform-tools/adb" logcat -d -b crash || true
+          tail -100 /tmp/jarvis-emulator.log || true
+          timeout 20 "$ANDROID_HOME/platform-tools/adb" logcat -d -b crash || true
           find 'Part 7/app/build/outputs/androidTest-results' -name '*.xml' -exec cat {} \; || true
