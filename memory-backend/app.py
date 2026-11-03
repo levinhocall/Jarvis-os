@@ -5,15 +5,18 @@ import os
 import sqlite3
 import threading
 import uuid
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager, contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 DATA_DIR = Path(os.getenv("JARVIS_MEMORY_DATA", "/data"))
 DB_PATH = DATA_DIR / "memories.sqlite3"
@@ -27,13 +30,33 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def connect() -> sqlite3.Connection:
+@contextmanager
+def connect() -> Iterator[sqlite3.Connection]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DB_PATH, timeout=30)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA foreign_keys=ON")
-    return db
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
+
+
+def next_timestamp(db: sqlite3.Connection) -> str:
+    """Called inside BEGIN IMMEDIATE: keyset cursors cannot miss clock rollback writes."""
+    current = datetime.fromisoformat(now_iso()).astimezone(timezone.utc)
+    previous = db.execute("SELECT MAX(updated_at) FROM memories").fetchone()[0]
+    if previous:
+        current = max(current, datetime.fromisoformat(previous).astimezone(timezone.utc) + timedelta(microseconds=1))
+    return current.isoformat(timespec="microseconds")
+
+
+def check_version(row: sqlite3.Row | None, expected: str | None) -> None:
+    actual = row["updated_at"] if row is not None else ""
+    if expected is not None and actual != expected:
+        raise HTTPException(status_code=409, detail="Memory changed; reconcile before retrying")
 
 
 def initialize() -> None:
@@ -66,6 +89,8 @@ def model() -> SentenceTransformer:
     if _model is None:
         with _model_lock:
             if _model is None:
+                from sentence_transformers import SentenceTransformer
+
                 _model = SentenceTransformer(MODEL_NAME, device=os.getenv("JARVIS_EMBEDDING_DEVICE", "cpu"))
     return _model
 
@@ -92,7 +117,9 @@ class AddRequest(BaseModel):
     user_id: str | None = None
     agent_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-    memory_id: str | None = None
+    memory_id: str | None = Field(default=None, min_length=1, max_length=128)
+    # Empty string means create only; omit only for legacy unconditional writes.
+    expected_updated_at: str | None = None
 
 
 class SearchRequest(BaseModel):
@@ -106,6 +133,7 @@ class UpdateRequest(BaseModel):
     data: str = Field(min_length=1, max_length=20000)
     user_id: str | None = None
     metadata: dict[str, Any] | None = None
+    expected_updated_at: str | None = None
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -161,12 +189,19 @@ def add_memory(request: AddRequest) -> dict[str, Any]:
     content = "\n".join(m.content.strip() for m in request.messages if m.content.strip()).strip()
     if not content:
         raise HTTPException(status_code=400, detail="No memory content supplied")
+    if len(content) > 20000:
+        raise HTTPException(status_code=413, detail="Combined memory content exceeds 20000 characters")
     vector = embed(content)
     content_hash = __import__("hashlib").sha256(content.casefold().encode("utf-8")).hexdigest()
     memory_id = request.memory_id or str(uuid.uuid4())
-    timestamp = now_iso()
     metadata = json.dumps(request.metadata, ensure_ascii=False)
     with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        existing = db.execute("SELECT scope, updated_at FROM memories WHERE id=?", (memory_id,)).fetchone()
+        if existing is not None and existing["scope"] != scope:
+            raise HTTPException(status_code=409, detail="Memory identifier belongs to another scope")
+        check_version(existing, request.expected_updated_at)
+        timestamp = next_timestamp(db)
         db.execute("""
             INSERT INTO memories(id, scope, content, metadata_json, embedding_json, content_hash, created_at, updated_at, deleted_at)
             VALUES(?, ?, ?, ?, ?, ?, ?, ?, NULL)
@@ -179,12 +214,12 @@ def add_memory(request: AddRequest) -> dict[str, Any]:
                 deleted_at=NULL
             WHERE memories.scope=excluded.scope
         """, (memory_id, scope, content, metadata, json.dumps(vector), content_hash, timestamp, timestamp))
-        row = db.execute("SELECT scope FROM memories WHERE id=?", (memory_id,)).fetchone()
+        row = db.execute("SELECT scope, created_at FROM memories WHERE id=?", (memory_id,)).fetchone()
         if row is None or row["scope"] != scope:
             raise HTTPException(status_code=409, detail="Memory identifier belongs to another scope")
         db.execute("DELETE FROM memories_fts WHERE memory_id=?", (memory_id,))
         db.execute("INSERT INTO memories_fts(memory_id, scope, content) VALUES(?, ?, ?)", (memory_id, scope, content))
-    return {"id": memory_id, "memory": content, "event": "ADD", "user_id": scope, "created_at": timestamp}
+    return {"id": memory_id, "memory": content, "event": "ADD", "user_id": scope, "created_at": row["created_at"], "updated_at": timestamp}
 
 
 @app.post("/v1/memories/search")
@@ -287,12 +322,14 @@ def get_memory(memory_id: str, user_id: str | None = Query(default=None)) -> dic
 def update_memory(memory_id: str, request: UpdateRequest) -> dict[str, Any]:
     scope = scope_value(request.user_id)
     vector = embed(request.data)
-    timestamp = now_iso()
     content_hash = __import__("hashlib").sha256(request.data.casefold().encode("utf-8")).hexdigest()
     with connect() as db:
-        row = db.execute("SELECT metadata_json FROM memories WHERE id=? AND scope=? AND deleted_at IS NULL", (memory_id, scope)).fetchone()
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT metadata_json, updated_at FROM memories WHERE id=? AND scope=? AND deleted_at IS NULL", (memory_id, scope)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Memory not found")
+        check_version(row, request.expected_updated_at)
+        timestamp = next_timestamp(db)
         metadata = request.metadata if request.metadata is not None else json.loads(row["metadata_json"])
         db.execute("""
             UPDATE memories SET content=?, metadata_json=?, embedding_json=?, content_hash=?, updated_at=?
@@ -304,15 +341,21 @@ def update_memory(memory_id: str, request: UpdateRequest) -> dict[str, Any]:
 
 
 @app.delete("/v1/memories/{memory_id}")
-def delete_memory(memory_id: str, user_id: str = Query(...)) -> dict[str, Any]:
+def delete_memory(
+    memory_id: str, user_id: str = Query(...), expected_updated_at: str | None = None
+) -> dict[str, Any]:
     scope = scope_value(user_id)
-    timestamp = now_iso()
     with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT updated_at FROM memories WHERE id=? AND scope=?", (memory_id, scope)).fetchone()
+        check_version(row, expected_updated_at)
+        timestamp = next_timestamp(db)
         cursor = db.execute(
             "UPDATE memories SET deleted_at=?, updated_at=? WHERE id=? AND scope=? AND deleted_at IS NULL",
             (timestamp, timestamp, memory_id, scope)
         )
-        db.execute("DELETE FROM memories_fts WHERE memory_id=?", (memory_id,))
+        if cursor.rowcount > 0:
+            db.execute("DELETE FROM memories_fts WHERE memory_id=? AND scope=?", (memory_id, scope))
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Memory not found")
     return {"id": memory_id, "event": "DELETE", "deleted_at": timestamp}
@@ -321,8 +364,9 @@ def delete_memory(memory_id: str, user_id: str = Query(...)) -> dict[str, Any]:
 @app.delete("/v1/memories")
 def clear_memories(user_id: str = Query(...)) -> dict[str, Any]:
     scope = scope_value(user_id)
-    timestamp = now_iso()
     with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        timestamp = next_timestamp(db)
         cursor = db.execute(
             "UPDATE memories SET deleted_at=?, updated_at=? WHERE scope=? AND deleted_at IS NULL",
             (timestamp, timestamp, scope)

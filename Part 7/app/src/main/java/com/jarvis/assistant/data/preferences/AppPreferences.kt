@@ -93,6 +93,11 @@ class AppPreferences internal constructor(
         private const val KEY_CUSTOM_ENDPOINT = "key_custom_endpoint"
     }
 
+    /** Extra cloud review calls are opt-in; no stored memories enter their prompts. */
+    var independentModelReviewsEnabled: Boolean
+        get() = prefs.getBoolean("independent_model_reviews_enabled", false)
+        set(value) { check(prefs.edit().putBoolean("independent_model_reviews_enabled", value).commit()) }
+
     var isOwnerVoiceEnabled: Boolean
         get() = secureApiPrefs?.getBoolean(KEY_OWNER_VOICE_ENABLED, false) == true &&
             hasOwnerVoiceProfile()

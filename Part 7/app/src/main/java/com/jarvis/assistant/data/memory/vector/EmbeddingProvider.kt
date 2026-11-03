@@ -14,7 +14,7 @@ interface EmbeddingProvider {
 }
 
 /**
- * Genuine, deterministic on-device semantic embedding provider for Android.
+ * Deterministic on-device heuristic vectors; this is not a pretrained neural model.
  * Generates unit-normalized 128-dimensional dense vectors using subword hashing,
  * semantic word clusters, and L2 normalization without requiring cloud network.
  */

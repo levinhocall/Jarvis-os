@@ -50,19 +50,15 @@ The API binds to loopback only. For phone access, put a TLS reverse proxy on a p
 
 A host, DNS/VPN route, TLS endpoint and actual installation are still required. No VPS has been provisioned or deployed from this repository session.
 
-## Android integration
+## Android integration — currently disabled
 
-Set `JARVIS_MEMORY_SYNC_ENDPOINT` in `Part 7/gradle.properties` or the Gradle environment to this service's HTTPS URL (or a trusted private-LAN URL). Example:
+The current Android application keeps memories in its local Room/SQLCipher database. `MEMORY_SYNC_ENDPOINT` is intentionally blank, startup cancels legacy upload jobs, and `MemorySyncWorker` performs no network work. Setting `JARVIS_MEMORY_SYNC_ENDPOINT` does **not** enable sync in this revision. Legacy remote/Gemini embedding adapters also return explicitly named local deterministic vectors without reading credentials or contacting providers.
 
-```properties
-JARVIS_MEMORY_SYNC_ENDPOINT=https://your-private-memory-host
-```
-
-When this value is blank, Android keeps local embeddings and does not schedule cloud sync. When configured, Android uses the neural embedding endpoint for new/search vectors, gradually re-indexes up to 24 older memories per semantic-search request, and queues an initial sync on app startup and then runs six-hour periodic sync while connected. The Android sync worker now performs **bidirectional sync**: stable per-memory sync IDs, local change uploads, remote change downloads, soft-delete/tombstone propagation, timestamp-based last-writer conflict handling, and a durable Room cursor ordered by `(updated_at, id)`. Remote pages are merged idempotently; a failed page is safely replayed because the cursor is committed only after its records merge. Sensitive local memories are never uploaded and are sent as remote deletion requests. This is source-level integration; validate it against a running backend before relying on multi-device recovery.
+The Room schema retains stable sync IDs, acknowledgement fields and a cursor table from earlier work. These are not evidence of a working sync client. Optional bidirectional Android synchronization, consent controls, conflict review, deletion acknowledgement and integration/device tests remain unfinished. Remote data must never silently overwrite or erase local memories. Neural embeddings are implemented only by this standalone backend; Android hashing is not neural inference.
 
 ## Backend tests
 
-Run the sync API cursor/tombstone tests from this directory after installing `requirements.txt`:
+Run storage/protocol tests from this directory with FastAPI, Pydantic and NumPy installed. These tests isolate neural inference and do not download or validate a model. The full `requirements.txt` remains necessary for production startup:
 
 ```bash
 python -m unittest discover -s tests -v
@@ -93,6 +89,12 @@ curl -X POST http://127.0.0.1:8765/v1/memories/search \
   -H 'Content-Type: application/json' \
   -d '{"user_id":"jarvis-os-personal","query":"What language style do I prefer?","limit":5}'
 ```
+
+## Conditional writes and cursor safety
+
+`POST /v1/memories` and `PUT /v1/memories/{id}` accept `expected_updated_at`. DELETE accepts the same optional query parameter. Set it to the exact version last read; a mismatch returns HTTP 409 without modifying the record or its search index. For POST, an empty string means create only. Keep the local version on conflict and ask the owner to reconcile; do not retry unconditionally. Legacy callers that omit the field retain unconditional behavior and do **not** gain conflict protection.
+
+POST returns both the original `created_at` and current `updated_at`. Writes allocate monotonically increasing UTC timestamps under a SQLite write lock, including after clock rollback, so a saved keyset cursor does not skip a later write. Tombstones remain available through `include_deleted=true`. Restore of an older server database invalidates this guarantee and requires explicit full reconciliation; no Android restore protocol is claimed.
 
 ## No login or authentication
 

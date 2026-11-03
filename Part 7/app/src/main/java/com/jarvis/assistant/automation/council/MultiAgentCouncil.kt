@@ -4,15 +4,12 @@ import android.content.Context
 import android.util.Log
 import com.jarvis.assistant.automation.mission.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.flow.update
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 data class CouncilDeliberation(
@@ -40,6 +37,20 @@ object MultiAgentCouncil {
         val reports: Map<String, String>,
         val callsUsed: Int
     )
+
+    private val reviewerRunner = BoundedAgentRunner()
+    private val executionMutex = Mutex()
+    private val activeReviewCounts = mutableMapOf<AgentRole, Int>()
+
+    private fun reviewerActive(role: AgentRole, active: Boolean) = synchronized(activeReviewCounts) {
+        val count = ((activeReviewCounts[role] ?: 0) + if (active) 1 else -1).coerceAtLeast(0)
+        if (count == 0) activeReviewCounts.remove(role) else activeReviewCounts[role] = count
+        _activeSubAgents.value = activeReviewCounts.keys.toSet()
+    }
+
+    private fun modelReviewsEnabled(context: Context?): Boolean =
+        (context?.applicationContext as? com.jarvis.assistant.JarvisApp)
+            ?.preferences?.independentModelReviewsEnabled == true
 
     // Default-deny: the Researcher may only use explicitly read-only tools.
     // New tools are never granted Researcher access merely because their risk metadata
@@ -73,7 +84,8 @@ object MultiAgentCouncil {
      */
     suspend fun deliberate(
         context: Context? = null,
-        userGoal: String
+        userGoal: String,
+        enableModelReviews: Boolean = modelReviewsEnabled(context)
     ): CouncilDeliberation = withContext(Dispatchers.Default) {
         val cleanGoal = userGoal.trim()
         Log.i(TAG, "Multi-Agent Council convening")
@@ -91,7 +103,8 @@ object MultiAgentCouncil {
         val agentReview = runIndependentSubAgents(
             cleanGoal,
             missionPlan.steps,
-            researcherFindings.joinToString("; ").take(2500)
+            researcherFindings.joinToString("; ").take(2500),
+            enableModelReviews
         )
 
         // 4. Critic stage combines deterministic policy checks with the independent LLM critic.
@@ -106,7 +119,7 @@ object MultiAgentCouncil {
         }
         val verifierReview = agentReview.reports[AgentRole.VERIFIER.name].orEmpty()
         val verifierCheck = (if (canVerify) {
-            "Verification criteria confirmed: Steps have concrete sensors/outcomes."
+            "Plan review only: concrete outcome verification is still required at execution."
         } else {
             "Verification caution: Some steps cannot be physically confirmed by platform sensors."
         }) + if (verifierReview.isNotBlank()) " Independent verifier: " + verifierReview.take(900) else ""
@@ -148,13 +161,13 @@ object MultiAgentCouncil {
     private suspend fun runIndependentSubAgents(
         goal: String,
         plan: List<MissionStep>,
-        researchedContext: String
+        researchedContext: String,
+        enabled: Boolean
     ): AgentReviewBatch = coroutineScope {
         // Keep ordinary one-step commands fast; delegate multi-step or explicitly complex goals.
-        if (plan.isEmpty() || (plan.size < 2 && goal.length < 80)) return@coroutineScope AgentReviewBatch(emptyMap(), 0)
+        if (!enabled || plan.isEmpty() || (plan.size < 2 && goal.length < 80)) return@coroutineScope AgentReviewBatch(emptyMap(), 0)
         val planner = MissionEngine.llmPlanner
             ?: return@coroutineScope AgentReviewBatch(emptyMap(), 0)
-        val budget = AtomicInteger(0)
         val roles = listOf(AgentRole.PLANNER, AgentRole.CRITIC, AgentRole.VERIFIER)
         val planSummary = plan.take(20).joinToString("\n") { "- " + it.title + " [tool=" + it.toolName + "]" }.take(5000)
         val prompts = mapOf(
@@ -162,31 +175,19 @@ object MultiAgentCouncil {
             AgentRole.CRITIC to "You are the adversarial CRITIC sub-agent for JARVIS OS. Inspect the goal and plan for destructive, privacy, external-communication, financial, permission and duplicate-action risks. Do not execute tools. Return concise findings beginning REVIEW:. Use BLOCK: only when the plan has a concrete severe safety flaw that should stop execution.\nGoal: " + goal.take(3000) + "\nPlan:\n" + planSummary,
             AgentRole.VERIFIER to "You are the independent VERIFIER sub-agent for JARVIS OS. Define observable evidence needed to verify the goal and identify any step whose success cannot be verified. Do not execute tools. Return concise findings beginning REVIEW:.\nGoal: " + goal.take(3000) + "\nResearch context: " + researchedContext.take(2500) + "\nPlan:\n" + planSummary
         )
-        val results = withTimeoutOrNull(24_000L) {
-            roles.map { role ->
-                async(Dispatchers.IO) {
-                    if (budget.incrementAndGet() > 3) return@async role to null
-                    _activeSubAgents.update { it + role }
-                    try {
-                        val prompt = prompts.getValue(role) + "\nShared mission budget: maximum 3 sub-agent calls, no delegation, no tool execution, output under 400 words."
-                        val report = withTimeoutOrNull(18_000L) { planner.reasonAsSubAgent(prompt) }
-                        role to report?.take(4000)
-                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                        throw cancelled
-                    } catch (error: Exception) {
-                        Log.w(TAG, "Sub-agent " + role.name + " failed; other reviewers continue (" + error.javaClass.simpleName + ").")
-                        role to null
-                    } finally {
-                        _activeSubAgents.update { it - role }
-                    }
-                }
-            }.awaitAll()
-        } ?: emptyList()
-        AgentReviewBatch(
-            reports = results.mapNotNull { (role, report) -> report?.takeIf { it.isNotBlank() }?.let { role.name to it } }.toMap(),
-            callsUsed = budget.get().coerceAtMost(3)
-        )
+        val result = reviewerRunner.run(roles.map { it.name }) { roleName ->
+            val role = AgentRole.valueOf(roleName)
+            reviewerActive(role, true)
+            try {
+                val prompt = prompts.getValue(role) + "\nShared mission budget: maximum 3 sub-agent calls, no delegation, no tool execution, output under 400 words."
+                planner.reasonAsSubAgent(prompt)
+            } finally {
+                reviewerActive(role, false)
+            }
+        }
+        AgentReviewBatch(result.reports, result.callsUsed)
     }
+
     private fun decomposeGoal(goal: String): List<String> {
         val lower = goal.lowercase()
         return when {
@@ -240,7 +241,7 @@ object MultiAgentCouncil {
     suspend fun executeCouncilTask(
         context: Context? = null,
         goal: String
-    ): CouncilExecutionOutcome = executeCouncilTaskInternal(context, goal, null)
+    ): CouncilExecutionOutcome = executeCouncilTaskInternal(context, goal, null, modelReviewsEnabled(context))
 
     /**
      * Test-only executor injection. Production callers cannot supply a simulated executor.
@@ -249,12 +250,26 @@ object MultiAgentCouncil {
         context: Context? = null,
         goal: String,
         simulatedExecutor: suspend (MissionStep) -> Pair<Boolean, MissionVerificationEvidence>
-    ): CouncilExecutionOutcome = executeCouncilTaskInternal(context, goal, simulatedExecutor)
+    ): CouncilExecutionOutcome = executeCouncilTaskInternal(context, goal, simulatedExecutor, true)
 
     private suspend fun executeCouncilTaskInternal(
         context: Context?,
         goal: String,
-        simulatedExecutor: (suspend (MissionStep) -> Pair<Boolean, MissionVerificationEvidence>)?
+        simulatedExecutor: (suspend (MissionStep) -> Pair<Boolean, MissionVerificationEvidence>)?,
+        enableModelReviews: Boolean
+    ): CouncilExecutionOutcome = executionMutex.withLock {
+        try {
+            runCouncilTaskInternal(context, goal, simulatedExecutor, enableModelReviews)
+        } finally {
+            _activeRole.value = null
+        }
+    }
+
+    private suspend fun runCouncilTaskInternal(
+        context: Context?,
+        goal: String,
+        simulatedExecutor: (suspend (MissionStep) -> Pair<Boolean, MissionVerificationEvidence>)?,
+        enableModelReviews: Boolean
     ): CouncilExecutionOutcome = withContext(Dispatchers.Default) {
         val cleanGoal = goal.trim()
         val handoffs = mutableListOf<AgentHandoff>()
@@ -342,7 +357,7 @@ object MultiAgentCouncil {
 
         // 3b. Independent LLM reviews run concurrently with a shared 3-call budget.
         // The local Researcher retrieval above supplies context; these sub-agents are advisory only.
-        val agentReview = runIndependentSubAgents(cleanGoal, missionPlan.steps, researchedContext)
+        val agentReview = runIndependentSubAgents(cleanGoal, missionPlan.steps, researchedContext, enableModelReviews)
         agentReview.reports.forEach { (roleName, report) ->
             val role = runCatching { AgentRole.valueOf(roleName) }.getOrNull() ?: return@forEach
             handoffs.add(
@@ -397,6 +412,7 @@ object MultiAgentCouncil {
         var lastEvidence: MissionVerificationEvidence? = null
         var executedStepCount = 0
         var allExecutedSuccessfully = true
+        var allStepsVerified = true
 
         for (step in missionPlan.steps) {
             if (!isToolAuthorizedForRole(AgentRole.EXECUTOR, step.toolName)) {
@@ -415,6 +431,7 @@ object MultiAgentCouncil {
                 lastEvidence = result.second
                 break
             }
+            allStepsVerified = allStepsVerified && result.second.isVerified && result.second.evidenceType != EvidenceType.UNVERIFIED
             executedStepCount++
             lastEvidence = result.second
         }
@@ -434,19 +451,21 @@ object MultiAgentCouncil {
             )
         }
 
-        // 5. Verifier independently inspects the outcome
+        // 5. Summarize executor evidence; no independent platform read occurs here.
         _activeRole.value = AgentRole.VERIFIER
         handoffs.add(
             AgentHandoff(
                 fromRole = AgentRole.EXECUTOR,
                 toRole = AgentRole.VERIFIER,
-                taskDescription = "Independently inspect execution evidence without mutating state",
+                taskDescription = "Summarize executor evidence without asserting independent verification",
                 inputPayload = mapOf("evidence" to (lastEvidence?.details ?: "")),
                 delegationDepth = 3
             )
         )
 
-        val isIndependentVerified = lastEvidence?.isVerified == true
+        // Executor observations are useful evidence, but no independent sensor read is performed here.
+        val allExecutionEvidenceVerified = allStepsVerified && executedStepCount == missionPlan.steps.size
+        val isIndependentVerified = false
 
         // 6. Lead synthesizes final response with Tony Stark tone
         _activeRole.value = AgentRole.LEAD_SYNTHESIZER
@@ -454,7 +473,7 @@ object MultiAgentCouncil {
             AgentHandoff(
                 fromRole = AgentRole.VERIFIER,
                 toRole = AgentRole.LEAD_SYNTHESIZER,
-                taskDescription = "Deliver verified status report for final synthesis",
+                taskDescription = "Deliver execution evidence status for final synthesis",
                 outputPayload = mapOf("isVerified" to isIndependentVerified),
                 delegationDepth = 3
             )
@@ -463,8 +482,8 @@ object MultiAgentCouncil {
         val reviewSummary = agentReview.reports.entries.joinToString(" | ") { (role, report) ->
             "$role: " + report.take(240)
         }.take(900)
-        val finalLeadMessage = (if (isIndependentVerified) {
-            "All systems nominal, Sir. The council has executed and independently verified '${cleanGoal}' with complete success."
+        val finalLeadMessage = (if (allExecutionEvidenceVerified) {
+            "Task executed, Sir. Every step returned verification evidence; independent verification was not performed."
         } else {
             "Task executed, Sir, though physical sensor verification remains unconfirmed."
         }) + if (reviewSummary.isNotBlank()) " Independent reviews: $reviewSummary" else ""

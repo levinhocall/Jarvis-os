@@ -477,6 +477,22 @@
                 </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
 
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchIndependentReviews"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="Independent AI reviews (optional)"
+                android:textColor="?attr/themeTextPrimary" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:text="Off by default. Sends the current request and plan to up to three extra model reviewers. Uses your configured Gemini key and may incur charges. Stored memories are excluded."
+                android:textColor="?attr/themeTextMuted"
+                android:textSize="12sp" />
+
         </LinearLayout>
     </ScrollView>
 

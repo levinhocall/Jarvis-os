@@ -8,6 +8,7 @@ import com.jarvis.assistant.automation.agent.LlmFunctionCallProvider
 import com.jarvis.assistant.automation.agent.LlmPlanner
 import com.jarvis.assistant.automation.agent.LlmPlannerStepRecord
 import com.jarvis.assistant.automation.agent.LlmStepDecision
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
@@ -61,9 +62,9 @@ class MultiAgentCouncilTest {
             )
         }
 
-        // Verify independent verification succeeded
-        assertTrue(outcome.isVerifiedIndependently)
-        assertTrue(outcome.leadResponse.contains("All systems nominal, Sir", ignoreCase = true))
+        // Executor evidence is not an independent sensor verification.
+        assertFalse(outcome.isVerifiedIndependently)
+        assertTrue(outcome.leadResponse.contains("Every step returned verification evidence", ignoreCase = true))
     }
 
     @Test
@@ -206,7 +207,8 @@ class MultiAgentCouncilTest {
         try {
             val result = MultiAgentCouncil.deliberate(
                 context = null,
-                userGoal = "Search recent Android platform security changes, compare official release notes with security bulletins, and identify the practical impact for this device"
+                userGoal = "Search recent Android platform security changes, compare official release notes with security bulletins, and identify the practical impact for this device",
+                enableModelReviews = true
             )
             assertEquals(3, calls.get())
             assertEquals(3, result.subAgentCallsUsed)
@@ -217,4 +219,48 @@ class MultiAgentCouncilTest {
             assertTrue(MultiAgentCouncil.activeSubAgents.value.isEmpty())
         }
     }
+    @Test
+    fun defaultPreflightDoesNotInvokeExtraCloudReviewers() = runBlocking {
+        val previousPlanner = MissionEngine.llmPlanner
+        val calls = AtomicInteger()
+        val provider = object : LlmFunctionCallProvider {
+            override val providerId = "default-off-test"
+            override suspend fun isAvailable() = true
+            override suspend fun predictStep(goal: String, history: List<LlmPlannerStepRecord>, availableTools: List<ToolDefinition>) =
+                LlmStepDecision.Abort("Not used")
+            override suspend fun reason(prompt: String): String? {
+                calls.incrementAndGet()
+                return "REVIEW: checked"
+            }
+        }
+        MissionEngine.llmPlanner = LlmPlanner(provider)
+        try {
+            val review = MultiAgentCouncil.deliberate(userGoal =
+                "Search Android platform security changes and compare official release notes with current security bulletins for this device")
+            assertEquals(0, calls.get())
+            assertEquals(0, review.subAgentCallsUsed)
+            assertTrue(review.agentReports.isEmpty())
+        } finally {
+            MissionEngine.llmPlanner = previousPlanner
+        }
+    }
+
+    @Test
+    fun councilRoleClearsAfterEarlyReturnAndCancellation() = runBlocking {
+        MultiAgentCouncil.executeCouncilTask(goal = "call")
+        assertNull(MultiAgentCouncil.activeRole.value)
+        val entered = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val job = launch {
+            MultiAgentCouncil.executeCouncilTaskForTest(goal = "Search Android security") {
+                entered.complete(Unit)
+                delay(10000)
+                true to MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, "unreachable")
+            }
+        }
+        kotlinx.coroutines.withTimeout(3000) { entered.await() }
+        job.cancel()
+        job.join()
+        assertNull(MultiAgentCouncil.activeRole.value)
+    }
+
 }

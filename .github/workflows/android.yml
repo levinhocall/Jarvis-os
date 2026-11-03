@@ -1,18 +1,7 @@
 name: Android CI
 
-# Verify source changes automatically. This workflow runs tests and lint only;
-# it does not assemble or publish an APK.
+# Manual only: development must not trigger CI or APK builds on push.
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - "Part 7/**"
-      - ".github/workflows/android.yml"
-  pull_request:
-    branches: [ main ]
-    paths:
-      - "Part 7/**"
-      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:

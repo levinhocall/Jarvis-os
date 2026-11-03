@@ -39,8 +39,8 @@ class MemoryRepository(
      */
     suspend fun searchMemoriesSemantic(query: String, limit: Int = 10): List<ScoredMemory> {
         var active = memoryDao.getAllMemories()
-        // Gradually re-embed older rows after switching from the legacy 128-D local vectors
-        // to the configured neural backend. A bounded batch avoids long UI/background stalls.
+        // Re-index stale local representations in bounded batches. The production provider
+        // uses on-device hashing; no neural backend receives memory contents.
         val stale = active.filter {
             it.embeddingJson.isNullOrBlank() ||
                 it.embeddingDimension != embeddingProvider.dimension ||

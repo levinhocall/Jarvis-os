@@ -189,8 +189,8 @@ class GeminiFunctionCallProvider(
                 .build()
             val call = client.newCall(request)
             call.timeout().timeout(17, TimeUnit.SECONDS)
-            call.execute().use { response ->
-                val body = response.body?.string().orEmpty()
+            call.awaitCouncilResponse().let { response ->
+                val body = response.body
                 if (!response.isSuccessful) {
                     if (response.code == 401 || body.contains("API_KEY_INVALID", true)) runCatching { onApiKeyInvalid(apiKey) }
                     else if (response.code == 429 || body.contains("RESOURCE_EXHAUSTED", true)) runCatching { onApiKeyRateLimited(apiKey) }
@@ -204,6 +204,8 @@ class GeminiFunctionCallProvider(
                 parts.mapNotNull { part -> part.asJsonObject.get("text")?.takeIf { it.isJsonPrimitive }?.asString }
                     .joinToString("\n").trim().takeIf { it.isNotBlank() }
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             Log.w("GeminiCouncilAgent", "Advisory reasoning unavailable (" + error.javaClass.simpleName + ").")
             null

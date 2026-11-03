@@ -21,6 +21,8 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
@@ -39,7 +41,7 @@ object VoiceSynthesisRouter {
     private val externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var externalTtsJob: Job? = null
     private var externalPlayer: MediaPlayer? = null
-    @Volatile private var externalCall: Call? = null
+    private val externalCalls = java.util.concurrent.ConcurrentHashMap.newKeySet<Call>()
     private var externalAudioFile: File? = null
     private val externalHttpClient = OkHttpClient.Builder()
         .callTimeout(45, TimeUnit.SECONDS)
@@ -192,15 +194,21 @@ object VoiceSynthesisRouter {
                         .post(body)
                         .build()
                     val call = externalHttpClient.newCall(request)
-                    externalCall = call
-                    call.execute().use { response ->
-                        externalCall = null
-                        if (!response.isSuccessful) {
-                            Log.w(TAG, "ElevenLabs TTS returned HTTP ${response.code}; using Android TTS fallback.")
-                            null
-                        } else {
-                            response.body?.bytes()?.takeIf { it.isNotEmpty() && it.size <= 12_000_000 }
+                    externalCalls.add(call)
+                    try {
+                        currentCoroutineContext().ensureActive()
+                        call.execute().use { response ->
+                            if (!response.isSuccessful) {
+                                Log.w(TAG, "ElevenLabs TTS returned HTTP ${response.code}; using Android TTS fallback.")
+                                null
+                            } else {
+                                readBoundedAudio(response.body)
+                            }
                         }
+                    } finally {
+                        // Keep calls cancellable through body download, including overlapping old jobs.
+                        call.cancel()
+                        externalCalls.remove(call)
                     }
                 }.getOrNull()
             }
@@ -246,8 +254,8 @@ object VoiceSynthesisRouter {
     private fun stopExternalPlayback() {
         externalTtsJob?.cancel()
         externalTtsJob = null
-        externalCall?.cancel()
-        externalCall = null
+        externalCalls.forEach { it.cancel() }
+        externalCalls.clear()
         releaseExternalPlayer()
     }
 

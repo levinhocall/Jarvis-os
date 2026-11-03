@@ -56,6 +56,7 @@ class ApiConnectionActivity : AppCompatActivity() {
     }
 
     private fun loadCurrentPreferences() {
+        binding.switchIndependentReviews.isChecked = preferences.independentModelReviewsEnabled
         binding.etApiKey.setText(preferences.apiKey)
         binding.etCustomEndpoint.setText(preferences.customEndpoint)
 
@@ -264,6 +265,7 @@ class ApiConnectionActivity : AppCompatActivity() {
         }
 
         binding.btnSaveConnection.setOnClickListener {
+            preferences.independentModelReviewsEnabled = binding.switchIndependentReviews.isChecked
             saveAndApply()
         }
     }

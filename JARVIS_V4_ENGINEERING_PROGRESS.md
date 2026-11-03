@@ -604,3 +604,28 @@ After the first corrections, the suite ran **384 tests with 8 failures**. Furthe
 The source license labels now retain the Tech GPTx/TAMCL identity stated by the existing Part 7 LICENSE while preserving NAZIB attribution. No license terms were changed. Generic runtime recovery logs now omit throwable messages/stack payloads as well as keeping them out of user-visible errors. The standalone prompt-formatting fixture uses a precise local query; no cloud memory injection was restored to satisfy its assertion.
 
 The next full run reached **384 tests, 1 failure, 1 skipped**. Mission pause/resume, synchronized cancellation and unknown-outcome restoration passed with the corrected platform-aware fixtures. The remaining formatter failure used Android's mocked `JSONObject.quote`, which returns null under this JVM test configuration. Replaced that pure formatter's dependency with the project's existing Gson serializer; no dependency was added and no cloud prompt caller was reintroduced. Final rerun recorded below.
+
+
+## Continuation checkpoint — 2026-11-03
+
+Baseline `bb1e406abe5babaa592c718aa0f1542bcb230f53` was supplied on local branch `work`; `main` was created at the same commit, with no feature branch or PR. `git ls-remote origin refs/heads/main` verified an exact baseline match after allowing the configured proxy connection. Current acceptance is tracked in `docs/V4-CONTINUATION-CHECKLIST.md`; final execution evidence belongs in `docs/V4-CONTINUATION-REPORT.md`.
+
+Repository inventory at baseline: 1,167 tracked files; Parts 1–6 contain 57/73/114/133/136/144 files; Part 7 contains 483 files, including 203 production Kotlin files, 60 JVM test files and 7 Android test files. Earlier reports describe older commits and are historical. This continuation reviewed history, tracked inventory, prior audit/findings, build/manifest/workflow and the memory, council, HTTP reviewer and external voice paths; it does not claim a fresh line-by-line review of every historical source file.
+
+### Source implementations
+
+- Added a shared three-worker reviewer runner with per-mission three-call admission, deduplicated roles, 18-second per-reviewer / 24-second mission deadlines, deterministic reconciliation, partial report retention on timeout, failure isolation and cancellation propagation. Reviewer activity uses reference counts across simultaneous missions.
+- Extra model reviews require explicit default-off selection in API settings. Reviewers still have no device-tool execution authority or stored-memory context. Existing MissionEngine approval/permission checks remain authoritative. Call admissions are bounded; monetary/provider token accounting is not implemented.
+- Added cancellable, bounded reviewer HTTP response handling. Stopping a reviewer cancels its OkHttp call rather than waiting on blocking execute. Test fixtures verify cancellation and late callbacks without external requests.
+- Serialized direct council execution and clear active role in finally on success, early return, exception and cancellation. Corrected council success text: executor evidence is not independent verification, and all steps must return evidence for the aggregate evidence claim.
+- ElevenLabs downloads remain cancellable through body consumption, including overlapping cancelled jobs. Bounded audio reads reject oversized known-length and chunked responses before full-body allocation. Provider/network/playback runtime acceptance remains open.
+- Backend conditional writes reject stale versions with 409, preserve original creation time, allocate monotonic modification timestamps under a SQLite write lock, preserve tombstones and scope-owned indexes, and close SQLite connections deterministically. Legacy unconditional API writes remain compatible and are not conflict protected.
+- Backend neural-model import is deferred to actual model startup/use. Protocol tests can execute without installing/downloading a neural model; production lifespan still requires and loads the real model, with no fabricated neural fallback.
+- Corrected backend Android-sync documentation and local hashing comments. Android remote synchronization remains disabled; Room/SQLCipher remains the primary memory store. No active bidirectional-client or on-device-neural completion is claimed.
+- Changed CI to manual dispatch only so the requested push cannot trigger automatic CI. No CI or APK tasks were invoked.
+
+### Verification boundary
+
+Nine backend storage/protocol tests pass, including concurrent conditional writers, clock rollback, tombstone resurrection rejection and wrong-scope delete preservation. Tests use explicitly isolated embedding fixtures for storage writes; neural inference, FastAPI deployment and live networking are not validated by that suite. Android Gradle verification and final counts are recorded in the final report after execution. `adb devices -l` returned an empty device list. No APK build/install or instrumentation task was run.
+
+Final fixed-source execution: `:app:testDebugUnitTest :app:lintDebug` exited 0, BUILD SUCCESSFUL in 5m 39s. Parsed JUnit XML: 398 tests across 63 suites, 0 failures/errors, 1 skipped (397 passed); all 14 added regressions passed. Parsed lint XML: 0 errors, 1,139 warnings. These are local JVM/compilation/static-analysis results, not APK or device verification. All 134 Android XML files parsed and git diff --check passed. No APK or CI task ran.
