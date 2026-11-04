@@ -3660,7 +3660,7 @@ class JarvisConversationService : Service() {
         }
         abandonAudioDuckFocus()
         releaseWifiLock()
-        com.jarvis.assistant.audio.JarvisSoundEffects.playStandbySound()
+        if (!com.jarvis.assistant.audio.wake.WakeSettings(this).silentWake) com.jarvis.assistant.audio.JarvisSoundEffects.playStandbySound()
         isPendingBackgroundTransition = false
         stopActiveConversation()
         currentTurnAssistantText.clear()
@@ -3682,6 +3682,7 @@ class JarvisConversationService : Service() {
     }
 
     private var wakeTestMode = false
+        set(value) { field = value; com.jarvis.assistant.audio.wake.WakeDiagnostics.testChanged(value) }
     private var wakeRecoveryJob: Job? = null
     private var wakeLockRenewalJob: Job? = null
     private var wakeFailures = 0
@@ -3689,6 +3690,8 @@ class JarvisConversationService : Service() {
     private var wakeRecognizer: Recognizer? = null
 
     private fun exitStandbyListening() {
+        wakeTestMode = false
+        com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(false)
         wakeRecoveryJob?.cancel(); wakeRecoveryJob = null
         com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Wake listener stopped")
         wakeModelJob?.cancel(); wakeModelJob = null
@@ -3744,6 +3747,7 @@ class JarvisConversationService : Service() {
             val service = SpeechService(rec, 16000.0f)
             voskSpeechService = service
             check(service.startListening(voskListener)) { "Microphone listener could not start" }
+            com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(true)
             com.jarvis.assistant.audio.wake.WakeDiagnostics.update(if (wakeTestMode) "Microphone test listening locally" else "Offline wake listener active")
         } catch (e: Exception) {
             recoverWakeListener(e)
@@ -3753,6 +3757,7 @@ class JarvisConversationService : Service() {
     private fun recoverWakeListener(error: Exception?) {
         if (!_isStandby.value || wakeRecoveryJob?.isActive == true) return
         wakeRecoveryJob = serviceScope.launch(Dispatchers.Main) {
+            com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(false)
             runCatching { voskSpeechService?.shutdown() }; voskSpeechService = null
             runCatching { wakeRecognizer?.close() }; wakeRecognizer = null
             if (!PermissionHelper.hasRecordAudioPermission(this@JarvisConversationService) || error is SecurityException || ++wakeFailures > 3) {
@@ -3871,7 +3876,7 @@ class JarvisConversationService : Service() {
         com.jarvis.assistant.ui.directives.WakeGlow.show(this)
         requestAudioDuckFocus()
         vibrateBriefly()
-        com.jarvis.assistant.audio.JarvisSoundEffects.playWakeSound()
+        if (!com.jarvis.assistant.audio.wake.WakeSettings(this).silentWake) com.jarvis.assistant.audio.JarvisSoundEffects.playWakeSound()
         exitStandbyListening()
         currentTurnAssistantText.clear()
         currentTurnUserText.clear()

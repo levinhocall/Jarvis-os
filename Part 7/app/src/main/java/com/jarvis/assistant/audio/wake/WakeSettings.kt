@@ -15,6 +15,9 @@ class WakeSettings(context: Context) {
     var sensitivity: Int
         get() = prefs.getInt("sensitivity",50).coerceIn(0,100)
         set(value) { prefs.edit().putInt("sensitivity",value.coerceIn(0,100)).apply() }
+    var silentWake: Boolean
+        get() = prefs.getBoolean("silent_wake",false)
+        set(value) { prefs.edit().putBoolean("silent_wake",value).apply() }
     var allowPocket: Boolean
         get() = prefs.getBoolean("allow_pocket",false)
         set(value) { prefs.edit().putBoolean("allow_pocket",value).apply() }
@@ -22,6 +25,12 @@ class WakeSettings(context: Context) {
 
 /** Ephemeral diagnostic text: never written to disk or sent to a provider. */
 object WakeDiagnostics {
+    private val capture = MutableStateFlow(false)
+    val listening = capture.asStateFlow()
+    private val test = MutableStateFlow(false)
+    val testing = test.asStateFlow()
+    fun captureChanged(active: Boolean) { capture.value = active }
+    fun testChanged(active: Boolean) { test.value = active }
     private val mutable = MutableStateFlow("Wake listener stopped")
     val status = mutable.asStateFlow()
     fun update(message: String) { mutable.value = message.take(400) }
