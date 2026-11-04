@@ -3,7 +3,7 @@
 ## Reproduced crash and repair
 Android 16 emulator run 41692523996 reproduced a fatal main-thread exception from DeferredSqlCipherOpenHelperFactory.getDelegate → RoomDatabase.inTransaction → DBUtil.performSuspending. Room checks transaction state on the collector thread against an already-open database. The custom guard incorrectly rejected cached helper access. Commit 735fbbf returns the cached helper before enforcing the cold-open background-thread guard. Encryption and local data are preserved; no destructive migration or main-thread queries were enabled.
 
-Run 41694643158 passed encryptedRoomAndReportedScreensOpen after that fix. Two pre-existing encryption fixtures failed because they used the instrumentation APK context; this change corrects them to the target app context and retains unique fixture files/aliases. Expanded runtime verification is pending for this source snapshot.
+Run 41694643158 passed encryptedRoomAndReportedScreensOpen after that fix. Two pre-existing encryption fixtures failed because they used the instrumentation APK context; this change corrects them to the target app context and retains unique fixture files/aliases. Expanded Android 16 runtime verification subsequently passed all 20 tests on source e6bca1e (run 41776063802).
 
 ## Implemented
 - Premium audio-reactive native voice orb, lighter WebGL home orb, opt-in Vosk wake screen, lazy/atomic offline model extraction, native recognizer cleanup and bounded readiness, transient multicolor wake border. Existing bundled speech model is about 68 MiB; speaker model is optional at runtime. No extra model download is required.
@@ -19,14 +19,14 @@ All new background/cloud features are opt-in. Phone-local encrypted memory remai
 
 ## Executed checks before final CI
 - Local Gradle unit tests: 418 tests, 0 failures, 0 errors, 1 environment-dependent skip.
-- Local Android lint and Android instrumentation Kotlin compilation: successful (existing warning backlog remains).
+- Local Android lint and Android instrumentation Kotlin compilation: successful; 0 lint errors, 1,244 warnings (warning backlog remains).
 - Host migration 6→7: schema matches exported Room schema; six existing seeded tables preserved.
 - Host migration 7→8: schema matches exported Room schema; nine existing seeded tables preserved.
 - Media and script checks: 16 H.264 silent MP4 files inspected; orb/avatar JavaScript syntax checked.
 - ARM64 Vosk and JNA ELF load alignment inspected for 16 KiB support.
 
 ## Remaining verification and limitations
-Final APK CI and expanded Android 16 instrumentation results will be appended after execution. Physical Mi/HyperOS accessibility activation/reconnection, microphone wake detection with speech, background battery restrictions, audio echo/noise behavior, wallpaper/launcher behavior, overlay gestures and live Gemini/WhatsApp provider interactions require device verification. No zero-latency or perfect background-audio rejection claim is made. Cloud features require configured compatible provider access. Decision review uses notification counts, not unrestricted call/SMS databases. Existing CI debug signing keys vary by runner: a differently signed APK cannot update an existing installation. Do not uninstall without a verified local-memory backup; uninstall erases app data. Stable private CI signing remains an owner configuration prerequisite.
+Android 16 emulator: 20 tests, 0 failures/errors/skips. This includes all 12 selected screen launches/recreation, four launcher icons, Vosk model loading/silent input, native SQLCipher/key wrapping, memory migrations/transactions, conversation persistence and mission replay protection. Final APK CI #299 passed unit tests, both migrations, lint, assembly and permanent release publication. Physical Mi/HyperOS accessibility activation/reconnection, microphone wake detection with speech, background battery restrictions, audio echo/noise behavior, wallpaper/launcher behavior, overlay gestures and live Gemini/WhatsApp provider interactions require device verification. No zero-latency or perfect background-audio rejection claim is made. Cloud features require configured compatible provider access. Decision review uses notification counts, not unrestricted call/SMS databases. Existing CI debug signing keys vary by runner: a differently signed APK cannot update an existing installation. Do not uninstall without a verified local-memory backup; uninstall erases app data. Stable private CI signing remains an owner configuration prerequisite.
 
 ## Modified files
 - `.github/workflows/android-runtime.yml`
@@ -100,3 +100,20 @@ Final APK CI and expanded Android 16 instrumentation results will be appended af
 - `Part 7/app/src/main/res/raw/aura_violet_gaze.mp4`
 - `Part 7/app/src/test/java/com/jarvis/assistant/ui/aura/AutonomyPolicyTest.kt`
 - `Part 7/scripts/generate-aura-wallpapers.py`
+
+## Delivery commits
+- `735fbbf`: reproduced Room cached-helper crash repair.
+- `0459306`: Aura implementation, local persistence migration and expanded tests.
+- `43b253e`: release-tag lookup exit-status correction.
+- `e6bca1e`: wake permission lifecycle, visible failure states and additional screen coverage.
+- `119a5e2`: remove private voice-tool arguments from logs (only production difference from the Android runtime test snapshot).
+
+Runtime suite: https://github.com/levinhocall/Jarvis-os/actions/runs/41776063802
+Final-source APK CI: https://github.com/levinhocall/Jarvis-os/actions/runs/41776590790
+
+## Published APK verification
+[Download JARVIS 1.9.0 (144)](https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-299/app-debug.apk) · [Permanent release](https://github.com/levinhocall/Jarvis-os/releases/tag/debug-ci-299).
+
+The actual CI asset was downloaded and verified with sha256sum and apksigner. Size: 167,637,800 bytes. SHA-256: `e9ea56dd67e5c8093a54b31df40dc289f6d258c95457872bc0abc2d4a9bbd85e`. Package `com.jarvis.assistant`, target SDK 36, version 1.9.0 (144). Debug certificate SHA-256: `e4aadb7a67463f409d75b43f8d187b256b24125c1c307a2cf2f3437d74166115`. This differs from CI #293; do not uninstall the previous installation without a verified backup.
+
+[Machine-readable evidence](AURA-CRASH-EVIDENCE.json) · [Build/download without ChatGPT](CI-APK-DOWNLOAD.md). No physical handset or paid-provider end-to-end verification was performed.

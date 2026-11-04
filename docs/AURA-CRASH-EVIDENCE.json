@@ -1,0 +1,68 @@
+{
+  "source_commit": "119a5e202329aa1797d747b21f5b1cdfe9fda32a",
+  "runtime_source_commit": "e6bca1e15ef35c241ef740541b1e8a73c3c4f62f",
+  "runtime_source_difference": "Only removes private tool arguments from a Log.i call",
+  "local_unit_tests": {
+    "tests": 418,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "local_lint": {
+    "errors": 0,
+    "warnings": 1244
+  },
+  "android16_runtime": {
+    "run_id": 41776063802,
+    "job_id": 126397041719,
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "conclusion": "success"
+  },
+  "migrations": [
+    {
+      "from": 6,
+      "to": 7,
+      "preserved_seeded_tables": 6,
+      "result": "pass"
+    },
+    {
+      "from": 7,
+      "to": 8,
+      "preserved_seeded_tables": 9,
+      "result": "pass"
+    }
+  ],
+  "assets": {
+    "silent_h264_videos": 16,
+    "javascript_syntax": [
+      "orb.html",
+      "avatar-studio.html"
+    ]
+  },
+  "apk_ci": {
+    "run_id": 41776590790,
+    "number": 299,
+    "status": "success",
+    "unit_tests": "passed",
+    "lint": "passed",
+    "assembly": "passed",
+    "publication": "passed"
+  },
+  "physical_device_verified": false,
+  "live_provider_verified": false,
+  "apk": {
+    "url": "https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-299/app-debug.apk",
+    "bytes": 167637800,
+    "sha256": "e9ea56dd67e5c8093a54b31df40dc289f6d258c95457872bc0abc2d4a9bbd85e",
+    "checksum_verified": true,
+    "apksigner_verified": true,
+    "certificate_sha256": "e4aadb7a67463f409d75b43f8d187b256b24125c1c307a2cf2f3437d74166115",
+    "package": "com.jarvis.assistant",
+    "version_name": "1.9.0",
+    "version_code": 144,
+    "target_sdk": 36
+  }
+}
