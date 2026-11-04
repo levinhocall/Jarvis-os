@@ -1,0 +1,38 @@
+{
+  "source_commit": "d20d33345fd1ed73fe968e59c8185bd38fa79aeb",
+  "local_tests": {
+    "tests": 426,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "local_lint": {
+    "errors": 0,
+    "warnings": 1258
+  },
+  "runtime": {
+    "run_id": 41860003480,
+    "tests": 22,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "conclusion": "success"
+  },
+  "apk_ci": {
+    "run_id": 41860003484,
+    "number": 302,
+    "conclusion": "success"
+  },
+  "apk": {
+    "version": "1.9.2",
+    "version_code": 146,
+    "package": "com.jarvis.assistant",
+    "target_sdk": 36,
+    "bytes": 167670568,
+    "sha256": "4fe34fe51d9d43cff3c7e878a82a6a7e2a076cec59364a2cf98e9b4c9f7974df",
+    "checksum_verified": true,
+    "signature_verified": true
+  },
+  "physical_acoustic_tests_verified": false,
+  "official_model_download_end_to_end_verified": false
+}
