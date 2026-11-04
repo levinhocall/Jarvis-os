@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 class WakeWordActivity : DirectiveActivity() {
     private lateinit var status: android.widget.TextView
     private val permissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result[Manifest.permission.RECORD_AUDIO] == true && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) enable()
+        if (result[Manifest.permission.RECORD_AUDIO] == true && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) enable()
         else status.text = "Microphone permission is needed. Wake listening remains off."
     }
     override fun onCreate(state: Bundle?) {

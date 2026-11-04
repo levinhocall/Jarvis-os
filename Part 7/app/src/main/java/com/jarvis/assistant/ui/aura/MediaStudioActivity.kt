@@ -26,7 +26,7 @@ class MediaStudioActivity : DirectiveActivity() {
         action("View last generated image") {
             last(applicationContext)?.let { uri -> runCatching { startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"image/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }.onFailure { notice("No image viewer is available.") } } ?: notice("Generate an image first.")
         }
-        action("Share last image to WhatsApp") { share(this) }
+        action("Share last image to WhatsApp") { if (last(this) == null) notice("Generate an image first.") else share(this) }
     }
     companion object {
         fun remember(context: android.content.Context, uri: Uri) { context.getSharedPreferences("aura_media",0).edit().putString("last_generated",uri.toString()).apply() }

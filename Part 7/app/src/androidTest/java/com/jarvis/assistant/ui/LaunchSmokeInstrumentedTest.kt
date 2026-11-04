@@ -49,6 +49,11 @@ class LaunchSmokeInstrumentedTest {
             com.jarvis.assistant.ui.home.MainActivity::class.java,
             com.jarvis.assistant.ui.settings.AuraControlActivity::class.java,
             com.jarvis.assistant.ui.directives.WakeWordActivity::class.java,
+            com.jarvis.assistant.ui.aura.AvatarStudioActivity::class.java,
+            com.jarvis.assistant.ui.aura.DecisionLogsActivity::class.java,
+            com.jarvis.assistant.ui.aura.MediaStudioActivity::class.java,
+            com.jarvis.assistant.ui.wallpaper.VideoWallpaperActivity::class.java,
+            com.jarvis.assistant.ui.directives.VoiceModeActivity::class.java,
             com.jarvis.assistant.ui.directives.IdeasActivity::class.java,
             com.jarvis.assistant.ui.directives.EnglishTeacherActivity::class.java
         )) {

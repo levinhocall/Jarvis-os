@@ -15,7 +15,7 @@ class DecisionLogsActivity : DirectiveActivity() {
         super.onCreate(state); heading("What AI Decided")
         label("Encrypted local history. Latest 100 checks shown; 500 retained. Android scheduling is inexact.")
         val output=label("Loading…")
-        lifecycleScope.launch(com.jarvis.assistant.core.diagnostics.StorageHealth.handler) { repeatOnLifecycle(Lifecycle.State.STARTED) {
+        lifecycleScope.launch(kotlinx.coroutines.CoroutineExceptionHandler { _, _ -> output.text="Decision history could not be opened. Local data has not been erased." }) { repeatOnLifecycle(Lifecycle.State.STARTED) {
             JarvisApp.instance.memoryDatabase.directiveDao().observeDecisions().collect { rows ->
                 output.text=rows.joinToString("\n\n") { "${DateFormat.getDateTimeInstance().format(Date(it.createdAt))} · ${it.action}\n${it.reason}" }.ifEmpty { "No autonomous checks yet." }
             }
