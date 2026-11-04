@@ -57,6 +57,9 @@ class LaunchSmokeInstrumentedTest {
         try {
             instrumentation.runOnMainSync {
                 val views=descendants(activity.window.decorView)
+                org.junit.Assert.assertTrue(views.filterIsInstance<android.widget.TextView>().any { it.text.toString()=="Microphone" })
+                org.junit.Assert.assertTrue(views.filterIsInstance<android.widget.Button>().any { it.text.toString()=="Test Microphone" })
+                org.junit.Assert.assertTrue(views.filterIsInstance<com.google.android.material.card.MaterialCardView>().size >= 5)
                 val inputs=views.filterIsInstance<android.widget.EditText>()
                 inputs[0].setText("myra"); inputs[1].setText("mira")
                 views.filterIsInstance<android.widget.Button>().single { it.text.toString()=="Save wake word" }.performClick()

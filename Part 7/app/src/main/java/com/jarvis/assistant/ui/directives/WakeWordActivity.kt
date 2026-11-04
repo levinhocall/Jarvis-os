@@ -2,8 +2,13 @@ package com.jarvis.assistant.ui.directives
 
 import android.Manifest
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
@@ -27,6 +32,7 @@ import kotlinx.coroutines.launch
 class WakeWordActivity : DirectiveActivity() {
     private lateinit var status: TextView
     private lateinit var wakeSwitch: SwitchCompat
+    private lateinit var statusDot: TextView
     private var rendering = false
     private var starting = false
     private var requestedTest = false
@@ -37,30 +43,21 @@ class WakeWordActivity : DirectiveActivity() {
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        page.removeAllViews()
+        page.setBackgroundColor(BACKGROUND)
+        page.setPadding(dp(18),dp(8),dp(18),dp(30))
         requestedTest = state?.getBoolean("test_requested") ?: false
         val settings = WakeSettings(this)
-        heading("Wake Word")
-        label("Your voice. Your call sign. Recognized on this phone.")
+        toolbar()
         lateinit var engine: TextView
         lateinit var testButton: com.google.android.material.button.MaterialButton
         section("Microphone") {
             engine = label("Vosk · Offline",18f)
             status = label(WakeDiagnostics.status.value)
-            wakeSwitch = SwitchCompat(this).apply {
-                text = "Background wake listening"; minHeight=dp(48)
-                setTextColor(themeColor(R.attr.themeTextPrimary))
-                setOnCheckedChangeListener { _, value ->
-                    if (!rendering) {
-                        if(value) { renderSwitch(); requestListening(false) } else stopListening()
-                    }
-                }
-            }
-            page.addView(wakeSwitch)
-            testButton = action("Test microphone") {
+            testButton = primaryAction("Test Microphone") {
                 if (WakeDiagnostics.testing.value && JarvisConversationService.isStandby.value) stopListening()
                 else requestListening(true)
             }
-            action("Stop all voice listening") { stopListening() }
             label("Test mode stays local and shows what was heard. A normal wake opens your configured assistant.")
         }
         section("Sensitivity") {
@@ -84,7 +81,7 @@ class WakeWordActivity : DirectiveActivity() {
             fun showCurrent() { current.text="Current wake word: ${settings.name}\nSay ‘Hey ${settings.name}’ or ‘Wake up ${settings.name}’" }
             showCurrent()
             val alias=input("Optional phonetic alias, e.g. Mira",1).apply { setText(settings.alias) }
-            action("Save wake word") {
+            primaryAction("Save wake word", compact=true) {
                 val value=name.text.toString()
                 if(!WakeMatcher.validName(value)) {
                     name.error="Enter only a name: one or two English words, 2–20 letters each"
@@ -99,16 +96,26 @@ class WakeWordActivity : DirectiveActivity() {
         }
         lateinit var modelStatus: TextView
         section("Offline Model · Vosk") {
+            wakeSwitch = SwitchCompat(this).apply {
+                text = "Offline Mode (Vosk)"; minHeight=dp(52);textSize=16f
+                setTypeface(typeface,Typeface.BOLD);setTextColor(TEXT)
+                setOnCheckedChangeListener { _, value ->
+                    if (!rendering) {
+                        if(value) { renderSwitch(); requestListening(false) } else stopListening()
+                    }
+                }
+            }
+            page.addView(wakeSwitch)
             modelStatus=label(VoskModelManager.status.value)
             label("Wake recognition is always offline. The ~68 MiB model is already bundled; no download is needed for normal setup.")
-            action("Prepare / repair bundled model") {
+            secondaryAction("Prepare / repair bundled model") {
                 VoskModelManager.init(applicationContext,lifecycleScope,com.jarvis.assistant.JarvisApp.instance.preferences.isOwnerVoiceEnabled)
             }
             val progress=LinearProgressIndicator(this).apply { max=100; visibility=View.GONE }
             page.addView(progress,LinearLayout.LayoutParams(-1,dp(6)))
             val downloadStatus=label("Optional official download: ~40 MB compressed / ~70 MB extracted. Requires internet and 350 MiB free storage.")
-            val download=action("Download / retry official model") { ModelDownloadWorker.enqueue(applicationContext) }
-            val cancel=action("Cancel download") { WorkManager.getInstance(applicationContext).cancelUniqueWork(ModelDownloadWorker.WORK_NAME) }.apply { isEnabled=false }
+            val download=secondaryAction("Download / retry official model") { ModelDownloadWorker.enqueue(applicationContext) }
+            val cancel=secondaryAction("Cancel download") { WorkManager.getInstance(applicationContext).cancelUniqueWork(ModelDownloadWorker.WORK_NAME) }.apply { isEnabled=false }
             WorkManager.getInstance(applicationContext).getWorkInfosForUniqueWorkLiveData(ModelDownloadWorker.WORK_NAME).observe(this) { jobs ->
                 val tracking=getSharedPreferences("offline_wake",MODE_PRIVATE)
                 val active=jobs.firstOrNull { !it.state.isFinished }
@@ -145,7 +152,8 @@ class WakeWordActivity : DirectiveActivity() {
                 if (standby || capture) starting=false
                 renderSwitch()
                 engine.text=when { capture && test -> "● Microphone test · Local only"; capture -> "● Listening · Vosk offline"; standby -> "Preparing microphone…"; else -> "○ Wake microphone off" }
-                testButton.text=if(standby && test) "Stop microphone test" else "Test microphone"
+                statusDot.setTextColor(if(capture) 0xff56b85a.toInt() else 0xffb6b6bb.toInt())
+                testButton.text=if(standby && test) "Stop Microphone Test" else "Test Microphone"
             } }
         } }
         renderSwitch()
@@ -154,11 +162,57 @@ class WakeWordActivity : DirectiveActivity() {
         val parent=page
         val body=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(8),dp(16),dp(16))}
         parent.addView(MaterialCardView(this).apply {
-            radius=dp(20).toFloat(); strokeWidth=dp(1); strokeColor=themeColor(R.attr.themeCardBorder)
-            setCardBackgroundColor(themeColor(R.attr.themeCardBg)); addView(body)
+            radius=dp(18).toFloat(); strokeWidth=0
+            cardElevation=dp(3).toFloat(); setCardBackgroundColor(Color.WHITE); addView(body)
         },LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(12)})
         page=body
-        try {label(title,18f);content()} finally {page=parent}
+        try {
+            label(title,17f).apply { setTextColor(TEXT); setTypeface(typeface,Typeface.BOLD) }
+            content()
+            styleCard(body)
+        } finally {page=parent}
+    }
+    private fun toolbar() {
+        val row=LinearLayout(this).apply {orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(4),0,dp(8))}
+        row.addView(TextView(this).apply {
+            text="‹";textSize=40f;setTextColor(TEXT);gravity=Gravity.CENTER
+            contentDescription="Back";setOnClickListener {finish()}
+        },LinearLayout.LayoutParams(dp(48),dp(52)))
+        row.addView(LinearLayout(this).apply {
+            orientation=LinearLayout.VERTICAL
+            addView(TextView(this@WakeWordActivity).apply {text="Microphone";textSize=24f;setTextColor(TEXT);setTypeface(typeface,Typeface.BOLD)})
+            addView(TextView(this@WakeWordActivity).apply {text="JARVIS is listening for your wake word";textSize=12f;setTextColor(MUTED)})
+        },LinearLayout.LayoutParams(0,-2,1f))
+        statusDot=TextView(this).apply {text="●";textSize=18f;setTextColor(0xffb6b6bb.toInt());gravity=Gravity.CENTER}
+        row.addView(statusDot,LinearLayout.LayoutParams(dp(34),dp(44)))
+        page.addView(row,LinearLayout.LayoutParams(-1,-2))
+    }
+    private fun primaryAction(title:String, compact:Boolean=false, listener:(com.google.android.material.button.MaterialButton)->Unit) =
+        action(title,listener).apply {
+            backgroundTintList=ColorStateList.valueOf(RED);setTextColor(Color.WHITE)
+            cornerRadius=dp(12);setTypeface(typeface,Typeface.BOLD)
+            if(compact) layoutParams=LinearLayout.LayoutParams(-2,dp(48))
+        }
+    private fun secondaryAction(title:String, listener:(com.google.android.material.button.MaterialButton)->Unit) =
+        action(title,listener).apply {
+            backgroundTintList=ColorStateList.valueOf(Color.WHITE);setTextColor(RED)
+            strokeColor=ColorStateList.valueOf(0x33df263f);strokeWidth=dp(1);cornerRadius=dp(12)
+        }
+    private fun styleCard(root:LinearLayout) {
+        fun visit(view:View) {
+            when(view) {
+                is EditText -> {view.setTextColor(TEXT);view.setHintTextColor(0xffa7a7ad.toInt());view.backgroundTintList=ColorStateList.valueOf(0xffdddddf.toInt())}
+                is SeekBar -> {view.progressTintList=ColorStateList.valueOf(RED);view.thumbTintList=ColorStateList.valueOf(RED)}
+                is SwitchCompat -> {view.setTextColor(TEXT);view.thumbTintList=ColorStateList.valueOf(RED)}
+                is LinearProgressIndicator -> view.setIndicatorColor(RED)
+                is TextView -> if(view !is com.google.android.material.button.MaterialButton && view !is SwitchCompat) {
+                    if(view.currentTextColor==themeColor(R.attr.themeTextPrimary)) view.setTextColor(TEXT)
+                    else if(view.currentTextColor==themeColor(R.attr.themeTextMuted)) view.setTextColor(MUTED)
+                }
+            }
+            if(view is android.view.ViewGroup) for(i in 0 until view.childCount) visit(view.getChildAt(i))
+        }
+        visit(root)
     }
     private fun renderSwitch() {
         rendering=true
@@ -186,5 +240,11 @@ class WakeWordActivity : DirectiveActivity() {
             ContextCompat.startForegroundService(this,Intent(this,JarvisConversationService::class.java).setAction(if(requestedTest) JarvisConversationService.ACTION_TEST_WAKE else JarvisConversationService.ACTION_ENTER_STANDBY))
             status.text="Starting offline microphone…"
         } catch(_:Exception) {starting=false;status.text="Android blocked startup. Keep Jarvis open and check microphone permissions.";renderSwitch()}
+    }
+    companion object {
+        private val BACKGROUND:Int=0xfff6f6f8.toInt()
+        private val TEXT:Int=0xff17171a.toInt()
+        private val MUTED:Int=0xff77777f.toInt()
+        private val RED:Int=0xffdf263f.toInt()
     }
 }

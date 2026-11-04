@@ -10,8 +10,14 @@ Reference: user-uploaded 52-second screen recording, `Screenrecorder-2026-11-04-
 - Sensitivity retains live 0–100% adjustment, with accurate explanation of confidence thresholds and false wakes.
 - Model download displays measured percentage in a progress bar, queued/verification/failure state, cancel and retry controls. Already bundled models are prepared locally; no unnecessary mandatory download is added.
 - Optional silent wake transitions suppress app wake/standby chimes; OS microphone indicators remain intact. The option defaults off to preserve existing behavior. Pocket listening remains explicitly opt-in.
-- All cards follow JARVIS System/Light/Dark colors; no MYRA artwork or branding is copied.
+- The wake setup uses the reference's dedicated light control-surface palette; no MYRA artwork or branding is copied.
 - Stop handles an in-flight start request and avoids displaying a permanent stopping state when already off.
+
+## Visual parity revision
+
+The first integration preserved the app-theme card styling and did not match the recording closely enough. Version 1.9.3 replaces that screen presentation with the reference hierarchy: fixed light-gray canvas, compact Microphone toolbar, live capture dot, white elevated rounded cards, black headings, muted descriptions, red primary actions, red sensitivity/progress controls, a compact Save action, and Offline Mode (Vosk) switch inside the model card. The status dot turns green only after the recorder is actually active. The microphone card contains the local test action; the model card owns persistent background listening, matching the recording's information structure.
+
+JARVIS text, behavior, accessibility descriptions and privacy disclosures remain original. The recording's MYRA name, character art, icons and other branded assets are not copied.
 
 ## Verification
 
