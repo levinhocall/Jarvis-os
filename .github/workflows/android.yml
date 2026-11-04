@@ -48,8 +48,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: debug-ci-${{ github.run_number }}
         run: |
-          existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null || true)
-          if [ -n "$existing_sha" ]; then
+          if existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null); then
             test "$existing_sha" = "$GITHUB_SHA"
           else
             gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA" --silent
