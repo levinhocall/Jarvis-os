@@ -17,11 +17,31 @@ class LaunchSmokeInstrumentedTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         com.jarvis.assistant.audio.VoskModelManager.init(context,this,includeSpeaker=false)
         kotlinx.coroutines.withTimeout(90_000) { com.jarvis.assistant.audio.VoskModelManager.isModelReady.first { it } }
-        val recognizer = org.vosk.Recognizer(com.jarvis.assistant.audio.VoskModelManager.model,16000f,"[\"hey jarvis\",\"jarvis\",\"[unk]\"]")
+        val recognizer = org.vosk.Recognizer(com.jarvis.assistant.audio.VoskModelManager.model,16000f)
         try {
             recognizer.acceptWaveForm(ByteArray(32000),32000)
             org.junit.Assert.assertEquals("",org.json.JSONObject(recognizer.finalResult).optString("text"))
         } finally { recognizer.close() }
+    }
+    @Test fun foregroundMicrophoneTestStartsAndStopsWithoutCloudSession() = runBlocking {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        instrumentation.uiAutomation.grantRuntimePermission(context.packageName,android.Manifest.permission.RECORD_AUDIO)
+        if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.grantRuntimePermission(context.packageName,android.Manifest.permission.POST_NOTIFICATIONS)
+        val activity = instrumentation.startActivitySync(Intent(context,com.jarvis.assistant.ui.directives.WakeWordActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        instrumentation.waitForIdleSync()
+        try {
+            instrumentation.runOnMainSync {
+                androidx.core.content.ContextCompat.startForegroundService(activity,Intent(activity,com.jarvis.assistant.background.JarvisConversationService::class.java).setAction(com.jarvis.assistant.background.JarvisConversationService.ACTION_TEST_WAKE))
+            }
+            kotlinx.coroutines.withTimeout(60_000) { com.jarvis.assistant.audio.wake.WakeDiagnostics.status.first { it == "Microphone test listening locally" } }
+            org.junit.Assert.assertFalse(com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value)
+            org.junit.Assert.assertTrue(com.jarvis.assistant.background.JarvisConversationService.isStandby.value)
+        } finally {
+            instrumentation.runOnMainSync { activity.startService(Intent(activity,com.jarvis.assistant.background.JarvisConversationService::class.java).setAction(com.jarvis.assistant.background.JarvisConversationService.ACTION_STOP_ALL)) }
+            kotlinx.coroutines.withTimeout(10_000) { com.jarvis.assistant.background.JarvisConversationService.isStandby.first { !it } }
+            instrumentation.runOnMainSync { activity.finish() }
+        }
     }
     @Test fun eachIconSelectionLeavesExactlyOneLauncherEntry() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
