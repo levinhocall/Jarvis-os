@@ -887,7 +887,7 @@ class JarvisConversationService : Service() {
                 com.jarvis.assistant.audio.JarvisSoundEffects.playWakeSound()
                 beginActiveConversation()
             }
-            ACTION_ENTER_STANDBY -> { wakeTestMode = false; enterStandby(announce = false) }
+            ACTION_ENTER_STANDBY -> { wakeTestMode = false; enterStandby(announce = false); updateNotification() }
             ACTION_TEST_WAKE -> { exitStandbyListening(); wakeTestMode = true; enterStandby(announce = false) }
             ACTION_STOP_ALL -> {
                 fullStop()

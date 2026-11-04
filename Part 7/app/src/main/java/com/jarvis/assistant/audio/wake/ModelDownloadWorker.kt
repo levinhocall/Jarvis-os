@@ -84,7 +84,10 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
         const val MODEL_URL="https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
         private const val MAX_DOWNLOAD=96L*1024*1024
         private val http=OkHttpClient.Builder().connectTimeout(20,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS).callTimeout(3,TimeUnit.MINUTES).followRedirects(false).build()
-        fun enqueue(context: Context) = WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME,ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<ModelDownloadWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build()).build())
+        fun enqueue(context: Context) {
+            val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build()).build()
+            context.getSharedPreferences("offline_wake",Context.MODE_PRIVATE).edit().putString("download_id",request.id.toString()).apply()
+            WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME,ExistingWorkPolicy.KEEP,request)
+        }
     }
 }

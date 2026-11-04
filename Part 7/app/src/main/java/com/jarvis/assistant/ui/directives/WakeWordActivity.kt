@@ -45,6 +45,8 @@ class WakeWordActivity : DirectiveActivity() {
         label("Say ‘Hey’ followed by your saved call sign. Vosk recognizes the wake phrase on this phone. The bundled English model is about 68 MiB; no extra model download is needed. Live replies still use your configured AI provider.")
         label("Listening uses a visible microphone foreground service. Start it here while the app is open. Android/HyperOS can stop background listening; it is never silently enabled at boot.")
         status = label("Wake listening is off until you start it.")
+        val modelStatus = label(VoskModelManager.status.value)
+        val serviceStatus = label("Voice state: ${JarvisConversationService.conversationState.value.name}")
         action("Enable background wake listening") {
             requestedTest = false
             val required = mutableListOf(Manifest.permission.RECORD_AUDIO)
@@ -71,7 +73,10 @@ class WakeWordActivity : DirectiveActivity() {
         action("Download / retry official offline model") { com.jarvis.assistant.audio.wake.ModelDownloadWorker.enqueue(applicationContext) }
         action("Cancel model download") { androidx.work.WorkManager.getInstance(applicationContext).cancelUniqueWork(com.jarvis.assistant.audio.wake.ModelDownloadWorker.WORK_NAME) }
         androidx.work.WorkManager.getInstance(applicationContext).getWorkInfosForUniqueWorkLiveData(com.jarvis.assistant.audio.wake.ModelDownloadWorker.WORK_NAME).observe(this) { jobs ->
-            val job=jobs.firstOrNull { !it.state.isFinished } ?: jobs.firstOrNull()
+            val tracking=getSharedPreferences("offline_wake",MODE_PRIVATE)
+            val active=jobs.firstOrNull { !it.state.isFinished }
+            if(active!=null) tracking.edit().putString("download_id",active.id.toString()).apply()
+            val job=active ?: jobs.firstOrNull { it.id.toString()==tracking.getString("download_id",null) }
             if(job!=null) {
                 val data=if(job.state.isFinished) job.outputData else job.progress
                 val percent=data.getInt("percent",-1)
@@ -80,7 +85,8 @@ class WakeWordActivity : DirectiveActivity() {
         }
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) {
             launch { com.jarvis.assistant.audio.wake.WakeDiagnostics.status.collect { status.text = it } }
-            launch { JarvisConversationService.conversationState.collect { status.text = "Voice state: ${it.name}\n${VoskModelManager.status.value}" } }
+            launch { VoskModelManager.status.collect { modelStatus.text = it } }
+            launch { JarvisConversationService.conversationState.collect { serviceStatus.text = "Voice state: ${it.name}" } }
         } }
     }
     override fun onSaveInstanceState(outState: Bundle) { outState.putBoolean("test_requested",requestedTest); super.onSaveInstanceState(outState) }
