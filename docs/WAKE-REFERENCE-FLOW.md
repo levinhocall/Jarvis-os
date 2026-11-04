@@ -27,14 +27,14 @@ Real speech accuracy, OEM background/pocket restrictions, and the complete offic
 
 ## Verified delivery
 
-Source commit: `d20d33345fd1ed73fe968e59c8185bd38fa79aeb` (pushed to main).
+Source commit: `4fad7a8ba9f37752ab25d0170777479c7f52a6a7` (pushed to main).
 
 - Local unit tests: 426 tests, 0 failures/errors, 1 environment-dependent skip.
-- Local lint: 0 errors, 1,258 warnings; Android instrumentation Kotlin compilation passed.
-- [Android 16 runtime CI](https://github.com/levinhocall/Jarvis-os/actions/runs/41860003480): 22 tests, 0 failures/errors/skips. Both saved-name phrase-preview and real microphone service start/stop indicator assertions passed.
-- [APK CI](https://github.com/levinhocall/Jarvis-os/actions/runs/41860003484): tests, migrations, lint, assembly and release publication passed.
-- [Download JARVIS 1.9.2 (146)](https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-302/app-debug.apk): actual published file downloaded; checksum and APK signature verified. Package `com.jarvis.assistant`, target SDK 36.
-- APK SHA-256: `4fe34fe51d9d43cff3c7e878a82a6a7e2a076cec59364a2cf98e9b4c9f7974df`. Size: 167,670,568 bytes.
-- Debug certificate SHA-256: `cd65d637c27aa09c9f7872bd5b47f00a1ceee9f7a835c56a47735ea2e5ab3fce`. It differs from previous CI builds. Do not uninstall an existing installation without a verified memory backup.
+- Local lint: 0 errors, 1,260 warnings; Android instrumentation Kotlin compilation passed.
+- [Android 16 runtime CI](https://github.com/levinhocall/Jarvis-os/actions/runs/41898423395): 22 tests, 0 failures/errors/skips. The fixed light layout structure, saved-name phrase preview, and real microphone service start/stop indicator assertions passed.
+- [APK CI](https://github.com/levinhocall/Jarvis-os/actions/runs/41898423489): tests, migrations, lint, assembly and release publication passed.
+- [Download JARVIS 1.9.3 (147)](https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-303/app-debug.apk): actual published file downloaded; checksum and APK signature verified. Package `com.jarvis.assistant`, target SDK 36.
+- APK SHA-256: `eab39262b5b4f7c408b1e57c1e6a70dfb54f00ac616a6d28d84bdba229ea32e9`. Size: 167,670,568 bytes.
+- Debug certificate SHA-256: `727f0e54c778fd8f6b5d701c9f8b29962a3c7d489ae3cf932432a9ad9d39e7d3`. It differs from previous CI builds. Do not uninstall an existing installation without a verified memory backup.
 
 Open Aura → Offline Wake Word. Save the name, confirm the generated phrase examples, run Test microphone, then enable Background wake listening. Pocket listening and silent transitions are explicit options. Physical acoustic/pocket accuracy and the full external model-download path remain unverified.
