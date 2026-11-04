@@ -2221,7 +2221,7 @@ class JarvisConversationService : Service() {
                     }
                 }
 
-                Log.i("JarvisService", "Handling native toolCall: $name with args: $args")
+                Log.i("JarvisService", "Handling native toolCall: $name")
                 val result = JSONObject()
 
                 when (name) {
