@@ -38,7 +38,7 @@ abstract class DirectiveActivity : AppCompatActivity() {
     }
     protected fun action(title: String, listener: (MaterialButton) -> Unit): MaterialButton = MaterialButton(this).apply {
         text = title; isAllCaps = false; minHeight = dp(48)
-        setOnClickListener { listener(this) }; page.addView(this, LinearLayout.LayoutParams(-1, -2))
+        setOnClickListener { if (com.jarvis.assistant.JarvisApp.instance.preferences.hapticFeedbackEnabled) performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK); listener(this) }; page.addView(this, LinearLayout.LayoutParams(-1, -2))
     }
     protected fun <T> options(items: List<T>, selected: T, label: (T) -> String = { it.toString() }, change: (T) -> Unit): Spinner = Spinner(this).apply {
         adapter = ArrayAdapter(this@DirectiveActivity, android.R.layout.simple_spinner_dropdown_item, items.map(label))

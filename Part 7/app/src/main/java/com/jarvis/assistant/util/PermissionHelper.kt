@@ -113,7 +113,14 @@ object PermissionHelper {
     }
 
     fun openAccessibilitySettings(context: Context) {
-        val targetComponent = android.content.ComponentName(context, JarvisAccessibilityService::class.java).flattenToString()
+        val component = android.content.ComponentName(context, JarvisAccessibilityService::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                context.startActivity(Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS").putExtra("android.provider.extra.EXTRA_ACCESSIBILITY_COMPONENT_NAME", component).putExtra("android.intent.extra.COMPONENT_NAME", component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) { /* OEM fallback below */ }
+        }
+        val targetComponent = component.flattenToString()
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             putExtra(":settings:fragment_args_key", targetComponent)
@@ -300,7 +307,7 @@ object PermissionHelper {
             val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
                 .setTitle("Security Authorization Required")
                 .setMessage(
-                    "Android 13/14 requires a 2-step approval for sideloaded automation apps:\n\n" +
+                    "Android 13–16 may require extra approval for sideloaded automation apps:\n\n" +
                     "Step 1: Tap '1. Trigger In Settings' → Find JARVIS → Tap it (system will show 'Restricted setting').\n\n" +
                     "Step 2: Tap '2. Unlock App Info' → Tap 3 dots (⋮) top-right (or scroll to bottom on Xiaomi/Vivo) → Select 'Allow restricted settings' and confirm PIN.\n\n" +
                     "Step 3: Return to Accessibility Settings and toggle JARVIS ON."

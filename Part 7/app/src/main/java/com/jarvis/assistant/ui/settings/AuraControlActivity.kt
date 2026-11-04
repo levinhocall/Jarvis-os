@@ -73,7 +73,7 @@ class AuraControlActivity : AppCompatActivity() {
             setPadding(0, 0, 0, dp(12))
             setTextColor(color(R.attr.themeTextPrimary))
         }
-        root.addView(selected)
+        root.addView(selected, 1)
         listOf(
             "classic" to "Classic Orb",
             "aura" to "Aura Orb",
@@ -98,7 +98,19 @@ class AuraControlActivity : AppCompatActivity() {
             it.text = if (preferences.hapticFeedbackEnabled) "Haptic feedback: ON" else "Haptic feedback: OFF"
             if (preferences.hapticFeedbackEnabled) it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
         })
-        setContentView(android.widget.ScrollView(this).apply { addView(root) })
+        com.jarvis.assistant.ui.aura.AuraControls.add(this, root)
+        val scroll = android.widget.ScrollView(this).apply { addView(root) }
+        setContentView(scroll)
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+            val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets
+        }
+        selected.setPadding(dp(16),dp(18),dp(16),dp(18))
+        selected.contentDescription = "Active orb style. Tap to switch."
+        selected.setOnClickListener {
+            val values = arrayOf("classic", "aura", "midnight", "crimson")
+            MaterialAlertDialogBuilder(this).setTitle("Quick orb switch").setItems(values) { _, index -> preferences.orbPreset = values[index]; renderSelection() }.show()
+        }
         renderSelection()
     }
 

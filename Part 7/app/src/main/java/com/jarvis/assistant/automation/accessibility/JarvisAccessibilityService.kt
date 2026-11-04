@@ -1241,6 +1241,7 @@ class JarvisAccessibilityService : AccessibilityService() {
                     .build()
                 val callback = createGestureCallback("longPressAt($x, $y)")
                 val dispatched = dispatchGesture(gesture, callback, null)
+                if (dispatched) com.jarvis.assistant.ui.aura.TapIndicator.show(this, x, y)
                 if (!dispatched) {
                     consecutiveGestureFailures++
                     AccessibilityHealthModel.recordActionFailure("longPressAt", "Long-press dispatch rejected at ($x, $y)")
@@ -1277,6 +1278,8 @@ class JarvisAccessibilityService : AccessibilityService() {
             // Prefer semantic actions. Walk only a small parent chain to avoid clicking
             // a broad container unrelated to the selected element.
             if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                val tapBounds = Rect(); node.getBoundsInScreen(tapBounds)
+                com.jarvis.assistant.ui.aura.TapIndicator.show(this, tapBounds.exactCenterX(), tapBounds.exactCenterY())
                 Log.d(TAG, "Programmatic ACTION_CLICK succeeded on node")
                 return true
             }
@@ -1332,6 +1335,7 @@ class JarvisAccessibilityService : AccessibilityService() {
                     .build()
                 val callback = createGestureCallback("clickAt($x, $y)")
                 val dispatched = dispatchGesture(gesture, callback, null)
+                if (dispatched) com.jarvis.assistant.ui.aura.TapIndicator.show(this, x, y)
                 if (!dispatched) {
                     consecutiveGestureFailures++
                     Log.w(TAG, "dispatchGesture returned false for clickAt($x, $y)")

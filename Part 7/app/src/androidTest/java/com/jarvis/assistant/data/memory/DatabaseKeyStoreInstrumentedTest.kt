@@ -15,7 +15,7 @@ import java.util.UUID
 class DatabaseKeyStoreInstrumentedTest {
     @Test
     fun keystoreWrapsAndUnwrapsPassphraseAndRejectsTampering() {
-        val context = InstrumentationRegistry.getInstrumentation().context
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val alias = "jarvis_test_${UUID.randomUUID().toString().replace("-", "")}"
         val keyStore = DatabaseKeyStore(context, alias)
         val keyFile = File(context.noBackupFilesDir, "$alias.bin")

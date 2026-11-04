@@ -28,9 +28,10 @@ import android.os.Looper
         MemorySyncStateEntity::class,
         IdeaEntity::class,
         LearningProfileEntity::class,
-        LearningAttemptEntity::class
+        LearningAttemptEntity::class,
+        AutonomyDecisionEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class MemoryDatabase : RoomDatabase() {
@@ -159,6 +160,12 @@ abstract class MemoryDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_attempts_createdAt ON learning_attempts(createdAt)")
             }
         }
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS autonomy_decisions (id TEXT NOT NULL PRIMARY KEY, createdAt INTEGER NOT NULL, reason TEXT NOT NULL, action TEXT NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_autonomy_decisions_createdAt ON autonomy_decisions(createdAt)")
+            }
+        }
         @Volatile
         private var instance: MemoryDatabase? = null
 
@@ -261,7 +268,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .openHelperFactory(DeferredSqlCipherOpenHelperFactory(context.applicationContext))
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()

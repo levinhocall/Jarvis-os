@@ -38,7 +38,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class JarvisApp : Application() {
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + com.jarvis.assistant.core.diagnostics.StorageHealth.handler)
     private var batteryLowReceiver: BroadcastReceiver? = null
 
     lateinit var preferences: AppPreferences
@@ -90,6 +90,7 @@ class JarvisApp : Application() {
         preferences = AppPreferences(this)
         com.jarvis.assistant.util.ThemeManager.applyNightPreference(preferences.appTheme)
         com.jarvis.assistant.data.directives.IdeaReviewWorker.schedule(this, preferences.ideasCloudReviewEnabled)
+        com.jarvis.assistant.ui.aura.AutonomyWorker.schedule(this)
         chatRepository = ChatRepository(preferences)
         triggerRepository = TriggerRepository(this)
         registerBatteryLowReceiver()
@@ -144,7 +145,7 @@ class JarvisApp : Application() {
         }
 
         // Cloud memory sync is intentionally not scheduled. Memory remains on this device.
-        VoskModelManager.init(this, CoroutineScope(Dispatchers.Default))
+        // Load Vosk on explicit voice/wake activation, not on every application launch.
         com.jarvis.assistant.audio.HeadsetWhisperManager.init(this, appScope)
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

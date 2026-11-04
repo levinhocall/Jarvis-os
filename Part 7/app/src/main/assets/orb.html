@@ -73,7 +73,7 @@ if (isEmbedded) {
   document.body.style.background = "transparent";
 }
 
-const FOV=45, VIS=3.1, ORBIT=36, COUNT=6000;
+const FOV=45, VIS=3.1, ORBIT=36, COUNT=4200;
 const STATES={
   idle:     {scale:1.00,speed:.35,cyan:.35,purple:.45,bright:1.00,glow:.50,ring:.15,wob:0},
   listening:{scale:1.05,speed:.85,cyan:1.00,purple:.25,bright:1.12,glow:.95,ring:.35,wob:0},
@@ -85,8 +85,8 @@ const $=s=>document.querySelector(s);
 const stage=$("#stage"),canvas=$("#c"),shadowEl=$("#shadow");
 
 let renderer;
-try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:"high-performance"});}
-catch(e){$("#err").style.display="block";stage.style.display="none";return;}
+try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:"default"});}
+catch(e){stage.textContent="JARVIS · Voice ready";stage.style.color="#71dbff";return;}
 renderer.setClearColor(0x000000,0);
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(FOV,1,.1,50);
@@ -338,6 +338,7 @@ function updateOrb(dt){
   glowMat.uniforms.uStrength.value=cur.glow+audio.level*.6+idlePulse*2;
   const pulse=cur.ring*.5*(.5+.5*Math.sin(time*4))+audio.bass*.8;
   ring1.rotation.z=r1a;ring2.rotation.z=r2a;
+  ring1.rotation.x=.72+.10*Math.sin(time*.18); ring2.rotation.y=.55+.12*Math.cos(time*.21);
   ring1.scale.setScalar(s*(1+pulse*.03));ring2.scale.setScalar(s*(1+pulse*.02));
   ring1.material.uniforms.uAlpha.value=.4+cur.ring*.3+audio.level*.35;
   ring2.material.uniforms.uAlpha.value=.22+cur.ring*.2+audio.level*.2;
@@ -357,7 +358,7 @@ function updateParticles(dt){
 
 /* ---------- Resize / loop ---------- */
 function handleResize(){
-  const w=Math.max(stage.clientWidth,1),h=Math.max(stage.clientHeight,1),pr=Math.min(window.devicePixelRatio,2);
+  const w=Math.max(stage.clientWidth,1),h=Math.max(stage.clientHeight,1),pr=Math.min(window.devicePixelRatio,1.5);
   renderer.setPixelRatio(pr);renderer.setSize(w,h,false);
   camera.aspect=w/h;
   const visH=VIS/Math.min(1,w/h),tan=Math.tan(THREE.MathUtils.degToRad(FOV/2));
@@ -368,6 +369,7 @@ function handleResize(){
 let last=performance.now();
 function animate(now){
   requestAnimationFrame(animate);
+  if(document.hidden || now-last<32) return;
   const dt=Math.min((now-last)/1000,.05);last=now;
   updateOrb(dt);updateParticles(dt);renderer.render(scene,camera);
 }

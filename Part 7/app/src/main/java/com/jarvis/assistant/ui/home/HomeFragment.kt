@@ -70,15 +70,17 @@ class HomeFragment : Fragment() {
                 (resources.displayMetrics.heightPixels * 0.88f).toInt().coerceAtLeast((660 * resources.displayMetrics.density).toInt())))
             addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(requireContext()))
         }
-        return androidx.core.widget.NestedScrollView(requireContext()).apply {
+        val scrollingDeck = androidx.core.widget.NestedScrollView(requireContext()).apply {
             isFillViewport = true
             com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(this)
             addView(deck)
         }
+        return com.jarvis.assistant.ui.wallpaper.InAppWallpaper(requireContext(), scrollingDeck, listOf(scrollingDeck, binding.root))
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        (view as? com.jarvis.assistant.ui.wallpaper.InAppWallpaper)?.let { viewLifecycleOwner.lifecycle.addObserver(it) }
         com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
         createTaskFallbackPanel()
 

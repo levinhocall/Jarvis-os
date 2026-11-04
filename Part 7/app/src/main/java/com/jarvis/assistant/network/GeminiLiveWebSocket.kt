@@ -325,6 +325,18 @@ class GeminiLiveWebSocket(
                 })
                 put("tools", JSONArray().put(JSONObject().apply {
                     put("functionDeclarations", JSONArray().apply {
+                        listOf(
+                            Triple("background_search", "Search the web without opening a browser. Requires the user's Aura Background Web Search toggle. Return retrieved sources.", "query"),
+                            Triple("generate_image", "Generate an image with Gemini and save it to the phone gallery. Requires Gemini Images enabled. Never claim saved until tool succeeds.", "prompt"),
+                            Triple("delegate_ui_task", "Delegate a long user-requested UI task to a separate bounded mission while continuing conversation. Requires Background Agent enabled. Accepted is not completed.", "goal")
+                        ).forEach { (toolName, description, parameter) ->
+                            put(JSONObject().put("name", toolName).put("description", description).put("parameters", JSONObject()
+                                .put("type", "OBJECT").put("properties", JSONObject().put(parameter, JSONObject().put("type", "STRING")))
+                                .put("required", JSONArray().put(parameter))))
+                        }
+                        put(JSONObject().put("name", "share_generated_image").put("description", "Only when the user asks, open WhatsApp's contact picker for the last generated image. User confirms Send; opening is not delivery.")
+                            .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))
+
                         // 1. open_app
                         put(JSONObject().apply {
                             put("name", "open_app")

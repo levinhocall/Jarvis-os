@@ -51,7 +51,7 @@ jobs:
           exit 1
       - name: Execute encryption and reported-screen runtime tests
         working-directory: 'Part 7'
-        run: ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.jarvis.assistant.ui.LaunchSmokeInstrumentedTest,com.jarvis.assistant.data.memory.SqlCipherRuntimeInstrumentedTest,com.jarvis.assistant.data.memory.DatabaseKeyStoreInstrumentedTest
+        run: ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Runtime diagnostics
         if: always()
         run: |

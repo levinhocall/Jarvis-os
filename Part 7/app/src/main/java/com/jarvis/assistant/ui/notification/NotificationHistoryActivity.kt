@@ -25,6 +25,10 @@ import kotlinx.coroutines.withContext
 
 /** User-controlled, encrypted notification history. Persistence is opt-in and disabled by default. */
 class NotificationHistoryActivity : AppCompatActivity() {
+    private val storageErrors = kotlinx.coroutines.CoroutineExceptionHandler { _, error ->
+        val message = com.jarvis.assistant.core.diagnostics.StorageHealth.record(error)
+        runOnUiThread { if (::status.isInitialized) status.text = message }
+    }
     private lateinit var content: RecyclerView
     private val notificationAdapter = NotificationAdapter()
     private val query = MutableStateFlow("")
@@ -70,7 +74,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
                         .setPositiveButton("Disable and clear") { _, _ ->
                             prefs.notificationHistoryEnabled = false
                             historyJob?.cancel()
-                            lifecycleScope.launch(Dispatchers.IO) {
+                            lifecycleScope.launch(Dispatchers.IO + storageErrors) {
                                 MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().clearAll()
                                 withContext(Dispatchers.Main) { renderEmpty("History is off. No notification text is being saved.") }
                             }
@@ -84,12 +88,12 @@ class NotificationHistoryActivity : AppCompatActivity() {
             setTextColor(resolveColor(com.jarvis.assistant.R.attr.themeTextMuted))
         }
         root.addView(status)
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val actions = android.widget.GridLayout(this).apply { columnCount = 2 }
         actions.addView(Button(this).apply { text = "All"; setOnClickListener { showUnreadOnly = false; observeHistory() } })
         actions.addView(Button(this).apply { text = "Unread"; setOnClickListener { showUnreadOnly = true; observeHistory() } })
         actions.addView(Button(this).apply {
             text = "Mark all read"
-            setOnClickListener { lifecycleScope.launch(Dispatchers.IO) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().markAllRead() } }
+            setOnClickListener { lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().markAllRead() } }
         })
         actions.addView(Button(this).apply {
             text = "Clear"
@@ -99,10 +103,16 @@ class NotificationHistoryActivity : AppCompatActivity() {
                     .setMessage("This cannot be undone.")
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Clear") { _, _ ->
-                        lifecycleScope.launch(Dispatchers.IO) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().clearAll() }
+                        lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().clearAll() }
                     }.show()
             }
         })
+        for (i in 0 until actions.childCount) {
+            actions.getChildAt(i).layoutParams = android.widget.GridLayout.LayoutParams().apply {
+                width = 0; height = -2; columnSpec = android.widget.GridLayout.spec(i % 2, 1f)
+                rowSpec = android.widget.GridLayout.spec(i / 2)
+            }
+        }
         root.addView(actions)
         root.addView(Button(this).apply {
             text = "Notification access settings"
@@ -118,8 +128,13 @@ class NotificationHistoryActivity : AppCompatActivity() {
             })
         })
         content = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@NotificationHistoryActivity); adapter = notificationAdapter }
-        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
+        root.addView(content, LinearLayout.LayoutParams(-1, dp(380)))
+        val scroll = ScrollView(this).apply { isFillViewport = true; addView(root) }
+        setContentView(scroll)
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+            val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets
+        }
         observeHistory()
     }
 
@@ -129,7 +144,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
             renderEmpty("History is off. Enable the switch above to save future notifications.")
             return
         }
-        historyJob = lifecycleScope.launch {
+        historyJob = lifecycleScope.launch(storageErrors) {
             val dao = withContext(Dispatchers.IO) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao() }
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 val stream = if (showUnreadOnly) dao.observeUnread() else dao.observeRecent()
@@ -149,7 +164,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
         }
         notificationAdapter.submitList(audited.first)
         for (item in audited.second) {
-            if (pendingCredentialCleanup.add(item.id)) lifecycleScope.launch(Dispatchers.IO) {
+            if (pendingCredentialCleanup.add(item.id)) lifecycleScope.launch(Dispatchers.IO + storageErrors) {
                 try { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().delete(item.id) }
                 finally { withContext(Dispatchers.Main) { pendingCredentialCleanup.remove(item.id) } }
             }
@@ -171,7 +186,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
         fun bind(item: NotificationHistoryEntity) {
             val time = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(item.timestamp))
             text.text = "${if (item.isRead) "✓" else "●"} ${item.sender.ifBlank { item.packageName }}\n${item.message}\n$time · ${item.packageName}"
-            text.setOnClickListener { lifecycleScope.launch(Dispatchers.IO) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().markRead(item.id) } }
+            text.setOnClickListener { lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().markRead(item.id) } }
         }
     }
 

@@ -1101,6 +1101,11 @@ object MissionEngine {
     /**
      * Cancels an active mission cleanly.
      */
+    fun requestUserCancellation() {
+        val id = _activeMission.value?.missionId ?: return
+        engineScope.launch { cancelMission(id) }
+    }
+
     suspend fun cancelMission(missionId: String, reason: String = "User requested cancellation") = mutex.withLock {
         val current = _activeMission.value ?: return@withLock
         if (current.missionId != missionId || current.isFinished) return@withLock
@@ -1863,6 +1868,13 @@ object MissionEngine {
 
             "search_web" -> {
                 val query = step.parameters["query"] as? String ?: ""
+                if (com.jarvis.assistant.ui.aura.AuraOptions.enabled("backgroundSearch")) {
+                    val answer = com.jarvis.assistant.ui.aura.AuraCloudClient.search(query)
+                    return Pair(true, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, true, answer))
+                }
+                if (_activeMission.value?.userConstraints?.let { MissionRoutePolicy.route(it) } == MissionExecutionRoute.CORE_LLM) {
+                    return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Enable Background Web Search in Aura. Core LLM route will not launch a browser."))
+                }
                 if (app == null || query.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Browser unavailable or query missing."))
                 val output = app.commandExecutor.execute(JarvisCommand.SearchWeb(query))
                 val launched = output.startsWith("Opening ", ignoreCase = true)

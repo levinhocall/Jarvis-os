@@ -76,7 +76,7 @@ class AppPreferences internal constructor(
         private const val KEY_TASK_OVERLAY_X = "key_task_overlay_x"
         private const val KEY_TASK_OVERLAY_Y = "key_task_overlay_y"
         private val ALLOWED_TASK_OVERLAY_AVATARS = setOf(
-            "alien", "blob", "cat", "circle", "cloud", "droid", "drop", "flower",
+            "alien", "blob", "bot", "cat", "circle", "cloud", "clover", "droid", "drop", "flower",
             "ghost", "hexagon", "mech", "pebble", "pill", "puddle", "square", "star", "triangle"
         )
         private const val KEY_APP_THEME = "key_app_theme"

@@ -2,113 +2,72 @@ package com.jarvis.assistant.audio
 
 import android.content.Context
 import android.content.res.AssetManager
-import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import org.vosk.Model
 import org.vosk.SpeakerModel
 import java.io.File
-import java.io.FileOutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
+/** Bundled offline model, unpacked atomically and loaded only for explicit audio features. */
 object VoskModelManager {
-    private const val TAG = "VoskModelManager"
+    private val ready = MutableStateFlow(false)
+    val isModelReady = ready.asStateFlow()
+    private val speakerReady = MutableStateFlow(false)
+    val isSpeakerModelReady = speakerReady.asStateFlow()
+    private val state = MutableStateFlow("Bundled offline model · not loaded")
+    val status = state.asStateFlow()
+    @Volatile var model: Model? = null; private set
+    @Volatile var speakerModel: SpeakerModel? = null; private set
+    private val initializing = AtomicBoolean(false)
 
-    private val _isModelReady = MutableStateFlow(false)
-    val isModelReady: StateFlow<Boolean> = _isModelReady.asStateFlow()
-
-    private val _isSpeakerModelReady = MutableStateFlow(false)
-    val isSpeakerModelReady: StateFlow<Boolean> = _isSpeakerModelReady.asStateFlow()
-
-    @Volatile
-    var model: Model? = null
-        private set
-
-    @Volatile
-    var speakerModel: SpeakerModel? = null
-        private set
-
-    private val isInitializing = java.util.concurrent.atomic.AtomicBoolean(false)
-
-    fun init(context: Context, scope: CoroutineScope) {
-        if (model != null && speakerModel != null) return
-        if (!isInitializing.compareAndSet(false, true)) return
-
+    fun init(context: Context, scope: CoroutineScope, includeSpeaker: Boolean = true) {
+        if (model != null && (!includeSpeaker || speakerModel != null)) return
+        if (!initializing.compareAndSet(false, true)) return
         scope.launch(Dispatchers.IO) {
             try {
-                // 1. Unpack & load speech recognition model
-                val targetDir = File(context.filesDir, "vosk-model")
-                val markerFile = File(targetDir, "am/final.mdl")
-
-                if (!markerFile.exists() || markerFile.length() == 0L) {
-                    Log.i(TAG, "Unpacking Vosk model to internal storage: ${targetDir.absolutePath}")
-                    targetDir.deleteRecursively()
-                    targetDir.mkdirs()
-                    copyAssetFolder(context.assets, "model-en-us", targetDir)
-                    Log.i(TAG, "Vosk model unpacked successfully.")
-                } else {
-                    Log.i(TAG, "Vosk model already unpacked at: ${targetDir.absolutePath}")
+                if (model == null) {
+                    state.value = "Preparing bundled offline speech model…"
+                    val folder = unpack(context, "model-en-us", "vosk-model", listOf("am/final.mdl", "conf/model.conf", "graph/HCLr.fst", "graph/Gr.fst"))
+                    model = Model(folder.absolutePath)
+                    ready.value = true
                 }
-
-                val loadedModel = Model(targetDir.absolutePath)
-                model = loadedModel
-                _isModelReady.value = true
-                Log.i(TAG, "Vosk Model ready in memory!")
-
-                // 2. Unpack & load speaker recognition model (x-vector extractor)
-                try {
-                    val spkTargetDir = File(context.filesDir, "vosk-spk-model")
-                    val spkMarkerFile = File(spkTargetDir, "final.ext.raw")
-
-                    if (!spkMarkerFile.exists() || spkMarkerFile.length() == 0L) {
-                        Log.i(TAG, "Unpacking Vosk Speaker model to: ${spkTargetDir.absolutePath}")
-                        spkTargetDir.deleteRecursively()
-                        spkTargetDir.mkdirs()
-                        copyAssetFolder(context.assets, "model-spk", spkTargetDir)
-                        Log.i(TAG, "Vosk Speaker model unpacked successfully.")
-                    } else {
-                        Log.i(TAG, "Vosk Speaker model already unpacked at: ${spkTargetDir.absolutePath}")
-                    }
-
-                    val loadedSpk = SpeakerModel(spkTargetDir.absolutePath)
-                    speakerModel = loadedSpk
-                    _isSpeakerModelReady.value = true
-                    Log.i(TAG, "Vosk SpeakerModel ready in memory!")
-                } catch (e: Throwable) {
-                    Log.e(TAG, "Failed to load Vosk SpeakerModel: ${e.message}", e)
+                if (includeSpeaker && speakerModel == null) {
+                    val folder = unpack(context, "model-spk", "vosk-spk-model", listOf("final.ext.raw"))
+                    speakerModel = SpeakerModel(folder.absolutePath)
+                    speakerReady.value = true
                 }
-
-                isInitializing.set(false)
-            } catch (e: Throwable) {
-                isInitializing.set(false)
-                Log.e(TAG, "FATAL: Failed to load Vosk model: ${e.message}", e)
-            }
+                state.value = "Offline Vosk model ready"
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { state.value = "Offline model could not load (${error.javaClass.simpleName}). Retry from Wake Word." }
+            catch (_: OutOfMemoryError) { state.value = "Not enough free memory for offline speech. Close other apps and retry." }
+            catch (error: LinkageError) { state.value = "Offline speech native library unavailable on this device (${error.javaClass.simpleName})." }
+            finally { initializing.set(false) }
         }
     }
-
-    private fun copyAssetFolder(assetManager: AssetManager, fromAssetPath: String, toDir: File) {
-        val list = assetManager.list(fromAssetPath)
-        if (list.isNullOrEmpty()) {
-            try {
-                assetManager.open(fromAssetPath).use { input ->
-                    toDir.parentFile?.mkdirs()
-                    FileOutputStream(toDir).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not copy asset $fromAssetPath: ${e.message}")
-            }
+    private fun unpack(context: Context, asset: String, name: String, required: List<String>): File {
+        val target = File(context.filesDir, name)
+        if (File(target, ".jarvis-complete").isFile && required.all { File(target, it).let { f -> f.isFile && f.length() > 0 } }) return target
+        val staging = File(context.filesDir, "$name.staging")
+        staging.deleteRecursively(); check(staging.mkdirs())
+        try {
+            copy(context.assets, asset, staging)
+            check(required.all { File(staging, it).length() > 0 }) { "Incomplete model assets" }
+            File(staging, ".jarvis-complete").writeText("bundled-v1")
+            check(!target.exists() || target.deleteRecursively())
+            check(staging.renameTo(target)) { "Model installation could not complete" }
+            return target
+        } finally { staging.deleteRecursively() }
+    }
+    private fun copy(assets: AssetManager, path: String, target: File) {
+        val children = assets.list(path).orEmpty()
+        if (children.isEmpty()) {
+            target.parentFile?.mkdirs()
+            assets.open(path).use { input -> target.outputStream().use { input.copyTo(it) } }
         } else {
-            toDir.mkdirs()
-            for (item in list) {
-                val childAsset = if (fromAssetPath.isEmpty()) item else "$fromAssetPath/$item"
-                val childTarget = File(toDir, item)
-                copyAssetFolder(assetManager, childAsset, childTarget)
-            }
+            target.mkdirs()
+            children.forEach { copy(assets, "$path/$it", File(target, it)) }
         }
     }
 }

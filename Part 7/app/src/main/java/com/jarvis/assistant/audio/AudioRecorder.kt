@@ -101,7 +101,7 @@ class AudioRecorder(
             }
 
             val sessionId = record.audioSessionId
-            if (AcousticEchoCanceler.isAvailable()) {
+            if (AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
                 try {
                     echoCanceler = AcousticEchoCanceler.create(sessionId)?.apply {
                         enabled = true
@@ -112,7 +112,7 @@ class AudioRecorder(
                 }
             }
 
-            if (NoiseSuppressor.isAvailable()) {
+            if (NoiseSuppressor.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
                 try {
                     noiseSuppressor = NoiseSuppressor.create(sessionId)?.apply {
                         enabled = true
@@ -223,14 +223,14 @@ class AudioRecorder(
                             }
 
                             val newSessionId = candidate.audioSessionId
-                            if (AcousticEchoCanceler.isAvailable()) {
+                            if (AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
                                 try {
                                     echoCanceler = AcousticEchoCanceler.create(newSessionId)?.apply { enabled = true }
                                 } catch (e: Exception) {
                                     Log.w(TAG, "AEC rebind failed: ${e.message}")
                                 }
                             }
-                            if (NoiseSuppressor.isAvailable()) {
+                            if (NoiseSuppressor.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
                                 try {
                                     noiseSuppressor = NoiseSuppressor.create(newSessionId)?.apply { enabled = true }
                                 } catch (e: Exception) {

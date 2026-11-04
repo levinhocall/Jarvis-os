@@ -13,7 +13,8 @@ internal data class CouncilHttpResponse(val code: Int, val body: String) {
 }
 
 /** Cancellation aborts the network exchange, including body reads, before a worker is released. */
-internal suspend fun Call.awaitCouncilResponse(): CouncilHttpResponse = suspendCancellableCoroutine { continuation ->
+internal suspend fun Call.awaitCouncilResponse(maxBytes: Long = 128 * 1024L): CouncilHttpResponse = suspendCancellableCoroutine { continuation ->
+    require(maxBytes in 1..16*1024*1024L)
     continuation.invokeOnCancellation { cancel() }
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
@@ -26,8 +27,8 @@ internal suspend fun Call.awaitCouncilResponse(): CouncilHttpResponse = suspendC
                     val source = it.body?.source()
                     // Reviewer output is small; reject unbounded proxy/provider bodies.
                     if (source != null) {
-                        source.request(128 * 1024L + 1)
-                        if (source.buffer.size > 128 * 1024L) throw IOException("Council response exceeds limit")
+                        source.request(maxBytes + 1)
+                        if (source.buffer.size > maxBytes) throw IOException("Council response exceeds limit")
                     }
                     CouncilHttpResponse(it.code, source?.readUtf8().orEmpty())
                 }

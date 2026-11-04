@@ -70,7 +70,7 @@ class TaskProgressOverlay(private val context: Context) {
         setBackgroundColor(Color.TRANSPARENT)
         // Keep the existing avatar visuals while making the floating control
         // discoverable to Android accessibility services.
-        contentDescription = "Floating JARVIS avatar. Drag to move; double-tap to switch between avatar and task status."
+        contentDescription = "Floating JARVIS avatar. Drag to move; double-tap to stop the active task."
         settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -130,7 +130,7 @@ class TaskProgressOverlay(private val context: Context) {
         pill.addView(progress, LinearLayout.LayoutParams(-1, dp(3)).apply { topMargin = dp(4); bottomMargin = dp(1) })
         pill.addView(progressText, matchWrap())
         root.addView(pill, FrameLayout.LayoutParams(-1, -2))
-        root.addView(avatar, FrameLayout.LayoutParams(dp(88), dp(88), Gravity.CENTER))
+        root.addView(avatar, FrameLayout.LayoutParams(dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize), dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize), Gravity.CENTER))
         root.addView(statusPill, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(2) })
         pill.isClickable = true
         pill.setOnTouchListener { _, event -> handleOverlayTouch(event) }
@@ -158,11 +158,15 @@ class TaskProgressOverlay(private val context: Context) {
             remove()
             return true
         }
-        val selectedAvatar = preferences.taskOverlayAvatar
+        val shape = preferences.taskOverlayAvatar
+        val style = com.jarvis.assistant.ui.aura.AuraOptions.avatarStyle
+        val selectedAvatar = "$shape:$style"
         if (selectedAvatar != loadedAvatar) {
             loadedAvatar = selectedAvatar
-            avatar.loadUrl("https://appassets.androidplatform.net/assets/overlay-toys/$selectedAvatar.html")
+            avatar.loadUrl(if (style == "plain" && shape !in setOf("bot", "clover")) "https://appassets.androidplatform.net/assets/overlay-toys/$shape.html" else "https://appassets.androidplatform.net/assets/avatar-studio.html?shape=$shape&style=$style")
         }
+        val avatarPixels = dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize)
+        avatar.layoutParams = FrameLayout.LayoutParams(avatarPixels, avatarPixels, Gravity.CENTER)
         val nextTaskId = snapshot?.taskId
         if (displayedTaskId != nextTaskId) {
             displayedTaskId = nextTaskId
@@ -324,7 +328,8 @@ class TaskProgressOverlay(private val context: Context) {
                 val now = android.os.SystemClock.uptimeMillis()
                 if (now - lastTapAt <= 360L) {
                     lastTapAt = 0L
-                    toggleAvatarMode()
+                    com.jarvis.assistant.background.JarvisConversationService.cancelActiveTaskFromOverlay()
+                    showStatusPill("Stop requested")
                     return true
                 }
                 lastTapAt = now
@@ -355,8 +360,8 @@ class TaskProgressOverlay(private val context: Context) {
      */
     private fun snapToNearestEdge() {
         val metrics = context.resources.displayMetrics
-        val width = root.width.takeIf { it > 0 } ?: params.width.takeIf { it > 0 } ?: dp(88)
-        val height = root.height.takeIf { it > 0 } ?: params.height.takeIf { it > 0 } ?: dp(88)
+        val width = root.width.takeIf { it > 0 } ?: params.width.takeIf { it > 0 } ?: dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize)
+        val height = root.height.takeIf { it > 0 } ?: params.height.takeIf { it > 0 } ?: dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize)
         val snapped = OverlayDockingPolicy.snap(
             x = params.x,
             y = params.y,
@@ -393,16 +398,16 @@ class TaskProgressOverlay(private val context: Context) {
     private fun applyMode() {
         pill.visibility = if (avatarMode) View.GONE else View.VISIBLE
         avatar.visibility = if (avatarMode) View.VISIBLE else View.GONE
-        params.width = if (avatarMode) dp(88) else minOf(dp(236), context.resources.displayMetrics.widthPixels - dp(16))
-        params.height = if (avatarMode) dp(88) else WindowManager.LayoutParams.WRAP_CONTENT
+        params.width = if (avatarMode) dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize) else minOf(dp(236), context.resources.displayMetrics.widthPixels - dp(16))
+        params.height = if (avatarMode) dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize) else WindowManager.LayoutParams.WRAP_CONTENT
         if (JarvisApp.instance.preferences.taskOverlayFreePosition) clampPosition()
         try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
     }
 
     private fun clampPosition() {
         val metrics = context.resources.displayMetrics
-        val overlayWidth = root.width.takeIf { it > 0 } ?: params.width.takeIf { it > 0 } ?: dp(88)
-        val overlayHeight = root.height.takeIf { it > 0 } ?: params.height.takeIf { it > 0 } ?: dp(88)
+        val overlayWidth = root.width.takeIf { it > 0 } ?: params.width.takeIf { it > 0 } ?: dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize)
+        val overlayHeight = root.height.takeIf { it > 0 } ?: params.height.takeIf { it > 0 } ?: dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize)
         params.gravity = Gravity.TOP or Gravity.LEFT
         params.x = params.x.coerceIn(0, (metrics.widthPixels - overlayWidth).coerceAtLeast(0))
         params.y = params.y.coerceIn(dp(24), (metrics.heightPixels - overlayHeight).coerceAtLeast(dp(24)))

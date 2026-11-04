@@ -68,7 +68,7 @@ class VideoWallpaperActivity : AppCompatActivity() {
             setTextColor(resolveColor(com.jarvis.assistant.R.attr.themeTextMuted))
         })
         videoView = VideoView(this).also { player ->
-            root.addView(player, LinearLayout.LayoutParams(-1, 0, 1f).apply { bottomMargin = dp(14) })
+            root.addView(player, LinearLayout.LayoutParams(-1, dp(320)).apply { bottomMargin = dp(14) })
         }
         status = TextView(this).apply {
             textSize = 12f
@@ -76,6 +76,18 @@ class VideoWallpaperActivity : AppCompatActivity() {
             setPadding(0, 0, 0, dp(12))
         }
         root.addView(status)
+        root.addView(actionButton("Built-in library · 16 original cyberpunk loops") {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this).setTitle("Original animated wallpapers")
+                .setItems(WallpaperCatalog.names.toTypedArray()) { _, index ->
+                    val uri = WallpaperCatalog.uri(this, WallpaperCatalog.names[index])
+                    prefs.edit().putString(KEY_VIDEO_URI, uri.toString()).apply()
+                    bindPreview(uri); status?.text = "Selected ${WallpaperCatalog.names[index]}. Android chooses supported home/lock-screen placement."
+                }.show()
+        })
+        root.addView(androidx.appcompat.widget.SwitchCompat(this).apply {
+            text = "Also show in app (main deck)"; isChecked = prefs.getBoolean("show_in_app", false)
+            setOnCheckedChangeListener { _, value -> prefs.edit().putBoolean("show_in_app",value).apply() }
+        })
         root.addView(actionButton("Choose video") { videoPicker.launch(arrayOf("video/*")) })
         root.addView(actionButton("Preview selected video") {
             val uri = selectedUri()
@@ -83,7 +95,11 @@ class VideoWallpaperActivity : AppCompatActivity() {
         })
         root.addView(actionButton("Apply live wallpaper") { openSystemWallpaperPreview() })
         root.addView(actionButton("Stop preview") { videoView?.stopPlayback() })
-        setContentView(root)
+        val scroll = android.widget.ScrollView(this).apply { addView(root) }
+        setContentView(scroll)
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(scroll) { view,insets ->
+            val bars=insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars()); view.setPadding(bars.left,bars.top,bars.right,bars.bottom); insets
+        }
 
         selectedUri()?.let(::bindPreview) ?: run {
             status?.text = "No video selected. Import a video to begin."

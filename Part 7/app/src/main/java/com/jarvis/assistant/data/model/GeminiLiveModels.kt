@@ -37,7 +37,8 @@ object GeminiConstants {
         "Bhojpuri",
         "Punjabi",
         "Odia",
-        "Urdu"
+        "Urdu", "Assamese", "Maithili", "Kashmiri", "Konkani", "Nepali", "Sindhi", "Sanskrit", "Dogri", "Manipuri", "Santali", "Bodo",
+        "Arabic", "French", "Spanish", "German", "Italian", "Portuguese", "Russian", "Japanese", "Korean", "Mandarin Chinese", "Indonesian", "Malay", "Thai", "Vietnamese", "Filipino", "Turkish", "Persian", "Hebrew", "Greek", "Dutch", "Polish", "Ukrainian", "Romanian", "Czech", "Hungarian", "Swedish", "Danish", "Norwegian", "Finnish", "Swahili", "Zulu", "Afrikaans", "Sinhala", "Burmese", "Khmer", "Lao"
     )
 
     const val DEFAULT_VOICE = "Puck"

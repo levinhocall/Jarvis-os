@@ -17,7 +17,7 @@ class SqlCipherRuntimeInstrumentedTest {
     @Test
     fun encryptedDatabaseReopensWithCorrectKeyAndRejectsWrongKey() {
         System.loadLibrary("sqlcipher")
-        val context = InstrumentationRegistry.getInstrumentation().context
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val file = File(context.cacheDir, "sqlcipher-runtime-${System.nanoTime()}.db")
         val rawKey = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val cipherKey = Base64.encode(rawKey, Base64.NO_WRAP)

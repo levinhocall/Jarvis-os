@@ -2,16 +2,18 @@
 import json
 import re
 import sqlite3
+import sys
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 schemas = root / 'app/schemas/com.jarvis.assistant.data.memory.MemoryDatabase'
-old = json.loads((schemas / '6.json').read_text())['database']
-new = json.loads((schemas / '7.json').read_text())['database']
+start, end = map(int, sys.argv[1:3]) if len(sys.argv) == 3 else (6, 7)
+old = json.loads((schemas / f'{start}.json').read_text())['database']
+new = json.loads((schemas / f'{end}.json').read_text())['database']
 source = (root / 'app/src/main/java/com/jarvis/assistant/data/memory/MemoryDatabase.kt').read_text()
-section = source.split('val MIGRATION_6_7 =', 1)[1].split('@Volatile', 1)[0]
+section = re.split(r'val MIGRATION_|@Volatile', source.split(f'val MIGRATION_{start}_{end} =', 1)[1], maxsplit=1)[0]
 statements = re.findall(r'db\.execSQL\("([^"\n]+)"\)', section)
-assert len(statements) == 5
+assert len(statements) == (5 if start == 6 else 2)
 
 def create(db, schema):
     for entity in schema['entities']:
@@ -39,10 +41,10 @@ for entity in old['entities']:
     before[name] = actual.execute(f'SELECT * FROM "{name}"').fetchall()
 for sql in statements:
     actual.execute(sql)
-assert len(new['entities']) == len(old['entities']) + 3
+assert len(new['entities']) == len(old['entities']) + (3 if start == 6 else 1)
 for entity in new['entities']:
     name = entity['tableName']
     assert shape(actual, name) == shape(expected, name), name
 for name, rows in before.items():
     assert actual.execute(f'SELECT * FROM "{name}"').fetchall() == rows, name
-print(f'PASS: 6->7 schema matches Room export; all {len(before)} existing tables retain seeded rows.')
+print(f'PASS: {start}->{end} schema matches Room export; all {len(before)} existing tables retain seeded rows.')

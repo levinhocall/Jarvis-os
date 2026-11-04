@@ -50,6 +50,13 @@ data class LearningAttemptEntity(
 
 @Dao
 interface DirectiveDao {
+    @Insert suspend fun addDecision(decision: AutonomyDecisionEntity)
+    @Query("SELECT * FROM autonomy_decisions ORDER BY createdAt DESC LIMIT 100")
+    fun observeDecisions(): Flow<List<AutonomyDecisionEntity>>
+    @Query("DELETE FROM autonomy_decisions WHERE id NOT IN (SELECT id FROM autonomy_decisions ORDER BY createdAt DESC LIMIT 500)")
+    suspend fun trimDecisions()
+    @Query("DELETE FROM autonomy_decisions") suspend fun clearDecisions()
+
     @Query("SELECT * FROM ideas ORDER BY updatedAt DESC LIMIT :limit")
     fun observeIdeas(limit: Int = 100): Flow<List<IdeaEntity>>
     @Query("SELECT * FROM ideas WHERE refinement IS NULL ORDER BY updatedAt DESC LIMIT :limit")
@@ -73,3 +80,11 @@ interface DirectiveDao {
     @Query("DELETE FROM learning_attempts")
     suspend fun clearAttempts()
 }
+
+@Entity(tableName = "autonomy_decisions", indices = [Index("createdAt")])
+data class AutonomyDecisionEntity(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val createdAt: Long = System.currentTimeMillis(),
+    val reason: String,
+    val action: String
+)

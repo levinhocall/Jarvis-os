@@ -27,7 +27,7 @@ data class CachedNotification(
 )
 
 class JarvisNotificationListenerService : NotificationListenerService() {
-    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO + com.jarvis.assistant.core.diagnostics.StorageHealth.handler)
 
     companion object {
         private const val TAG = "JarvisNotification"

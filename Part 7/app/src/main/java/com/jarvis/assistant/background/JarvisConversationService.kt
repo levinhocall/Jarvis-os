@@ -49,6 +49,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -255,13 +257,17 @@ class JarvisConversationService : Service() {
         }
 
         fun cancelActiveTaskFromOverlay() {
+            com.jarvis.assistant.automation.mission.MissionEngine.requestUserCancellation()
             val service = activeInstance
             if (service != null) service.cancelAllActiveTools()
             else com.jarvis.assistant.automation.agent.AgentTaskEngine.requestCancellation()
         }
     }
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + kotlinx.coroutines.CoroutineExceptionHandler { _, error ->
+        Log.e("JarvisService", "Background voice operation failed", error)
+        _events.tryEmit("Voice operation failed (${error.javaClass.simpleName}). Open Jarvis to retry; no completion is claimed.")
+    })
     private var taskProgressOverlay: com.jarvis.assistant.ui.agent.TaskProgressOverlay? = null
     private var taskProgressOverlayJob: Job? = null
     private var overlayPermissionWarningTaskId: String? = null
@@ -919,6 +925,7 @@ class JarvisConversationService : Service() {
     }
 
     private fun beginActiveConversation(wakeTriggered: Boolean = false) {
+        VoskModelManager.init(applicationContext, serviceScope, preferences.isOwnerVoiceEnabled)
         if (_isSessionOn.value) return
         if (!microphoneForegroundReady) {
             _liveError.value = JarvisLiveError(
@@ -2150,6 +2157,11 @@ class JarvisConversationService : Service() {
                     "open_app", "open_website", "search_in_chrome",
                     "click_ui_element", "type_text", "scroll_screen", "press_key"
                 )
+                val backgroundMission = com.jarvis.assistant.automation.mission.MissionEngine.activeMission.value
+                if (isAutomationTool && backgroundMission != null && !backgroundMission.isFinished) {
+                    liveWebSocket?.sendToolResponse(callId, name, JSONObject().put("success",false).put("message","A mission owns UI control. Pause or cancel it in Mission Mode before issuing competing UI actions."))
+                    return@withTimeout
+                }
                 if (isAutomationTool && autonomousHardStop) {
                     Log.w("JarvisService", "Automation tool '$name' refused: hard stop is active.")
                     liveWebSocket?.sendToolResponse(callId, name, JSONObject().apply {
@@ -2213,6 +2225,37 @@ class JarvisConversationService : Service() {
                 val result = JSONObject()
 
                 when (name) {
+                    "background_search" -> {
+                        val answer = com.jarvis.assistant.ui.aura.AuraCloudClient.search(args.optString("query"))
+                        result.put("success", true); result.put("answer", answer)
+                    }
+                    "generate_image" -> {
+                        val uri = com.jarvis.assistant.ui.aura.AuraCloudClient.image(applicationContext, args.optString("prompt"))
+                        com.jarvis.assistant.ui.aura.MediaStudioActivity.remember(applicationContext, uri)
+                        result.put("success", true); result.put("message", "Image saved to Pictures/Jarvis. It has not been shared.")
+                    }
+                    "share_generated_image" -> {
+                        val foreground = app.currentResumedActivity
+                        val opened = withContext(Dispatchers.Main) { foreground != null && com.jarvis.assistant.ui.aura.MediaStudioActivity.share(foreground) }
+                        result.put("success", opened); result.put("delivered", false)
+                        result.put("message", if (opened) "WhatsApp contact picker opened. User must select contact and confirm Send." else "Bring Jarvis to the foreground and open Gemini Image Studio to share the saved image.")
+                    }
+                    "delegate_ui_task" -> {
+                        check(com.jarvis.assistant.ui.aura.AuraOptions.enabled("backgroundAgent")) { "Enable Background Agent in Aura first" }
+                        check(com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.isRunning()) { "Enable Accessibility first" }
+                        val goal = args.optString("goal").trim(); require(goal.length in 1..6000)
+                        val mission = com.jarvis.assistant.automation.mission.MissionEngine.startMission(applicationContext, goal,
+                            executionRoute = com.jarvis.assistant.automation.mission.MissionExecutionRoute.UI_AGENT)
+                        result.put("mission_id", mission.missionId); result.put("status", mission.status.name)
+                        result.put("success", mission.status != com.jarvis.assistant.automation.mission.MissionOverallStatus.FAILED)
+                        result.put("completed", false); result.put("message", "Mission submitted; follow Mission Mode for exact approvals and verified results. Submission is not completion.")
+                        if (mission.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING) serviceScope.launch {
+                            com.jarvis.assistant.automation.mission.MissionEngine.activeMission.first { it?.missionId != mission.missionId || it.isFinished || it.status in setOf(com.jarvis.assistant.automation.mission.MissionOverallStatus.WAITING_FOR_APPROVAL, com.jarvis.assistant.automation.mission.MissionOverallStatus.CLARIFICATION_REQUIRED) }.let { finished ->
+                                if (finished?.missionId == mission.missionId) _events.emit("Background mission: ${finished.status.name}. ${finished.outcomeSummary.orEmpty().take(300)}")
+                            }
+                        }
+                    }
+
                     "open_app" -> {
                         val appName = args.optString("app_name", "")
                         val normalizedTarget = appName.trim().lowercase(Locale.ROOT)
@@ -3634,7 +3677,11 @@ class JarvisConversationService : Service() {
         }
     }
 
+    private var wakeModelJob: Job? = null
+    private var wakeRecognizer: Recognizer? = null
+
     private fun exitStandbyListening() {
+        wakeModelJob?.cancel(); wakeModelJob = null
         _isStandby.value = false
         try {
             voskSpeechService?.cancel()
@@ -3644,6 +3691,7 @@ class JarvisConversationService : Service() {
             Log.e("JarvisService", "Error stopping Vosk SpeechService: ${e.message}")
         }
         voskSpeechService = null
+        runCatching { wakeRecognizer?.close() }; wakeRecognizer = null
     }
 
     private fun startWakeListening() {
@@ -3651,15 +3699,19 @@ class JarvisConversationService : Service() {
         if (voskSpeechService != null) return
 
         val model = VoskModelManager.model
-        if (model == null) {
-            Log.i("JarvisService", "Vosk model still loading; triggering init and will start once ready")
-            VoskModelManager.init(applicationContext, serviceScope)
-            serviceScope.launch {
-                VoskModelManager.isModelReady.collect { ready ->
-                    if (ready && _isStandby.value && voskSpeechService == null) {
-                        startWakeListening()
-                    }
+        if (model == null || (preferences.isOwnerVoiceEnabled && VoskModelManager.speakerModel == null)) {
+            if (wakeModelJob?.isActive == true) return
+            Log.i("JarvisService", "Preparing offline wake model")
+            VoskModelManager.init(applicationContext, serviceScope, preferences.isOwnerVoiceEnabled)
+            wakeModelJob = serviceScope.launch {
+                val loaded = kotlinx.coroutines.withTimeoutOrNull(45_000) {
+                    combine(VoskModelManager.isModelReady, VoskModelManager.isSpeakerModelReady) { speech, speaker ->
+                        speech && (!preferences.isOwnerVoiceEnabled || speaker)
+                    }.first { it }
                 }
+                wakeModelJob = null
+                if (loaded == true && _isStandby.value && voskSpeechService == null) startWakeListening()
+                else if (_isStandby.value) _events.emit("Wake model unavailable. Open Wake Word and retry.")
             }
             return
         }
@@ -3669,6 +3721,7 @@ class JarvisConversationService : Service() {
             // Phrase grammar: allow single-word "jarvis", multi-syllable wake phrases, and [unk]
             val grammar = "[\"jarvis\", \"hey jarvis\", \"hi jarvis\", \"hello jarvis\", \"ok jarvis\", \"okay jarvis\", \"wake up jarvis\", \"sun jarvis\", \"suno jarvis\", \"jarvis jarvis\", \"[unk]\"]"
             val rec = Recognizer(model, 16000.0f, grammar)
+            wakeRecognizer = rec
             rec.setWords(true)
             val spkModel = VoskModelManager.speakerModel
             if (spkModel != null) {
@@ -3891,6 +3944,7 @@ class JarvisConversationService : Service() {
     private fun onWakeWordDetected() {
         if (!_isStandby.value) return
         VoiceFlightRecorder.recordWakeDetected()
+        com.jarvis.assistant.ui.directives.WakeGlow.show(this)
         requestAudioDuckFocus()
         vibrateBriefly()
         com.jarvis.assistant.audio.JarvisSoundEffects.playWakeSound()

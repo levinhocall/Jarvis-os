@@ -28,6 +28,10 @@ import com.jarvis.assistant.data.memory.MemoryBackupPolicy
 import java.util.Locale
 
 class MemoryActivity : AppCompatActivity() {
+    private val storageErrors = kotlinx.coroutines.CoroutineExceptionHandler { _, error ->
+        val message = com.jarvis.assistant.core.diagnostics.StorageHealth.record(error)
+        runOnUiThread { if (::binding.isInitialized) { binding.tvNoMemories.visibility = View.VISIBLE; binding.tvNoMemories.text = message } }
+    }
 
     private lateinit var binding: ActivityMemoryBinding
     private val memoryRepo by lazy { JarvisApp.instance.memoryRepository }
@@ -49,7 +53,7 @@ class MemoryActivity : AppCompatActivity() {
             Toast.makeText(this, "Choose an on-device Documents or Downloads location. Cloud providers are disabled for memory backups.", Toast.LENGTH_LONG).show()
             return
         }
-        lifecycleScope.launch {
+        lifecycleScope.launch(storageErrors) {
             try {
                 val message = withContext(Dispatchers.IO) {
                     if (export) {
@@ -80,6 +84,10 @@ class MemoryActivity : AppCompatActivity() {
         setContentView(binding.root)
         com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
 
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets
+        }
         setupToolbar()
         setupRecyclerView()
         setupCategoryChips()
@@ -161,7 +169,7 @@ class MemoryActivity : AppCompatActivity() {
     }
 
     private fun observeMemories() {
-        lifecycleScope.launch {
+        lifecycleScope.launch(storageErrors) {
             memoryRepo.getAllMemoriesFlow().collectLatest { memories ->
                 allMemories = memories
                 filterAndDisplay()
@@ -238,7 +246,7 @@ class MemoryActivity : AppCompatActivity() {
                 val fact = editText.text.toString().trim()
                 val category = spinner.selectedItem.toString()
                 if (fact.isNotBlank()) {
-                    lifecycleScope.launch {
+                    lifecycleScope.launch(storageErrors) {
                         memoryRepo.saveMemory(
                             rawText = fact,
                             category = category,
@@ -276,7 +284,7 @@ class MemoryActivity : AppCompatActivity() {
             .setPositiveButton("UPDATE") { _, _ ->
                 val newFact = editText.text.toString().trim()
                 if (newFact.isNotBlank()) {
-                    lifecycleScope.launch {
+                    lifecycleScope.launch(storageErrors) {
                         memoryRepo.updateMemory(
                             memory.copy(
                                 rawText = newFact,
@@ -297,7 +305,7 @@ class MemoryActivity : AppCompatActivity() {
             .setTitle("Delete Memory")
             .setMessage("Are you sure you want JARVIS to forget this fact?\n\n\"${memory.rawText}\"")
             .setPositiveButton("DELETE") { _, _ ->
-                lifecycleScope.launch {
+                lifecycleScope.launch(storageErrors) {
                     memoryRepo.deleteMemoryById(memory.id)
                     Toast.makeText(this@MemoryActivity, "Memory deleted", Toast.LENGTH_SHORT).show()
                 }
@@ -307,7 +315,7 @@ class MemoryActivity : AppCompatActivity() {
                     .setTitle("Erase this fact permanently?")
                     .setMessage("This removes all stored versions of this fact. Existing exports are unaffected.")
                     .setPositiveButton("ERASE") { _, _ ->
-                        lifecycleScope.launch {
+                        lifecycleScope.launch(storageErrors) {
                             try {
                                 val removed = memoryRepo.permanentlyDeleteMemoryById(memory.id)
                                 Toast.makeText(this@MemoryActivity, if (removed > 0) "Stored fact erased" else "Fact was already removed", Toast.LENGTH_SHORT).show()
