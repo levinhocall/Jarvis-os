@@ -38,6 +38,9 @@ class CommandExecutor(
 
             // Phone Controls
             is JarvisCommand.Flash -> phoneManager.setFlashlight(command.enabled)
+            is JarvisCommand.SetAlarm -> com.jarvis.assistant.automation.phone.MobileUtilityActions(phoneManager.context).setAlarm(command.hour, command.minute, command.label)
+            is JarvisCommand.SetTimer -> com.jarvis.assistant.automation.phone.MobileUtilityActions(phoneManager.context).setTimer(command.seconds, command.label)
+            is JarvisCommand.ComposeSms -> com.jarvis.assistant.automation.phone.MobileUtilityActions(phoneManager.context).composeSms(command.phoneNumber, command.message)
             is JarvisCommand.Brightness -> {
                 if (command.isRelative) {
                     phoneManager.adjustBrightness(command.delta > 0)
