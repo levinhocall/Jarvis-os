@@ -151,6 +151,15 @@
             android:layout_height="match_parent"
             android:layout_gravity="center"
             android:background="@android:color/transparent" />
+
+        <!-- Realistic AI avatar (Settings > Assistant Avatar). Hidden when Orb/Ghost is selected. -->
+        <com.jarvis.assistant.ui.avatar.RealisticAvatarView
+            android:id="@+id/realisticAvatar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:contentDescription="Jarvis avatar. Tap to talk, hold to power off." />
     </FrameLayout>
 
     <!-- Sleek Futuristic Status Pill -->

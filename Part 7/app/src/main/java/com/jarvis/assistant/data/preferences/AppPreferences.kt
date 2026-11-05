@@ -87,6 +87,8 @@ class AppPreferences internal constructor(
         private const val KEY_ORB_SCALE = "key_orb_scale"
         private const val KEY_ORB_HUE = "key_orb_hue"
         private const val KEY_ORB_PRESET = "key_orb_preset"
+        private const val KEY_ASSISTANT_AVATAR = "assistant_avatar"
+        val ASSISTANT_AVATAR_MODES = setOf("ai_girl", "orb", "ghost")
         private const val KEY_HAPTIC_FEEDBACK = "key_haptic_feedback"
         private const val KEY_NOTIFICATION_HISTORY_OPT_IN = "key_notification_history_opt_in"
         private const val KEY_HEADSET_WHISPER_ENABLED = "key_headset_whisper_enabled"
@@ -467,6 +469,20 @@ class AppPreferences internal constructor(
         set(value) = prefs.edit().putString(KEY_ORB_PRESET, value.takeIf {
             it in setOf("classic", "aura", "crimson", "midnight")
         } ?: "classic").apply()
+
+    /**
+     * Primary Home visual: "ai_girl" (realistic animated avatar, default), "orb" (classic) or
+     * "ghost" (legacy minimal entity). Orb and Ghost both render the existing WebView orb stage.
+     */
+    var assistantAvatar: String
+        get() {
+            val value = prefs.getString(KEY_ASSISTANT_AVATAR, "ai_girl") ?: "ai_girl"
+            return if (value in ASSISTANT_AVATAR_MODES) value else "ai_girl"
+        }
+        set(value) = prefs.edit().putString(
+            KEY_ASSISTANT_AVATAR,
+            if (value in ASSISTANT_AVATAR_MODES) value else "ai_girl",
+        ).apply()
 
     var hapticFeedbackEnabled: Boolean
         get() = prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true)
