@@ -131,8 +131,6 @@
         android:layout_height="0dp"
         android:clipChildren="false"
         android:clipToPadding="false"
-        app:layout_constraintHeight_percent="0.45"
-        app:layout_constraintVertical_bias="0.45"
         app:layout_constraintTop_toBottomOf="@id/layoutTitle"
         app:layout_constraintBottom_toTopOf="@id/layoutStatusIndicator"
         app:layout_constraintStart_toStartOf="parent"
@@ -169,8 +167,8 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:layout_marginBottom="22dp"
-        app:layout_constraintBottom_toTopOf="@id/cardWeather"
+        android:layout_marginBottom="4dp"
+        app:layout_constraintBottom_toTopOf="@id/layoutMicRow"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -214,7 +212,102 @@
             android:layout_marginTop="5dp" />
     </LinearLayout>
 
-    <!-- Weather Widget Card -->
+    <!-- Mockup-style mic row: waveform | glowing mic ring | waveform -->
+    <LinearLayout
+        android:id="@+id/layoutMicRow"
+        android:layout_width="match_parent"
+        android:layout_height="112dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:layout_marginBottom="6dp"
+        app:layout_constraintBottom_toTopOf="@id/layoutHomeActionBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.jarvis.assistant.ui.home.WaveformView
+            android:id="@+id/waveLeft"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:importantForAccessibility="no" />
+
+        <com.jarvis.assistant.ui.home.MicRingView
+            android:id="@+id/micRing"
+            android:layout_width="112dp"
+            android:layout_height="112dp"
+            android:contentDescription="Microphone. Tap to talk or mute, hold to power off." />
+
+        <com.jarvis.assistant.ui.home.WaveformView
+            android:id="@+id/waveRight"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:importantForAccessibility="no" />
+    </LinearLayout>
+
+    <!-- Mockup-style action bar: keyboard | live voice | camera/screen | features -->
+    <LinearLayout
+        android:id="@+id/layoutHomeActionBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_home_action_bar"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnBarKeyboard"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="15dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_home_keyboard"
+            app:tint="#F5E9FF"
+            android:contentDescription="Type a message" />
+
+        <ImageButton
+            android:id="@+id/btnBarVoice"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="15dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_home_waveform"
+            app:tint="#F5E9FF"
+            android:contentDescription="Live voice mode" />
+
+        <ImageButton
+            android:id="@+id/btnBarCamera"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="15dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_home_camera"
+            app:tint="#F5E9FF"
+            android:contentDescription="Share screen or camera view" />
+
+        <ImageButton
+            android:id="@+id/btnBarGrid"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="15dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_home_grid"
+            app:tint="#F5E9FF"
+            android:contentDescription="Feature hub" />
+    </LinearLayout>
+
+    <!-- Weather Widget Card (hidden in mockup layout; views kept so existing logic keeps working) -->
     <LinearLayout
         android:id="@+id/cardWeather"
         android:layout_width="match_parent"
@@ -229,6 +322,7 @@
         android:clickable="true"
         android:focusable="true"
         android:layout_marginBottom="24dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@id/layoutActionGrid"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -291,6 +385,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:layout_marginBottom="12dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">

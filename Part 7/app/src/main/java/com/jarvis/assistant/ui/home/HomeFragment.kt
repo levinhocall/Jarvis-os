@@ -111,6 +111,7 @@ class HomeFragment : Fragment() {
 
         setupOrbWebView()
         setupRealisticAvatar()
+        setupMockupControls()
 
         binding.btnScreenShareQuick.setOnClickListener {
             val isSharing = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value
@@ -232,6 +233,40 @@ class HomeFragment : Fragment() {
         applyAvatarMode()
     }
 
+    private fun setupMockupControls() {
+        binding.waveLeft.mirrored = false
+        binding.waveRight.mirrored = true
+        binding.micRing.setOnClickListener { (activity as? MainActivity)?.handleMicOrOrbClick() }
+        binding.micRing.setOnLongClickListener {
+            (activity as? MainActivity)?.handleHoldMicOrOrb()
+            true
+        }
+        binding.btnBarKeyboard.setOnClickListener { (activity as? MainActivity)?.selectTab(MainActivity.TAB_CHAT) }
+        binding.btnBarVoice.setOnClickListener {
+            startActivity(Intent(requireContext(), com.jarvis.assistant.ui.directives.VoiceModeActivity::class.java))
+        }
+        // Reuses the existing (now hidden) quick-action so screen-share logic stays in one place.
+        binding.btnBarCamera.setOnClickListener { binding.btnScreenShareQuick.performClick() }
+        binding.btnBarGrid.setOnClickListener {
+            startActivity(Intent(requireContext(), FeatureHubActivity::class.java))
+        }
+    }
+
+    private fun updateMicVisuals(status: HomeStatusState) {
+        val mode = when {
+            !status.isOn || status.isStandby -> MicRingView.Mode.OFF
+            status.isMuted -> MicRingView.Mode.MUTED
+            status.state == ConversationState.SPEAKING -> MicRingView.Mode.SPEAKING
+            status.state == ConversationState.THINKING || status.state == ConversationState.EXECUTING ||
+                status.state == ConversationState.CONNECTING || status.state == ConversationState.RECOVERING -> MicRingView.Mode.THINKING
+            else -> MicRingView.Mode.LISTENING
+        }
+        binding.micRing.setMode(mode)
+        val moving = mode == MicRingView.Mode.LISTENING || mode == MicRingView.Mode.SPEAKING
+        binding.waveLeft.setActive(moving)
+        binding.waveRight.setActive(moving)
+    }
+
     /** Shows the realistic avatar or the existing Orb/Ghost stage, per Settings > Assistant Avatar. */
     private fun applyAvatarMode() {
         val b = _binding ?: return
@@ -280,6 +315,9 @@ class HomeFragment : Fragment() {
 
     private fun pushExternalAudio(amp: Float, bass: Float, high: Float) {
         _binding?.realisticAvatar?.setAmplitude(amp)
+        _binding?.waveLeft?.setLevel(amp)
+        _binding?.waveRight?.setLevel(amp)
+        _binding?.micRing?.setLevel(amp)
         if (!isPageLoaded) return
         val now = System.currentTimeMillis()
         if (now - lastAudioPushTime < 33L) return // ~30 calls per second throttle
@@ -480,6 +518,7 @@ class HomeFragment : Fragment() {
                     ) { isOn, isMuted, state, isStandby ->
                         HomeStatusState(isOn, isMuted, state, isStandby)
                     }.collect { status ->
+                        updateMicVisuals(status)
                         if (!status.isOn) {
                             setOrbState("idle")
                             binding.tvListeningStatus.text = "JARVIS OFF • TAP TO START"
