@@ -39,6 +39,7 @@ class HomeFragment : Fragment() {
 
     private var isPageLoaded = false
     private var pendingOrbState: String? = null
+    private var avatarTaskWasCompleted = false
     private var pendingThemeKey: String? = null
     private var pendingCustomHex: String? = null
     private var lastAudioPushTime = 0L
@@ -109,6 +110,7 @@ class HomeFragment : Fragment() {
         }
 
         setupOrbWebView()
+        setupRealisticAvatar()
 
         binding.btnScreenShareQuick.setOnClickListener {
             val isSharing = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value
@@ -218,8 +220,39 @@ class HomeFragment : Fragment() {
         }
     }
 
+    private fun setupRealisticAvatar() {
+        binding.realisticAvatar.hapticsEnabled = preferences.hapticFeedbackEnabled
+        binding.realisticAvatar.setOnClickListener {
+            (activity as? MainActivity)?.handleMicOrOrbClick()
+        }
+        binding.realisticAvatar.setOnLongClickListener {
+            (activity as? MainActivity)?.handleHoldMicOrOrb()
+            true
+        }
+        applyAvatarMode()
+    }
+
+    /** Shows the realistic avatar or the existing Orb/Ghost stage, per Settings > Assistant Avatar. */
+    private fun applyAvatarMode() {
+        val b = _binding ?: return
+        val girl = preferences.assistantAvatar == "ai_girl"
+        b.realisticAvatar.hapticsEnabled = preferences.hapticFeedbackEnabled
+        b.realisticAvatar.visibility = if (girl) View.VISIBLE else View.GONE
+        b.orbHaloRing.visibility = if (girl) View.GONE else View.VISIBLE
+        if (girl) {
+            b.orbWebView.visibility = View.GONE
+            b.orbWebView.onPause()
+            b.orbWebView.pauseTimers()
+        } else {
+            b.orbWebView.visibility = View.VISIBLE
+            b.orbWebView.onResume()
+            b.orbWebView.resumeTimers()
+        }
+    }
+
     fun setOrbState(state: String) {
         pendingOrbState = state
+        activity?.runOnUiThread { _binding?.realisticAvatar?.setStateKey(state) }
         if (!isPageLoaded) return
         activity?.runOnUiThread {
             _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$state');", null)
@@ -246,6 +279,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun pushExternalAudio(amp: Float, bass: Float, high: Float) {
+        _binding?.realisticAvatar?.setAmplitude(amp)
         if (!isPageLoaded) return
         val now = System.currentTimeMillis()
         if (now - lastAudioPushTime < 33L) return // ~30 calls per second throttle
@@ -260,6 +294,7 @@ class HomeFragment : Fragment() {
         com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
         binding.orbWebView.onResume()
         binding.orbWebView.resumeTimers()
+        applyAvatarMode()
         renderTaskFallback(com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.value)
 
         // Sync theme with settings
@@ -309,6 +344,7 @@ class HomeFragment : Fragment() {
             binding.orbWebView.visibility = View.VISIBLE
             binding.orbWebView.onResume()
             binding.orbWebView.resumeTimers()
+            applyAvatarMode()
             com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
             setOrbTheme(preferences.appTheme, preferences.customThemeColor)
             updateHomeHeaderAndVoiceStatus()
@@ -414,6 +450,9 @@ class HomeFragment : Fragment() {
                 launch {
                     com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.collect { snapshot ->
                         renderTaskFallback(snapshot)
+                        val completed = snapshot?.currentStatus.equals("COMPLETED", ignoreCase = true)
+                        if (completed && !avatarTaskWasCompleted) _binding?.realisticAvatar?.playAcknowledge()
+                        avatarTaskWasCompleted = completed
                     }
                 }
                 launch {
