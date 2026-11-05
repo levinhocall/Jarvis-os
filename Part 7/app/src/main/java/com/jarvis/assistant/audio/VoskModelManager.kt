@@ -3,6 +3,8 @@ package com.jarvis.assistant.audio
 import android.content.Context
 import android.content.res.AssetManager
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.vosk.Model
@@ -21,6 +23,8 @@ object VoskModelManager {
     @Volatile var model: Model? = null; private set
     @Volatile var speakerModel: SpeakerModel? = null; private set
     private val initializing = AtomicBoolean(false)
+    internal val installationMutex = Mutex()
+    @Volatile internal var loadedPath: String? = null; private set
 
     fun init(context: Context, scope: CoroutineScope, includeSpeaker: Boolean = true) {
         if (model != null && (!includeSpeaker || speakerModel != null)) return
@@ -29,13 +33,29 @@ object VoskModelManager {
             try {
                 if (model == null) {
                     state.value = "Preparing bundled offline speech model…"
-                    val folder = unpack(context, "model-en-us", "vosk-model", listOf("am/final.mdl", "conf/model.conf", "graph/HCLr.fst", "graph/Gr.fst"))
-                    model = Model(folder.absolutePath)
-                    ready.value = true
+                    installationMutex.withLock {
+                        val downloaded = File(context.filesDir,"vosk-downloaded")
+                        val required = com.jarvis.assistant.audio.wake.ModelArchive.required
+                        var folder = if (File(downloaded,".jarvis-complete").isFile && required.all { File(downloaded,it).length()>0 }) downloaded
+                            else unpack(context,"model-en-us","vosk-model",required)
+                        val loaded = try { Model(folder.absolutePath) } catch (_: Exception) {
+                            // Only disposable speech-model files are repaired; no user database is touched.
+                            folder.deleteRecursively()
+                            folder = unpack(context,"model-en-us","vosk-model",required)
+                            Model(folder.absolutePath)
+                        }
+                        loadedPath = folder.absolutePath
+                        model = loaded
+                        ready.value = true
+                    }
                 }
                 if (includeSpeaker && speakerModel == null) {
-                    val folder = unpack(context, "model-spk", "vosk-spk-model", listOf("final.ext.raw"))
-                    speakerModel = SpeakerModel(folder.absolutePath)
+                    var folder = unpack(context, "model-spk", "vosk-spk-model", listOf("final.ext.raw"))
+                    speakerModel = try { SpeakerModel(folder.absolutePath) } catch (_: Exception) {
+                        folder.deleteRecursively()
+                        folder = unpack(context,"model-spk","vosk-spk-model",listOf("final.ext.raw"))
+                        SpeakerModel(folder.absolutePath)
+                    }
                     speakerReady.value = true
                 }
                 state.value = "Offline Vosk model ready"
@@ -43,8 +63,7 @@ object VoskModelManager {
             catch (error: Exception) { state.value = "Offline model could not load (${error.javaClass.simpleName}). Retry from Wake Word." }
             catch (_: OutOfMemoryError) { state.value = "Not enough free memory for offline speech. Close other apps and retry." }
             catch (error: LinkageError) { state.value = "Offline speech native library unavailable on this device (${error.javaClass.simpleName})." }
-            finally { initializing.set(false) }
-        }
+        }.invokeOnCompletion { initializing.set(false) }
     }
     private fun unpack(context: Context, asset: String, name: String, required: List<String>): File {
         val target = File(context.filesDir, name)

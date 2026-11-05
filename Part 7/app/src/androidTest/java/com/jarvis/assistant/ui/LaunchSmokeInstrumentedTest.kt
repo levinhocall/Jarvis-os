@@ -17,11 +17,59 @@ class LaunchSmokeInstrumentedTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         com.jarvis.assistant.audio.VoskModelManager.init(context,this,includeSpeaker=false)
         kotlinx.coroutines.withTimeout(90_000) { com.jarvis.assistant.audio.VoskModelManager.isModelReady.first { it } }
-        val recognizer = org.vosk.Recognizer(com.jarvis.assistant.audio.VoskModelManager.model,16000f,"[\"hey jarvis\",\"jarvis\",\"[unk]\"]")
+        val recognizer = org.vosk.Recognizer(com.jarvis.assistant.audio.VoskModelManager.model,16000f)
         try {
             recognizer.acceptWaveForm(ByteArray(32000),32000)
             org.junit.Assert.assertEquals("",org.json.JSONObject(recognizer.finalResult).optString("text"))
         } finally { recognizer.close() }
+    }
+    @Test fun foregroundMicrophoneTestStartsAndStopsWithoutCloudSession() = runBlocking {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        instrumentation.uiAutomation.grantRuntimePermission(context.packageName,android.Manifest.permission.RECORD_AUDIO)
+        if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.grantRuntimePermission(context.packageName,android.Manifest.permission.POST_NOTIFICATIONS)
+        val activity = instrumentation.startActivitySync(Intent(context,com.jarvis.assistant.ui.directives.WakeWordActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        instrumentation.waitForIdleSync()
+        try {
+            instrumentation.runOnMainSync {
+                androidx.core.content.ContextCompat.startForegroundService(activity,Intent(activity,com.jarvis.assistant.background.JarvisConversationService::class.java).setAction(com.jarvis.assistant.background.JarvisConversationService.ACTION_TEST_WAKE))
+            }
+            kotlinx.coroutines.withTimeout(60_000) { com.jarvis.assistant.audio.wake.WakeDiagnostics.status.first { it == "Microphone test listening locally" } }
+            org.junit.Assert.assertFalse(com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value)
+            org.junit.Assert.assertTrue(com.jarvis.assistant.background.JarvisConversationService.isStandby.value)
+            org.junit.Assert.assertTrue(com.jarvis.assistant.audio.wake.WakeDiagnostics.listening.value)
+            org.junit.Assert.assertTrue(com.jarvis.assistant.audio.wake.WakeDiagnostics.testing.value)
+        } finally {
+            instrumentation.runOnMainSync { activity.startService(Intent(activity,com.jarvis.assistant.background.JarvisConversationService::class.java).setAction(com.jarvis.assistant.background.JarvisConversationService.ACTION_STOP_ALL)) }
+            kotlinx.coroutines.withTimeout(10_000) { com.jarvis.assistant.background.JarvisConversationService.isStandby.first { !it } }
+            org.junit.Assert.assertFalse(com.jarvis.assistant.audio.wake.WakeDiagnostics.listening.value)
+            org.junit.Assert.assertFalse(com.jarvis.assistant.audio.wake.WakeDiagnostics.testing.value)
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+    @Test fun customWakeNameUpdatesReferenceStylePhrasePreview() {
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val context=instrumentation.targetContext
+        val settings=com.jarvis.assistant.audio.wake.WakeSettings(context)
+        val previousName=settings.name; val previousAlias=settings.alias
+        val activity=instrumentation.startActivitySync(Intent(context,com.jarvis.assistant.ui.directives.WakeWordActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        fun descendants(view: android.view.View): List<android.view.View> = listOf(view) + if(view is android.view.ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
+        try {
+            instrumentation.runOnMainSync {
+                val views=descendants(activity.window.decorView)
+                org.junit.Assert.assertTrue(views.filterIsInstance<android.widget.TextView>().any { it.text.toString()=="Microphone" })
+                org.junit.Assert.assertTrue(views.filterIsInstance<android.widget.Button>().any { it.text.toString()=="Test Microphone" })
+                org.junit.Assert.assertTrue(views.filterIsInstance<com.google.android.material.card.MaterialCardView>().size >= 5)
+                val inputs=views.filterIsInstance<android.widget.EditText>()
+                inputs[0].setText("myra"); inputs[1].setText("mira")
+                views.filterIsInstance<android.widget.Button>().single { it.text.toString()=="Save wake word" }.performClick()
+                org.junit.Assert.assertEquals("myra",settings.name)
+                org.junit.Assert.assertTrue(views.filterIsInstance<android.widget.TextView>().any { it.text.contains("Hey myra") && it.text.contains("Wake up myra") })
+            }
+        } finally {
+            settings.name=previousName; settings.alias=previousAlias
+            instrumentation.runOnMainSync { activity.finish() }
+        }
     }
     @Test fun eachIconSelectionLeavesExactlyOneLauncherEntry() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

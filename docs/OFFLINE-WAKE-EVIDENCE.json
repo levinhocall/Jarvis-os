@@ -1,0 +1,51 @@
+{
+  "source_commit": "e4448d459319a492015eec17a8277f9173343e12",
+  "local_unit_tests": {
+    "tests": 426,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "local_lint": {
+    "errors": 0,
+    "warnings": 1254
+  },
+  "instrumentation_compilation": "passed",
+  "runtime_source_commit": "b6dbbc07ccc32c2c701c6d886b60481eaf6aad88",
+  "runtime_source_difference": "Latest source only corrects current-download selection, separates status labels and refreshes the standby notification.",
+  "android_runtime": {
+    "run_id": 41836468630,
+    "status": "success",
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "job_id": 126596540559,
+    "foreground_microphone_start_stop_test": "passed",
+    "local_test_keeps_assistant_session_off": "passed"
+  },
+  "apk_ci": {
+    "run_id": 41836994092,
+    "number": 301,
+    "status": "success",
+    "unit_tests": "passed",
+    "lint": "passed",
+    "assembly": "passed",
+    "publication": "passed"
+  },
+  "official_model_download_end_to_end_verified": false,
+  "physical_pocket_accuracy_verified": false,
+  "battery_measurements_verified": false,
+  "apk": {
+    "url": "https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-301/app-debug.apk",
+    "size_bytes": 167670568,
+    "sha256": "df0f38fb0f141bc2158f3c6315c4edc6200a8efddb0fbef7fca33e263d55b42d",
+    "checksum_verified": true,
+    "signature_verified": true,
+    "certificate_sha256": "5eb75ff5da3bdbaa7a13ce22e501f57389379eaa90d8e587434aff6621f2ab43",
+    "package": "com.jarvis.assistant",
+    "version_name": "1.9.1",
+    "version_code": 145,
+    "target_sdk": 36
+  }
+}
