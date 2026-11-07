@@ -286,7 +286,7 @@ class HomeFragment : Fragment() {
     /** Shows the realistic avatar or the existing Orb/Ghost stage, per Settings > Assistant Avatar. */
     private fun applyAvatarMode() {
         val b = _binding ?: return
-        val girl = preferences.assistantAvatar == "ai_girl"
+        val girl = false // AI girl removed from Home; Orb/Ghost stage always shown
         b.realisticAvatar.hapticsEnabled = preferences.hapticFeedbackEnabled
         b.realisticAvatar.visibility = if (girl) View.VISIBLE else View.GONE
         b.orbHaloRing.visibility = if (girl) View.GONE else View.VISIBLE

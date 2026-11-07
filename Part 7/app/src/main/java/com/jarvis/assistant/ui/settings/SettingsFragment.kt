@@ -129,11 +129,11 @@ class SettingsFragment : Fragment() {
     private fun avatarLabel(key: String) = when (key) {
         "orb" -> "Orb (Classic)"
         "ghost" -> "Ghost (Legacy)"
-        else -> "AI Girl (Realistic)"
+        else -> "Orb (Classic)"
     }
 
     private fun showAvatarPicker() {
-        val keys = arrayOf("ai_girl", "orb", "ghost")
+        val keys = arrayOf("orb", "ghost")
         val labels = keys.map { avatarLabel(it) }.toTypedArray()
         val checked = keys.indexOf(preferences.assistantAvatar).coerceAtLeast(0)
         MaterialAlertDialogBuilder(requireContext())
