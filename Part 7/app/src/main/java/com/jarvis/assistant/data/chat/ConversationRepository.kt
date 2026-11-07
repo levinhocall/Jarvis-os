@@ -171,8 +171,18 @@ class ConversationRepository(
             createNewSession(title = user.lineSequence().firstOrNull()?.take(36)?.ifBlank { "Voice Conversation" } ?: "Voice Conversation")
         }
 
-        if (user.isNotBlank()) addMessage(session.id, role = "USER", content = user)
-        if (assistant.isNotBlank()) addMessage(session.id, role = "ASSISTANT", content = assistant)
+        val timestamp = System.currentTimeMillis()
+        val messages = buildList {
+            if (user.isNotBlank()) add(ChatMessageEntity(
+                id = UUID.randomUUID().toString(), sessionId = session.id,
+                role = "USER", content = user, timestamp = timestamp
+            ))
+            if (assistant.isNotBlank()) add(ChatMessageEntity(
+                id = UUID.randomUUID().toString(), sessionId = session.id,
+                role = "ASSISTANT", content = assistant, timestamp = timestamp + 1L
+            ))
+        }
+        chatDao.insertTurnAtomically(session.id, messages, user.takeIf { it.isNotBlank() })
         session.id
     }
 
