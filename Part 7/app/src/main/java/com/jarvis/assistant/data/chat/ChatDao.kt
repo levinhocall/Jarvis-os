@@ -79,6 +79,28 @@ interface ChatDao {
     @Query("SELECT COUNT(*) FROM chat_messages WHERE sessionId = :sessionId")
     suspend fun getMessageCount(sessionId: String): Int
 
+    /** Persist a complete voice turn, session timestamp and first-message title together. */
+    @Transaction
+    suspend fun insertTurnAtomically(
+        sessionId: String,
+        messages: List<ChatMessageEntity>,
+        firstUserText: String?
+    ) {
+        if (messages.isEmpty()) return
+        insertMessages(messages)
+        val timestamp = messages.maxOf { it.timestamp }
+        updateSessionTimestamp(sessionId, timestamp)
+        if (firstUserText != null) {
+            val session = getSessionById(sessionId)
+            if (session != null && (session.title == "New Chat" || session.title.isBlank())) {
+                val firstLine = firstUserText.trim().lineSequence().firstOrNull()?.trim().orEmpty()
+                val title = if (firstLine.length > 36) firstLine.take(33).trim() + "..."
+                    else firstLine.ifEmpty { "New Chat" }
+                renameSession(sessionId, title, timestamp)
+            }
+        }
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: ChatMessageEntity)
 
