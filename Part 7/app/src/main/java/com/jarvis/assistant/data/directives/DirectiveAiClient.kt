@@ -64,6 +64,9 @@ class DirectiveAiClient(private val preferences: AppPreferences) {
         JsonParser.parseString(text).asJsonObject
     }
 
+    /** Generic explicit-request JSON call used by feature screens (Brain Dump, Hermes, Polyglot). */
+    suspend fun generate(prompt: String): JsonObject = request(prompt)
+
     suspend fun refineIdea(content: String): String {
         require(content.isNotBlank() && content.length <= 8000)
         val safeContent = com.jarvis.assistant.data.memory.EpisodicVectorMemory.sanitizeForStorage(content)
