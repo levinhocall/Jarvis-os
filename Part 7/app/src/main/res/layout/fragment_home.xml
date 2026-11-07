@@ -9,7 +9,7 @@
     android:clipToPadding="false"
     android:paddingStart="20dp"
     android:paddingEnd="20dp"
-    android:paddingTop="16dp"
+    android:paddingTop="20dp"
     android:paddingBottom="96dp">
 
     <!-- Ambient Liquid Glass Glow Fields (Soft luminous refractions behind glass) -->
@@ -58,7 +58,7 @@
     <LinearLayout
         android:id="@+id/layoutTitle"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:orientation="vertical"
         android:gravity="center"
         app:layout_constraintTop_toTopOf="@id/btnTopChat"
@@ -69,7 +69,7 @@
         <ImageView
             android:id="@+id/ivHeaderJarvisLogo"
             android:layout_width="110dp"
-            android:layout_height="34dp"
+            android:layout_height="28dp"
             android:src="@drawable/ic_jarvis_logo"
             android:scaleType="fitCenter"
             android:contentDescription="Jarvis Logo" />
@@ -78,6 +78,7 @@
             android:id="@+id/tvGreeting"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:visibility="gone"
             android:text="Welcome, NAZIB"
             android:textColor="?attr/themeTextPrimary"
             android:textSize="14sp"
@@ -89,16 +90,17 @@
             android:id="@+id/tvHomeSubtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="How can I help you today?"
+            android:text="Your Personal AI Assistant"
             android:textColor="?attr/themeTextMuted"
             android:textSize="11sp"
             android:fontFamily="sans-serif"
-            android:layout_marginTop="3dp" />
+            android:layout_marginTop="1dp" />
         <TextView
             android:id="@+id/btnFeatureHub"
             android:layout_width="wrap_content"
             android:layout_height="28dp"
             android:layout_marginTop="5dp"
+            android:visibility="gone"
             android:background="@drawable/bg_jarvis_icon_square"
             android:clickable="true"
             android:focusable="true"

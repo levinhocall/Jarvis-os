@@ -678,6 +678,7 @@ class JarvisConversationService : Service() {
                     prefs.isTaskOverlayEnabled,
                     PermissionHelper.hasOverlayPermission(this@JarvisConversationService),
                     prefs.taskOverlayAvatar,
+                    prefs.taskOverlayPeek,
                     prefs.taskOverlayMode,
                     prefs.taskOverlayEdge,
                     conversationState.value

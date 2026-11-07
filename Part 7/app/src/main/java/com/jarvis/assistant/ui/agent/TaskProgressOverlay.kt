@@ -24,6 +24,7 @@ import com.jarvis.assistant.JarvisApp
 import android.view.ViewGroup
 import com.jarvis.assistant.automation.agent.AgentTaskSnapshot
 import com.jarvis.assistant.automation.agent.TaskStepStatus
+import com.jarvis.assistant.ui.avatar.RealisticAvatarView
 
 /** Small task HUD owned by the foreground conversation service. */
 class TaskProgressOverlay(private val context: Context) {
@@ -83,6 +84,13 @@ class TaskProgressOverlay(private val context: Context) {
         }
         visibility = View.VISIBLE
     }
+    /** Realistic AI Girl avatar, used when Settings > Floating overlay > "AI Girl" is on. */
+    private val girlAvatar = RealisticAvatarView(context).apply {
+        shape = RealisticAvatarView.Shape.CIRCLE
+        contentDescription = "Floating JARVIS AI girl. Drag to move; double-tap to stop the active task."
+        amplitudeSource = { com.jarvis.assistant.background.JarvisConversationService.audioLevel.value }
+        visibility = View.GONE
+    }
     private val statusPill = TextView(context).apply {
         textSize = 10f
         setTextColor(Color.WHITE)
@@ -100,7 +108,7 @@ class TaskProgressOverlay(private val context: Context) {
         minOf(dp(236), context.resources.displayMetrics.widthPixels - dp(16)),
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT
     ).apply {
         gravity = Gravity.RIGHT or Gravity.CENTER_VERTICAL
@@ -109,6 +117,11 @@ class TaskProgressOverlay(private val context: Context) {
     }
     private var attached = false
     private var avatarMode = true
+    private var girlMode = false
+    private var peeked = false
+    private var restX = 0
+    private var peekAnimator: android.animation.ValueAnimator? = null
+    private val peekRunnable = Runnable { peekIfAllowed() }
     private var loadedAvatar = ""
     private var lastReactionState: com.jarvis.assistant.data.model.ConversationState? = null
     private var displayedTaskId: String? = null
@@ -131,10 +144,12 @@ class TaskProgressOverlay(private val context: Context) {
         pill.addView(progressText, matchWrap())
         root.addView(pill, FrameLayout.LayoutParams(-1, -2))
         root.addView(avatar, FrameLayout.LayoutParams(dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize), dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize), Gravity.CENTER))
+        root.addView(girlAvatar, FrameLayout.LayoutParams(dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize), dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize), Gravity.CENTER))
         root.addView(statusPill, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(2) })
         pill.isClickable = true
         pill.setOnTouchListener { _, event -> handleOverlayTouch(event) }
         avatar.setOnTouchListener { _, event -> handleOverlayTouch(event) }
+        girlAvatar.setOnTouchListener { _, event -> handleOverlayTouch(event) }
         activeInstance = this
     }
 
@@ -158,15 +173,18 @@ class TaskProgressOverlay(private val context: Context) {
             remove()
             return true
         }
+        restoreFromPeek()
         val shape = preferences.taskOverlayAvatar
         val style = com.jarvis.assistant.ui.aura.AuraOptions.avatarStyle
-        val selectedAvatar = "$shape:$style"
+        girlMode = shape == "ai_girl"
+        val selectedAvatar = if (girlMode) "ai_girl" else "$shape:$style"
         if (selectedAvatar != loadedAvatar) {
             loadedAvatar = selectedAvatar
-            avatar.loadUrl(if (style == "plain" && shape !in setOf("bot", "clover")) "https://appassets.androidplatform.net/assets/overlay-toys/$shape.html" else "https://appassets.androidplatform.net/assets/avatar-studio.html?shape=$shape&style=$style")
+            if (girlMode) avatar.loadUrl("about:blank") else avatar.loadUrl(if (style == "plain" && shape !in setOf("bot", "clover")) "https://appassets.androidplatform.net/assets/overlay-toys/$shape.html" else "https://appassets.androidplatform.net/assets/avatar-studio.html?shape=$shape&style=$style")
         }
         val avatarPixels = dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize)
         avatar.layoutParams = FrameLayout.LayoutParams(avatarPixels, avatarPixels, Gravity.CENTER)
+        girlAvatar.layoutParams = FrameLayout.LayoutParams(avatarPixels, avatarPixels, Gravity.CENTER)
         val nextTaskId = snapshot?.taskId
         if (displayedTaskId != nextTaskId) {
             displayedTaskId = nextTaskId
@@ -193,6 +211,7 @@ class TaskProgressOverlay(private val context: Context) {
         activeInstance = this
         applyMode()
         applyAvatarReaction(conversationState)
+        schedulePeek(conversationState)
         return true
     }
 
@@ -201,7 +220,20 @@ class TaskProgressOverlay(private val context: Context) {
      * This only animates the floating avatar WebView; the home-screen voice orb
      * and the avatar artwork/assets remain unchanged.
      */
+    private fun stateKey(state: com.jarvis.assistant.data.model.ConversationState) = when (state) {
+        com.jarvis.assistant.data.model.ConversationState.LISTENING,
+        com.jarvis.assistant.data.model.ConversationState.INTERRUPTED -> "listening"
+        com.jarvis.assistant.data.model.ConversationState.THINKING,
+        com.jarvis.assistant.data.model.ConversationState.EXECUTING,
+        com.jarvis.assistant.data.model.ConversationState.RECOVERING -> "thinking"
+        com.jarvis.assistant.data.model.ConversationState.SPEAKING -> "speaking"
+        com.jarvis.assistant.data.model.ConversationState.FAILED -> "error"
+        else -> "idle"
+    }
+
     private fun applyAvatarReaction(state: com.jarvis.assistant.data.model.ConversationState) {
+        girlAvatar.setStateKey(stateKey(state))
+        if (girlMode) return
         if (lastReactionState == state) return
         lastReactionState = state
         avatar.animate().cancel()
@@ -224,6 +256,9 @@ class TaskProgressOverlay(private val context: Context) {
     }
 
     fun remove() {
+        root.removeCallbacks(peekRunnable)
+        peekAnimator?.cancel()
+        peeked = false
         if (activeInstance === this) activeInstance = null
         statusPill.animate().cancel()
         avatar.animate().cancel()
@@ -291,6 +326,7 @@ class TaskProgressOverlay(private val context: Context) {
     private fun handleOverlayTouch(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                root.removeCallbacks(peekRunnable)
                 downRawX = event.rawX
                 downRawY = event.rawY
                 val location = IntArray(2)
@@ -304,6 +340,7 @@ class TaskProgressOverlay(private val context: Context) {
                 val dx = event.rawX - downRawX
                 val dy = event.rawY - downRawY
                 if (dragging || kotlin.math.abs(dx) > touchSlop || kotlin.math.abs(dy) > touchSlop) {
+                    if (!dragging) { peekAnimator?.cancel(); peeked = false }
                     dragging = true
                     params.gravity = Gravity.TOP or Gravity.LEFT
                     params.x = startX + dx.toInt()
@@ -318,11 +355,18 @@ class TaskProgressOverlay(private val context: Context) {
                 if (dragging) {
                     dragging = false
                     snapToNearestEdge()
+                    root.postDelayed(peekRunnable, 4000L)
                     val preferences = JarvisApp.instance.preferences
                     preferences.taskOverlayFreePosition = true
                     preferences.taskOverlayEdge = currentEdge
                     preferences.taskOverlayX = params.x
                     preferences.taskOverlayY = params.y
+                    return true
+                }
+                if (peeked) {
+                    // First touch on a peeking avatar only brings it out; it never triggers stop/interrupt.
+                    popOut()
+                    root.postDelayed(peekRunnable, 5000L)
                     return true
                 }
                 val now = android.os.SystemClock.uptimeMillis()
@@ -397,11 +441,74 @@ class TaskProgressOverlay(private val context: Context) {
 
     private fun applyMode() {
         pill.visibility = if (avatarMode) View.GONE else View.VISIBLE
-        avatar.visibility = if (avatarMode) View.VISIBLE else View.GONE
+        avatar.visibility = if (avatarMode && !girlMode) View.VISIBLE else View.GONE
+        girlAvatar.visibility = if (avatarMode && girlMode) View.VISIBLE else View.GONE
         params.width = if (avatarMode) dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize) else minOf(dp(236), context.resources.displayMetrics.widthPixels - dp(16))
         params.height = if (avatarMode) dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize) else WindowManager.LayoutParams.WRAP_CONTENT
         if (JarvisApp.instance.preferences.taskOverlayFreePosition) clampPosition()
         try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
+    }
+
+    // ---- Andee-style edge peek ---------------------------------------------------------
+
+    private fun peekOffsetPx(): Int {
+        val w = root.width.takeIf { it > 0 } ?: params.width.takeIf { it > 0 } ?: dp(com.jarvis.assistant.ui.aura.AuraOptions.avatarSize)
+        return (w * 0.55f).toInt()
+    }
+
+    private fun idleForPeek(state: com.jarvis.assistant.data.model.ConversationState) = stateKey(state) == "idle"
+
+    private fun schedulePeek(state: com.jarvis.assistant.data.model.ConversationState) {
+        root.removeCallbacks(peekRunnable)
+        val prefs = JarvisApp.instance.preferences
+        if (!prefs.taskOverlayPeek || !avatarMode || dragging) return
+        if (idleForPeek(state)) root.postDelayed(peekRunnable, 2500L) else popOut()
+    }
+
+    private fun peekIfAllowed() {
+        val prefs = JarvisApp.instance.preferences
+        if (!attached || peeked || dragging || !prefs.taskOverlayPeek || !avatarMode) return
+        if (currentEdge != "left" && currentEdge != "right") return
+        if (!idleForPeek(com.jarvis.assistant.background.JarvisConversationService.conversationState.value)) return
+        val horizontal = params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK
+        val rightAnchored = horizontal == Gravity.RIGHT
+        restX = params.x
+        val target = when {
+            currentEdge == "left" && !rightAnchored -> -peekOffsetPx()
+            currentEdge == "right" && rightAnchored -> -peekOffsetPx()
+            currentEdge == "right" -> restX + peekOffsetPx()
+            else -> return
+        }
+        peeked = true
+        animateX(target)
+    }
+
+    private fun popOut() {
+        if (!peeked) return
+        peeked = false
+        animateX(restX)
+    }
+
+    /** Instant, un-animated return used before a normal layout pass so clamping never fights the peek offset. */
+    private fun restoreFromPeek() {
+        if (!peeked) return
+        peekAnimator?.cancel()
+        peeked = false
+        params.x = restX
+    }
+
+    private fun animateX(target: Int) {
+        peekAnimator?.cancel()
+        val from = params.x
+        peekAnimator = android.animation.ValueAnimator.ofInt(from, target).apply {
+            duration = 260L
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener {
+                params.x = it.animatedValue as Int
+                try { if (attached) windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
+            }
+            start()
+        }
     }
 
     private fun clampPosition() {

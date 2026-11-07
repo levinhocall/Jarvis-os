@@ -32,6 +32,7 @@ class OverlayAvatarActivity : AppCompatActivity() {
     private val preferences get() = JarvisApp.instance.preferences
     private lateinit var assetLoader: WebViewAssetLoader
     private var pendingOverlayEnable = false
+    private var aiGirlSwitchRef: SwitchCompat? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         ThemeManager.applyTheme(this)
@@ -95,6 +96,20 @@ class OverlayAvatarActivity : AppCompatActivity() {
             edgeSpinner.isEnabled = enabled
             for (i in 0 until modeGroup.childCount) modeGroup.getChildAt(i).isEnabled = enabled
         }
+        val aiGirlSwitch = findViewById<SwitchCompat>(R.id.switchOverlayAiGirl)
+        aiGirlSwitch.isChecked = preferences.taskOverlayAvatar == "ai_girl"
+        aiGirlSwitch.setOnCheckedChangeListener { _, checked ->
+            if (checked) {
+                preferences.taskOverlayAvatar = "ai_girl"
+            } else if (preferences.taskOverlayAvatar == "ai_girl") {
+                preferences.taskOverlayAvatar = "ghost"
+                selectInGallery("ghost")
+            }
+        }
+        aiGirlSwitchRef = aiGirlSwitch
+        val peekSwitch = findViewById<SwitchCompat>(R.id.switchOverlayPeek)
+        peekSwitch.isChecked = preferences.taskOverlayPeek
+        peekSwitch.setOnCheckedChangeListener { _, checked -> preferences.taskOverlayPeek = checked }
         avatarGallery = findViewById(R.id.avatarGallery)
         assetLoader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
@@ -156,6 +171,7 @@ class OverlayAvatarActivity : AppCompatActivity() {
             if (name !in ALLOWED_AVATARS) return
             runOnUiThread {
                 preferences.taskOverlayAvatar = name
+                aiGirlSwitchRef?.isChecked = false
                 selectInGallery(preferences.taskOverlayAvatar)
             }
         }

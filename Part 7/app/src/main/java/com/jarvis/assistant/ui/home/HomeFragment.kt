@@ -30,6 +30,8 @@ import com.jarvis.assistant.R
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
+private val NEON_BG: Int = Color.parseColor("#070510")
+
 class HomeFragment : Fragment() {
 
     private var _binding: FragmentHomeBinding? = null
@@ -64,17 +66,31 @@ class HomeFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = FragmentHomeBinding.inflate(inflater, container, false)
+        // Home is always dark neon, whatever app theme the user picked.
+        val neonContext = android.view.ContextThemeWrapper(requireContext(), R.style.Theme_JarvisAssistant_HomeNeon)
+        _binding = FragmentHomeBinding.inflate(inflater.cloneInContext(neonContext), container, false)
         val deck = android.widget.LinearLayout(requireContext()).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             addView(binding.root, android.widget.LinearLayout.LayoutParams(-1,
                 (resources.displayMetrics.heightPixels * 0.88f).toInt().coerceAtLeast((660 * resources.displayMetrics.density).toInt())))
-            addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(requireContext()))
+            addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(neonContext))
         }
         val scrollingDeck = androidx.core.widget.NestedScrollView(requireContext()).apply {
             isFillViewport = true
-            com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(this)
+            setBackgroundColor(NEON_BG)
             addView(deck)
+            // Home fills exactly one screen; the directive grid sits below the fold instead of peeking under the dock.
+            addOnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
+                val screenHeight = bottom - top
+                v.post {
+                    val b = _binding ?: return@post
+                    val lp = b.root.layoutParams
+                    if (screenHeight > 0 && lp.height != screenHeight) {
+                        lp.height = screenHeight
+                        b.root.layoutParams = lp
+                    }
+                }
+            }
         }
         return com.jarvis.assistant.ui.wallpaper.InAppWallpaper(requireContext(), scrollingDeck, listOf(scrollingDeck, binding.root))
     }
@@ -82,7 +98,7 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         (view as? com.jarvis.assistant.ui.wallpaper.InAppWallpaper)?.let { viewLifecycleOwner.lifecycle.addObserver(it) }
-        com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
+        binding.root.setBackgroundColor(NEON_BG)
         createTaskFallbackPanel()
 
         // Top Navigation
@@ -329,7 +345,7 @@ class HomeFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
+        binding.root.setBackgroundColor(NEON_BG)
         binding.orbWebView.onResume()
         binding.orbWebView.resumeTimers()
         applyAvatarMode()
@@ -383,7 +399,7 @@ class HomeFragment : Fragment() {
             binding.orbWebView.onResume()
             binding.orbWebView.resumeTimers()
             applyAvatarMode()
-            com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
+            binding.root.setBackgroundColor(NEON_BG)
             setOrbTheme(preferences.appTheme, preferences.customThemeColor)
             updateHomeHeaderAndVoiceStatus()
         } else if (hidden && _binding != null) {
