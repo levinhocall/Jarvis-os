@@ -5,6 +5,7 @@ import com.jarvis.assistant.security.sandbox.RiskPolicy
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
+import com.jarvis.assistant.automation.tooling.ToolDefinition
 
 class MissionRoutePolicyTest {
     @Test fun selectedRouteSurvivesConstraintRoundTripAndDoesNotDuplicate() {

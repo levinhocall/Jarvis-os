@@ -1,12 +1,7 @@
 package com.jarvis.assistant.automation.mission
 
 import java.util.UUID
-
-enum class MissionRisk {
-    LOW,
-    MEDIUM,
-    HIGH_CONSEQUENTIAL // Deletion, external communications, financial, permissions
-}
+import com.jarvis.assistant.automation.tooling.MissionRisk
 
 enum class MissionApprovalState {
     NOT_REQUIRED,
@@ -49,23 +44,6 @@ data class ClarificationRequest(
     val question: String,
     val missingField: String,
     val suggestedOptions: List<String> = emptyList()
-)
-
-data class ToolParameter(
-    val name: String,
-    val type: String,
-    val description: String,
-    val required: Boolean = true
-)
-
-data class ToolDefinition(
-    val name: String,
-    val description: String,
-    val parameters: List<ToolParameter>,
-    val requiredPermissions: List<String> = emptyList(),
-    val riskLevel: MissionRisk = MissionRisk.LOW,
-    val requiresAccessibility: Boolean = false,
-    val isIdempotent: Boolean = true
 )
 
 sealed class ToolExecutionResult {

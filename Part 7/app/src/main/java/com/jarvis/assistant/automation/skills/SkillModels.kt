@@ -1,6 +1,6 @@
 package com.jarvis.assistant.automation.skills
 
-import com.jarvis.assistant.automation.mission.MissionRisk
+import com.jarvis.assistant.automation.tooling.MissionRisk
 import com.jarvis.assistant.automation.mission.MissionStep
 import java.util.UUID
 

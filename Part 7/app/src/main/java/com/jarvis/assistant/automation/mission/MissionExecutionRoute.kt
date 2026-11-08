@@ -1,5 +1,7 @@
 package com.jarvis.assistant.automation.mission
 
+import com.jarvis.assistant.automation.tooling.ToolRegistry
+
 enum class MissionExecutionRoute { AUTO, UI_AGENT, CORE_LLM }
 
 /** Persisted in existing mission constraints so approval/recovery cannot silently change route. */

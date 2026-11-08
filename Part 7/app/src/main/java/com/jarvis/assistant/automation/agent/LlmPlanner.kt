@@ -5,9 +5,9 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonElement
-import com.jarvis.assistant.automation.mission.MissionRisk
-import com.jarvis.assistant.automation.mission.ToolDefinition
-import com.jarvis.assistant.automation.mission.ToolRegistry
+import com.jarvis.assistant.automation.tooling.MissionRisk
+import com.jarvis.assistant.automation.tooling.ToolDefinition
+import com.jarvis.assistant.automation.tooling.ToolRegistry
 import com.jarvis.assistant.security.sandbox.RiskPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -432,7 +432,7 @@ class LlmPlanner(
                 )
             }
             val validation = ToolRegistry.validate(canonicalName, approvedToolCall.arguments, context)
-            if (validation !is com.jarvis.assistant.automation.mission.ToolValidationResult.Valid) {
+            if (validation !is com.jarvis.assistant.automation.tooling.ToolValidationResult.Valid) {
                 return LlmMissionExecutionResult(
                     false, "Approved action is currently blocked by tool validation: $validation",
                     history.size, history, "APPROVED_TOOL_VALIDATION_FAILED"
@@ -621,7 +621,7 @@ class LlmPlanner(
 
                     // 5. Pre-execution ToolRegistry Validation
                     val validation = ToolRegistry.validate(resolvedName, decision.arguments, context)
-                    if (validation !is com.jarvis.assistant.automation.mission.ToolValidationResult.Valid) {
+                    if (validation !is com.jarvis.assistant.automation.tooling.ToolValidationResult.Valid) {
                         val reason = validation.toString()
                         history.add(
                             LlmPlannerStepRecord(

@@ -1,6 +1,6 @@
 package com.jarvis.assistant.automation.agent
 
-import com.jarvis.assistant.automation.mission.ToolDefinition
+import com.jarvis.assistant.automation.tooling.ToolDefinition
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test

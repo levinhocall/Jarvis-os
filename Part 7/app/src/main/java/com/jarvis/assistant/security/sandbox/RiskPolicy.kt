@@ -1,7 +1,7 @@
 package com.jarvis.assistant.security.sandbox
 
-import com.jarvis.assistant.automation.mission.MissionRisk
-import com.jarvis.assistant.automation.mission.ToolRegistry
+import com.jarvis.assistant.automation.tooling.MissionRisk
+import com.jarvis.assistant.automation.tooling.ToolRegistry
 
 data class RiskEvaluation(
     val tier: MissionRisk,

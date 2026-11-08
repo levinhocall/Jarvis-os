@@ -4,6 +4,9 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import com.jarvis.assistant.automation.tooling.MissionRisk
+import com.jarvis.assistant.automation.tooling.ToolValidationResult
+import com.jarvis.assistant.automation.tooling.ToolRegistry
 
 class MissionEngineTest {
     private val storedMissions = mutableMapOf<String, com.jarvis.assistant.data.mission.MissionEntity>()

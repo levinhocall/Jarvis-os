@@ -3,7 +3,7 @@ package com.jarvis.assistant.automation.council
 import com.jarvis.assistant.automation.mission.EvidenceType
 import com.jarvis.assistant.automation.mission.MissionVerificationEvidence
 import com.jarvis.assistant.automation.mission.MissionEngine
-import com.jarvis.assistant.automation.mission.ToolDefinition
+import com.jarvis.assistant.automation.tooling.ToolDefinition
 import com.jarvis.assistant.automation.agent.LlmFunctionCallProvider
 import com.jarvis.assistant.automation.agent.LlmPlanner
 import com.jarvis.assistant.automation.agent.LlmPlannerStepRecord

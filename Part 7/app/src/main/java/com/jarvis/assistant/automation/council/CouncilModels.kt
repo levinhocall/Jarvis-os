@@ -1,7 +1,7 @@
 package com.jarvis.assistant.automation.council
 
 import com.jarvis.assistant.automation.mission.EvidenceType
-import com.jarvis.assistant.automation.mission.MissionRisk
+import com.jarvis.assistant.automation.tooling.MissionRisk
 import com.jarvis.assistant.automation.mission.MissionStep
 import com.jarvis.assistant.automation.mission.MissionVerificationEvidence
 import java.util.UUID

@@ -5,8 +5,8 @@ import com.jarvis.assistant.automation.grounding.ActionOutcomeResult
 import com.jarvis.assistant.automation.grounding.ActionType
 import com.jarvis.assistant.automation.grounding.ScreenContext
 import com.jarvis.assistant.automation.grounding.ScreenGroundingEngine
-import com.jarvis.assistant.automation.mission.ToolRegistry
-import com.jarvis.assistant.automation.mission.MissionRisk
+import com.jarvis.assistant.automation.tooling.ToolRegistry
+import com.jarvis.assistant.automation.tooling.MissionRisk
 import kotlinx.coroutines.delay
 import java.util.Locale
 

@@ -36,6 +36,9 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
+import com.jarvis.assistant.automation.tooling.MissionRisk
+import com.jarvis.assistant.automation.tooling.ToolValidationResult
+import com.jarvis.assistant.automation.tooling.ToolRegistry
 
 /**
  * Central mission orchestration layer for JARVIS OS.

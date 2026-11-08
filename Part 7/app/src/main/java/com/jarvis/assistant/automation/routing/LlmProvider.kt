@@ -5,7 +5,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.jarvis.assistant.automation.agent.GeminiSchemaConverter
 import com.jarvis.assistant.automation.agent.LlmStepDecision
-import com.jarvis.assistant.automation.mission.ToolDefinition
+import com.jarvis.assistant.automation.tooling.ToolDefinition
 import com.jarvis.assistant.data.preferences.AppPreferences
 import com.jarvis.assistant.data.model.GeminiConstants
 import kotlinx.coroutines.Dispatchers
