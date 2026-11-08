@@ -31,6 +31,10 @@ class RiskPolicy {
             Regex("\\bpurchase\\b", RegexOption.IGNORE_CASE)
         )
 
+        private val AUTONOMOUS_COMMS_TOOLS = setOf(
+            "whatsapp_send", "send_whatsapp", "whatsapp_call", "call_contact", "whatsapp_prepare"
+        )
+
         private val BANKING_OR_PAYMENT_TOOLS = setOf(
             "gpay_pay", "phonepe_pay", "paytm_pay", "bank_transfer", "send_upi_payment"
         )
@@ -53,9 +57,15 @@ class RiskPolicy {
             val resolvedName = ToolRegistry.resolveToolName(toolName)
             val toolDef = ToolRegistry.getTool(resolvedName)
 
+            // Messages and calls the user directly asked for are autonomous. The text of a chat
+            // message ("buy milk", "delete that") is content, not an action, so it must not
+            // trigger the payment/destructive keyword gate.
+            val isUserDirectedComms = AUTONOMOUS_COMMS_TOOLS.contains(resolvedName)
             val isPaymentOrBanking = BANKING_OR_PAYMENT_TOOLS.contains(resolvedName) ||
-                containsSensitiveKeyword(title) ||
-                arguments.values.any { it != null && containsSensitiveKeyword(it.toString()) }
+                (!isUserDirectedComms && (
+                    containsSensitiveKeyword(title) ||
+                    arguments.values.any { it != null && containsSensitiveKeyword(it.toString()) }
+                ))
 
             val commitsUiAction = resolvedName == "click_ui_element" &&
                 Regex("\\b(book|confirm|reserve|checkout|place order|request ride|request cab)\\b", RegexOption.IGNORE_CASE)

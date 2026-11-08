@@ -31,17 +31,17 @@ class JarvisEvolutionMasterTest {
     // =========================================================================
 
     @Test
-    fun testMissionPlanningWhatsAppRequiresApproval() {
+    fun testMissionPlanningWhatsAppRunsAutonomously() {
         val goal = "Send WhatsApp message to Rahul saying I will reach office by 10 AM"
         val mission = MissionEngine.planMission(goal)
 
         assertEquals("Send WhatsApp message to Rahul saying I will reach office by 10 AM", mission.goal)
-        assertEquals(MissionApprovalState.PENDING_APPROVAL, mission.approvalState)
-        assertTrue(mission.steps.size >= 2)
+        assertEquals(MissionApprovalState.NOT_REQUIRED, mission.approvalState)
+        assertTrue(mission.steps.isNotEmpty())
 
         val sendStep = mission.steps.firstOrNull { it.toolName == "whatsapp_send" }
         assertNotNull(sendStep)
-        assertEquals(MissionRisk.HIGH_CONSEQUENTIAL, sendStep?.riskLevel)
+        assertEquals(MissionRisk.MEDIUM, sendStep?.riskLevel)
         assertTrue(sendStep?.expectedEvidence?.isNotBlank() == true)
     }
 

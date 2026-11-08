@@ -62,7 +62,8 @@ object UniversalActionRegistry {
                 android.Manifest.permission.READ_CONTACTS
             ),
             requiresAccessibility = true,
-            riskLevel = ActionRiskLevel.HIGH_CONSEQUENTIAL,
+            // Autonomous: a message the user explicitly dictated needs no second approval.
+            riskLevel = ActionRiskLevel.MEDIUM,
             isIdempotent = false,
             verificationStrategy = VerificationStrategy.CLOSED_LOOP_ACCESSIBILITY,
             sideEffectsDescription = "Dispatches external message across messaging network"

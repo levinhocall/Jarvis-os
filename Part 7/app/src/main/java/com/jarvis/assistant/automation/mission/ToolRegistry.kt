@@ -54,7 +54,8 @@ object ToolRegistry {
                     android.Manifest.permission.READ_CONTACTS,
                     android.Manifest.permission.CALL_PHONE
                 ),
-                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                // Autonomous: the user's own spoken command is the authorization.
+                riskLevel = MissionRisk.MEDIUM,
                 isIdempotent = false
             )
         )
@@ -62,14 +63,14 @@ object ToolRegistry {
         register(
             ToolDefinition(
                 name = "whatsapp_call",
-                description = "Opens a WhatsApp voice or video call after explicit user approval",
+                description = "Opens a WhatsApp voice or video call immediately when the user asks for it",
                 parameters = listOf(
                     ToolParameter("contact_name", "String", "Recipient contact name", required = true),
                     ToolParameter("call_type", "String", "Call type: voice or video", required = false),
                     ToolParameter("app_number", "Int", "1-based WhatsApp profile index when multiple apps exist", required = false)
                 ),
                 requiredPermissions = listOf(android.Manifest.permission.READ_CONTACTS),
-                riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                riskLevel = MissionRisk.MEDIUM,
                 isIdempotent = false
             )
         )
@@ -85,7 +86,7 @@ object ToolRegistry {
                 android.Manifest.permission.READ_CONTACTS
             ),
             requiresAccessibility = true,
-            riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+            riskLevel = MissionRisk.MEDIUM,
             isIdempotent = false
         )
         register(whatsappSendDef)

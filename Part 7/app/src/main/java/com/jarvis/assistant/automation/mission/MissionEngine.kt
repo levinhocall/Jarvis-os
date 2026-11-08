@@ -642,29 +642,19 @@ object MissionEngine {
                         missingField = "app_number"
                     )
                 } else {
-                    requiresApproval = true
-                    approvalPrompt = "Send WhatsApp message to '$contact' saying: '$msg'?"
+                    // Autonomous: the user already gave the instruction, so no extra approval and
+                    // no staged draft (a leftover draft would hijack the next "yes"/"no").
                     steps.add(
                     MissionStep(
-                        title = "Prepare WhatsApp message",
-                        description = "Validate recipient and draft message content",
-                        toolName = "whatsapp_prepare",
-                        parameters = mapOf("contact" to contact, "message" to msg),
-                        riskLevel = MissionRisk.MEDIUM,
-                        isIdempotent = true
-                    )
-                )
-                steps.add(
-                    MissionStep(
                         title = "Send WhatsApp message",
-                        description = "Dispatch approved message through WhatsApp automation",
+                        description = "Dispatch the message the user asked for through WhatsApp automation",
                         toolName = "whatsapp_send",
                         parameters = buildMap {
                             put("contact", contact)
                             put("message", msg)
                             if (appNumber != null) put("app_number", appNumber)
                         },
-                        riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                        riskLevel = MissionRisk.MEDIUM,
                         isIdempotent = false,
                         expectedEvidence = "Message sent checkmark or chat dispatch"
                     )
@@ -672,7 +662,7 @@ object MissionEngine {
                 }
             }
         }
-        // 2. WhatsApp voice/video calls are consequential and always require explicit approval.
+        // 2. WhatsApp voice/video calls run autonomously when the user asks for them.
         else if (lower.contains("whatsapp") && (lower.contains("call") || lower.contains("phone"))) {
             val query = cleanGoal
                 .replace(Regex("(?i)^(?:please\\s+)?(?:make\\s+)?(?:a\\s+)?whatsapp\\s+(?:voice\\s+|video\\s+)?call\\s*(?:to\\s+)?"), "")
@@ -695,8 +685,7 @@ object MissionEngine {
                         missingField = "app_number"
                     )
                 } else {
-                    requiresApproval = true
-                    approvalPrompt = "Start a WhatsApp $callType call with '$query'?"
+                    // Autonomous: the user asked for this call directly.
                     steps.add(
                     MissionStep(
                         title = "Start WhatsApp $callType call",
@@ -707,7 +696,7 @@ object MissionEngine {
                             put("call_type", callType)
                             if (appNumber != null) put("app_number", appNumber)
                         },
-                        riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                        riskLevel = MissionRisk.MEDIUM,
                         isIdempotent = false,
                         expectedEvidence = "WhatsApp call interface opened; connection state remains unverified"
                     )
@@ -724,8 +713,7 @@ object MissionEngine {
                     missingField = "contact_name"
                 )
             } else {
-                requiresApproval = true
-                approvalPrompt = "Place a phone call to '$query'?"
+                // Autonomous: the user asked for this call directly.
                 val contactIndex = userConstraints.firstNotNullOfOrNull {
                     it.removePrefix("contact_index=").toIntOrNull()
                 }
@@ -738,7 +726,7 @@ object MissionEngine {
                             put("contact_name", query)
                             if (contactIndex != null) put("contact_index", contactIndex)
                         },
-                        riskLevel = MissionRisk.HIGH_CONSEQUENTIAL,
+                        riskLevel = MissionRisk.MEDIUM,
                         isIdempotent = false,
                         expectedEvidence = "Outgoing phone call screen launched"
                     )
@@ -1902,7 +1890,6 @@ object MissionEngine {
             }
 
             "send_whatsapp", "whatsapp_send" -> {
-                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before sending a WhatsApp message."))
                 val contact = step.parameters["contact"] as? String ?: ""
                 val message = step.parameters["message"] as? String ?: ""
                 if (app == null || contact.isBlank() || message.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "WhatsApp assistant unavailable or message inputs missing."))
@@ -1932,7 +1919,6 @@ object MissionEngine {
             }
 
             "whatsapp_call" -> {
-                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before placing a WhatsApp call."))
                 val contact = step.parameters["contact_name"] as? String ?: ""
                 val callType = (step.parameters["call_type"] as? String).orEmpty().ifBlank { "voice" }
                 val appNumber = (step.parameters["app_number"] as? Number)?.toInt()
@@ -1962,7 +1948,6 @@ object MissionEngine {
             }
 
             "call_contact" -> {
-                if (!isApprovedByUser) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Explicit user approval is required before placing a phone call."))
                 val contact = step.parameters["contact_name"] as? String ?: ""
                 val idx = (step.parameters["contact_index"] as? Number)?.toInt()
                 if (contact.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Contact name is missing."))
