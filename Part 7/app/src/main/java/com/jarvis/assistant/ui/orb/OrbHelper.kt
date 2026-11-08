@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.graphics.Color
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -42,14 +44,7 @@ class OrbHelper(
         webView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
         val settings: WebSettings = webView.settings
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.allowFileAccess = true
-        settings.allowContentAccess = true
-        @Suppress("DEPRECATION")
-        settings.allowFileAccessFromFileURLs = true
-        @Suppress("DEPRECATION")
-        settings.allowUniversalAccessFromFileURLs = true
+        OrbWebViewSecurity.applyLocalContentSettings(settings)
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
         settings.cacheMode = WebSettings.LOAD_NO_CACHE
@@ -87,7 +82,17 @@ class OrbHelper(
             }
         }, "JarvisBridge")
 
+        val assetLoader = OrbWebViewSecurity.newAssetLoader(webView.context)
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                OrbWebViewSecurity.intercept(assetLoader, request)
+
+            // The JavaScript bridge below is privileged: never navigate to anything but bundled assets.
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val uri = request.url
+                return !OrbWebViewSecurity.isLocalAssetUrl(uri.scheme, uri.host, uri.path)
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 isLoaded = true
@@ -118,7 +123,7 @@ class OrbHelper(
             }
         }
 
-        webView.loadUrl("file:///android_asset/hud/index.html")
+        webView.loadUrl(OrbWebViewSecurity.HUD_URL)
     }
 
     fun updateState(state: ConversationState, audioLevel: Float = 0f) {

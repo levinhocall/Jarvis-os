@@ -11,6 +11,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebSettings
+import com.jarvis.assistant.ui.orb.OrbWebViewSecurity
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
@@ -183,22 +186,29 @@ class HomeFragment : Fragment() {
             setBackgroundColor(Color.TRANSPARENT)
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                allowFileAccess = true
-                allowContentAccess = true
-                @Suppress("DEPRECATION")
-                allowFileAccessFromFileURLs = true
-                @Suppress("DEPRECATION")
-                allowUniversalAccessFromFileURLs = true
-                cacheMode = WebSettings.LOAD_DEFAULT
-            }
+            OrbWebViewSecurity.applyLocalContentSettings(settings)
+            settings.cacheMode = WebSettings.LOAD_DEFAULT
 
+            val orbAssetLoader = OrbWebViewSecurity.newAssetLoader(requireContext())
             webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                    OrbWebViewSecurity.intercept(orbAssetLoader, request)
+
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val uri = request.url
+                    return !OrbWebViewSecurity.isLocalAssetUrl(uri.scheme, uri.host, uri.path)
+                }
+
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     isPageLoaded = true
+
+                    // Reduced motion: the system "remove animations" setting slows the orb renderer.
+                    val reducedMotion = android.provider.Settings.Global.getFloat(
+                        requireContext().contentResolver,
+                        android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f
+                    ) == 0f
+                    view?.evaluateJavascript("window.__reducedMotion=$reducedMotion;", null)
 
                     // Sync Theme
                     val currentTheme = pendingThemeKey ?: preferences.appTheme
@@ -233,7 +243,7 @@ class HomeFragment : Fragment() {
                 v.onTouchEvent(event)
             }
 
-            loadUrl("file:///android_asset/orb.html?embedded=1")
+            loadUrl(OrbWebViewSecurity.ORB_URL)
         }
     }
 

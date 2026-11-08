@@ -369,7 +369,9 @@ function handleResize(){
 let last=performance.now();
 function animate(now){
   requestAnimationFrame(animate);
-  if(document.hidden || now-last<32) return;
+  // Reduced motion (system "remove animations" or prefers-reduced-motion): render ~2 fps, not 30.
+  const reduced=window.__reducedMotion===true||(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  if(document.hidden || now-last<(reduced?500:32)) return;
   const dt=Math.min((now-last)/1000,.05);last=now;
   updateOrb(dt);updateParticles(dt);renderer.render(scene,camera);
 }
