@@ -181,7 +181,7 @@ class AutonomousDevLoop(
                         if (tool != null && step.toolParams != null) {
                             val actionText = step.toolParams!!["command"] as? String
                             val actionApproved = isApprovedByUser && actionText != null && actionText == approvedAction
-                            val executionParams = if (actionApproved) step.toolParams!! + mapOf("approvedCommand" to actionText) else step.toolParams!!
+                            val executionParams = if (actionApproved) step.toolParams!! + mapOf("approvedCommand" to actionText, "approvedWorkDir" to project.workspaceRoot) else step.toolParams!!
                             val result = tool.execute(project, executionParams, sandbox, devAgent, actionApproved)
                             when (result) {
                                 is DevToolResult.Success -> {
@@ -236,7 +236,10 @@ class AutonomousDevLoop(
                                 buildMap {
                                     put("command", testCmd)
                                     put("timeoutSeconds", 120)
-                                    if (isApprovedByUser && testCmd == approvedAction) put("approvedCommand", testCmd)
+                                    if (isApprovedByUser && testCmd == approvedAction) {
+                                        put("approvedCommand", testCmd)
+                                        put("approvedWorkDir", project.workspaceRoot)
+                                    }
                                 },
                                 sandbox,
                                 devAgent,

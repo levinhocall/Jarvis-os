@@ -108,15 +108,36 @@ class DevEnvironmentAndTermuxBridgeTest {
 
     @Test
     fun `detectEnvironment correctly identifies host dev environment`() {
-        val hostDir = "/root/jarvis-os-ref/Part 7"
-        org.junit.Assume.assumeTrue("Host toolchain fixture is unavailable", File(hostDir).isDirectory)
-        val capability = DevToolRegistry.detectEnvironment(hostDir, context = null)
+        // Host mode is opt-in: it needs an explicitly configured workspace and a git binary.
+        val hostDir = File.createTempFile("host_workspace", "").apply { delete(); mkdir(); deleteOnExit() }
+        org.junit.Assume.assumeTrue("git binary unavailable", listOf("/usr/bin/git", "/bin/git", "/usr/local/bin/git").any { File(it).canExecute() })
+        val previous = System.getProperty(ShellPolicy.HOST_WORKSPACE_PROPERTY)
+        System.setProperty(ShellPolicy.HOST_WORKSPACE_PROPERTY, hostDir.absolutePath)
+        try {
+            val capability = DevToolRegistry.detectEnvironment(hostDir.absolutePath, context = null)
+            assertEquals(DevEnvironmentType.LOCAL_PROCESS, capability.type)
+            assertTrue(capability.canExecuteCommands)
+            assertTrue(capability.canRunGit)
+            assertTrue(capability.canRunBuildTools)
+        } finally {
+            if (previous == null) System.clearProperty(ShellPolicy.HOST_WORKSPACE_PROPERTY)
+            else System.setProperty(ShellPolicy.HOST_WORKSPACE_PROPERTY, previous)
+        }
+    }
 
-        // In Linux host container where /root/jarvis-os-ref and /usr/bin/git exist
-        assertEquals(DevEnvironmentType.LOCAL_PROCESS, capability.type)
-        assertTrue(capability.canExecuteCommands)
-        assertTrue(capability.canRunGit)
-        assertTrue(capability.canRunBuildTools)
+    @Test
+    fun `detectEnvironment does not assume a host environment from a hardcoded path`() {
+        val previous = System.getProperty(ShellPolicy.HOST_WORKSPACE_PROPERTY)
+        System.clearProperty(ShellPolicy.HOST_WORKSPACE_PROPERTY)
+        org.junit.Assume.assumeTrue("host env var is configured", System.getenv(ShellPolicy.HOST_WORKSPACE_ENV).isNullOrBlank())
+        try {
+            val dir = File.createTempFile("no_host", "").apply { delete(); mkdir(); deleteOnExit() }
+            val capability = DevToolRegistry.detectEnvironment(dir.absolutePath, context = null)
+            assertTrue(capability.type != DevEnvironmentType.LOCAL_PROCESS)
+            assertTrue(!capability.canExecuteCommands)
+        } finally {
+            if (previous != null) System.setProperty(ShellPolicy.HOST_WORKSPACE_PROPERTY, previous)
+        }
     }
 
     @Test

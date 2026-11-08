@@ -41,7 +41,7 @@ class SoftwareEngineerWorkspaceCoordinator(
         // Register default project workspace if available
         val defaultProject = DevProject(
             name = "JARVIS OS",
-            workspaceRoot = "/root/jarvis-os-ref/Part 7",
+            workspaceRoot = ShellPolicy.hostWorkspace() ?: "/sdcard/jarvis-workspace",
             projectType = "ANDROID_GRADLE",
             description = "Main personal AI assistant application codebase"
         )

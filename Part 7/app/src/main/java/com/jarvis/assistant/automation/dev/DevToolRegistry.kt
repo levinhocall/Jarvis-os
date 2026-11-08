@@ -261,34 +261,20 @@ class GitStatusAndDiffDevTool(private val contextProvider: () -> android.content
         }
 
         val context = contextProvider()
-        val isHostDev = File("/root/jarvis-os-ref").exists() && File("/usr/bin/git").exists()
 
-        if (isHostDev) {
-            try {
-                val statusProcess = ProcessBuilder("git", "status", "--short")
-                    .directory(root)
-                    .redirectErrorStream(true)
-                    .start()
-
-                val statusOutput = statusProcess.inputStream.bufferedReader().use { it.readText() }
-                statusProcess.waitFor(5, TimeUnit.SECONDS)
-
-                val diffProcess = ProcessBuilder("git", "diff", "--stat")
-                    .directory(root)
-                    .redirectErrorStream(true)
-                    .start()
-                val diffStat = diffProcess.inputStream.bufferedReader().use { it.readText() }
-                diffProcess.waitFor(5, TimeUnit.SECONDS)
-
-                val summary = buildString {
-                    append("=== GIT STATUS ===\n").append(statusOutput.ifBlank { "Clean working tree\n" })
-                    append("\n=== DIFF STAT ===\n").append(diffStat.ifBlank { "No modified tracked files\n" })
-                }
-
-                return@withContext DevToolResult.Success(toolName = name, output = summary)
-            } catch (e: Exception) {
-                return@withContext DevToolResult.Failure(name, "Host git execution error: ${e.message}")
+        if (ShellPolicy.isHostShellAvailable()) {
+            // Fixed, read-only commands run through the central policy (no shell involved).
+            val status = ShellPolicy.runHost("git status --short", root, 5)
+            val diff = ShellPolicy.runHost("git diff --stat", root, 5)
+            val failure = status.refusedReason ?: diff.refusedReason
+            if (failure != null) {
+                return@withContext DevToolResult.Failure(name, "Host git execution error: $failure")
             }
+            val summary = buildString {
+                append("=== GIT STATUS ===\n").append(status.output.ifBlank { "Clean working tree\n" })
+                append("\n=== DIFF STAT ===\n").append(diff.output.ifBlank { "No modified tracked files\n" })
+            }
+            return@withContext DevToolResult.Success(toolName = name, output = summary)
         }
 
         // On Android: check Termux
@@ -341,10 +327,15 @@ class ExecuteApprovedCommandDevTool(private val contextProvider: () -> android.c
             return@withContext DevToolResult.Failure(name, "Security check blocked command: ${textCheck.reason}", isRecoverable = false)
         }
 
-        // Approval is bound to the exact command text. A caller-supplied Boolean alone
-        // is not proof that this specific command was shown to and approved by the user.
-        val explicitlyApproved = isApprovedByUser &&
-            (params["approvedCommand"] as? String) == command
+        // Central policy: blocked commands never run, whatever the approval state.
+        val classification = ShellPolicy.classify(command)
+        if (classification.risk == ShellRisk.BLOCKED) {
+            return@withContext DevToolResult.Failure(name, "Shell policy blocked command: ${classification.reason}", isRecoverable = false)
+        }
+
+        // Approval is bound to the exact command text AND the working directory it was shown for.
+        // A caller-supplied Boolean alone is not proof that this specific command was approved.
+        val explicitlyApproved = ShellPolicy.isApproved(isApprovedByUser, params, command, project.workspaceRoot)
 
         // 2. Destructive Git Check
         val gitRisk = devAgent.auditGitOperation(command)
@@ -358,44 +349,31 @@ class ExecuteApprovedCommandDevTool(private val contextProvider: () -> android.c
         if (!explicitlyApproved) {
             return@withContext DevToolResult.AwaitingApproval(
                 toolName = name,
-                reason = "Shell execution requires explicit approval for this exact command.",
+                reason = "Shell execution requires explicit approval for this exact command (${classification.risk}: ${classification.reason}).",
                 proposedAction = command
             )
         }
 
         val timeoutSec = (params["timeoutSeconds"] as? Number)?.toLong() ?: 60L
-        val isHostDev = File("/root/jarvis-os-ref").exists() && File("/bin/bash").exists()
 
-        if (isHostDev) {
-            val startTime = System.currentTimeMillis()
-            try {
-                val process = ProcessBuilder("bash", "-c", command)
-                    .directory(File(project.workspaceRoot))
-                    .redirectErrorStream(true)
-                    .start()
-
-                val stdout = process.inputStream.bufferedReader().use { it.readText() }
-                val finished = process.waitFor(timeoutSec, TimeUnit.SECONDS)
-                val duration = System.currentTimeMillis() - startTime
-
-                if (!finished) {
-                    process.destroyForcibly()
-                    return@withContext DevToolResult.Failure(
-                        toolName = name,
-                        error = "Command timed out after $timeoutSec seconds",
-                        exitCode = -1,
-                        stdout = stdout
-                    )
-                }
-
-                val exitCode = process.exitValue()
-                return@withContext if (exitCode == 0) {
-                    DevToolResult.Success(toolName = name, output = stdout, durationMs = duration)
-                } else {
-                    DevToolResult.Failure(toolName = name, error = "Command exited with non-zero code $exitCode", exitCode = exitCode, stdout = stdout)
-                }
-            } catch (e: Exception) {
-                return@withContext DevToolResult.Failure(toolName = name, error = "Host execution failed: ${e.message}")
+        if (ShellPolicy.isHostShellAvailable()) {
+            // Approval for this exact command and directory counts as the explicit authorization.
+            val run = ShellPolicy.runHost(command, File(project.workspaceRoot), timeoutSec, authorized = true)
+            return@withContext when {
+                run.refused -> DevToolResult.Failure(toolName = name, error = run.refusedReason ?: "Refused by shell policy", isRecoverable = false)
+                run.timedOut -> DevToolResult.Failure(
+                    toolName = name,
+                    error = "Command timed out after $timeoutSec seconds",
+                    exitCode = -1,
+                    stdout = run.output
+                )
+                run.exitCode == 0 -> DevToolResult.Success(toolName = name, output = run.output, durationMs = run.durationMs)
+                else -> DevToolResult.Failure(
+                    toolName = name,
+                    error = "Command exited with non-zero code ${run.exitCode}",
+                    exitCode = run.exitCode,
+                    stdout = run.output
+                )
             }
         }
 
@@ -436,8 +414,12 @@ class TermuxBridgeDevTool(private val contextProvider: () -> android.content.Con
             return DevToolResult.Failure(name, "Security check blocked command: ${textCheck.reason}", isRecoverable = false)
         }
 
-        val explicitlyApproved = isApprovedByUser &&
-            (params["approvedCommand"] as? String) == command
+        val classification = ShellPolicy.classify(command)
+        if (classification.risk == ShellRisk.BLOCKED) {
+            return DevToolResult.Failure(name, "Shell policy blocked command: ${classification.reason}", isRecoverable = false)
+        }
+
+        val explicitlyApproved = ShellPolicy.isApproved(isApprovedByUser, params, command, project.workspaceRoot)
 
         val gitRisk = devAgent.auditGitOperation(command)
         if (gitRisk.isDestructive && !explicitlyApproved) {
@@ -531,7 +513,7 @@ object DevToolRegistry {
         val hasTermux = context != null && TermuxBridge.isTermuxInstalled(context)
         val termuxPermitted = hasTermux && context != null && TermuxBridge.isRunCommandPermissionGranted(context)
 
-        val isHostDev = File("/root/jarvis-os-ref").exists() && File("/usr/bin/git").exists()
+        val isHostDev = ShellPolicy.isHostShellAvailable()
 
         // Android's ability to spawn a small system utility does not imply that a usable
         // shell, Git, compiler, or Gradle installation is available. Only the verified host

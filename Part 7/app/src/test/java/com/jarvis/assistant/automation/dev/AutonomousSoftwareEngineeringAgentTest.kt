@@ -272,7 +272,8 @@ class AutonomousSoftwareEngineeringAgentTest {
             project,
             mapOf(
                 "command" to "echo 'Safe build step'",
-                "approvedCommand" to "echo 'Safe build step'"
+                "approvedCommand" to "echo 'Safe build step'",
+                "approvedWorkDir" to project.workspaceRoot
             ),
             sandbox,
             devAgent,
@@ -288,13 +289,40 @@ class AutonomousSoftwareEngineeringAgentTest {
             project,
             mapOf(
                 "command" to "echo 'Different command'",
-                "approvedCommand" to "echo 'Safe build step'"
+                "approvedCommand" to "echo 'Safe build step'",
+                "approvedWorkDir" to project.workspaceRoot
             ),
             sandbox,
             devAgent,
             isApprovedByUser = true
         )
         assertTrue("Approval for another command must not authorize this command", mismatchedApproval is DevToolResult.AwaitingApproval)
+
+        // F1: approval is also bound to the execution context (working directory).
+        val otherDirApproval = cmdTool.execute(
+            project,
+            mapOf(
+                "command" to "echo 'Safe build step'",
+                "approvedCommand" to "echo 'Safe build step'",
+                "approvedWorkDir" to project.workspaceRoot + "/elsewhere"
+            ),
+            sandbox,
+            devAgent,
+            isApprovedByUser = true
+        )
+        assertTrue("Approval for another directory must not authorize this command", otherDirApproval is DevToolResult.AwaitingApproval)
+
+        val noContextApproval = cmdTool.execute(
+            project,
+            mapOf(
+                "command" to "echo 'Safe build step'",
+                "approvedCommand" to "echo 'Safe build step'"
+            ),
+            sandbox,
+            devAgent,
+            isApprovedByUser = true
+        )
+        assertTrue("Approval without an execution context must not authorize this command", noContextApproval is DevToolResult.AwaitingApproval)
     }
 
     @Test

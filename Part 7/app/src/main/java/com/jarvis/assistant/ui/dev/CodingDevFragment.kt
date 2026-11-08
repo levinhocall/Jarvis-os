@@ -20,6 +20,7 @@ import com.jarvis.assistant.automation.dev.CapabilityState
 import com.jarvis.assistant.automation.dev.DevEnvironmentStatus
 import com.jarvis.assistant.automation.dev.DevProject
 import com.jarvis.assistant.automation.dev.DevToolResult
+import com.jarvis.assistant.automation.dev.ShellPolicy
 import com.jarvis.assistant.automation.dev.ExecutionTarget
 import com.jarvis.assistant.automation.dev.SoftwareEngineeringAgent
 import com.jarvis.assistant.automation.dev.TermuxBridge
@@ -381,7 +382,8 @@ class CodingDevFragment : Fragment() {
             when (status.activeExecutionTarget) {
                 ExecutionTarget.HOST_LINUX_PROCESS -> {
                     val output = withContext(Dispatchers.IO) {
-                        runHostCommand("git status --short && git branch --show-current", File(status.internalWorkspacePath))
+                        runHostCommand("git status --short", File(status.internalWorkspacePath)) +
+                            runHostCommand("git branch --show-current", File(status.internalWorkspacePath))
                     }
                     appendLog(output)
                     setRunningState("GIT READY", "#10B981")
@@ -436,17 +438,14 @@ class CodingDevFragment : Fragment() {
     private fun executeGitPush() {
         val status = getEnvironmentStatus()
         val audit = devAgent.auditGitOperation("git push origin main")
-        if (audit.isDestructive) {
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Approval Required")
-                .setMessage("Destructive Git operation detected:\n${audit.warningMessage}\nDo you authorize this action?")
-                .setPositiveButton("Authorize") { _, _ -> runGitPushDirectly(status) }
-                .setNegativeButton("Cancel", null)
-                .show()
-            return
-        }
-
-        runGitPushDirectly(status)
+        // Publishing to a remote always needs an explicit confirmation of the exact command.
+        val warning = if (audit.isDestructive) "Destructive Git operation detected:\n${audit.warningMessage}\n\n" else ""
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Approval Required")
+            .setMessage("${warning}This publishes commits to the remote:\n\ngit push origin main\n\nDo you authorize this action?")
+            .setPositiveButton("Authorize") { _, _ -> runGitPushDirectly(status) }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun runGitPushDirectly(status: DevEnvironmentStatus) {
@@ -457,7 +456,7 @@ class CodingDevFragment : Fragment() {
             when (status.activeExecutionTarget) {
                 ExecutionTarget.HOST_LINUX_PROCESS -> {
                     val output = withContext(Dispatchers.IO) {
-                        runHostCommand("git push origin main", File(status.internalWorkspacePath))
+                        runHostCommand("git push origin main", File(status.internalWorkspacePath), userAuthorized = true)
                     }
                     appendLog("[GIT] Result:\n$output")
                     setRunningState("GIT PUSH DONE", "#10B981")
@@ -666,10 +665,7 @@ class CodingDevFragment : Fragment() {
     }
 
     private fun getWorkspaceRoot(): String {
-        val hostCandidate = File("/root/jarvis-os-ref/Part 7")
-        if (hostCandidate.exists() && hostCandidate.isDirectory) {
-            return hostCandidate.absolutePath
-        }
+        ShellPolicy.hostWorkspace()?.let { return it }
         val externalStorage = File("/sdcard/jarvis-workspace")
         if (externalStorage.exists() && externalStorage.isDirectory) {
             return externalStorage.absolutePath
@@ -678,9 +674,7 @@ class CodingDevFragment : Fragment() {
     }
 
     private fun isHostDevEnvironment(): Boolean {
-        val devDir = File("/root/jarvis-os-ref/Part 7")
-        val gitBin = File("/usr/bin/git")
-        return devDir.exists() && gitBin.exists() && gitBin.canExecute()
+        return ShellPolicy.isHostShellAvailable()
     }
 
     private fun readBranchFromGitHead(gitDir: File): String {
@@ -700,17 +694,16 @@ class CodingDevFragment : Fragment() {
         }
     }
 
-    private fun runHostCommand(command: String, dir: File): String {
-        return try {
-            val process = ProcessBuilder("bash", "-c", command)
-                .directory(dir)
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().use { it.readText() }
-            process.waitFor(30, TimeUnit.SECONDS)
-            output.ifBlank { "Executed with code ${process.exitValue()}" }
-        } catch (e: Exception) {
-            "Host command error: ${e.message}"
+    /**
+     * Runs a host command through [ShellPolicy] (no shell). [userAuthorized] must only be true
+     * after the user confirmed this exact command in a dialog.
+     */
+    private fun runHostCommand(command: String, dir: File, userAuthorized: Boolean = false): String {
+        val result = ShellPolicy.runHost(command, dir, 30, authorized = userAuthorized)
+        return when {
+            result.refused -> "Blocked: ${result.refusedReason}"
+            result.timedOut -> "Command timed out after 30 seconds.\n${result.output}"
+            else -> result.output.ifBlank { "Executed with code ${result.exitCode}" }
         }
     }
 
