@@ -413,8 +413,8 @@ object AccessibilityHealthModel {
                             val sInfo = info.resolveInfo?.serviceInfo
                             sInfo?.packageName == context.packageName &&
                             (sInfo.name == JarvisAccessibilityService::class.java.name ||
-                             info.id.startsWith("${context.packageName}/") ||
-                             info.id.contains("JarvisAccessibilityService"))
+                             ComponentName.unflattenFromString(info.id) ==
+                                 ComponentName(context, JarvisAccessibilityService::class.java))
                         }
                         if (matched) return true
                     }
