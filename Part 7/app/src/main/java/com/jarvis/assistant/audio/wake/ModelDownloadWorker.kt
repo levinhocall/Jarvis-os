@@ -68,7 +68,9 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
                 }
                 backup.deleteRecursively()
             }
-            VoskModelManager.init(applicationContext,CoroutineScope(currentCoroutineContext()),false)
+            // Structured: init's load runs as a child of this worker, is awaited here (so staging is
+            // cleaned afterwards) and is cancelled together with the worker.
+            coroutineScope { VoskModelManager.init(applicationContext, this, false) }
             Result.success(workDataOf("phase" to "Verified model installed; an already-loaded model stays active until app restart", "percent" to 100))
         } catch(cancelled: CancellationException) { throw cancelled }
         catch(error: Exception) {

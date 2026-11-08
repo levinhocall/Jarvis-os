@@ -39,6 +39,10 @@ import kotlinx.coroutines.flow.asStateFlow
 class JarvisApp : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + com.jarvis.assistant.core.diagnostics.StorageHealth.handler)
+
+    /** Process-lifetime supervised scope for required background work that must outlive any screen. */
+    val applicationScope: CoroutineScope get() = appScope
+
     private var batteryLowReceiver: BroadcastReceiver? = null
 
     lateinit var preferences: AppPreferences

@@ -6,9 +6,7 @@ import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.jarvis.assistant.data.memory.RecallCoreManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.jarvis.assistant.util.launchPersistingOnAppScope
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -228,15 +226,11 @@ object SecurityGuardManager {
         }
         // Never persist or log the supplied phrase/PIN.
         Log.w(TAG, "Security authorization failed at $timeStr")
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                RecallCoreManager.saveFact(
-                    context,
-                    "[SECURITY ALERT: Failed authorization attempt at $timeStr]"
-                )
-            } catch (error: Exception) {
-                Log.w(TAG, "Could not persist security alert.")
-            }
+        launchPersistingOnAppScope(context, TAG, "Security alert persistence") {
+            RecallCoreManager.saveFact(
+                context,
+                "[SECURITY ALERT: Failed authorization attempt at $timeStr]"
+            )
         }
     }
 
@@ -255,12 +249,8 @@ object SecurityGuardManager {
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         // Do not persist arbitrary command text, which may contain credentials or private data.
         Log.w(TAG, "Security intruder alert at $timeStr")
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                RecallCoreManager.saveFact(context, "[SECURITY INTRUDER ALERT at $timeStr]")
-            } catch (error: Exception) {
-                Log.w(TAG, "Could not persist security alert.")
-            }
+        launchPersistingOnAppScope(context, TAG, "Security alert persistence") {
+            RecallCoreManager.saveFact(context, "[SECURITY INTRUDER ALERT at $timeStr]")
         }
     }
 }
