@@ -14,7 +14,7 @@ object WorldModelCoordinator {
     private const val SCREEN_TTL_MS = 10000L // 10s freshness for screen layout
 
     private var activeGoal: ActiveGoal? = null
-    private var currentScreenContext: StateObservation<ScreenContext>? = null
+    private var currentScreenContext: StateObservation<WorldScreenSummary>? = null
     private val generalObservations = ConcurrentHashMap<String, StateObservation<*>>()
 
     fun setActiveGoal(goal: ActiveGoal?) {
@@ -38,7 +38,7 @@ object WorldModelCoordinator {
             visibleLabels
         }
 
-        val context = ScreenContext(
+        val context = WorldScreenSummary(
             foregroundPackage = foregroundPackage,
             visibleElementLabels = sanitizedLabels,
             containsPasswordFields = containsPasswordFields
@@ -54,7 +54,7 @@ object WorldModelCoordinator {
         Log.d(TAG, "Screen context updated for package: $foregroundPackage (${sanitizedLabels.size} elements)")
     }
 
-    fun getScreenContext(): ScreenContext? {
+    fun getScreenContext(): WorldScreenSummary? {
         val obs = currentScreenContext ?: return null
         return if (obs.isStale) null else obs.value
     }

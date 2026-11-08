@@ -17,7 +17,12 @@ data class StateObservation<T>(
         get() = (System.currentTimeMillis() - observedTimestamp) > ttlMs
 }
 
-data class ScreenContext(
+/**
+ * Coarse, privacy-filtered summary of what is on screen, kept by the world model (package, visible
+ * labels, whether a password field is present). Not the accessibility-tree snapshot used for
+ * grounding and clicking: see `automation.grounding.ScreenContext` for that richer model.
+ */
+data class WorldScreenSummary(
     val foregroundPackage: String,
     val visibleElementLabels: List<String>,
     val containsPasswordFields: Boolean = false,

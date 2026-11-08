@@ -2,6 +2,7 @@ package com.jarvis.assistant.core.world
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -161,5 +162,25 @@ class WorldModelTest {
         assertTrue(screen!!.visibleElementLabels.contains("Account Balance"))
         assertFalse("Password label should be redacted", screen.visibleElementLabels.any { it.contains("Password", ignoreCase = true) })
         assertFalse("PIN label should be redacted", screen.visibleElementLabels.any { it.contains("PIN", ignoreCase = true) })
+    }
+
+    @Test
+    fun testWorldScreenSummaryIsDistinctFromGroundingScreenContext() {
+        // F7: two different models used to share the name ScreenContext. They must stay distinct.
+        assertNotEquals(
+            WorldScreenSummary::class,
+            com.jarvis.assistant.automation.grounding.ScreenContext::class
+        )
+
+        val summary = WorldScreenSummary(
+            foregroundPackage = "com.example.app",
+            visibleElementLabels = listOf("Pay", "Cancel"),
+            containsPasswordFields = true,
+            observationTimestamp = 42L
+        )
+        assertEquals("com.example.app", summary.foregroundPackage)
+        assertEquals(listOf("Pay", "Cancel"), summary.visibleElementLabels)
+        assertTrue(summary.containsPasswordFields)
+        assertEquals(42L, summary.observationTimestamp)
     }
 }
