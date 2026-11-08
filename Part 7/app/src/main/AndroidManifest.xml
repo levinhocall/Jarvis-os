@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Granted once via: adb shell pm grant com.jarvis.assistant android.permission.WRITE_SECURE_SETTINGS
+         Lets Jarvis re-enable / rebind its own accessibility service when Android drops it. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -201,7 +204,6 @@
             android:label="@string/app_name"
             android:description="@string/accessibility_service_desc"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:directBootAware="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

@@ -303,7 +303,10 @@ object AccessibilityHealthModel {
                 // Process just started: binder connection is pending in system_server
                 updateState(AccessibilityState.ENABLED, "Service enabled in Settings; connecting background binder...")
             } else {
-                updateState(AccessibilityState.ENABLED, "Service enabled in Settings but binder instance is not connected. Toggle Off and On to restart.")
+                // Self-heal first (needs WRITE_SECURE_SETTINGS); it is rate limited and a no-op otherwise.
+                if (!AccessibilitySelfHeal.healIfNeeded(context)) {
+                    updateState(AccessibilityState.ENABLED, "Service enabled in Settings but binder instance is not connected. Toggle Off and On to restart.")
+                }
             }
         } else {
             updateState(AccessibilityState.DISABLED, "Service is disabled in Android Accessibility Settings.")

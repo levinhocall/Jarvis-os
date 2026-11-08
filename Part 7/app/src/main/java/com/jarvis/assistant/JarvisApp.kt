@@ -139,6 +139,13 @@ class JarvisApp : Application() {
                 onApiKeySuccess = { key -> preferences.reportKeySuccess("gemini", key) }
             )
         )
+        // If Accessibility is enabled in Settings but Android never reconnected it (reboot,
+        // update, OEM killer), rebind it automatically. No-op without WRITE_SECURE_SETTINGS.
+        appScope.launch {
+            kotlinx.coroutines.delay(2500L)
+            com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.refreshFromSystem(this@JarvisApp)
+            com.jarvis.assistant.automation.accessibility.AccessibilitySelfHeal.healIfNeeded(this@JarvisApp)
+        }
         appScope.launch {
             unifiedRuntime.bootSelfTest(context = this@JarvisApp)
             com.jarvis.assistant.automation.mission.MissionEngine.resumeNonTerminalMissions(this@JarvisApp)

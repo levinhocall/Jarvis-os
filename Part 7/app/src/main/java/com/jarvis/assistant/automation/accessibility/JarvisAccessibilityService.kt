@@ -78,6 +78,17 @@ class JarvisAccessibilityService : AccessibilityService() {
                 kotlinx.coroutines.delay(50L)
                 instance?.let { return it }
             }
+            if (instance != null) return instance
+
+            // Enabled in Settings but still not connected: ask the system to rebind us
+            // (works when WRITE_SECURE_SETTINGS was granted) and wait for it to come up.
+            if (context != null && AccessibilitySelfHeal.healIfNeeded(context, force = true)) {
+                val healStart = System.currentTimeMillis()
+                while (System.currentTimeMillis() - healStart < 5000L) {
+                    kotlinx.coroutines.delay(100L)
+                    instance?.let { return it }
+                }
+            }
             return instance
         }
 
@@ -478,7 +489,10 @@ class JarvisAccessibilityService : AccessibilityService() {
         } catch (t: Throwable) {
             Log.w(TAG, "onUnbind suppressed error: ${t.message}")
         }
-        return true // Allows onRebind to be invoked when system reconnects without destroying service
+        // Standard behaviour: let system_server bind again through onBind so a fresh
+        // onServiceConnected() always runs. Returning true made the service depend on
+        // onRebind(), which is not guaranteed to fire for accessibility services.
+        return false
     }
 
     override fun onRebind(intent: Intent?) {

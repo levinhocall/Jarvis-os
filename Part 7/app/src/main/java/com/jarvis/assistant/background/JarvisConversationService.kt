@@ -2246,7 +2246,11 @@ class JarvisConversationService : Service() {
                     }
                     "delegate_ui_task" -> {
                         check(com.jarvis.assistant.ui.aura.AuraOptions.enabled("backgroundAgent")) { "Enable Background Agent in Aura first" }
-                        check(com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.isRunning()) { "Enable Accessibility first" }
+                        com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.awaitInstance(applicationContext, 3000L)
+                        check(com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.isRunning()) {
+                            com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.getRecoveryGuidance()
+                                ?: "Accessibility service is still connecting. Try again in a few seconds."
+                        }
                         val goal = args.optString("goal").trim(); require(goal.length in 1..6000)
                         val mission = com.jarvis.assistant.automation.mission.MissionEngine.startMission(applicationContext, goal,
                             executionRoute = com.jarvis.assistant.automation.mission.MissionExecutionRoute.UI_AGENT)
