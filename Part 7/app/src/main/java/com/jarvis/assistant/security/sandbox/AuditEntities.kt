@@ -35,22 +35,25 @@ interface AuditDao {
     suspend fun pruneOldest(count: Int): Int
 }
 
+// exportSchema stays false: version 1 was never created on any device, so there is no historical
+// schema to export; the encrypted successor will export its own schema from its first version.
 @Database(entities = [AuditEntity::class], version = 1, exportSchema = false)
 abstract class AuditDatabase : RoomDatabase() {
     abstract fun auditDao(): AuditDao
 
     companion object {
-        @Volatile
-        private var instance: AuditDatabase? = null
-
-        fun getInstance(context: Context): AuditDatabase {
-            return instance ?: synchronized(this) {
-                instance ?: Room.databaseBuilder(
-                    context.applicationContext,
-                    AuditDatabase::class.java,
-                    "jarvis_audit.db"
-                ).build().also { instance = it }
-            }
-        }
+        /**
+         * Phase 1.2 F3/F5: audit rows contain action names, invokers and free-form details, so they must
+         * never be written to a plaintext SQLite file. No production code opens this database today
+         * (CapabilitySandbox is always built with `auditDao = null`, so `jarvis_audit.db` is never
+         * created and there are no legacy rows to migrate). The former plaintext builder is therefore
+         * disabled and fails closed until an encrypted store with an explicit, tested migration exists
+         * (planned for Phase 1.7, reusing DatabaseEncryption/DatabaseKeyStore or MemoryDatabase).
+         */
+        fun getInstance(@Suppress("UNUSED_PARAMETER") context: Context): AuditDatabase =
+            error(
+                "Persistent audit storage is disabled until it is encrypted. " +
+                    "Do not open jarvis_audit.db as plaintext."
+            )
     }
 }
