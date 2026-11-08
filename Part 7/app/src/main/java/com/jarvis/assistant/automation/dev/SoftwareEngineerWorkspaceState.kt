@@ -1,8 +1,13 @@
 package com.jarvis.assistant.automation.dev
 
 import com.jarvis.assistant.data.memory.MemoryRepository
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,8 +27,12 @@ data class WorkspaceUiState(
 class SoftwareEngineerWorkspaceCoordinator(
     private val memoryRepo: MemoryRepository? = null,
     private val devLoop: AutonomousDevLoop = AutonomousDevLoop(memoryRepo),
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default)
+    injectedScope: CoroutineScope? = null
 ) {
+    // A caller-supplied scope stays owned by the caller; a default one is owned (and closed) here.
+    private val ownsScope = injectedScope == null
+    private val scope: CoroutineScope = injectedScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    @Volatile private var executionJob: Job? = null
 
     private val _uiState = MutableStateFlow(WorkspaceUiState())
     val uiState: StateFlow<WorkspaceUiState> = _uiState.asStateFlow()
@@ -65,7 +74,7 @@ class SoftwareEngineerWorkspaceCoordinator(
             consoleLog = listOf("Initiating autonomous dev loop for: '$requirement'")
         )
 
-        scope.launch {
+        executionJob = launchGuarded {
             val report = devLoop.executePlan(
                 project = project,
                 plan = plan,
@@ -101,7 +110,7 @@ class SoftwareEngineerWorkspaceCoordinator(
             isExecuting = true
         )
 
-        scope.launch {
+        executionJob = launchGuarded {
             val report = devLoop.executePlan(
                 project = project,
                 plan = plan,
@@ -124,7 +133,29 @@ class SoftwareEngineerWorkspaceCoordinator(
         }
     }
 
+    /** Runs one execution; cancellation propagates, any other failure is reported in the console log. */
+    private fun launchGuarded(block: suspend () -> Unit): Job = scope.launch {
+        try {
+            block()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w("SoftwareEngineerWorkspace", "Dev execution failed (${error.javaClass.simpleName})")
+            _uiState.value = _uiState.value.copy(
+                isExecuting = false,
+                consoleLog = _uiState.value.consoleLog + "[ERROR] Execution failed: ${error.javaClass.simpleName}"
+            )
+        }
+    }
+
+    /** Cancels any running execution and, when this coordinator created its own scope, that scope. */
+    fun close() {
+        executionJob?.cancel()
+        if (ownsScope) scope.cancel()
+    }
+
     fun cancelTask() {
+        executionJob?.cancel()
         devLoop.cancelExecution()
         val logs = _uiState.value.consoleLog.toMutableList()
         logs.add("[CANCELLED] Task cancelled by user.")

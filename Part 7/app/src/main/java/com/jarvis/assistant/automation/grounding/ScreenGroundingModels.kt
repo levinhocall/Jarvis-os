@@ -67,7 +67,9 @@ enum class GroundingOutcome {
 }
 
 /**
- * Coherent representation of the current Android screen.
+ * Coherent representation of the current Android screen: the accessibility-tree snapshot (elements,
+ * freshness, secure-window flags) used for grounding and action verification. The world model keeps
+ * a separate coarse summary, `core.world.WorldScreenSummary`.
  */
 data class ScreenContext(
     val foregroundPackage: String = "",

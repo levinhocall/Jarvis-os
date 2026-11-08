@@ -3,9 +3,7 @@ package com.jarvis.assistant.automation.ledger
 import android.content.Context
 import android.util.Log
 import com.jarvis.assistant.data.memory.RecallCoreManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.jarvis.assistant.util.launchPersistingOnAppScope
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -138,7 +136,9 @@ object ExpenseLedgerTracker {
         val summary = "${entry.type.name}: ${entry.formattedAmount} to/from ${entry.merchant} via ${entry.source} at $timeStr"
         Log.i(TAG, "Recorded Ledger Entry: $summary")
 
-        CoroutineScope(Dispatchers.IO).launch {
+        // Persisted on the application-owned scope so the write survives the notification service
+        // lifecycle; a failure is contained instead of crashing the process.
+        launchPersistingOnAppScope(context, TAG, "Ledger persistence") {
             RecallCoreManager.logProductResearch(
                 context = context,
                 productName = "[LEDGER] ${entry.merchant}",
