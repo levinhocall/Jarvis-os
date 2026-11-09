@@ -1,1 +1,23 @@
-
+name: Repository integrity
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/main.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch exact source
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 --filter=blob:none origin "$GITHUB_SHA"
+          git sparse-checkout set --cone "Part 7" ".github"
+          git checkout --detach FETCH_HEAD
+      - name: Verify official Gradle wrapper checksum
+        working-directory: 'Part 7'
+        run: echo "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
