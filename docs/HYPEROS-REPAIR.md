@@ -30,3 +30,20 @@ The remote branch also contained an empty `.github/workflows/main.yml`, confirme
 Run 42684674955 completed 24 Android tests with one failure: screenshot capture timed out while launching MainActivity a second time. The earlier recreation fixture finished a pre-recreation object and did not explicitly close the replacement. Lifecycle tests now use ActivityScenario.recreate/close, and capture starts a clean task. 23 cases passed in that run, including the accessibility replacement and native microphone regressions. This establishes a fixture correction, not proof of an OEM lifecycle root cause.
 
 Run 42686651157 passed home capture but failed the expanded recreation fixture while waiting for RESUMED (last state PAUSED). The clean emulator fixture now grants required mic/location/notification permissions before these launches, preserves screen-specific failure context, and keeps all recreation checks. Cache-based screenshot export was unavailable after testing; a MediaStore test-evidence copy and export fallback preserve the clean-emulator capture. Failed runs remain documented and are not counted as passing verification.
+
+## Verified delivery
+
+Source: `29f401aed6b1cb1b4eb24e47cb9329c79c82aa9b`, pushed directly to main. The preceding implementation commits and upstream merge are preserved in history.
+
+- Local merged-source JVM suite: 449 tests, zero failures, one environment skip; lint and instrumentation Kotlin compilation passed.
+- [APK CI #321](https://github.com/levinhocall/Jarvis-os/actions/runs/42689051279): successful.
+- [Android 16 runtime CI](https://github.com/levinhocall/Jarvis-os/actions/runs/42689051683): successful, 24 tests, zero failures/errors/skips. Actual clean-emulator [home screenshot](images/home-1.10.0.jpg) was exported from this run and visually reviewed. This proves the new home/orb renders on the emulator; it does not establish handset frame rate or pixel-identical Orby fidelity.
+- [Download debug APK](https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-321/app-debug.apk): package `com.jarvis.assistant`, version 1.10.0 (148), target SDK 36, minimum SDK 26; 167,936,063 bytes. Downloaded artifact checksum and APK signature verified locally.
+- SHA-256: `62f430b141bd909501ab49c15470f7c1fb8a56068e2bdb7b39dc183a75ac7c80`.
+- Signing certificate SHA-256: `9c579fd629d2a3997d51e93e02b884007ad0bde5fa98b1e0c38baae76d8953e3`.
+
+CI debug signing still varies by runner: a private stable signing key is not configured. Updating an installation signed with a different key may be rejected. Do not uninstall an existing installation without a verified export/backup of local memories. No private signing key was published or user data erased.
+
+Remaining handset verification: HyperOS 3 accessibility binding after background/OEM termination; exact-contact WhatsApp delivery; real microphone pickup, interruptions and playback stutter; possible-fall sensing, countdown cancellation and trusted-contact calling; FPS, thermal and battery measurements. Android background restrictions were not bypassed. Automatic emergency monitoring remains opt-in and off by default.
+
+Full changed-file lists: [implementation](https://github.com/levinhocall/Jarvis-os/commit/0c32623), [integrated home](https://github.com/levinhocall/Jarvis-os/commit/d372375), [workflow repair](https://github.com/levinhocall/Jarvis-os/commit/a5b3890), [lifecycle fixture](https://github.com/levinhocall/Jarvis-os/commit/cbccbae), [final runtime fixture and capture](https://github.com/levinhocall/Jarvis-os/commit/29f401a). Machine-readable results are in [HYPEROS-EVIDENCE.json](HYPEROS-EVIDENCE.json).

@@ -1,0 +1,19 @@
+{
+  "application_source_commit": "29f401aed6b1cb1b4eb24e47cb9329c79c82aa9b",
+  "version_name": "1.10.0",
+  "version_code": 148,
+  "local_unit_tests": {"tests": 449, "failures": 0, "skipped": 1},
+  "local_lint": "passed",
+  "local_instrumentation_compilation": "passed",
+  "browser_renderer": {"shader_and_page_errors": 0, "states_checked": ["idle", "listening", "thinking", "speaking", "error"]},
+  "repository_integrity_run": {"id": 42684922010, "result": "success"},
+  "apk_run": {"id": 42689051279, "number": 321, "result": "success"},
+  "apk": {"bytes": 167936063, "sha256": "62f430b141bd909501ab49c15470f7c1fb8a56068e2bdb7b39dc183a75ac7c80", "signature_verified": true, "signing_certificate_sha256": "9c579fd629d2a3997d51e93e02b884007ad0bde5fa98b1e0c38baae76d8953e3", "url": "https://github.com/levinhocall/Jarvis-os/releases/download/debug-ci-321/app-debug.apk"},
+  "android_runtime_run": {"id": 42689051683, "result": "success", "tests": 24, "failures": 0, "errors": 0, "skipped": 0},
+  "earlier_runtime_failures": [42684674955, 42686651157],
+  "native_home_preview": "images/home-1.10.0.jpg",
+  "physical_hyperos_verification": false,
+  "actual_whatsapp_delivery_tested": false,
+  "physical_fall_or_emergency_call_tested": false,
+  "android_device_fps_and_battery_profiled": false
+}
