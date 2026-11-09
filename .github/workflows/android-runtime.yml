@@ -65,8 +65,10 @@ jobs:
           import base64, json, os, subprocess
           adb = os.path.join(os.environ['ANDROID_HOME'], 'platform-tools', 'adb')
           result = subprocess.run([adb, 'exec-out', 'run-as', 'com.jarvis.assistant', 'cat', 'cache/jarvis-home-preview.jpg'], capture_output=True, timeout=20)
+          if result.returncode != 0 or not result.stdout.startswith(b'\xff\xd8'):
+              result = subprocess.run([adb, 'exec-out', 'cat', '/sdcard/Download/JarvisTestEvidence/jarvis-home-preview.jpg'], capture_output=True, timeout=20)
           if result.returncode == 0 and result.stdout.startswith(b'\xff\xd8'):
               print(json.dumps({'jarvis_home_preview_jpeg': base64.b64encode(result.stdout).decode('ascii')}))
           else:
-              print('Home visual evidence unavailable; inspect the runtime test result.')
+              print('Home visual evidence unavailable: ' + result.stderr.decode('utf-8', errors='replace').strip())
           PY

@@ -13,7 +13,16 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class LaunchSmokeInstrumentedTest {
+    private fun prepareHomePermissions() {
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val pkg=instrumentation.targetContext.packageName
+        for(permission in listOf(android.Manifest.permission.RECORD_AUDIO,android.Manifest.permission.ACCESS_COARSE_LOCATION,android.Manifest.permission.ACCESS_FINE_LOCATION)) {
+            instrumentation.uiAutomation.grantRuntimePermission(pkg,permission)
+        }
+        if(android.os.Build.VERSION.SDK_INT>=33) instrumentation.uiAutomation.grantRuntimePermission(pkg,android.Manifest.permission.POST_NOTIFICATIONS)
+    }
     @Test fun captureHomeForVisualReview() {
+        prepareHomePermissions()
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val context=instrumentation.targetContext
         val scenario=androidx.test.core.app.ActivityScenario.launch<com.jarvis.assistant.ui.home.MainActivity>(Intent(context,com.jarvis.assistant.ui.home.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
@@ -27,6 +36,17 @@ class LaunchSmokeInstrumentedTest {
             try {
                 java.io.File(context.cacheDir,"jarvis-home-preview.jpg").outputStream().use { output ->
                     org.junit.Assert.assertTrue(scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG,85,output))
+                }
+                if(android.os.Build.VERSION.SDK_INT>=29) {
+                    val resolver=context.contentResolver
+                    val uri=resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,"jarvis-home-preview.jpg")
+                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE,"image/jpeg")
+                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,"Download/JarvisTestEvidence")
+                        put(android.provider.MediaStore.MediaColumns.IS_PENDING,1)
+                    }) ?: error("Emulator visual evidence storage unavailable")
+                    resolver.openOutputStream(uri)!!.use { output ->org.junit.Assert.assertTrue(scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG,85,output))}
+                    resolver.update(uri,android.content.ContentValues().apply {put(android.provider.MediaStore.MediaColumns.IS_PENDING,0)},null,null)
                 }
             } finally {if(scaled!==bitmap)scaled.recycle();bitmap.recycle()}
         } finally {scenario.close()}
@@ -116,6 +136,7 @@ class LaunchSmokeInstrumentedTest {
         } finally { com.jarvis.assistant.ui.aura.AppIconSwitcher.select(context,"Default") }
     }
     @Test fun encryptedRoomAndReportedScreensOpen() = runBlocking {
+        prepareHomePermissions()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val app = context.applicationContext as JarvisApp
@@ -140,7 +161,7 @@ class LaunchSmokeInstrumentedTest {
             com.jarvis.assistant.ui.directives.EnglishTeacherActivity::class.java
         )) {
             val scenario=androidx.test.core.app.ActivityScenario.launch<android.app.Activity>(Intent(context,screen).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
-            try {scenario.recreate()} finally {scenario.close()}
+            try {scenario.recreate()} catch(error:Throwable) {throw AssertionError("Lifecycle failure in ${screen.simpleName}",error)} finally {scenario.close()}
         }
     }
 }
