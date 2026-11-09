@@ -169,6 +169,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.rootMainLayout)
+        if (savedInstanceState == null) showLaunchSequence()
 
         currentTab = savedInstanceState?.getInt("CURRENT_TAB", TAB_HOME) ?: TAB_HOME
 
@@ -221,6 +222,61 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    /**
+     * A lightweight cinematic boot sequence; no network, audio, or permission work.
+     * Respect reduced-motion settings and never delay actual app initialization.
+     */
+    private fun showLaunchSequence() {
+        val root = window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content)
+        val density = resources.displayMetrics.density
+        val overlay = android.widget.FrameLayout(this).apply {
+            setBackgroundColor(android.graphics.Color.rgb(4, 9, 22))
+            isClickable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val title = android.widget.TextView(this).apply {
+            text = "J A R V I S"
+            textSize = 34f
+            letterSpacing = 0.18f
+            setTextColor(android.graphics.Color.rgb(116, 237, 255))
+            gravity = android.view.Gravity.CENTER
+            typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.BOLD)
+        }
+        val subtitle = android.widget.TextView(this).apply {
+            text = "NEURAL SYSTEM ONLINE"
+            textSize = 11f
+            letterSpacing = 0.22f
+            setTextColor(android.graphics.Color.rgb(145, 173, 205))
+            gravity = android.view.Gravity.CENTER
+        }
+        val center = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+            addView(title, android.widget.LinearLayout.LayoutParams(-1, (70 * density).toInt()))
+            addView(subtitle, android.widget.LinearLayout.LayoutParams(-1, (32 * density).toInt()))
+        }
+        overlay.addView(center, android.widget.FrameLayout.LayoutParams(-1, -2, android.view.Gravity.CENTER))
+        root.addView(overlay, android.widget.FrameLayout.LayoutParams(-1, -1))
+        val scale = android.provider.Settings.Global.getFloat(
+            contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f
+        )
+        if (scale == 0f) {
+            root.removeView(overlay)
+            return
+        }
+        title.alpha = 0f
+        title.scaleX = 0.82f
+        title.scaleY = 0.82f
+        title.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(550).start()
+        overlay.postDelayed({
+            if (overlay.parent != null) {
+                overlay.animate().alpha(0f).setDuration(400).withEndAction {
+                    (overlay.parent as? android.view.ViewGroup)?.removeView(overlay)
+                }.start()
+            }
+        }, 1050L)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

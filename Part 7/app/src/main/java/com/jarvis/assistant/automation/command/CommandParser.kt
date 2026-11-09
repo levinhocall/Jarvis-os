@@ -50,6 +50,41 @@ object CommandParser {
             return ParsedCommandResult(null, 0.0f)
         }
 
+        // Mobile utility intents: explicit, anchored patterns only.
+        // The SMS composer always requires a manual Send tap in the SMS app.
+        val alarmMatch = Regex("^(?:set\\s+)?alarm\\s+(?:for\\s+|at\\s+)?(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?(?:\\s+(?:lagao|laga\\s+do|set\\s+karo))?$").matchEntire(clean)
+        if (alarmMatch != null) {
+            var hour = alarmMatch.groupValues[1].toInt()
+            val minute = alarmMatch.groupValues[2].toIntOrNull() ?: 0
+            val meridiem = alarmMatch.groupValues[3]
+            if (meridiem.isNotEmpty() && hour in 1..12) {
+                hour = (hour % 12) + if (meridiem == "pm") 12 else 0
+            }
+            if (hour in 0..23 && minute in 0..59) {
+                return ParsedCommandResult(JarvisCommand.SetAlarm(hour, minute), 0.98f, "SET_ALARM")
+            }
+        }
+        val timerMatch = Regex("^(?:set\\s+)?(?:a\\s+)?timer\\s+(?:for\\s+)?(\\d{1,4})\\s*(seconds?|minutes?|hours?)(?:\\s+(?:lagao|set\\s+karo))?$").matchEntire(clean)
+        if (timerMatch != null) {
+            val amount = timerMatch.groupValues[1].toInt()
+            val unit = timerMatch.groupValues[2]
+            val seconds = amount * when {
+                unit.startsWith("hour") -> 3600
+                unit.startsWith("minute") -> 60
+                else -> 1
+            }
+            if (seconds in 1..86400) {
+                return ParsedCommandResult(JarvisCommand.SetTimer(seconds), 0.98f, "SET_TIMER")
+            }
+        }
+        val smsMatch = Regex("^(?:compose|draft|write)\\s+(?:an?\\s+)?sms\\s+(?:to\\s+)?(\\+?[0-9][0-9 ()-]{5,24})\\s+(?:saying|message|text)\\s+(.+)$").matchEntire(clean)
+        if (smsMatch != null) {
+            return ParsedCommandResult(
+                JarvisCommand.ComposeSms(smsMatch.groupValues[1].trim(), smsMatch.groupValues[2].trim()),
+                0.98f, "COMPOSE_SMS"
+            )
+        }
+
         // 1. Confirmations & Cancellations (Priority when awaiting confirmation)
         if (isAwaitingConfirmation) {
             if (clean.matches(Regex("^(yes|yeah|yup|send|send it|confirm|do it|sure|okay|go ahead|please send|haan|haanji|kardo|theek hai|avunu|sare|chey|aamaa|sari|ho|thik ache|thik ahe|kar da|kar do).*"))) {

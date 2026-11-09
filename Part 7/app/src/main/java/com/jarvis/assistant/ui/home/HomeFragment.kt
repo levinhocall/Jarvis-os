@@ -30,6 +30,8 @@ import com.jarvis.assistant.R
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
+private val NEON_BG: Int = Color.parseColor("#070510")
+
 class HomeFragment : Fragment() {
 
     private var _binding: FragmentHomeBinding? = null
@@ -39,6 +41,7 @@ class HomeFragment : Fragment() {
 
     private var isPageLoaded = false
     private var pendingOrbState: String? = null
+    private var avatarTaskWasCompleted = false
     private var pendingThemeKey: String? = null
     private var pendingCustomHex: String? = null
     private var lastAudioPushTime = 0L
@@ -63,17 +66,31 @@ class HomeFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = FragmentHomeBinding.inflate(inflater, container, false)
+        // Home is always dark neon, whatever app theme the user picked.
+        val neonContext = android.view.ContextThemeWrapper(requireContext(), R.style.Theme_JarvisAssistant_HomeNeon)
+        _binding = FragmentHomeBinding.inflate(inflater.cloneInContext(neonContext), container, false)
         val deck = android.widget.LinearLayout(requireContext()).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             addView(binding.root, android.widget.LinearLayout.LayoutParams(-1,
                 (resources.displayMetrics.heightPixels * 0.88f).toInt().coerceAtLeast((660 * resources.displayMetrics.density).toInt())))
-            addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(requireContext()))
+            addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(neonContext))
         }
         val scrollingDeck = androidx.core.widget.NestedScrollView(requireContext()).apply {
             isFillViewport = true
-            com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(this)
+            setBackgroundColor(NEON_BG)
             addView(deck)
+            // Home fills exactly one screen; the directive grid sits below the fold instead of peeking under the dock.
+            addOnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
+                val screenHeight = bottom - top
+                v.post {
+                    val b = _binding ?: return@post
+                    val lp = b.root.layoutParams
+                    if (screenHeight > 0 && lp.height != screenHeight) {
+                        lp.height = screenHeight
+                        b.root.layoutParams = lp
+                    }
+                }
+            }
         }
         return com.jarvis.assistant.ui.wallpaper.InAppWallpaper(requireContext(), scrollingDeck, listOf(scrollingDeck, binding.root))
     }
@@ -81,7 +98,7 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         (view as? com.jarvis.assistant.ui.wallpaper.InAppWallpaper)?.let { viewLifecycleOwner.lifecycle.addObserver(it) }
-        com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
+        binding.root.setBackgroundColor(NEON_BG)
         createTaskFallbackPanel()
 
         // Top Navigation
@@ -109,6 +126,8 @@ class HomeFragment : Fragment() {
         }
 
         setupOrbWebView()
+        setupRealisticAvatar()
+        setupMockupControls()
 
         binding.btnScreenShareQuick.setOnClickListener {
             val isSharing = com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value
@@ -218,8 +237,73 @@ class HomeFragment : Fragment() {
         }
     }
 
+    private fun setupRealisticAvatar() {
+        binding.realisticAvatar.hapticsEnabled = preferences.hapticFeedbackEnabled
+        binding.realisticAvatar.setOnClickListener {
+            (activity as? MainActivity)?.handleMicOrOrbClick()
+        }
+        binding.realisticAvatar.setOnLongClickListener {
+            (activity as? MainActivity)?.handleHoldMicOrOrb()
+            true
+        }
+        applyAvatarMode()
+    }
+
+    private fun setupMockupControls() {
+        binding.waveLeft.mirrored = false
+        binding.waveRight.mirrored = true
+        binding.micRing.setOnClickListener { (activity as? MainActivity)?.handleMicOrOrbClick() }
+        binding.micRing.setOnLongClickListener {
+            (activity as? MainActivity)?.handleHoldMicOrOrb()
+            true
+        }
+        binding.btnBarKeyboard.setOnClickListener { (activity as? MainActivity)?.selectTab(MainActivity.TAB_CHAT) }
+        binding.btnBarVoice.setOnClickListener {
+            startActivity(Intent(requireContext(), com.jarvis.assistant.ui.directives.VoiceModeActivity::class.java))
+        }
+        // Reuses the existing (now hidden) quick-action so screen-share logic stays in one place.
+        binding.btnBarCamera.setOnClickListener { binding.btnScreenShareQuick.performClick() }
+        binding.btnBarGrid.setOnClickListener {
+            startActivity(Intent(requireContext(), FeatureHubActivity::class.java))
+        }
+    }
+
+    private fun updateMicVisuals(status: HomeStatusState) {
+        val mode = when {
+            !status.isOn || status.isStandby -> MicRingView.Mode.OFF
+            status.isMuted -> MicRingView.Mode.MUTED
+            status.state == ConversationState.SPEAKING -> MicRingView.Mode.SPEAKING
+            status.state == ConversationState.THINKING || status.state == ConversationState.EXECUTING ||
+                status.state == ConversationState.CONNECTING || status.state == ConversationState.RECOVERING -> MicRingView.Mode.THINKING
+            else -> MicRingView.Mode.LISTENING
+        }
+        binding.micRing.setMode(mode)
+        val moving = mode == MicRingView.Mode.LISTENING || mode == MicRingView.Mode.SPEAKING
+        binding.waveLeft.setActive(moving)
+        binding.waveRight.setActive(moving)
+    }
+
+    /** Shows the realistic avatar or the existing Orb/Ghost stage, per Settings > Assistant Avatar. */
+    private fun applyAvatarMode() {
+        val b = _binding ?: return
+        val girl = false // AI girl removed from Home; Orb/Ghost stage always shown
+        b.realisticAvatar.hapticsEnabled = preferences.hapticFeedbackEnabled
+        b.realisticAvatar.visibility = if (girl) View.VISIBLE else View.GONE
+        b.orbHaloRing.visibility = if (girl) View.GONE else View.VISIBLE
+        if (girl) {
+            b.orbWebView.visibility = View.GONE
+            b.orbWebView.onPause()
+            b.orbWebView.pauseTimers()
+        } else {
+            b.orbWebView.visibility = View.VISIBLE
+            b.orbWebView.onResume()
+            b.orbWebView.resumeTimers()
+        }
+    }
+
     fun setOrbState(state: String) {
         pendingOrbState = state
+        activity?.runOnUiThread { _binding?.realisticAvatar?.setStateKey(state) }
         if (!isPageLoaded) return
         activity?.runOnUiThread {
             _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$state');", null)
@@ -246,6 +330,10 @@ class HomeFragment : Fragment() {
     }
 
     private fun pushExternalAudio(amp: Float, bass: Float, high: Float) {
+        _binding?.realisticAvatar?.setAmplitude(amp)
+        _binding?.waveLeft?.setLevel(amp)
+        _binding?.waveRight?.setLevel(amp)
+        _binding?.micRing?.setLevel(amp)
         if (!isPageLoaded) return
         val now = System.currentTimeMillis()
         if (now - lastAudioPushTime < 33L) return // ~30 calls per second throttle
@@ -257,9 +345,10 @@ class HomeFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
+        binding.root.setBackgroundColor(NEON_BG)
         binding.orbWebView.onResume()
         binding.orbWebView.resumeTimers()
+        applyAvatarMode()
         renderTaskFallback(com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.value)
 
         // Sync theme with settings
@@ -309,7 +398,8 @@ class HomeFragment : Fragment() {
             binding.orbWebView.visibility = View.VISIBLE
             binding.orbWebView.onResume()
             binding.orbWebView.resumeTimers()
-            com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
+            applyAvatarMode()
+            binding.root.setBackgroundColor(NEON_BG)
             setOrbTheme(preferences.appTheme, preferences.customThemeColor)
             updateHomeHeaderAndVoiceStatus()
         } else if (hidden && _binding != null) {
@@ -414,6 +504,9 @@ class HomeFragment : Fragment() {
                 launch {
                     com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.collect { snapshot ->
                         renderTaskFallback(snapshot)
+                        val completed = snapshot?.currentStatus.equals("COMPLETED", ignoreCase = true)
+                        if (completed && !avatarTaskWasCompleted) _binding?.realisticAvatar?.playAcknowledge()
+                        avatarTaskWasCompleted = completed
                     }
                 }
                 launch {
@@ -441,6 +534,7 @@ class HomeFragment : Fragment() {
                     ) { isOn, isMuted, state, isStandby ->
                         HomeStatusState(isOn, isMuted, state, isStandby)
                     }.collect { status ->
+                        updateMicVisuals(status)
                         if (!status.isOn) {
                             setOrbState("idle")
                             binding.tvListeningStatus.text = "JARVIS OFF • TAP TO START"

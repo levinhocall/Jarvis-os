@@ -117,6 +117,28 @@
         <item name="themeAccentLight">#3A0C16</item>
     </style>
 
+    <!-- HOME NEON: Home screen is always dark neon (pink / gold / cyan), whatever app theme is chosen. -->
+    <style name="Theme.JarvisAssistant.HomeNeon" parent="Theme.JarvisAssistant.Dark">
+        <item name="themeBg">#070510</item>
+        <item name="themeSurface">#331A0B24</item>
+        <item name="themeCardBg">#331A0B24</item>
+        <item name="themeCardBorder">#59FF4FA3</item>
+        <item name="themeCardGlassStart">#4D2A0F28</item>
+        <item name="themeCardGlassEnd">#1A12061C</item>
+        <item name="themeChipBg">#33240D2A</item>
+        <item name="themeGlowBlob1">@drawable/bg_liquid_glow_red_1</item>
+        <item name="themeGlowBlob2">@drawable/bg_liquid_glow_red_2</item>
+        <item name="themeGlowBlob3">@drawable/bg_liquid_glow_red_3</item>
+        <item name="themeTextPrimary">#FFF4FA</item>
+        <item name="themeTextSecondary">#F3C6DD</item>
+        <item name="themeTextMuted">#B58AA6</item>
+        <item name="themeAccent1">#FF4FA3</item>
+        <item name="themeAccent2">#FFC76B</item>
+        <item name="themeAccent3">#39E1FF</item>
+        <item name="themeAccent">#FF4FA3</item>
+        <item name="themeAccentLight">#3A0C2A</item>
+    </style>
+
     <!-- 4. SUNSET THEME - LIQUID SUNSET GLASS EDITION -->
     <style name="Theme.JarvisAssistant.Sunset" parent="Theme.Material3.Light.NoActionBar">
         <item name="android:statusBarColor">#FFF0EA</item>

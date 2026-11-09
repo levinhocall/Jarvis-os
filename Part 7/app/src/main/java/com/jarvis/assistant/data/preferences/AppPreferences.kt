@@ -73,10 +73,11 @@ class AppPreferences internal constructor(
         private const val KEY_TASK_OVERLAY_MODE = "key_task_overlay_mode"
         private const val KEY_TASK_OVERLAY_EDGE = "key_task_overlay_edge"
         private const val KEY_TASK_OVERLAY_FREE_POSITION = "key_task_overlay_free_position"
+        private const val KEY_TASK_OVERLAY_PEEK = "key_task_overlay_peek"
         private const val KEY_TASK_OVERLAY_X = "key_task_overlay_x"
         private const val KEY_TASK_OVERLAY_Y = "key_task_overlay_y"
         private val ALLOWED_TASK_OVERLAY_AVATARS = setOf(
-            "alien", "blob", "bot", "cat", "circle", "cloud", "clover", "droid", "drop", "flower",
+            "ai_girl", "alien", "blob", "bot", "cat", "circle", "cloud", "clover", "droid", "drop", "flower",
             "ghost", "hexagon", "mech", "pebble", "pill", "puddle", "square", "star", "triangle"
         )
         private const val KEY_APP_THEME = "key_app_theme"
@@ -87,6 +88,8 @@ class AppPreferences internal constructor(
         private const val KEY_ORB_SCALE = "key_orb_scale"
         private const val KEY_ORB_HUE = "key_orb_hue"
         private const val KEY_ORB_PRESET = "key_orb_preset"
+        private const val KEY_ASSISTANT_AVATAR = "assistant_avatar"
+        val ASSISTANT_AVATAR_MODES = setOf("orb", "ghost")
         private const val KEY_HAPTIC_FEEDBACK = "key_haptic_feedback"
         private const val KEY_NOTIFICATION_HISTORY_OPT_IN = "key_notification_history_opt_in"
         private const val KEY_HEADSET_WHISPER_ENABLED = "key_headset_whisper_enabled"
@@ -468,6 +471,20 @@ class AppPreferences internal constructor(
             it in setOf("classic", "aura", "crimson", "midnight")
         } ?: "classic").apply()
 
+    /**
+     * Primary Home visual: "orb" (classic voice orb, default) or "ghost" (legacy minimal entity).
+     * Both render the existing WebView orb stage. A previously saved "ai_girl" is treated as "orb".
+     */
+    var assistantAvatar: String
+        get() {
+            val value = prefs.getString(KEY_ASSISTANT_AVATAR, "orb") ?: "orb"
+            return if (value in ASSISTANT_AVATAR_MODES) value else "orb"
+        }
+        set(value) = prefs.edit().putString(
+            KEY_ASSISTANT_AVATAR,
+            if (value in ASSISTANT_AVATAR_MODES) value else "orb",
+        ).apply()
+
     var hapticFeedbackEnabled: Boolean
         get() = prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true)
         set(value) = prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK, value).apply()
@@ -577,6 +594,11 @@ class AppPreferences internal constructor(
     var taskOverlayEdge: String
         get() = prefs.getString(KEY_TASK_OVERLAY_EDGE, "right") ?: "right"
         set(value) = prefs.edit().putString(KEY_TASK_OVERLAY_EDGE, value.takeIf { it in setOf("left", "right", "top", "bottom") } ?: "right").apply()
+
+    /** When docked to the left/right edge the floating avatar slides partly off-screen ("peek") until touched or active. */
+    var taskOverlayPeek: Boolean
+        get() = prefs.getBoolean(KEY_TASK_OVERLAY_PEEK, true)
+        set(value) = prefs.edit().putBoolean(KEY_TASK_OVERLAY_PEEK, value).apply()
 
     var taskOverlayFreePosition: Boolean
         get() = prefs.getBoolean(KEY_TASK_OVERLAY_FREE_POSITION, false)

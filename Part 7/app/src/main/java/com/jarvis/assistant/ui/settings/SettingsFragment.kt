@@ -121,6 +121,30 @@ class SettingsFragment : Fragment() {
             "custom" -> "Custom (${preferences.customThemeColor})"
             else -> "Light Theme"
         }
+
+        // Assistant avatar
+        binding.tvCurrentAvatar.text = avatarLabel(preferences.assistantAvatar)
+    }
+
+    private fun avatarLabel(key: String) = when (key) {
+        "orb" -> "Orb (Classic)"
+        "ghost" -> "Ghost (Legacy)"
+        else -> "Orb (Classic)"
+    }
+
+    private fun showAvatarPicker() {
+        val keys = arrayOf("orb", "ghost")
+        val labels = keys.map { avatarLabel(it) }.toTypedArray()
+        val checked = keys.indexOf(preferences.assistantAvatar).coerceAtLeast(0)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Assistant Avatar")
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                preferences.assistantAvatar = keys[which]
+                binding.tvCurrentAvatar.text = labels[which]
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun setupClickListeners() {
@@ -178,6 +202,8 @@ class SettingsFragment : Fragment() {
         binding.rowAppTheme.setOnClickListener {
             ThemeSelectionBottomSheet.newInstance().show(childFragmentManager, ThemeSelectionBottomSheet.TAG)
         }
+
+        binding.rowAssistantAvatar.setOnClickListener { showAvatarPicker() }
 
         binding.rowPrivacyPolicy.setOnClickListener {
             startActivity(Intent(requireContext(), PrivacyShieldActivity::class.java))

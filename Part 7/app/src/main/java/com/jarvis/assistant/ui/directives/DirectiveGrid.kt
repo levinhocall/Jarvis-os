@@ -9,7 +9,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.card.MaterialCardView
 import com.jarvis.assistant.R
 
-/** One canonical nine-entry registry shared by the main deck and feature hub. */
+/** One canonical registry shared by the main deck and feature hub. */
 enum class DirectiveId(val title: String, val description: String, val icon: Int) {
     VOICE("Voice Mode", "Holographic orb", R.drawable.ic_settings_voice),
     LENS("Neural Lens", "Live object scan", R.drawable.ic_screen_share),
@@ -19,7 +19,13 @@ enum class DirectiveId(val title: String, val description: String, val icon: Int
     THEME("Home Theme", "System / Light / Dark", R.drawable.ic_settings_palette),
     MISSION("Mission Mode", "UI Agent / Core LLM", R.drawable.ic_settings_apps),
     IDEAS("My Ideas", "Encrypted thought vault", R.drawable.ic_stack_memory),
-    TEACHER("English Teacher AI", "Four personal trainers", R.drawable.ic_settings_language)
+    TEACHER("English Teacher AI", "Four personal trainers", R.drawable.ic_settings_language),
+    BRAIN_DUMP("Brain Dump", "Many tasks, one sentence", R.drawable.ic_stack_memory),
+    HERMES("Hermes Context", "SOUL / USER / AGENT files", R.drawable.ic_settings_book),
+    AIR_GESTURES("Air Gestures", "Wave to control media", R.drawable.ic_settings_voice),
+    NETWORK("Network Audit", "Your Wi-Fi at a glance", R.drawable.ic_settings_apps),
+    AIRSPACE("Airspace Radar", "Aircraft overhead", R.drawable.ic_screen_share),
+    POLYGLOT("Polyglot", "Translate with AI", R.drawable.ic_settings_language)
 }
 
 object DirectiveGrid {
@@ -69,6 +75,12 @@ object DirectiveGrid {
             DirectiveId.MISSION -> MissionDeskActivity::class.java
             DirectiveId.IDEAS -> IdeasActivity::class.java
             DirectiveId.TEACHER -> EnglishTeacherActivity::class.java
+            DirectiveId.BRAIN_DUMP -> com.jarvis.assistant.ui.extras.BrainDumpActivity::class.java
+            DirectiveId.HERMES -> com.jarvis.assistant.ui.extras.HermesContextActivity::class.java
+            DirectiveId.AIR_GESTURES -> com.jarvis.assistant.ui.extras.AirGesturesActivity::class.java
+            DirectiveId.NETWORK -> com.jarvis.assistant.ui.extras.NetworkAuditActivity::class.java
+            DirectiveId.AIRSPACE -> com.jarvis.assistant.ui.extras.AirspaceRadarActivity::class.java
+            DirectiveId.POLYGLOT -> com.jarvis.assistant.ui.extras.PolyglotActivity::class.java
             DirectiveId.THEME -> return
         }
         context.startActivity(Intent(context, target))

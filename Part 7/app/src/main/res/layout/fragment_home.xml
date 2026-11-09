@@ -9,7 +9,7 @@
     android:clipToPadding="false"
     android:paddingStart="20dp"
     android:paddingEnd="20dp"
-    android:paddingTop="16dp"
+    android:paddingTop="20dp"
     android:paddingBottom="96dp">
 
     <!-- Ambient Liquid Glass Glow Fields (Soft luminous refractions behind glass) -->
@@ -58,7 +58,7 @@
     <LinearLayout
         android:id="@+id/layoutTitle"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:orientation="vertical"
         android:gravity="center"
         app:layout_constraintTop_toTopOf="@id/btnTopChat"
@@ -69,7 +69,7 @@
         <ImageView
             android:id="@+id/ivHeaderJarvisLogo"
             android:layout_width="110dp"
-            android:layout_height="34dp"
+            android:layout_height="28dp"
             android:src="@drawable/ic_jarvis_logo"
             android:scaleType="fitCenter"
             android:contentDescription="Jarvis Logo" />
@@ -78,6 +78,7 @@
             android:id="@+id/tvGreeting"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:visibility="gone"
             android:text="Welcome, NAZIB"
             android:textColor="?attr/themeTextPrimary"
             android:textSize="14sp"
@@ -89,16 +90,17 @@
             android:id="@+id/tvHomeSubtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="How can I help you today?"
+            android:text="Your Personal AI Assistant"
             android:textColor="?attr/themeTextMuted"
             android:textSize="11sp"
             android:fontFamily="sans-serif"
-            android:layout_marginTop="3dp" />
+            android:layout_marginTop="1dp" />
         <TextView
             android:id="@+id/btnFeatureHub"
             android:layout_width="wrap_content"
             android:layout_height="28dp"
             android:layout_marginTop="5dp"
+            android:visibility="gone"
             android:background="@drawable/bg_jarvis_icon_square"
             android:clickable="true"
             android:focusable="true"
@@ -131,8 +133,6 @@
         android:layout_height="0dp"
         android:clipChildren="false"
         android:clipToPadding="false"
-        app:layout_constraintHeight_percent="0.45"
-        app:layout_constraintVertical_bias="0.45"
         app:layout_constraintTop_toBottomOf="@id/layoutTitle"
         app:layout_constraintBottom_toTopOf="@id/layoutStatusIndicator"
         app:layout_constraintStart_toStartOf="parent"
@@ -151,6 +151,15 @@
             android:layout_height="match_parent"
             android:layout_gravity="center"
             android:background="@android:color/transparent" />
+
+        <!-- Realistic AI avatar (Settings > Assistant Avatar). Hidden when Orb/Ghost is selected. -->
+        <com.jarvis.assistant.ui.avatar.RealisticAvatarView
+            android:id="@+id/realisticAvatar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:contentDescription="Jarvis avatar. Tap to talk, hold to power off." />
     </FrameLayout>
 
     <!-- Sleek Futuristic Status Pill -->
@@ -160,8 +169,8 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:layout_marginBottom="22dp"
-        app:layout_constraintBottom_toTopOf="@id/cardWeather"
+        android:layout_marginBottom="4dp"
+        app:layout_constraintBottom_toTopOf="@id/layoutMicRow"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -205,7 +214,102 @@
             android:layout_marginTop="5dp" />
     </LinearLayout>
 
-    <!-- Weather Widget Card -->
+    <!-- Mockup-style mic row: waveform | glowing mic ring | waveform -->
+    <LinearLayout
+        android:id="@+id/layoutMicRow"
+        android:layout_width="match_parent"
+        android:layout_height="112dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:layout_marginBottom="6dp"
+        app:layout_constraintBottom_toTopOf="@id/layoutHomeActionBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.jarvis.assistant.ui.home.WaveformView
+            android:id="@+id/waveLeft"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:importantForAccessibility="no" />
+
+        <com.jarvis.assistant.ui.home.MicRingView
+            android:id="@+id/micRing"
+            android:layout_width="112dp"
+            android:layout_height="112dp"
+            android:contentDescription="Microphone. Tap to talk or mute, hold to power off." />
+
+        <com.jarvis.assistant.ui.home.WaveformView
+            android:id="@+id/waveRight"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:importantForAccessibility="no" />
+    </LinearLayout>
+
+    <!-- Mockup-style action bar: keyboard | live voice | camera/screen | features -->
+    <LinearLayout
+        android:id="@+id/layoutHomeActionBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_home_action_bar"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnBarKeyboard"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="15dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_home_keyboard"
+            app:tint="#F5E9FF"
+            android:contentDescription="Type a message" />
+
+        <ImageButton
+            android:id="@+id/btnBarVoice"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="15dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_home_waveform"
+            app:tint="#F5E9FF"
+            android:contentDescription="Live voice mode" />
+
+        <ImageButton
+            android:id="@+id/btnBarCamera"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="15dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_home_camera"
+            app:tint="#F5E9FF"
+            android:contentDescription="Share screen or camera view" />
+
+        <ImageButton
+            android:id="@+id/btnBarGrid"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="15dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_home_grid"
+            app:tint="#F5E9FF"
+            android:contentDescription="Feature hub" />
+    </LinearLayout>
+
+    <!-- Weather Widget Card (hidden in mockup layout; views kept so existing logic keeps working) -->
     <LinearLayout
         android:id="@+id/cardWeather"
         android:layout_width="match_parent"
@@ -220,6 +324,7 @@
         android:clickable="true"
         android:focusable="true"
         android:layout_marginBottom="24dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@id/layoutActionGrid"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -282,6 +387,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:layout_marginBottom="12dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
