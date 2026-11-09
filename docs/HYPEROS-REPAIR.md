@@ -24,3 +24,7 @@ Before publication, origin/main had advanced to 93f1bb7 with additional avatar, 
 The accessibility instance-replacement regression uses two test-owned service objects to test lifecycle bookkeeping. It does not simulate a real HyperOS binder or establish automatic recovery after OEM termination. A separate clean Android emulator screenshot is captured for visual review; no personal handset content is captured.
 
 The remote branch also contained an empty `.github/workflows/main.yml`, confirmed by GitHub as a separate invalid-workflow failure on push. It is replaced by a real exact-source Gradle-wrapper integrity check. Android APK and runtime workflows remain separate.
+
+## Runtime verification follow-up
+
+Run 42684674955 completed 24 Android tests with one failure: screenshot capture timed out while launching MainActivity a second time. The earlier screen-recreation test finished the obsolete pre-recreation activity object, leaving the replacement in the task. Lifecycle tests now use ActivityScenario.recreate/close, and the capture test starts a clean task. The accessibility replacement regression, native microphone test and other 22 cases passed in that run. Full runtime verification is repeated after correcting the fixture; the failed result is not treated as a pass.

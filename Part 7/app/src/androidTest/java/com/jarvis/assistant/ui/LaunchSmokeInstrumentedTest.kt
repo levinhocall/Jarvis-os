@@ -16,7 +16,7 @@ class LaunchSmokeInstrumentedTest {
     @Test fun captureHomeForVisualReview() {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val context=instrumentation.targetContext
-        val activity=instrumentation.startActivitySync(Intent(context,com.jarvis.assistant.ui.home.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val scenario=androidx.test.core.app.ActivityScenario.launch<com.jarvis.assistant.ui.home.MainActivity>(Intent(context,com.jarvis.assistant.ui.home.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         try {
             instrumentation.waitForIdleSync()
             Thread.sleep(2500)
@@ -29,7 +29,7 @@ class LaunchSmokeInstrumentedTest {
                     org.junit.Assert.assertTrue(scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG,85,output))
                 }
             } finally {if(scaled!==bitmap)scaled.recycle();bitmap.recycle()}
-        } finally {instrumentation.runOnMainSync {activity.finish()}}
+        } finally {scenario.close()}
     }
     @Test fun retiringAccessibilityInstanceCannotDisconnectReplacement() {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
@@ -139,11 +139,8 @@ class LaunchSmokeInstrumentedTest {
             com.jarvis.assistant.ui.directives.IdeasActivity::class.java,
             com.jarvis.assistant.ui.directives.EnglishTeacherActivity::class.java
         )) {
-            val activity = instrumentation.startActivitySync(Intent(context, screen).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync { activity.recreate() }
-            instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync { activity.finish() }
+            val scenario=androidx.test.core.app.ActivityScenario.launch<android.app.Activity>(Intent(context,screen).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            try {scenario.recreate()} finally {scenario.close()}
         }
     }
 }
