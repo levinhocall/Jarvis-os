@@ -16,3 +16,9 @@
 Browser WebGL checks exercise shader compilation and idle/listening/thinking/speaking/error transitions with explicitly injected test amplitude. This is renderer testing, not acoustic recognition or Android FPS/battery evidence. Android emulator checks cover activity lifecycle and service logic; HyperOS-specific process termination, actual WhatsApp delivery, acoustic pickup/stutter and physical fall/contact calling require handset verification.
 
 Development source validation and final CI results are recorded after execution. Existing on-device memories are preserved. CI signing in earlier builds varied by runner; an installed version check was requested to distinguish a failed APK update from an unchanged interface. No user-data reset or uninstall is part of this repair.
+
+## Repository integration
+
+Before publication, origin/main had advanced to 93f1bb7 with additional avatar, home-control, utility, wake-matcher and audit changes. Those commits were merged and preserved. The merged home uses the same controller actions with visible Chat/Voice/Vision/Tools category cards; the redundant mic row is hidden because the bottom Talk control remains available. Its hidden animation loops do not run. Validation is repeated on this merged source, not inferred from the earlier checkout's successful checks.
+
+The accessibility instance-replacement regression uses two test-owned service objects to test lifecycle bookkeeping. It does not simulate a real HyperOS binder or establish automatic recovery after OEM termination. A separate clean Android emulator screenshot is captured for visual review; no personal handset content is captured.

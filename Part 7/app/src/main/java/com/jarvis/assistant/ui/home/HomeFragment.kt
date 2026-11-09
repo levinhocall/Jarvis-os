@@ -77,7 +77,7 @@ class HomeFragment : Fragment() {
         }
         val scrollingDeck = androidx.core.widget.NestedScrollView(requireContext()).apply {
             isFillViewport = true
-            setBackgroundColor(NEON_BG)
+            setBackgroundResource(R.drawable.bg_premium_night)
             addView(deck)
             // Home fills exactly one screen; the directive grid sits below the fold instead of peeking under the dock.
             addOnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
@@ -98,7 +98,7 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         (view as? com.jarvis.assistant.ui.wallpaper.InAppWallpaper)?.let { viewLifecycleOwner.lifecycle.addObserver(it) }
-        binding.root.setBackgroundColor(NEON_BG)
+        binding.root.setBackgroundResource(R.drawable.bg_premium_night)
         createTaskFallbackPanel()
 
         // Top Navigation
@@ -345,7 +345,7 @@ class HomeFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        binding.root.setBackgroundColor(NEON_BG)
+        binding.root.setBackgroundResource(R.drawable.bg_premium_night)
         binding.orbWebView.onResume()
         binding.orbWebView.resumeTimers()
         applyAvatarMode()
@@ -399,7 +399,7 @@ class HomeFragment : Fragment() {
             binding.orbWebView.onResume()
             binding.orbWebView.resumeTimers()
             applyAvatarMode()
-            binding.root.setBackgroundColor(NEON_BG)
+            binding.root.setBackgroundResource(R.drawable.bg_premium_night)
             setOrbTheme(preferences.appTheme, preferences.customThemeColor)
             updateHomeHeaderAndVoiceStatus()
         } else if (hidden && _binding != null) {

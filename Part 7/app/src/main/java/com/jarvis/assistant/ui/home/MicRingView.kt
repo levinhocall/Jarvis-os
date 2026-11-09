@@ -95,6 +95,7 @@ class MicRingView @JvmOverloads constructor(
     }
 
     private fun start() {
+        if (!isShown || !ValueAnimator.areAnimatorsEnabled()) return
         if (ticker != null) return
         lastTick = 0L
         ticker = ValueAnimator.ofFloat(0f, 1f).apply {

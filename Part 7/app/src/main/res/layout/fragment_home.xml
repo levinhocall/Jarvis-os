@@ -217,6 +217,7 @@
     <!-- Mockup-style mic row: waveform | glowing mic ring | waveform -->
     <LinearLayout
         android:id="@+id/layoutMicRow"
+        android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="112dp"
         android:orientation="horizontal"
@@ -253,10 +254,10 @@
     <LinearLayout
         android:id="@+id/layoutHomeActionBar"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="88dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="@drawable/bg_home_action_bar"
+        android:background="@android:color/transparent"
         android:paddingStart="8dp"
         android:paddingEnd="8dp"
         android:layout_marginBottom="8dp"
@@ -264,48 +265,48 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnBarKeyboard"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:padding="15dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_home_keyboard"
-            app:tint="#F5E9FF"
+            android:layout_margin="3dp" android:minWidth="0dp" android:padding="4dp"
+            android:text="Chat" android:textAllCaps="false" android:textColor="#F5E9FF" android:textSize="12sp"
+            app:backgroundTint="#251339" app:cornerRadius="16dp" app:strokeWidth="1dp" app:strokeColor="#634187"
+            app:icon="@drawable/ic_home_keyboard" app:iconGravity="textTop" app:iconTint="#D7A7FF" app:iconSize="22dp"
             android:contentDescription="Type a message" />
 
-        <ImageButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnBarVoice"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:padding="15dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_home_waveform"
-            app:tint="#F5E9FF"
+            android:layout_margin="3dp" android:minWidth="0dp" android:padding="4dp"
+            android:text="Voice" android:textAllCaps="false" android:textColor="#F5E9FF" android:textSize="12sp"
+            app:backgroundTint="#251339" app:cornerRadius="16dp" app:strokeWidth="1dp" app:strokeColor="#634187"
+            app:icon="@drawable/ic_home_waveform" app:iconGravity="textTop" app:iconTint="#D7A7FF" app:iconSize="22dp"
             android:contentDescription="Live voice mode" />
 
-        <ImageButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnBarCamera"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:padding="15dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_home_camera"
-            app:tint="#F5E9FF"
+            android:layout_margin="3dp" android:minWidth="0dp" android:padding="4dp"
+            android:text="Vision" android:textAllCaps="false" android:textColor="#F5E9FF" android:textSize="12sp"
+            app:backgroundTint="#251339" app:cornerRadius="16dp" app:strokeWidth="1dp" app:strokeColor="#634187"
+            app:icon="@drawable/ic_home_camera" app:iconGravity="textTop" app:iconTint="#D7A7FF" app:iconSize="22dp"
             android:contentDescription="Share screen or camera view" />
 
-        <ImageButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnBarGrid"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:padding="15dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_home_grid"
-            app:tint="#F5E9FF"
+            android:layout_margin="3dp" android:minWidth="0dp" android:padding="4dp"
+            android:text="Tools" android:textAllCaps="false" android:textColor="#F5E9FF" android:textSize="12sp"
+            app:backgroundTint="#251339" app:cornerRadius="16dp" app:strokeWidth="1dp" app:strokeColor="#634187"
+            app:icon="@drawable/ic_home_grid" app:iconGravity="textTop" app:iconTint="#D7A7FF" app:iconSize="22dp"
             android:contentDescription="Feature hub" />
     </LinearLayout>
 
