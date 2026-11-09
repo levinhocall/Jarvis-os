@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 
 /** Native audio-reactive presentation over the existing service, never a second microphone pipeline. */
 class VoiceModeActivity : AppCompatActivity() {
-    private lateinit var orb: PremiumOrbView
+    private lateinit var orb: VortexOrbView
     private lateinit var status: TextView
     private var attemptedStart = false
     private val permissions = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -34,7 +34,8 @@ class VoiceModeActivity : AppCompatActivity() {
         fun text(size: Float) = TextView(this).apply { textSize = size; setTextColor(Color.WHITE); root.addView(this) }
         text(22f).text = "JARVIS · LIVE VOICE"
         status = text(14f)
-        orb = PremiumOrbView(this)
+        orb = VortexOrbView(this)
+        lifecycle.addObserver(orb)
         root.addView(orb, LinearLayout.LayoutParams(-1, 0, 1f))
         val user = text(16f).apply { maxLines = 3 }
         val assistant = text(18f).apply { maxLines = 5 }
@@ -70,7 +71,7 @@ class VoiceModeActivity : AppCompatActivity() {
         }
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) {
             launch { JarvisConversationService.audioLevel.collect { orb.level = it } }
-            launch { JarvisConversationService.conversationState.collect { status.text = it.name.replace('_', ' ') } }
+            launch { JarvisConversationService.conversationState.collect { status.text = it.name.replace('_', ' ');orb.updateState(it.name) } }
             launch { JarvisConversationService.liveUserTranscript.collect { user.text = it } }
             launch { JarvisConversationService.liveAssistantResponse.collect { assistant.text = it } }
             launch { JarvisConversationService.liveError.collect { if (it != null) status.text = "Live voice could not connect. Check AI Provider Connections." } }

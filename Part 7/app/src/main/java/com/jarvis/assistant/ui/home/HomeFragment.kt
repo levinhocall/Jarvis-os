@@ -493,7 +493,7 @@ class HomeFragment : Fragment() {
                                     binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#10B981"))
                                 }
                                 ConversationState.ERROR -> {
-                                    setOrbState("idle")
+                                    setOrbState("error")
                                     binding.tvListeningStatus.text = "CONNECTION ERROR"
                                     binding.tvListeningStatus.setTextColor(Color.parseColor("#EF4444"))
                                     binding.tvHoldHint.text = "Check connection settings and retry"

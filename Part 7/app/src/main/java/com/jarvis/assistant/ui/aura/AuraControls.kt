@@ -20,6 +20,7 @@ object AuraControls {
             }
         }
         button("Offline wake word · Hey Jarvis") { activity.startActivity(Intent(activity,com.jarvis.assistant.ui.directives.WakeWordActivity::class.java)) }
+        button("Emergency contact · optional fall monitoring") { activity.startActivity(Intent(activity,com.jarvis.assistant.emergency.EmergencyContactActivity::class.java)) }
         button("App icon · Default / Aura Red / Midnight / Crimson") {
             MaterialAlertDialogBuilder(activity).setTitle("Home-screen icon").setItems(AppIconSwitcher.icons.keys.toTypedArray()) { _, i ->
                 runCatching { AppIconSwitcher.select(activity,AppIconSwitcher.icons.keys.elementAt(i)) }.onFailure { Toast.makeText(activity,"Launcher could not update the icon.",Toast.LENGTH_LONG).show() }

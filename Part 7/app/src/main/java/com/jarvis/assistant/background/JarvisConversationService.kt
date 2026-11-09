@@ -2100,12 +2100,14 @@ class JarvisConversationService : Service() {
         result: JSONObject,
         goal: String,
         userConstraints: List<String> = emptyList(),
-        actionLabel: String
+        actionLabel: String,
+        explicitMessageAuthorization: com.jarvis.assistant.automation.mission.ExplicitMessageAuthorization? = null
     ) {
         val mission = com.jarvis.assistant.automation.mission.MissionEngine.startMission(
             context = this@JarvisConversationService,
             goal = goal,
-            userConstraints = userConstraints
+            userConstraints = userConstraints,
+            explicitMessageAuthorization = explicitMessageAuthorization
         )
         result.put("success", mission.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.COMPLETED)
         result.put("mission_id", mission.missionId)
@@ -2567,7 +2569,10 @@ class JarvisConversationService : Service() {
                             result = result,
                             goal = "send WhatsApp to $recipient saying $message",
                             userConstraints = constraints,
-                            actionLabel = "WhatsApp message to $recipient"
+                            actionLabel = "WhatsApp message to $recipient",
+                            explicitMessageAuthorization = com.jarvis.assistant.automation.mission.ExplicitMessageAuthorization.fromUtterance(
+                                currentTurnUserText.toString(),recipient,message
+                            )
                         )
                         result.put("sent", false)
                     }

@@ -13,6 +13,39 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class LaunchSmokeInstrumentedTest {
+    @Test fun captureHomeForVisualReview() {
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val context=instrumentation.targetContext
+        val activity=instrumentation.startActivitySync(Intent(context,com.jarvis.assistant.ui.home.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            instrumentation.waitForIdleSync()
+            Thread.sleep(2500)
+            val capture=instrumentation.uiAutomation.takeScreenshot()
+            org.junit.Assert.assertNotNull("Emulator screenshot unavailable",capture)
+            val bitmap=capture!!
+            val scaled=android.graphics.Bitmap.createScaledBitmap(bitmap,360,(bitmap.height*360f/bitmap.width).toInt(),true)
+            try {
+                java.io.File(context.cacheDir,"jarvis-home-preview.jpg").outputStream().use { output ->
+                    org.junit.Assert.assertTrue(scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG,85,output))
+                }
+            } finally {if(scaled!==bitmap)scaled.recycle();bitmap.recycle()}
+        } finally {instrumentation.runOnMainSync {activity.finish()}}
+    }
+    @Test fun retiringAccessibilityInstanceCannotDisconnectReplacement() {
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        org.junit.Assume.assumeTrue(com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance==null)
+        instrumentation.runOnMainSync {
+            val old=com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService()
+            val replacement=com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService()
+            try {
+                val connect=com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService::class.java.getDeclaredMethod("onServiceConnected").apply { isAccessible=true }
+                connect.invoke(old);connect.invoke(replacement)
+                old.onUnbind(null);old.onDestroy()
+                org.junit.Assert.assertSame(replacement,com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance)
+                org.junit.Assert.assertTrue(com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel.isOperational())
+            } finally {replacement.onDestroy()}
+        }
+    }
     @Test fun offlineVoskModelLoadsAndSilenceDoesNotWake() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         com.jarvis.assistant.audio.VoskModelManager.init(context,this,includeSpeaker=false)
@@ -97,6 +130,7 @@ class LaunchSmokeInstrumentedTest {
             com.jarvis.assistant.ui.home.MainActivity::class.java,
             com.jarvis.assistant.ui.settings.AuraControlActivity::class.java,
             com.jarvis.assistant.ui.directives.WakeWordActivity::class.java,
+            com.jarvis.assistant.emergency.EmergencyContactActivity::class.java,
             com.jarvis.assistant.ui.aura.AvatarStudioActivity::class.java,
             com.jarvis.assistant.ui.aura.DecisionLogsActivity::class.java,
             com.jarvis.assistant.ui.aura.MediaStudioActivity::class.java,

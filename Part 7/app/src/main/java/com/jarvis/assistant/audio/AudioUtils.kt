@@ -67,8 +67,8 @@ object AudioUtils {
                 if ((sample >= 0 && lastSample < 0) || (sample < 0 && lastSample >= 0)) {
                     zeroCrossings++
                 }
-                val diff = sample - lastSample
-                diffSumSquares += (diff * diff).toDouble()
+                val diff = sample.toDouble() - lastSample.toDouble()
+                diffSumSquares += diff * diff
             }
 
             lowPassFilterState += alpha * (sample - lowPassFilterState)

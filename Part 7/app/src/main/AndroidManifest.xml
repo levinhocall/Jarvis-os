@@ -13,6 +13,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
@@ -49,6 +50,10 @@
         android:networkSecurityConfig="@xml/network_security_config">
 
         <activity android:name=".ui.directives.WakeWordActivity" android:exported="false" />
+        <activity android:name=".emergency.EmergencyContactActivity" android:exported="false" />
+        <service android:name=".emergency.EmergencyMonitorService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled possible-fall sensor monitoring with a cancellable trusted-contact call countdown" />
+        </service>
         <activity android:name=".ui.aura.DecisionLogsActivity" android:exported="false" />
         <activity android:name=".ui.aura.MediaStudioActivity" android:exported="false" />
         <activity android:name=".ui.aura.AvatarStudioActivity" android:exported="false" />

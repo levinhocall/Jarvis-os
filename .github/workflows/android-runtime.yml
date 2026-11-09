@@ -58,3 +58,15 @@ jobs:
           tail -100 /tmp/jarvis-emulator.log || true
           timeout 20 "$ANDROID_HOME/platform-tools/adb" logcat -d -b crash || true
           find 'Part 7/app/build/outputs/androidTest-results' -name '*.xml' -exec cat {} \; || true
+      - name: Home visual evidence from disposable emulator
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, subprocess
+          adb = os.path.join(os.environ['ANDROID_HOME'], 'platform-tools', 'adb')
+          result = subprocess.run([adb, 'exec-out', 'run-as', 'com.jarvis.assistant', 'cat', 'cache/jarvis-home-preview.jpg'], capture_output=True, timeout=20)
+          if result.returncode == 0 and result.stdout.startswith(b'\xff\xd8'):
+              print(json.dumps({'jarvis_home_preview_jpeg': base64.b64encode(result.stdout).decode('ascii')}))
+          else:
+              print('Home visual evidence unavailable; inspect the runtime test result.')
+          PY

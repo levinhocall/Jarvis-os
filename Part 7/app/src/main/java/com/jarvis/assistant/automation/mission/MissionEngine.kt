@@ -498,10 +498,22 @@ object MissionEngine {
         context: Context? = null,
         goal: String,
         userConstraints: List<String> = emptyList(),
-        executionRoute: MissionExecutionRoute = MissionExecutionRoute.AUTO
+        executionRoute: MissionExecutionRoute = MissionExecutionRoute.AUTO,
+        explicitMessageAuthorization: ExplicitMessageAuthorization? = null
     ): MissionDefinition = mutex.withLock {
         val userConstraints = if (executionRoute == MissionExecutionRoute.AUTO) userConstraints else MissionRoutePolicy.constraints(userConstraints, executionRoute)
-        if (hasBlockingMission()) return@withLock blockedMission(goal)
+        if (hasBlockingMission()) {
+            val existing=_activeMission.value
+            val authorized=if(existing!=null && existing.userConstraints==userConstraints) explicitMessageAuthorization?.applyTo(existing) else null
+            if(authorized!=null && authorized!==existing) {
+                _activeMission.value=authorized
+                persistMission(authorized)
+                MissionApprovalNotifier.cancel(context,authorized.missionId)
+                engineScope.launch {executeMission(context,authorized.missionId)}
+                return@withLock authorized
+            }
+            return@withLock blockedMission(goal)
+        }
         val planner = llmPlanner
         planner?.resetCancellation()
         val hasExactContactOrProfileConstraint = userConstraints.any {
@@ -562,7 +574,8 @@ object MissionEngine {
             persistMission(unavailable)
             return@withLock unavailable
         }
-        val mission = planMission(goal, userConstraints, context)
+        val planned = planMission(goal, userConstraints, context)
+        val mission = explicitMessageAuthorization?.applyTo(planned) ?: planned
         _activeMission.value = mission
         persistMission(mission)
         Log.i(TAG, "Mission planned (id=${mission.missionId}, status=${mission.status}); goal omitted from logs")

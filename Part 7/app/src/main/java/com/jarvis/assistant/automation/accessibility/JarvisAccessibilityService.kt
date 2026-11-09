@@ -459,8 +459,10 @@ class JarvisAccessibilityService : AccessibilityService() {
             // Prevent delayed lifecycle work and armed actions retaining this service after teardown.
             handler.removeCallbacksAndMessages(null)
             clearPendingAutomation()
-            if (instance === this) instance = null
-            AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service destroyed")
+            if (instance === this) {
+                instance = null
+                AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service destroyed")
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "onDestroy suppressed error: ${t.message}")
         } finally {
@@ -473,8 +475,10 @@ class JarvisAccessibilityService : AccessibilityService() {
             // A service may later rebind; onRebind schedules only the work it still needs.
             handler.removeCallbacksAndMessages(null)
             clearPendingAutomation()
-            if (instance === this) instance = null
-            AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
+            if (instance === this) {
+                instance = null
+                AccessibilityHealthModel.updateState(AccessibilityState.DISCONNECTED, "Service unbound")
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "onUnbind suppressed error: ${t.message}")
         }

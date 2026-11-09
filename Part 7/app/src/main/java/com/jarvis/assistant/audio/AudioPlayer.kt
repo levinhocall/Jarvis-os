@@ -38,7 +38,7 @@ class AudioPlayer(
         val bufferSize = maxOf(minBufferSize * 4, 19200)
 
         val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setUsage(AudioAttributes.USAGE_ASSISTANT)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
 
@@ -245,11 +245,11 @@ class AudioPlayer(
 
         track?.let { t ->
             if (t.state == AudioTrack.STATE_INITIALIZED) {
-                // AudioTrack.WRITE_BLOCKING guarantees zero dropped PCM chunks on the dedicated audio thread
-                val written = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    t.write(chunk, 0, chunk.size, AudioTrack.WRITE_BLOCKING)
-                } else {
-                    t.write(chunk, 0, chunk.size)
+                val epoch = activeEpoch.get()
+                val written = PcmWritePump.write(chunk, {
+                    isRunning.get() && activeEpoch.get() == epoch
+                }) { offset, length ->
+                    t.write(chunk, offset, length, AudioTrack.WRITE_BLOCKING)
                 }
                 if (written < 0) {
                     Log.w(TAG, "AudioTrack write failed ($written). Reinitializing AudioTrack...")

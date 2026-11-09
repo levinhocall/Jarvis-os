@@ -145,6 +145,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val visualUpgrade = getSharedPreferences("jarvis_visual_upgrade", MODE_PRIVATE)
+        if (!visualUpgrade.getBoolean("violet_home_applied", false)) {
+            com.jarvis.assistant.JarvisApp.instance.preferences.appTheme = "dark"
+            visualUpgrade.edit().putBoolean("violet_home_applied", true).apply()
+        }
         com.jarvis.assistant.util.ThemeManager.applyTheme(this)
         val prefs = com.jarvis.assistant.JarvisApp.instance.preferences
         appliedThemeKey = prefs.appTheme

@@ -52,10 +52,10 @@
         <item name="colorSurface">#33141B3D</item>
         <item name="colorOnSurface">#F8FAFC</item>
 
-        <item name="themeBg">#070914</item>
-        <item name="themeSurface">#33141B3D</item>
-        <item name="themeCardBg">#33141B3D</item>
-        <item name="themeCardBorder">#4D5B8CFF</item>
+        <item name="themeBg">#0B031C</item>
+        <item name="themeSurface">#221331</item>
+        <item name="themeCardBg">#221331</item>
+        <item name="themeCardBorder">#665E318F</item>
         <item name="themeCardGlassStart">#4D1B2654</item>
         <item name="themeCardGlassEnd">#1A0F1733</item>
         <item name="themeDockBg">#660F1535</item>
@@ -72,10 +72,10 @@
         <item name="themeTextPrimary">#F8FAFC</item>
         <item name="themeTextSecondary">#94A3B8</item>
         <item name="themeTextMuted">#64748B</item>
-        <item name="themeAccent1">#5B8CFF</item>
+        <item name="themeAccent1">#C674FF</item>
         <item name="themeAccent2">#A78BFA</item>
         <item name="themeAccent3">#22D3EE</item>
-        <item name="themeAccent">#5B8CFF</item>
+        <item name="themeAccent">#C674FF</item>
         <item name="themeAccentLight">#1E2858</item>
     </style>
 

@@ -47,7 +47,7 @@ object ThemeManager {
     fun getThemeBgColor(themeKey: String, customHex: String?): Int {
         val resolved = if (themeKey == "system") runCatching { resolveThemeKey(JarvisApp.instance, themeKey) }.getOrDefault("light") else themeKey
         return when (resolved) {
-            "dark" -> Color.parseColor("#070914")
+            "dark" -> Color.parseColor("#0B031C")
             "red" -> Color.parseColor("#0E0307")
             "sunset" -> Color.parseColor("#FFF0EA")
             "custom" -> try { Color.parseColor(customHex ?: "#FFFFFF") } catch (_: Exception) { Color.WHITE }
@@ -60,7 +60,7 @@ object ThemeManager {
         val themeKey = resolveThemeKey(activity, prefs?.appTheme ?: "sunset")
 
         val (themeRes, isLightStatusBar, bgColor) = when (themeKey) {
-            "dark" -> Triple(R.style.Theme_JarvisAssistant_Dark, false, Color.parseColor("#070914"))
+            "dark" -> Triple(R.style.Theme_JarvisAssistant_Dark, false, Color.parseColor("#0B031C"))
             "red" -> Triple(R.style.Theme_JarvisAssistant_Red, false, Color.parseColor("#0E0307"))
             "sunset" -> Triple(R.style.Theme_JarvisAssistant_Sunset, true, Color.parseColor("#FFF0EA"))
             "custom" -> {
@@ -96,6 +96,10 @@ object ThemeManager {
     fun applyDynamicBackground(view: View) {
         val prefs = try { JarvisApp.instance.preferences } catch (_: Exception) { null }
         val themeKey = prefs?.appTheme ?: "sunset"
+        if (resolveThemeKey(view.context, themeKey) == "dark") {
+            view.setBackgroundResource(R.drawable.bg_premium_night)
+            return
+        }
         val customHex = prefs?.customThemeColor ?: "#FFFFFF"
         val color = getThemeBgColor(themeKey, customHex)
         view.setBackgroundColor(color)
