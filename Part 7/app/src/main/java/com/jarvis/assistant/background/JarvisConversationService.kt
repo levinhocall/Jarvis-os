@@ -3722,15 +3722,22 @@ class JarvisConversationService : Service() {
     private var wakeModelJob: Job? = null
     private var wakeRecognizer: Recognizer? = null
     private var wakeMicrophoneLease: com.jarvis.assistant.audio.MicrophoneOwnership.Lease? = null
+    @Volatile private var wakeStopping = false
 
     private fun exitStandbyListening() {
+        wakeStopping = true
         wakeTestMode = false
-        com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(false)
         wakeRecoveryJob?.cancel(); wakeRecoveryJob = null
-        com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Wake listener stopped")
         wakeModelJob?.cancel(); wakeModelJob = null
-        _isStandby.value = false
-        closeWakeCapture()
+        try {
+            val closed = closeWakeCapture()
+            if (closed) {
+                com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(false)
+                com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Wake listener stopped")
+            }
+            // Observers must not mistake requested shutdown for released microphone ownership.
+            _isStandby.value = false
+        } finally { wakeStopping = false }
     }
 
     private fun closeWakeCapture(): Boolean {
@@ -3749,7 +3756,7 @@ class JarvisConversationService : Service() {
     }
 
     private fun startWakeListening() {
-        if (!_isStandby.value) return
+        if (!_isStandby.value || wakeStopping) return
         if (voskSpeechService != null) return
 
         val model = VoskModelManager.model
@@ -3805,11 +3812,11 @@ class JarvisConversationService : Service() {
     private fun recoverWakeListener(error: Exception?) {
         if (!_isStandby.value || wakeRecoveryJob?.isActive == true) return
         wakeRecoveryJob = serviceScope.launch(Dispatchers.Main) {
-            com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(false)
             if (!closeWakeCapture()) {
                 fullStop()
                 return@launch
             }
+            com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(false)
             if (!PermissionHelper.hasRecordAudioPermission(this@JarvisConversationService) || error is SecurityException || ++wakeFailures > 3) {
                 fullStop()
                 com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Microphone unavailable. Check permission/privacy switch and restart from Wake Word.")
@@ -3836,7 +3843,7 @@ class JarvisConversationService : Service() {
     }
 
     private fun checkVoskHypothesis(hypothesisJson: String?) {
-        if (hypothesisJson.isNullOrBlank() || !_isStandby.value || wakeRecoveryJob?.isActive == true || isPhoneCallActive()) return
+        if (hypothesisJson.isNullOrBlank() || !_isStandby.value || wakeStopping || wakeRecoveryJob?.isActive == true || isPhoneCallActive()) return
         val settings = com.jarvis.assistant.audio.wake.WakeSettings(this)
         if (!settings.allowPocket && com.jarvis.assistant.audio.PocketDetectionManager.isDeviceInPocket()) {
             com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Pocket wake is disabled in Wake Word settings")
