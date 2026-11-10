@@ -24,7 +24,8 @@ class GeminiLiveWebSocket(
     private val onApiKeyInvalid: (String) -> Unit = {},
     private val onApiKeySuccess: (String) -> Unit = {},
     /** When true, VoiceSessionManager is the sole reconnect authority. */
-    private val externalReconnectOwner: Boolean = false
+    private val externalReconnectOwner: Boolean = false,
+    private val socketFactory: WebSocket.Factory = sharedClient
 ) {
     @Volatile private var activeApiKey: String = apiKey
     @Volatile private var pendingApiKey: String? = null
@@ -56,7 +57,7 @@ class GeminiLiveWebSocket(
             .build()
     }
 
-    private val client = sharedClient
+    private val connectionEpoch = AtomicLong(0L)
 
     // The owner selects a ListModels-discovered Bidi model. Never rewrite its version here.
     private var activeModel: String = model
@@ -127,6 +128,7 @@ class GeminiLiveWebSocket(
             return
         }
         activeApiKey = selectedApiKey
+        val epoch = connectionEpoch.incrementAndGet()
 
         listener.onConnectionStateChanged("CONNECTING...")
 
@@ -138,8 +140,9 @@ class GeminiLiveWebSocket(
                 .header("x-goog-api-key", activeApiKey)
                 .build()
 
-            webSocket = client.newWebSocket(request, object : WebSocketListener() {
+            webSocket = socketFactory.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
+                    if (epoch != connectionEpoch.get()) { webSocket.close(1000, "Superseded connection"); return }
                     Log.d(TAG, "WebSocket connected to Gemini Live. Sending BidiSetup...")
                     // Retain bounded tool IDs across a resumed connection; replay must not repeat side effects.
                     isConnected.set(true)
@@ -150,10 +153,12 @@ class GeminiLiveWebSocket(
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
+                    if (epoch != connectionEpoch.get()) return
                     handleIncomingMessage(text)
                 }
 
                 override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                    if (epoch != connectionEpoch.get()) return
                     handleIncomingMessage(bytes.utf8())
                 }
 
@@ -163,6 +168,7 @@ class GeminiLiveWebSocket(
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    if (epoch != connectionEpoch.get()) return
                     Log.d(TAG, "WebSocket closed: code=$code")
                     isConnected.set(false)
                     isSetupComplete.set(false)
@@ -213,6 +219,7 @@ class GeminiLiveWebSocket(
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    if (epoch != connectionEpoch.get()) { response?.close(); return }
                     val code = response?.code ?: 0
                     val retryAfterMs = response?.header("Retry-After")?.toLongOrNull()?.let { (it * 1_000L).coerceAtMost(MAX_RECONNECT_DELAY_MS) }
                     val responseBody = try { response?.body?.string() } catch (_: Exception) { null }
@@ -1122,6 +1129,7 @@ class GeminiLiveWebSocket(
     }
 
     fun disconnect() {
+        connectionEpoch.incrementAndGet()
         isManuallyStopped.set(true)
         stopTimers()
         reconnectJob?.cancel()
@@ -1129,6 +1137,7 @@ class GeminiLiveWebSocket(
         reconnectAttempts = 0
         pendingApiKey = null
         isConnected.set(false)
+        isSetupComplete.set(false)
 
         try {
             webSocket?.close(1000, "Client stopped session")
