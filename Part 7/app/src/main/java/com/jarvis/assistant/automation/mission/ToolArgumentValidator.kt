@@ -5,7 +5,7 @@ import java.math.BigDecimal
 /** No coercion: model strings, arrays or objects cannot impersonate numeric/boolean inputs. */
 object ToolArgumentValidator {
     fun invalidFields(tool: ToolDefinition, arguments: Map<String, Any?>): List<String> {
-        return tool.parameters.mapNotNull { parameter ->
+        val invalid = tool.parameters.mapNotNull { parameter ->
             val value = arguments[parameter.name] ?: return@mapNotNull null
             val valid = when (parameter.type.lowercase(java.util.Locale.ROOT)) {
                 "string" -> value is String && value.length <= 64 * 1024
@@ -20,5 +20,8 @@ object ToolArgumentValidator {
             }
             if (valid) null else parameter.name
         }
+        val known = tool.parameters.map { it.name }.toSet()
+        // Do not echo untrusted key names, which themselves could contain private text.
+        return if (arguments.keys.any { it !in known }) listOf("<unexpected parameter>") + invalid else invalid
     }
 }

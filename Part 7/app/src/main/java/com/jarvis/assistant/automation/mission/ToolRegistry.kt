@@ -80,7 +80,8 @@ object ToolRegistry {
             description = "Dispatches a WhatsApp message to a contact",
             parameters = listOf(
                 ToolParameter("contact", "String", "Recipient name or phone number", required = true),
-                ToolParameter("message", "String", "Text message body to send", required = true)
+                ToolParameter("message", "String", "Text message body to send", required = true),
+                ToolParameter("app_number", "Int", "1-based WhatsApp profile index when multiple apps exist", required = false)
             ),
             requiredPermissions = listOf(
                 android.Manifest.permission.READ_CONTACTS

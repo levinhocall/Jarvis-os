@@ -35,4 +35,13 @@ class ToolArgumentValidatorTest {
         assertEquals(ToolValidationResult.Valid, ToolRegistry.validate("schedule_reminder",
             mapOf("title" to "t", "description" to "d", "delay_minutes" to 10)))
     }
+
+    @Test fun ignoredNonceCannotAlterConsequentialInvocationIdentity() {
+        val definition = ToolRegistry.getTool("whatsapp_send")!!
+        val valid = mapOf("contact" to "Rahul", "message" to "hi", "app_number" to 2)
+        assertTrue(ToolArgumentValidator.invalidFields(definition, valid).isEmpty())
+        val invalid = ToolArgumentValidator.invalidFields(definition, valid + ("private-key-name" to "nonce"))
+        assertEquals(listOf("<unexpected parameter>"), invalid)
+        assertFalse(invalid.joinToString().contains("private-key-name"))
+    }
 }
