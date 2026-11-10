@@ -95,3 +95,9 @@ Final combined source verification: `:app:testDebugUnitTest :app:lintDebug :app:
 | 10 | Existing Gradle, unit/instrumentation suites, lint, CI, signing hooks | Full end-to-end/upgrade/data-preservation checks, stable private signing setup, R8/release review, physical device/performance tests and final release-candidate APK. Earlier CI APK is not evidence for this source checkpoint. |
 
 The latest extended capture check passed JVM tests but failed lint on LocalDictation indentation. The formatting is corrected without suppressing lint. Final combined verification is being rerun; the failed run is not counted as a passing checkpoint.
+
+## CI trigger repair requested after the source checkpoint
+
+Branch `feature/advanced-brain-voice-2026-11-10` holds verified progress while Android runtime acceptance is pending; GitHub main remains unchanged. CLI workflow dispatch failed because the cloud proxy rejected the CONNECT tunnel to api.github.com (403); the connected GitHub tools do not expose workflow dispatch. The user then explicitly requested fixing CI rather than a manual run.
+
+The narrow infrastructure exception for that request changes only `.github/workflows/android-runtime.yml`: trusted feature-branch pushes now run the existing Android 16 runtime job automatically, relevant Part 7 code/build changes trigger verification, and concurrency is per ref so a feature branch cannot cancel main's run. No API credential, permission expansion, third-party action, new deployment or test bypass is added. App changes remain within Part 7 and Parts 1–6 remain untouched. Final Android execution results must still be recorded after the workflow actually runs.
