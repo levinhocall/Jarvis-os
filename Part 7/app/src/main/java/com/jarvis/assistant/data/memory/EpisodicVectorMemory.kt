@@ -70,9 +70,7 @@ object EpisodicVectorMemory {
      * Tokenizes text into lower-case normalized unigrams and character n-grams.
      */
     fun tokenize(text: String): List<String> {
-        val clean = text.lowercase(Locale.ROOT)
-            .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
-        return clean.split(Regex("\\s+")).filter { it.length >= 2 }
+        return MemoryTextTokens.terms(text)
     }
 
     /**

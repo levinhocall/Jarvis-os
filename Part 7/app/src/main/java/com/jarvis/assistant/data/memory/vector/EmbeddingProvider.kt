@@ -22,16 +22,16 @@ class DeterministicLocalEmbeddingProvider(
     override val dimension: Int = 128
 ) : EmbeddingProvider {
 
-    override val modelName: String = "local-deterministic-l2-$dimension"
+    init { require(dimension in 1..8192) { "Unsupported local vector dimension" } }
+
+    // Version derived representations so old ASCII-only vectors are lazily rebuilt locally.
+    override val modelName: String = "local-unicode-v2-l2-$dimension"
 
     override fun isAvailable(): Boolean = true
 
     override suspend fun generateEmbedding(text: String): FloatArray? {
-        val clean = text.lowercase().trim()
-        if (clean.isBlank()) return null
-
         val vector = FloatArray(dimension)
-        val tokens = clean.split(Regex("[^a-z0-9_]+")).filter { it.isNotBlank() }
+        val tokens = com.jarvis.assistant.data.memory.MemoryTextTokens.terms(text, minimumCodePoints = 1)
         if (tokens.isEmpty()) return null
 
         for (token in tokens) {
@@ -41,10 +41,11 @@ class DeterministicLocalEmbeddingProvider(
             vector[primaryBucket] += 2.0f
 
             // 2. Character n-gram hashing (captures morphological similarity like prefer/preference)
+            val points = token.codePoints().toArray()
             for (n in 3..4) {
-                if (token.length >= n) {
-                    for (i in 0..token.length - n) {
-                        val ngram = token.substring(i, i + n)
+                if (points.size >= n) {
+                    for (i in 0..points.size - n) {
+                        val ngram = String(points, i, n)
                         val ngramHash = abs(ngram.hashCode())
                         val bucket = (ngramHash % dimension + dimension) % dimension
                         vector[bucket] += 1.0f

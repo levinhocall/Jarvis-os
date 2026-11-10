@@ -14,7 +14,7 @@ class LocalOnlyEmbeddingTest {
         assertTrue(provider.isAvailable())
         assertArrayEquals(DeterministicLocalEmbeddingProvider(768).generateEmbedding("private fact")!!,
             provider.generateEmbedding("private fact")!!, 0f)
-        assertEquals("local-deterministic-l2-768", provider.modelName)
+        assertEquals("local-unicode-v2-l2-768", provider.modelName)
     }
 
     @Test fun `legacy remote adapter ignores endpoint and untrusted fallback`() = runBlocking {
@@ -30,6 +30,6 @@ class LocalOnlyEmbeddingTest {
         assertArrayEquals(DeterministicLocalEmbeddingProvider(384).generateEmbedding("private fact")!!,
             vectors[0]!!, 0f)
         assertNull(vectors[1])
-        assertEquals("local-deterministic-l2-384", provider.modelName)
+        assertEquals("local-unicode-v2-l2-384", provider.modelName)
     }
 }

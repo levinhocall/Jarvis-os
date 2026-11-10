@@ -86,6 +86,23 @@ interface MemoryDao {
     @Query("UPDATE memories SET embeddingJson = :embeddingJson, embeddingModel = :model, embeddingDimension = :dimension WHERE id = :id")
     suspend fun updateEmbedding(id: Long, embeddingJson: String, model: String, dimension: Int)
 
+    /** A late derived vector must not overwrite an intervening correction or deletion. */
+    @Transaction
+    suspend fun updateEmbeddingIfUnchanged(snapshot: MemoryEntity, embeddingJson: String, model: String, dimension: Int): Boolean {
+        if (snapshot.status != MemoryEntity.STATUS_ACTIVE || getMemoryById(snapshot.id) != snapshot) return false
+        updateEmbedding(snapshot.id, embeddingJson, model, dimension)
+        return true
+    }
+
+    /** Prevent a slow correction from restoring a fact that the user just deleted or replaced. */
+    @Transaction
+    suspend fun updateMemoryIfUnchanged(snapshot: MemoryEntity, replacement: MemoryEntity): Boolean {
+        require(snapshot.id == replacement.id && snapshot.syncId == replacement.syncId)
+        if (snapshot.status != MemoryEntity.STATUS_ACTIVE || getMemoryById(snapshot.id) != snapshot) return false
+        updateMemory(replacement)
+        return true
+    }
+
     @Query("SELECT * FROM memories WHERE status = 'ACTIVE' AND embeddingJson IS NOT NULL")
     suspend fun getActiveMemoriesWithEmbeddings(): List<MemoryEntity>
 

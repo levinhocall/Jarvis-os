@@ -42,6 +42,20 @@ class MultiChatAndMemoryEngineTest {
         contextBuilder = MemoryAwareContextBuilder(memoryRepo, conversationRepo)
     }
 
+    @Test
+    fun staleMemoryEditorAndIndexerCannotOverwriteNewerData() = runBlocking {
+        val id = memoryRepo.remember("मेरा रंग नीला है", key = "colour")
+        val old = fakeMemoryDao.getMemoryById(id)!!
+        assertTrue(memoryRepo.correct(id, "मेरा रंग हरा है", expectedMemory = old))
+        val current = fakeMemoryDao.getMemoryById(id)!!
+        assertFalse(memoryRepo.correct(id, "stale editor", expectedMemory = old))
+        assertFalse(fakeMemoryDao.updateEmbeddingIfUnchanged(old, "[]", "old", 1))
+        assertEquals(current, fakeMemoryDao.getMemoryById(id))
+        fakeMemoryDao.softDeleteMemory(id)
+        assertFalse(fakeMemoryDao.updateMemoryIfUnchanged(current, current.copy(value = "must not resurrect")))
+        assertEquals(MemoryEntity.STATUS_DELETED, fakeMemoryDao.getMemoryById(id)!!.status)
+    }
+
     // =========================================================================
     // PHASE A TESTS: MULTI-CHAT SESSIONS & MESSAGE ISOLATION
     // =========================================================================

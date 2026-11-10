@@ -51,8 +51,8 @@ class MemoryRepository(
             stale.forEachIndexed { index, memory ->
                 val vector = vectors.getOrNull(index)
                 if (vector != null && vector.size == embeddingProvider.dimension) {
-                    memoryDao.updateEmbedding(
-                        memory.id,
+                    memoryDao.updateEmbeddingIfUnchanged(
+                        memory,
                         vectorSearchEngine.serializeEmbedding(vector),
                         embeddingProvider.modelName,
                         embeddingProvider.dimension
@@ -142,9 +142,10 @@ class MemoryRepository(
     /**
      * Corrects a memory and updates embedding.
      */
-    suspend fun correct(memoryId: Long, newContent: String): Boolean {
+    suspend fun correct(memoryId: Long, newContent: String, expectedMemory: MemoryEntity? = null): Boolean {
         val all = memoryDao.getAllMemories()
         val target = all.firstOrNull { it.id == memoryId } ?: return false
+        if (expectedMemory != null && target != expectedMemory) return false
         val sanitized = EpisodicVectorMemory.sanitizeForStorage(newContent).trim()
         require(sanitized.isNotBlank()) { "Corrected memory is empty after privacy sanitization." }
 
@@ -161,8 +162,7 @@ class MemoryRepository(
             embeddingModel = embeddingProvider.modelName,
             embeddingDimension = embeddingProvider.dimension
         )
-        memoryDao.updateMemory(updated)
-        return true
+        return memoryDao.updateMemoryIfUnchanged(target, updated)
     }
 
     /**

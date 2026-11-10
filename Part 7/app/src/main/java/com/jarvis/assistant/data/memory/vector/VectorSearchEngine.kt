@@ -61,7 +61,10 @@ class VectorSearchEngine {
 
             val memoryEmbedding = parseEmbedding(memory.embeddingJson)
 
-            if (queryEmbedding != null && memoryEmbedding != null && queryEmbedding.size == memoryEmbedding.size) {
+            val compatible = memory.embeddingModel == embeddingProvider.modelName &&
+                memory.embeddingDimension == embeddingProvider.dimension
+            if (compatible && queryEmbedding != null && memoryEmbedding != null &&
+                queryEmbedding.size == embeddingProvider.dimension && queryEmbedding.size == memoryEmbedding.size) {
                 // Vector semantic search available
                 val cosineSim = cosineSimilarity(queryEmbedding, memoryEmbedding)
                 val recencyScore = computeRecencyScore(memory.timestamp, now)
@@ -118,13 +121,13 @@ class VectorSearchEngine {
         return try {
             val list = gson.fromJson(json, Array<Float>::class.java)
             if (list != null) {
-                FloatArray(list.size) { list[it] }
+                FloatArray(list.size) { list[it] }.takeIf { vector -> vector.isNotEmpty() && vector.all { it.isFinite() } }
             } else null
         } catch (_: Exception) {
             try {
                 val dList = gson.fromJson(json, Array<Double>::class.java)
                 if (dList != null) {
-                    FloatArray(dList.size) { dList[it].toFloat() }
+                    FloatArray(dList.size) { dList[it].toFloat() }.takeIf { vector -> vector.isNotEmpty() && vector.all { it.isFinite() } }
                 } else null
             } catch (_: Exception) {
                 null
@@ -137,10 +140,7 @@ class VectorSearchEngine {
     }
 
     private fun extractTokens(text: String): Set<String> {
-        return text.lowercase()
-            .split(Regex("[^a-z0-9_]+"))
-            .filter { it.length > 1 }
-            .toSet()
+        return com.jarvis.assistant.data.memory.MemoryTextTokens.terms(text).toSet()
     }
 
     private fun computeKeywordScore(queryTokens: Set<String>, memoryTokens: Set<String>): Double {

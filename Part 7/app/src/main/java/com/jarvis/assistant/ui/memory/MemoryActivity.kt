@@ -285,14 +285,12 @@ class MemoryActivity : AppCompatActivity() {
                 val newFact = editText.text.toString().trim()
                 if (newFact.isNotBlank()) {
                     lifecycleScope.launch(storageErrors) {
-                        memoryRepo.updateMemory(
-                            memory.copy(
-                                rawText = newFact,
-                                value = newFact,
-                                timestamp = System.currentTimeMillis()
-                            )
-                        )
-                        Toast.makeText(this@MemoryActivity, "Memory updated", Toast.LENGTH_SHORT).show()
+                        val updated = withContext(Dispatchers.IO) {
+                            memoryRepo.correct(memory.id, newFact, expectedMemory = memory)
+                        }
+                        Toast.makeText(this@MemoryActivity,
+                            if (updated) "Memory updated" else "Memory changed or was deleted. Reopen it before editing.",
+                            Toast.LENGTH_LONG).show()
                     }
                 }
             }

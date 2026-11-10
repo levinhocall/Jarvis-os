@@ -15,6 +15,37 @@ import java.util.UUID
 class MemoryRepositoryTransactionInstrumentedTest {
 
     @Test
+    fun lateIndexAndCorrectionCannotOverwriteNewValueOrResurrectDeletedMemory() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dao = MemoryDatabase.getInstance(context).memoryDao()
+        val local = DeterministicLocalEmbeddingProvider()
+        var deleteDuringEmbedding: Long? = null
+        val provider = object : EmbeddingProvider {
+            override val modelName = local.modelName
+            override val dimension = local.dimension
+            override fun isAvailable() = true
+            override suspend fun generateEmbedding(text: String): FloatArray? {
+                deleteDuringEmbedding?.let { id -> deleteDuringEmbedding = null; dao.softDeleteMemory(id) }
+                return local.generateEmbedding(text)
+            }
+        }
+        val repository = MemoryRepository(dao, provider)
+        val key = "unicode_guard_${UUID.randomUUID()}"
+        val id = repository.remember("मेरा पसंदीदा रंग नीला है", key = key)
+        try {
+            val old = dao.getMemoryById(id)!!
+            assertTrue(repository.correct(id, "मेरा पसंदीदा रंग हरा है"))
+            val corrected = dao.getMemoryById(id)!!
+            org.junit.Assert.assertFalse(dao.updateEmbeddingIfUnchanged(old, "[]", "obsolete", 1))
+            assertEquals(corrected, dao.getMemoryById(id))
+            deleteDuringEmbedding = id
+            org.junit.Assert.assertFalse(repository.correct(id, "Late correction"))
+            assertEquals(MemoryEntity.STATUS_DELETED, dao.getMemoryById(id)!!.status)
+            assertEquals(corrected.value, dao.getMemoryById(id)!!.value)
+        } finally { dao.permanentlyDeleteMemoryById(id) }
+    }
+
+    @Test
     fun permanentErasureRemovesAllVersionsOfOnlyTheSelectedFact() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val dao = MemoryDatabase.getInstance(context).memoryDao()
