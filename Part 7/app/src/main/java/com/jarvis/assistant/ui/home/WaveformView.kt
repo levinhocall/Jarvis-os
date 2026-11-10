@@ -74,7 +74,7 @@ class WaveformView @JvmOverloads constructor(
     }
 
     private fun start() {
-        if (!isShown || !ValueAnimator.areAnimatorsEnabled()) return
+        if (!isShown || com.jarvis.assistant.util.VisualMotionSettings.isReduced(context)) return
         if (ticker != null) return
         lastTick = 0L
         ticker = ValueAnimator.ofFloat(0f, 1f).apply {

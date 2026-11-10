@@ -46,8 +46,8 @@
     <!-- Top Action Bar -->
     <ImageButton
         android:id="@+id/btnTopChat"
-        android:layout_width="46dp"
-        android:layout_height="46dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:background="@drawable/bg_jarvis_icon_square"
         android:src="@drawable/ic_chat_bubble"
         app:tint="?attr/themeTextPrimary"
@@ -71,6 +71,7 @@
             android:layout_width="110dp"
             android:layout_height="28dp"
             android:src="@drawable/ic_jarvis_logo"
+            app:tint="?attr/themeAccent"
             android:scaleType="fitCenter"
             android:contentDescription="Jarvis Logo" />
 
@@ -117,8 +118,8 @@
 
     <ImageButton
         android:id="@+id/btnTopSettings"
-        android:layout_width="46dp"
-        android:layout_height="46dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:background="@drawable/bg_jarvis_icon_square"
         android:src="@drawable/ic_nav_settings"
         app:tint="?attr/themeTextPrimary"

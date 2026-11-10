@@ -29,7 +29,7 @@ class VortexOrbView(context:Context):FrameLayout(context),DefaultLifecycleObserv
             override fun onPageFinished(view:WebView,url:String) {
                 ready=true
                 view.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setTheme('dark');",null)
-                updateState(visualState);pushAudio(force=true)
+                applyMotionPolicy();updateState(visualState);pushAudio(force=true)
             }
         }
         addView(web,LayoutParams(-1,-1))
@@ -37,7 +37,7 @@ class VortexOrbView(context:Context):FrameLayout(context),DefaultLifecycleObserv
     }
     fun updateState(value:String) {
         visualState=when(value.lowercase(java.util.Locale.ROOT)) {
-            "listening"->"listening";"thinking","connecting"->"thinking";"speaking"->"speaking";"error"->"error";else->"idle"
+            "listening","connected","interrupted"->"listening";"thinking","connecting","executing","recovering"->"thinking";"speaking"->"speaking";"error","failed"->"error";else->"idle"
         }
         if(ready) web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$visualState');",null)
     }
@@ -47,7 +47,10 @@ class VortexOrbView(context:Context):FrameLayout(context),DefaultLifecycleObserv
         lastPush=now
         web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setExternalAudio($level);",null)
     }
-    override fun onResume(owner:LifecycleOwner) {web.onResume();web.resumeTimers()}
+    private fun applyMotionPolicy() {
+        if(ready) web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setReducedMotion(${com.jarvis.assistant.util.VisualMotionSettings.isReduced(context)});",null)
+    }
+    override fun onResume(owner:LifecycleOwner) {web.onResume();web.resumeTimers();applyMotionPolicy()}
     override fun onPause(owner:LifecycleOwner) {web.onPause();web.pauseTimers()}
     override fun onDestroy(owner:LifecycleOwner) {ready=false;web.stopLoading();removeView(web);web.destroy()}
 }

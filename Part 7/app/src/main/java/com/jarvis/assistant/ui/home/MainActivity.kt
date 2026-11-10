@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
         const val TAB_CHAT = 1
         const val TAB_CODING = 2
         const val TAB_SETTINGS = 3
+        const val TAB_CONTROLS = 4
 
         var activeInstance: MainActivity? = null
     }
@@ -50,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private val chatFragment by lazy { ChatFragment() }
     private val codingFragment by lazy { CodingDevFragment() }
     private val settingsFragment by lazy { SettingsFragment() }
+    private val controlsFragment by lazy { com.jarvis.assistant.ui.controls.ControlsFragment() }
 
     private val requestAudioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -145,11 +147,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val visualUpgrade = getSharedPreferences("jarvis_visual_upgrade", MODE_PRIVATE)
-        if (!visualUpgrade.getBoolean("violet_home_applied", false)) {
-            com.jarvis.assistant.JarvisApp.instance.preferences.appTheme = "dark"
-            visualUpgrade.edit().putBoolean("violet_home_applied", true).apply()
-        }
         com.jarvis.assistant.util.ThemeManager.applyTheme(this)
         val prefs = com.jarvis.assistant.JarvisApp.instance.preferences
         appliedThemeKey = prefs.appTheme
@@ -189,12 +186,14 @@ class MainActivity : AppCompatActivity() {
             .add(R.id.fragmentContainer, chatFragment, "TAB_1")
             .add(R.id.fragmentContainer, codingFragment, "TAB_2")
             .add(R.id.fragmentContainer, settingsFragment, "TAB_3")
+            .add(R.id.fragmentContainer, controlsFragment, "TAB_4")
 
         val allTabs = listOf(
             TAB_HOME to homeFragment,
             TAB_CHAT to chatFragment,
             TAB_CODING to codingFragment,
-            TAB_SETTINGS to settingsFragment
+            TAB_SETTINGS to settingsFragment,
+            TAB_CONTROLS to controlsFragment
         )
 
         allTabs.forEach { (tabId, frag) ->
@@ -245,7 +244,7 @@ class MainActivity : AppCompatActivity() {
             typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.BOLD)
         }
         val subtitle = android.widget.TextView(this).apply {
-            text = "NEURAL SYSTEM ONLINE"
+            text = "YOUR PERSONAL AI"
             textSize = 11f
             letterSpacing = 0.22f
             setTextColor(android.graphics.Color.rgb(145, 173, 205))
@@ -262,7 +261,7 @@ class MainActivity : AppCompatActivity() {
         val scale = android.provider.Settings.Global.getFloat(
             contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f
         )
-        if (scale == 0f) {
+        if (scale == 0f || com.jarvis.assistant.util.VisualMotionSettings.isReduced(this)) {
             root.removeView(overlay)
             return
         }
@@ -308,6 +307,13 @@ class MainActivity : AppCompatActivity() {
         binding.tabChat.setOnClickListener { selectTab(TAB_CHAT) }
         binding.tabCoding.setOnClickListener { selectTab(TAB_CODING) }
         binding.tabSettings.setOnClickListener { selectTab(TAB_SETTINGS) }
+        binding.tabControls.setOnClickListener { selectTab(TAB_CONTROLS) }
+        binding.tabMissions.setOnClickListener {
+            startActivity(Intent(this, com.jarvis.assistant.ui.directives.MissionDeskActivity::class.java))
+        }
+        binding.tabMemory.setOnClickListener {
+            startActivity(Intent(this, com.jarvis.assistant.ui.memory.MemoryActivity::class.java))
+        }
 
         binding.tabMic.setOnClickListener {
             handleMicOrOrbClick()
@@ -327,7 +333,8 @@ class MainActivity : AppCompatActivity() {
             TAB_HOME to homeFragment,
             TAB_CHAT to chatFragment,
             TAB_CODING to codingFragment,
-            TAB_SETTINGS to settingsFragment
+            TAB_SETTINGS to settingsFragment,
+            TAB_CONTROLS to controlsFragment
         )
 
         val trans = supportFragmentManager.beginTransaction()
@@ -348,7 +355,7 @@ class MainActivity : AppCompatActivity() {
                 if (tabId == tab) {
                     v.visibility = View.VISIBLE
                     com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(v)
-                    if (previousTab != tab) {
+                    if (previousTab != tab && !com.jarvis.assistant.util.VisualMotionSettings.isReduced(this)) {
                         v.alpha = 0f
                         v.translationX = if (tab > previousTab) 18f else -18f
                         v.animate().cancel()
@@ -389,22 +396,25 @@ class MainActivity : AppCompatActivity() {
             Triple(TAB_HOME, binding.pillTabHome, Pair(binding.ivTabHome, binding.tvTabHome)),
             Triple(TAB_CHAT, binding.pillTabChat, Pair(binding.ivTabChat, binding.tvTabChat)),
             Triple(TAB_CODING, binding.pillTabCoding, Pair(binding.ivTabCoding, binding.tvTabCoding)),
-            Triple(TAB_SETTINGS, binding.pillTabSettings, Pair(binding.ivTabSettings, binding.tvTabSettings))
+            Triple(TAB_SETTINGS, binding.pillTabSettings, Pair(binding.ivTabSettings, binding.tvTabSettings)),
+            Triple(TAB_CONTROLS, binding.tabControls, Pair(binding.ivTabControls, binding.tvTabControls))
         )
 
         navItems.forEach { (tabId, pill, views) ->
-            val isSelected = tabId == tab
+            val isSelected = tabId == tab || (tabId == TAB_CONTROLS && tab == TAB_CODING)
             val (iv, tv) = views
             if (isSelected) {
                 pill.setBackgroundResource(R.drawable.bg_dock_item_active)
-                pill.alpha = 0f
-                pill.scaleX = 0.88f
-                pill.scaleY = 0.88f
+                val reduced = com.jarvis.assistant.util.VisualMotionSettings.isReduced(this)
+                pill.animate().cancel()
+                pill.alpha = if (reduced) 1f else 0f
+                pill.scaleX = if (reduced) 1f else 0.88f
+                pill.scaleY = if (reduced) 1f else 0.88f
                 pill.animate()
                     .alpha(1f)
                     .scaleX(1f)
                     .scaleY(1f)
-                    .setDuration(240)
+                    .setDuration(if (reduced) 0L else 240L)
                     .setInterpolator(android.view.animation.OvershootInterpolator(1.2f))
                     .start()
                 iv.imageTintList = ColorStateList.valueOf(activeTextColor)

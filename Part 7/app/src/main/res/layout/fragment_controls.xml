@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true" android:clipToPadding="false" android:paddingBottom="108dp"
+    android:background="?attr/themeBg">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="24dp">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="CONTROL DECK" android:textSize="25sp" android:textStyle="bold"
+            android:letterSpacing="0.08" android:textColor="?attr/themeTextPrimary" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:layout_marginBottom="24dp"
+            android:text="Voice, memory and device tools" android:textSize="14sp" android:textColor="?attr/themeTextSecondary" />
+        <com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content"
+            app:cardBackgroundColor="?attr/themeCardBg" app:strokeColor="?attr/themeCardBorder"
+            app:strokeWidth="1dp" app:cardCornerRadius="24dp" app:cardElevation="0dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="LIVE STATUS" android:textSize="12sp" android:textStyle="bold" android:letterSpacing="0.12" android:textColor="?attr/themeAccent" />
+                <TextView android:id="@+id/tvControlVoice" style="@style/Widget.Jarvis.ControlStatus" android:text="Voice connection" />
+                <TextView android:id="@+id/tvControlMic" style="@style/Widget.Jarvis.ControlStatus" android:text="Microphone" />
+                <TextView android:id="@+id/tvControlAccessibility" style="@style/Widget.Jarvis.ControlStatus" android:text="Accessibility" />
+                <TextView android:id="@+id/tvControlMemory" style="@style/Widget.Jarvis.ControlStatus" android:text="Memories stored on this phone" />
+                <TextView android:id="@+id/tvControlDevice" style="@style/Widget.Jarvis.ControlStatus" android:text="Device status" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnRefreshControls" style="@style/Widget.Jarvis.ControlButton" android:text="Refresh status" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+        <TextView style="@style/Widget.Jarvis.ControlSection" android:text="DEVICE" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlTorch" style="@style/Widget.Jarvis.ControlButton" android:text="Toggle flashlight" app:icon="@drawable/ic_settings_apps" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlNetwork" style="@style/Widget.Jarvis.ControlButton" android:text="Internet &amp; Wi-Fi" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlBluetooth" style="@style/Widget.Jarvis.ControlButton" android:text="Bluetooth settings" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlSound" style="@style/Widget.Jarvis.ControlButton" android:text="Sound &amp; volume" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlDisplay" style="@style/Widget.Jarvis.ControlButton" android:text="Display &amp; brightness" />
+        <TextView style="@style/Widget.Jarvis.ControlSection" android:text="ASSISTANT" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlWake" style="@style/Widget.Jarvis.ControlButton" android:text="Wake word &amp; microphone test" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlAccess" style="@style/Widget.Jarvis.ControlButton" android:text="Accessibility connection" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlPermissions" style="@style/Widget.Jarvis.ControlButton" android:text="Permissions &amp; background setup" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlScreen" style="@style/Widget.Jarvis.ControlButton" android:text="Share screen with JARVIS" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlCoding" style="@style/Widget.Jarvis.ControlButton" android:text="Developer tools" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnControlAllTools" style="@style/Widget.Jarvis.ControlButton" android:text="All directives" />
+        <TextView style="@style/Widget.Jarvis.ControlSection" android:text="APPEARANCE" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/switchReducedMotion"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp"
+            android:text="Reduced motion" android:textColor="?attr/themeTextPrimary" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="13sp"
+            android:text="Android's system animation setting is also respected." android:textColor="?attr/themeTextSecondary" />
+        <TextView style="@style/Widget.Jarvis.ControlSection" android:text="ADVANCED CAPABILITIES" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="14sp"
+            android:text="Standard Android and Accessibility controls are available with your permissions. Wireless ADB and root transport are not configured."
+            android:textColor="?attr/themeTextSecondary" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

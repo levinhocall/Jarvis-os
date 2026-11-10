@@ -128,6 +128,7 @@
         <!-- Tab 3: Voice / Mic (Hero Highlighted Action) -->
         <FrameLayout
             android:id="@+id/tabMic"
+            android:visibility="gone"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -171,6 +172,7 @@
         <!-- Tab 4: Coding / Dev Studio -->
         <FrameLayout
             android:id="@+id/tabCoding"
+            android:visibility="gone"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -210,7 +212,23 @@
             </LinearLayout>
         </FrameLayout>
 
-        <!-- Tab 5: Settings -->
+        <LinearLayout android:id="@+id/tabMissions" style="@style/Widget.Jarvis.NavGateway"
+            android:contentDescription="Missions">
+            <ImageView style="@style/Widget.Jarvis.NavGatewayIcon" android:src="@drawable/ic_code_chip" />
+            <TextView style="@style/Widget.Jarvis.NavGatewayLabel" android:text="Missions" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/tabMemory" style="@style/Widget.Jarvis.NavGateway"
+            android:contentDescription="Memory">
+            <ImageView style="@style/Widget.Jarvis.NavGatewayIcon" android:src="@drawable/ic_stack_memory" />
+            <TextView style="@style/Widget.Jarvis.NavGatewayLabel" android:text="Memory" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/tabControls" style="@style/Widget.Jarvis.NavGateway"
+            android:contentDescription="Controls">
+            <ImageView android:id="@+id/ivTabControls" style="@style/Widget.Jarvis.NavGatewayIcon" android:src="@drawable/ic_settings_apps" />
+            <TextView android:id="@+id/tvTabControls" style="@style/Widget.Jarvis.NavGatewayLabel" android:text="Controls" />
+        </LinearLayout>
+
+        <!-- Settings -->
         <FrameLayout
             android:id="@+id/tabSettings"
             android:layout_width="0dp"
@@ -257,6 +275,7 @@
     <!-- Glowing Liquid Glass Curved Line arching over the center Mic button -->
     <com.jarvis.assistant.ui.widget.CurvedDockLineView
         android:id="@+id/dockCurvedLine"
+        android:visibility="gone"
         android:layout_width="0dp"
         android:layout_height="24dp"
         android:elevation="14dp"

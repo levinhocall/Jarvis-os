@@ -7,6 +7,7 @@
 <style>
 :root{--bg:#fff;--fg:#1d2340;--sub:#6b7390;--glass:rgba(255,255,255,.72);--gb:rgba(255,255,255,.9);--chip:#4a527a;--t1:#2f6bff;--t2:#8b5cf6;--t3:#c15de0;--sh:rgba(70,80,170,.22)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+.reduced-motion *{animation:none!important;transition:none!important}
 html,body{height:100%;overflow:hidden}
 body{display:flex;flex-direction:column;align-items:center;background:var(--bg);color:var(--fg);font-family:Inter,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}
 header{text-align:center;padding-top:clamp(12px,3.5vh,36px);flex:none}
@@ -222,7 +223,6 @@ const THEMES={
  sunset:{bg:"radial-gradient(120% 80% at 50% 35%,#fff6ef 0%,#ffe7e1 60%,#fbd8e8 100%)",fg:"#4a2340",sub:"#98677f",glass:"rgba(255,255,255,.6)",gb:"rgba(255,255,255,.85)",chip:"#7a4566",t:["#ff6a3d","#e83e8c","#8b5cf6"],add:false,sh:"rgba(170,70,110,.22)",pal:[[.55,.12,.45],[.95,.30,.45],[1,.55,.20],[.60,.30,.90]]}
 };
 let themeName="light";
-THEMES.dark.pal=[[.12,.02,.25],[.55,.15,1],[1.,.25,.7],[.7,.35,1.]];
 function setBlend(add){
   [pointsMesh.material,orbitPts.material,glowMat,ring1.material,ring2.material].forEach(m=>{m.blending=add?THREE.AdditiveBlending:THREE.NormalBlending;m.needsUpdate=true;});
 }
@@ -293,12 +293,14 @@ const cur=Object.assign({},STATES.idle),tgt=Object.assign({},STATES.idle);
 function setOrbState(s){
   if(!STATES[s]) return;
   state=s;Object.assign(tgt,STATES[s]);
+  dirty=true;
+  if(reducedMotion) {Object.assign(cur,tgt);U.uError.value=state==="error"?1:0;}
   const lbl = $("#stext");
   if(lbl) lbl.textContent=LABELS[s] || "READY";
   document.querySelectorAll("[data-s]").forEach(b=>b.classList.toggle("on",b.dataset.s===s));
 }
 
-/* ---------- Audio (Simulated, Web mic, or External Native) ---------- */
+/* ---------- Actual PCM levels from native capture/playback or the explicit browser mic test ---------- */
 const audio={level:0,bass:0,high:0};
 let actx=null,analyser=null,micStream=null,freq=null,micOn=false;
 let externalAudioTime=0;
@@ -397,6 +399,7 @@ function updateParticles(dt){
 
 /* ---------- Resize / loop ---------- */
 function handleResize(){
+  dirty=true;
   const w=Math.max(stage.clientWidth,1),h=Math.max(stage.clientHeight,1),pr=Math.min(window.devicePixelRatio,1.5);
   renderer.setPixelRatio(pr);renderer.setSize(w,h,false);
   camera.aspect=w/h;
@@ -405,10 +408,15 @@ function handleResize(){
   pxPerUnit=h/visH;U.uPx.value=h*pr/(2*tan);
   shadowEl.style.top=Math.round(h/2+pxPerUnit*1.2)+"px";
 }
-let last=performance.now();
+let reducedMotion=false,dirty=true,last=performance.now();
 function animate(now){
+  if(document.hidden) { setTimeout(()=>animate(performance.now()),1000); return; }
+  if(reducedMotion) {
+    if(dirty) {updateOrb(0);updateParticles(0);renderer.render(scene,camera);dirty=false;}
+    setTimeout(()=>animate(performance.now()),250);return;
+  }
   requestAnimationFrame(animate);
-  if(document.hidden || now-last<32) return;
+  if(now-last<32) return;
   const dt=Math.min((now-last)/1000,.05);last=now;
   updateOrb(dt);updateParticles(dt);renderer.render(scene,camera);
 }
@@ -425,7 +433,8 @@ if(window.ResizeObserver) new ResizeObserver(handleResize).observe(stage);
 
 window.JarvisOrb={
   setState:setOrbState,
-  setTheme:n=>applyTheme(n),
+  setTheme:n=>{applyTheme(n);dirty=true;},
+  setReducedMotion:enabled=>{reducedMotion=!!enabled;document.documentElement.classList.toggle("reduced-motion",reducedMotion);dirty=true;last=performance.now();if(reducedMotion){Object.assign(cur,tgt);U.uError.value=state==="error"?1:0;}},
   setBackground:hex=>{
     if(!isEmbedded) document.documentElement.style.setProperty("--bg",hex);
     applyTheme(null,hex);

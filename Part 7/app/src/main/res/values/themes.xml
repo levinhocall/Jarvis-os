@@ -43,19 +43,19 @@
 
     <!-- 2. DARK THEME - LIQUID OBSIDIAN GLASS EDITION -->
     <style name="Theme.JarvisAssistant.Dark" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="android:statusBarColor">#070914</item>
+        <item name="android:statusBarColor">#050B16</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:navigationBarColor">#070914</item>
-        <item name="android:windowBackground">#070914</item>
+        <item name="android:navigationBarColor">#050B16</item>
+        <item name="android:windowBackground">#050B16</item>
         <item name="colorPrimary">#5B8CFF</item>
         <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSurface">#33141B3D</item>
+        <item name="colorSurface">#0E1B2E</item>
         <item name="colorOnSurface">#F8FAFC</item>
 
-        <item name="themeBg">#0B031C</item>
-        <item name="themeSurface">#221331</item>
-        <item name="themeCardBg">#221331</item>
-        <item name="themeCardBorder">#665E318F</item>
+        <item name="themeBg">#050B16</item>
+        <item name="themeSurface">#0E1B2E</item>
+        <item name="themeCardBg">#0E1B2E</item>
+        <item name="themeCardBorder">#405B8CFF</item>
         <item name="themeCardGlassStart">#4D1B2654</item>
         <item name="themeCardGlassEnd">#1A0F1733</item>
         <item name="themeDockBg">#660F1535</item>
@@ -64,18 +64,18 @@
         <item name="themeDockBorder">#665B8CFF</item>
         <item name="themeGlassSpecular">#80A5FF</item>
         <item name="themeChipBg">#331A244E</item>
-        <item name="themeInputBg">#33141B3D</item>
+        <item name="themeInputBg">#0E1B2E</item>
         <item name="themeGlowBlob1">@drawable/bg_liquid_glow_dark_1</item>
         <item name="themeGlowBlob2">@drawable/bg_liquid_glow_dark_2</item>
         <item name="themeGlowBlob3">@drawable/bg_liquid_glow_dark_3</item>
 
         <item name="themeTextPrimary">#F8FAFC</item>
-        <item name="themeTextSecondary">#94A3B8</item>
-        <item name="themeTextMuted">#64748B</item>
-        <item name="themeAccent1">#C674FF</item>
+        <item name="themeTextSecondary">#AFBED3</item>
+        <item name="themeTextMuted">#8B9FB8</item>
+        <item name="themeAccent1">#5AE0FF</item>
         <item name="themeAccent2">#A78BFA</item>
         <item name="themeAccent3">#22D3EE</item>
-        <item name="themeAccent">#C674FF</item>
+        <item name="themeAccent">#5AE0FF</item>
         <item name="themeAccentLight">#1E2858</item>
     </style>
 

@@ -22,8 +22,9 @@ class VoiceModeActivity : AppCompatActivity() {
     private lateinit var orb: VortexOrbView
     private lateinit var status: TextView
     private var attemptedStart = false
-    private val permissions = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        if (it) startVoice() else status.text = "Microphone access is required for live conversation."
+    private val permissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.all { it }) startVoice()
+        else status.text = "Microphone and notification access are needed. Grant access in Settings, then tap Start."
     }
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
@@ -58,6 +59,7 @@ class VoiceModeActivity : AppCompatActivity() {
             if (JarvisConversationService.isSessionOn.value) send(JarvisConversationService.ACTION_STOP_ALL)
         }
         button("‹ Main deck") { finish() }
+        button("Voice settings") { startActivity(Intent(this, com.jarvis.assistant.ui.settings.ApiConnectionActivity::class.java)) }
         root.addView(controls, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
@@ -81,8 +83,12 @@ class VoiceModeActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) { outState.putBoolean("attempted", attemptedStart); super.onSaveInstanceState(outState) }
     private fun startVoice() {
         if (JarvisConversationService.isSessionOn.value) return
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            permissions.launch(Manifest.permission.RECORD_AUDIO); return
+        val missing = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            if (android.os.Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        }.filter { ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) {
+            permissions.launch(missing.toTypedArray()); return
         }
         val prefs = (application as JarvisApp).preferences
         if ((prefs.getNextActiveKey("gemini") ?: prefs.apiKey).isBlank()) {

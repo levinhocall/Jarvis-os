@@ -55,7 +55,7 @@ class PremiumOrbView(context: Context) : View(context) {
             paint.alpha=60+(i*19%150)
             canvas.drawCircle(cx+cos(a)*radius,cy+sin(a)*radius*.83f,resources.displayMetrics.density*(.6f+i%3*.35f),paint)
         }
-        if (isShown && windowVisibility == VISIBLE && android.animation.ValueAnimator.areAnimatorsEnabled()) {
+        if (isShown && windowVisibility == VISIBLE && !com.jarvis.assistant.util.VisualMotionSettings.isReduced(context)) {
             val saver = com.jarvis.assistant.JarvisApp.instance.preferences.powerProfile == "saver"
             postInvalidateDelayed(if (saver) 100L else 33L)
         }

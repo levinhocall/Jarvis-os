@@ -47,7 +47,7 @@ object ThemeManager {
     fun getThemeBgColor(themeKey: String, customHex: String?): Int {
         val resolved = if (themeKey == "system") runCatching { resolveThemeKey(JarvisApp.instance, themeKey) }.getOrDefault("light") else themeKey
         return when (resolved) {
-            "dark" -> Color.parseColor("#0B031C")
+            "dark" -> Color.parseColor("#050B16")
             "red" -> Color.parseColor("#0E0307")
             "sunset" -> Color.parseColor("#FFF0EA")
             "custom" -> try { Color.parseColor(customHex ?: "#FFFFFF") } catch (_: Exception) { Color.WHITE }
@@ -60,7 +60,7 @@ object ThemeManager {
         val themeKey = resolveThemeKey(activity, prefs?.appTheme ?: "sunset")
 
         val (themeRes, isLightStatusBar, bgColor) = when (themeKey) {
-            "dark" -> Triple(R.style.Theme_JarvisAssistant_Dark, false, Color.parseColor("#0B031C"))
+            "dark" -> Triple(R.style.Theme_JarvisAssistant_Dark, false, Color.parseColor("#050B16"))
             "red" -> Triple(R.style.Theme_JarvisAssistant_Red, false, Color.parseColor("#0E0307"))
             "sunset" -> Triple(R.style.Theme_JarvisAssistant_Sunset, true, Color.parseColor("#FFF0EA"))
             "custom" -> {

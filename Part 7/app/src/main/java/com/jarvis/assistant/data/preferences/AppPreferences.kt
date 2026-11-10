@@ -445,7 +445,7 @@ class AppPreferences internal constructor(
 
     var appTheme: String
         get() {
-            val stored = prefs.getString(KEY_APP_THEME, "sunset") ?: "sunset"
+            val stored = prefs.getString(KEY_APP_THEME, "dark") ?: "dark"
             return when (stored) {
                 "light", "pearl_white" -> "light"
                 "dark", "midnight_onyx", "cyberpunk_neon", "emerald_obsidian" -> "dark"

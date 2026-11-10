@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Widget.Jarvis.ControlButton" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">8dp</item>
+        <item name="android:minHeight">56dp</item>
+        <item name="android:gravity">center_vertical|start</item>
+        <item name="android:textColor">?attr/themeTextPrimary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="strokeColor">?attr/themeCardBorder</item>
+        <item name="cornerRadius">18dp</item>
+        <item name="backgroundTint">?attr/themeCardBg</item>
+        <item name="iconTint">?attr/themeAccent</item>
+    </style>
+    <style name="Widget.Jarvis.ControlStatus" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">12dp</item>
+        <item name="android:textColor">?attr/themeTextPrimary</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+    <style name="Widget.Jarvis.ControlSection" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">28dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:textColor">?attr/themeTextSecondary</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.12</item>
+    </style>
+    <style name="Widget.Jarvis.NavGateway" parent="">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:minWidth">48dp</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+    </style>
+    <style name="Widget.Jarvis.NavGatewayIcon" parent="">
+        <item name="android:layout_width">22dp</item>
+        <item name="android:layout_height">22dp</item>
+        <item name="android:importantForAccessibility">no</item>
+        <item name="android:tint">?attr/themeTextMuted</item>
+    </style>
+    <style name="Widget.Jarvis.NavGatewayLabel" parent="">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">?attr/themeTextMuted</item>
+    </style>
+</resources>

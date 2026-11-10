@@ -40,6 +40,9 @@ class SerializedActionExecutorTest {
             assertEquals(42, withTimeout(3000) { SerializedActionExecutor.execute("test", expectedGeneration = fresh) { 42 } })
             assertNull(withTimeout(3000) { queued.await() })
             assertFalse(staleActionRan)
+            // The mutex may be released before withContext dispatches cancellation
+            // back to the caller. Await that boundary instead of racing isCancelled.
+            withTimeout(3000) { running.join() }
             assertTrue(running.isCancelled)
         } finally { running.cancelAndJoin(); SerializedActionExecutor.resetCancellation() }
     }

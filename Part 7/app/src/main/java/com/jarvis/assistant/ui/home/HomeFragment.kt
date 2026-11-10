@@ -66,18 +66,16 @@ class HomeFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Home is always dark neon, whatever app theme the user picked.
-        val neonContext = android.view.ContextThemeWrapper(requireContext(), R.style.Theme_JarvisAssistant_HomeNeon)
-        _binding = FragmentHomeBinding.inflate(inflater.cloneInContext(neonContext), container, false)
+        _binding = FragmentHomeBinding.inflate(inflater, container, false)
         val deck = android.widget.LinearLayout(requireContext()).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             addView(binding.root, android.widget.LinearLayout.LayoutParams(-1,
                 (resources.displayMetrics.heightPixels * 0.88f).toInt().coerceAtLeast((660 * resources.displayMetrics.density).toInt())))
-            addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(neonContext))
+            addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(requireContext()))
         }
         val scrollingDeck = androidx.core.widget.NestedScrollView(requireContext()).apply {
             isFillViewport = true
-            setBackgroundResource(R.drawable.bg_premium_night)
+            com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(this)
             addView(deck)
             // Home fills exactly one screen; the directive grid sits below the fold instead of peeking under the dock.
             addOnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
@@ -98,7 +96,7 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         (view as? com.jarvis.assistant.ui.wallpaper.InAppWallpaper)?.let { viewLifecycleOwner.lifecycle.addObserver(it) }
-        binding.root.setBackgroundResource(R.drawable.bg_premium_night)
+        com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
         createTaskFallbackPanel()
 
         // Top Navigation
@@ -185,20 +183,25 @@ class HomeFragment : Fragment() {
 
             settings.apply {
                 javaScriptEnabled = true
-                domStorageEnabled = true
-                allowFileAccess = true
-                allowContentAccess = true
-                @Suppress("DEPRECATION")
-                allowFileAccessFromFileURLs = true
-                @Suppress("DEPRECATION")
-                allowUniversalAccessFromFileURLs = true
+                domStorageEnabled = false
+                allowFileAccess = false
+                allowContentAccess = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 cacheMode = WebSettings.LOAD_DEFAULT
             }
 
-            webViewClient = object : WebViewClient() {
+            val assets = androidx.webkit.WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", androidx.webkit.WebViewAssetLoader.AssetsPathHandler(context)).build()
+            webViewClient = object : androidx.webkit.WebViewClientCompat() {
+                override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse =
+                    assets.shouldInterceptRequest(request.url) ?: android.webkit.WebResourceResponse(
+                        "text/plain", "UTF-8", java.io.ByteArrayInputStream(ByteArray(0)))
+                override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest) = true
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    if (_binding?.orbWebView !== view) return
                     isPageLoaded = true
+                    syncOrbMotion()
 
                     // Sync Theme
                     val currentTheme = pendingThemeKey ?: preferences.appTheme
@@ -233,8 +236,14 @@ class HomeFragment : Fragment() {
                 v.onTouchEvent(event)
             }
 
-            loadUrl("file:///android_asset/orb.html?embedded=1")
+            loadUrl("https://appassets.androidplatform.net/assets/orb.html?embedded=1")
         }
+    }
+
+    private fun syncOrbMotion() {
+        val web = _binding?.orbWebView ?: return
+        if (isPageLoaded) web.evaluateJavascript(
+            "window.JarvisOrb && window.JarvisOrb.setReducedMotion(${com.jarvis.assistant.util.VisualMotionSettings.isReduced(web.context)});", null)
     }
 
     private fun setupRealisticAvatar() {
@@ -345,7 +354,8 @@ class HomeFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        binding.root.setBackgroundResource(R.drawable.bg_premium_night)
+        syncOrbMotion()
+        com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
         binding.orbWebView.onResume()
         binding.orbWebView.resumeTimers()
         applyAvatarMode()
@@ -393,13 +403,14 @@ class HomeFragment : Fragment() {
 
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
+        if (!hidden) syncOrbMotion()
         if (!hidden && _binding != null) {
             binding.root.visibility = View.VISIBLE
             binding.orbWebView.visibility = View.VISIBLE
             binding.orbWebView.onResume()
             binding.orbWebView.resumeTimers()
             applyAvatarMode()
-            binding.root.setBackgroundResource(R.drawable.bg_premium_night)
+            com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
             setOrbTheme(preferences.appTheme, preferences.customThemeColor)
             updateHomeHeaderAndVoiceStatus()
         } else if (hidden && _binding != null) {
@@ -438,13 +449,6 @@ class HomeFragment : Fragment() {
                     }
                 }
             }
-        } else {
-            locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
         }
     }
 
