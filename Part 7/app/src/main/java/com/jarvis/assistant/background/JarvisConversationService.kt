@@ -1651,7 +1651,7 @@ class JarvisConversationService : Service() {
                 voiceSessionManager = VoiceSessionManager(
                     scope = serviceScope,
                     onConnectRequest = {
-                        socket.connect(serviceScope)
+                        socket.connectDiscovered(serviceScope)
                         kotlinx.coroutines.withTimeoutOrNull(20_000L) {
                             while (!socket.isSessionReady()) delay(50L)
                             true

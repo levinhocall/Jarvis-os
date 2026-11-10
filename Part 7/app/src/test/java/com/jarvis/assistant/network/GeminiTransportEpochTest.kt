@@ -76,4 +76,30 @@ class GeminiTransportEpochTest {
         assertTrue(listener.statuses.isEmpty())
         assertFalse(transport.isSessionReady())
     }
+
+    @Test fun connectionUsesTheAccountWhoseModelWasDiscovered() = runBlocking {
+        val factory = Factory()
+        val transport = GeminiLiveWebSocket("initial-test-key", "models/test-live", "Aoede", "test", Listener(),
+            apiKeyProvider = { "different-test-key" }, externalReconnectOwner = true, socketFactory = factory)
+        transport.connect(this)
+        assertEquals("initial-test-key", factory.sockets.single().request().header("x-goog-api-key"))
+        transport.disconnect()
+    }
+
+    @Test fun quotaRotationDiscoversTheNewAccountBeforeOpeningSocket() = runBlocking {
+        val factory = Factory()
+        val transport = GeminiLiveWebSocket("initial-test-key", "models/test-live", "Aoede", "test", Listener(),
+            apiKeyProvider = { "alternate-test-key" }, externalReconnectOwner = true, socketFactory = factory)
+        transport.connect(this)
+        val response = Response.Builder().request(factory.sockets[0].request()).protocol(Protocol.HTTP_1_1)
+            .code(429).message("Too Many Requests").body("quota".let { okhttp3.ResponseBody.create(null, it) }).build()
+        factory.listeners[0].onFailure(factory.sockets[0], IOException("quota"), response)
+        transport.connectDiscovered(this) { key ->
+            assertEquals("alternate-test-key", key)
+            assertEquals(1, factory.sockets.size)
+            "models/alternate-test-live"
+        }
+        assertEquals("alternate-test-key", factory.sockets.last().request().header("x-goog-api-key"))
+        transport.disconnect()
+    }
 }

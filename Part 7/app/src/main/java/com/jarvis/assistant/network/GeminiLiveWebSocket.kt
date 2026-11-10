@@ -107,13 +107,35 @@ class GeminiLiveWebSocket(
 
     fun isSessionReady(): Boolean = isConnected.get() && isSetupComplete.get()
 
+    /** The existing session owner calls this inside its cancellable connection timeout. */
+    internal suspend fun connectDiscovered(
+        scope: CoroutineScope,
+        resolve: suspend (String) -> String = { key -> GeminiModelCatalog.resolve(key, GeminiRequestKind.LIVE_AUDIO, activeModel) }
+    ) {
+        val epoch = connectionEpoch.incrementAndGet()
+        stopTimers()
+        isConnected.set(false)
+        isSetupComplete.set(false)
+        val previous = webSocket; webSocket = null
+        runCatching { previous?.cancel() }
+        val key = pendingApiKey?.takeIf { it.isNotBlank() } ?: activeApiKey.trim().ifBlank { apiKey.trim() }
+        val discovered = resolve(key)
+        currentCoroutineContext().ensureActive()
+        if (epoch != connectionEpoch.get()) throw CancellationException("Connection superseded during model discovery")
+        activeApiKey = key
+        activeModel = discovered
+        pendingApiKey = null
+        connect(scope)
+    }
+
     fun connect(scope: CoroutineScope) {
         coroutineScope = scope
         isManuallyStopped.set(false)
         reconnectAttempts = 0
         val queuedKey = pendingApiKey
         pendingApiKey = null
-        val selectedKey = runCatching { apiKeyProvider().trim() }.getOrDefault("")
+        // Keep a healthy, already-discovered account. Rotate only after an explicit quota/key failure.
+        val selectedKey = activeApiKey.trim().ifBlank { apiKey.trim() }
         activeApiKey = queuedKey?.takeIf { it.isNotBlank() } ?: selectedKey.ifBlank { apiKey.trim() }
         initiateConnection()
     }
@@ -219,7 +241,7 @@ class GeminiLiveWebSocket(
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                    if (epoch != connectionEpoch.get()) { response?.close(); return }
+                    if (epoch != connectionEpoch.get()) { runCatching { response?.close() }; return }
                     val code = response?.code ?: 0
                     val retryAfterMs = response?.header("Retry-After")?.toLongOrNull()?.let { (it * 1_000L).coerceAtMost(MAX_RECONNECT_DELAY_MS) }
                     val responseBody = try { response?.body?.string() } catch (_: Exception) { null }
