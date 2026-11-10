@@ -1307,8 +1307,16 @@ object MissionEngine {
 
             // 3. Deduplication Check for High Consequential Actions (60s Safety Window)
             if (currentStep.riskLevel == MissionRisk.HIGH_CONSEQUENTIAL) {
-                val actionKey = "${currentStep.toolName}:${currentStep.parameters}"
-                val lastRun = recentConsequentialActions[actionKey] ?: 0L
+                val actionKey = try {
+                    MissionActionIdentity.key(currentStep.toolName, currentStep.parameters)
+                } catch (_: IllegalArgumentException) {
+                    currentStep = currentStep.copy(status = MissionStepStatus.BLOCKED,
+                        failureReason = "Action arguments could not be safely identified; execution was not attempted.")
+                    updatedSteps[index] = currentStep
+                    finalizeFailure(mission, updatedSteps, index, currentStep.failureReason!!, completedCount, unverifiedNotes)
+                    return
+                }
+                val lastRun = MissionActionIdentity.previousTimestamp(currentStep.toolName, currentStep.parameters, recentConsequentialActions)
                 val now = System.currentTimeMillis()
                 if (now - lastRun < 60_000L) {
                     val skippedEvidence = MissionVerificationEvidence(
