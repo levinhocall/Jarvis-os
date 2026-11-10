@@ -34,6 +34,7 @@ class AudioRecorder(
     private var noiseSuppressor: NoiseSuppressor? = null
     private var automaticGainControl: AutomaticGainControl? = null
     private var recordingJob: Job? = null
+    private var microphoneLease: MicrophoneOwnership.Lease? = null
     private val isRecording = AtomicBoolean(false)
     private val lifecycleGeneration = AtomicLong(0L)
     val isMuted = AtomicBoolean(false)
@@ -67,6 +68,8 @@ class AudioRecorder(
             return false
         }
 
+        val lease = MicrophoneOwnership.acquire(MicrophoneOwner.VOICE_SESSION) ?: return false
+        microphoneLease = lease
         return try {
             var record: AudioRecord? = null
             var initAttempts = 0
@@ -97,6 +100,8 @@ class AudioRecorder(
 
             if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
                 Log.e(TAG, "AudioRecord initialization failed after retries")
+                microphoneLease = null
+                lease.close()
                 return false
             }
 
@@ -302,6 +307,8 @@ class AudioRecorder(
                 }
             }
             Log.e(TAG, "Error starting AudioRecord: ${e.message}", e)
+            microphoneLease?.close()
+            microphoneLease = null
             false
         }
     }
@@ -334,6 +341,8 @@ class AudioRecorder(
                 }
             }
         }
+        microphoneLease?.close()
+        microphoneLease = null
     }
 
     fun setMuted(muted: Boolean) {

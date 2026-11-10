@@ -56,6 +56,7 @@ class AudioPipelineManager(
     private var noiseSuppressor: NoiseSuppressor? = null
 
     private var recordingJob: Job? = null
+    private var microphoneLease: com.jarvis.assistant.audio.MicrophoneOwnership.Lease? = null
     private val isRecording = AtomicBoolean(false)
     private val isMuted = AtomicBoolean(false)
     private val isBargeInSuppressed = AtomicBoolean(false)
@@ -82,6 +83,10 @@ class AudioPipelineManager(
         }
 
         val bufferSize = (minBufSize * 2).coerceAtLeast(4096)
+        val lease = com.jarvis.assistant.audio.MicrophoneOwnership.acquire(
+            com.jarvis.assistant.audio.MicrophoneOwner.VOICE_SESSION
+        ) ?: return false
+        microphoneLease = lease
 
         return try {
             val record = AudioRecord(
@@ -95,6 +100,8 @@ class AudioPipelineManager(
             if (record.state != AudioRecord.STATE_INITIALIZED) {
                 Log.e(TAG, "Failed to initialize AudioRecord.")
                 record.release()
+                microphoneLease = null
+                lease.close()
                 return false
             }
 
@@ -169,6 +176,8 @@ class AudioPipelineManager(
         noiseSuppressor = null
         runCatching { record?.release() }
             .onFailure { Log.w(TAG, "AudioRecord release failed", it) }
+        microphoneLease?.close()
+        microphoneLease = null
         Log.i(TAG, "Audio recording stopped and hardware cleanup attempted.")
     }
 

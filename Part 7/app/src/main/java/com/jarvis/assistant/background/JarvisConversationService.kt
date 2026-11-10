@@ -3721,6 +3721,7 @@ class JarvisConversationService : Service() {
     private var wakeFailures = 0
     private var wakeModelJob: Job? = null
     private var wakeRecognizer: Recognizer? = null
+    private var wakeMicrophoneLease: com.jarvis.assistant.audio.MicrophoneOwnership.Lease? = null
 
     private fun exitStandbyListening() {
         wakeTestMode = false
@@ -3729,15 +3730,22 @@ class JarvisConversationService : Service() {
         com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Wake listener stopped")
         wakeModelJob?.cancel(); wakeModelJob = null
         _isStandby.value = false
-        try {
-            voskSpeechService?.cancel()
-            voskSpeechService?.stop()
-            voskSpeechService?.shutdown()
-        } catch (e: Exception) {
-            Log.e("JarvisService", "Error stopping Vosk SpeechService: ${e.message}")
+        closeWakeCapture()
+    }
+
+    private fun closeWakeCapture(): Boolean {
+        val capture = voskSpeechService
+        runCatching { capture?.cancel() }
+        runCatching { capture?.stop() }
+        if (runCatching { capture?.shutdown() }.isFailure) {
+            com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Wake microphone cleanup failed. Restart JARVIS before starting another microphone feature.")
+            // Keep the lease and reference: uncertain cleanup must not permit a competing capture.
+            return false
         }
         voskSpeechService = null
         runCatching { wakeRecognizer?.close() }; wakeRecognizer = null
+        wakeMicrophoneLease?.close(); wakeMicrophoneLease = null
+        return true
     }
 
     private fun startWakeListening() {
@@ -3766,6 +3774,13 @@ class JarvisConversationService : Service() {
         }
 
         try {
+            val lease = com.jarvis.assistant.audio.MicrophoneOwnership.acquire(com.jarvis.assistant.audio.MicrophoneOwner.WAKE_WORD)
+            if (lease == null) {
+                fullStop()
+                com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Microphone is owned by another JARVIS feature. Close voice enrollment or stop the active session, then retry.")
+                return
+            }
+            wakeMicrophoneLease = lease
             standbyActivatedTime = System.currentTimeMillis()
             // Full vocabulary avoids forcing ambient speech into a tiny wake grammar.
             // Names and aliases are matched against final, word-confidence-bearing results.
@@ -3791,8 +3806,10 @@ class JarvisConversationService : Service() {
         if (!_isStandby.value || wakeRecoveryJob?.isActive == true) return
         wakeRecoveryJob = serviceScope.launch(Dispatchers.Main) {
             com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(false)
-            runCatching { voskSpeechService?.shutdown() }; voskSpeechService = null
-            runCatching { wakeRecognizer?.close() }; wakeRecognizer = null
+            if (!closeWakeCapture()) {
+                fullStop()
+                return@launch
+            }
             if (!PermissionHelper.hasRecordAudioPermission(this@JarvisConversationService) || error is SecurityException || ++wakeFailures > 3) {
                 fullStop()
                 com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Microphone unavailable. Check permission/privacy switch and restart from Wake Word.")

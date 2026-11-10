@@ -24,6 +24,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.io.ByteArrayOutputStream
 import java.util.Locale
 
@@ -43,8 +47,9 @@ class VoiceEnrollmentActivity : AppCompatActivity() {
 
     private var isRecording = false
     private var isTesting = false
-    private var recordingJob: Job? = null
-    private var audioRecord: AudioRecord? = null
+    @Volatile private var recordingJob: Job? = null
+    @Volatile private var audioRecord: AudioRecord? = null
+    private val captureMutex = Mutex()
     private val recordingBuffer = ByteArrayOutputStream()
 
     private val requestAudioLauncher = registerForActivityResult(
@@ -332,56 +337,68 @@ class VoiceEnrollmentActivity : AppCompatActivity() {
         recordingBuffer.reset()
 
         recordingJob = lifecycleScope.launch(Dispatchers.IO) {
-            val sampleRate = 16000
-            val channelConfig = AudioFormat.CHANNEL_IN_MONO
-            val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-            val minBufSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-            val bufferSize = maxOf(minBufSize * 2, 32000)
-
-            try {
-                val record = AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    sampleRate,
-                    channelConfig,
-                    audioFormat,
-                    bufferSize
+            captureMutex.withLock {
+                val captureJob = currentCoroutineContext()[Job]
+                val lease = com.jarvis.assistant.audio.MicrophoneOwnership.acquire(
+                    com.jarvis.assistant.audio.MicrophoneOwner.VOICE_ENROLLMENT
                 )
-
-                if (record.state != AudioRecord.STATE_INITIALIZED) {
-                    record.release()
-                    return@launch
+                if (lease == null) {
+                    showCaptureError(captureJob, "Microphone is busy. Stop Voice Mode and wake listening, then retry enrollment.")
+                    return@withLock
                 }
-
-                record.startRecording()
-                audioRecord = record
-
-                val chunk = ByteArray(640) // 20ms chunk at 16kHz 16-bit
-                while (isActive) {
-                    val read = record.read(chunk, 0, chunk.size)
-                    if (read > 0) {
-                        onChunk(chunk.copyOf(read))
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
+                var record: AudioRecord? = null
                 try {
-                    audioRecord?.stop()
-                    audioRecord?.release()
-                } catch (_: Exception) {}
-                audioRecord = null
+                    val sampleRate = 16000
+                    val channelConfig = AudioFormat.CHANNEL_IN_MONO
+                    val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+                    val minBufSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+                    check(minBufSize > 0) { "Microphone format unavailable" }
+                    val bufferSize = maxOf(minBufSize * 2, 32000)
+
+                    val captured = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                        sampleRate, channelConfig, audioFormat, bufferSize)
+                    record = captured
+                    check(captured.state == AudioRecord.STATE_INITIALIZED) { "Microphone could not initialize" }
+                    currentCoroutineContext().ensureActive()
+                    captured.startRecording()
+                    audioRecord = captured
+
+                    val chunk = ByteArray(640) // 20ms chunk at 16kHz 16-bit
+                    while (isActive) {
+                        val read = captured.read(chunk, 0, chunk.size)
+                        currentCoroutineContext().ensureActive()
+                        if (read > 0) onChunk(chunk.copyOf(read))
+                        check(read >= 0) { "Microphone read failed" }
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (e: Exception) {
+                    showCaptureError(captureJob, "Microphone unavailable. Check microphone permission and the system privacy switch, then retry.")
+                } finally {
+                    runCatching { record?.stop() }
+                    runCatching { record?.release() }
+                    if (audioRecord === record) audioRecord = null
+                    lease.close()
+                }
             }
         }
+    }
+
+    private suspend fun showCaptureError(captureJob: Job?, message: String) = withContext(Dispatchers.Main.immediate) {
+        if (recordingJob !== captureJob || isFinishing || isDestroyed) return@withContext
+        isRecording = false
+        isTesting = false
+        binding.btnRecordSample.text = "RETRY SAMPLE ${currentSampleIndex + 1}"
+        binding.btnTestVoice.text = "TEST VOICE MATCH (SPEAK NOW)"
+        binding.tvRecordFeedback.text = message
+        Toast.makeText(this@VoiceEnrollmentActivity, message, Toast.LENGTH_LONG).show()
     }
 
     private fun stopAudioCapture() {
         recordingJob?.cancel()
         recordingJob = null
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-        } catch (_: Exception) {}
-        audioRecord = null
+        // The 20 ms read loop observes cancellation and frees its own recorder on IO.
+        // A replacement waits on captureMutex, so old teardown cannot release new hardware.
     }
 
     override fun onDestroy() {
