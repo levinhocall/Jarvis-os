@@ -57,7 +57,7 @@
                 android:minWidth="52dp"
                 android:orientation="vertical"
                 android:gravity="center"
-                android:paddingHorizontal="10dp"
+                android:paddingHorizontal="4dp"
                 android:paddingVertical="3dp"
                 android:background="@drawable/bg_dock_item_active">
 
@@ -74,6 +74,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Home"
+                    android:singleLine="true"
                     android:textSize="10sp"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif-medium"
@@ -100,7 +101,7 @@
                 android:minWidth="52dp"
                 android:orientation="vertical"
                 android:gravity="center"
-                android:paddingHorizontal="10dp"
+                android:paddingHorizontal="4dp"
                 android:paddingVertical="3dp">
 
                 <ImageView
@@ -116,6 +117,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Chat"
+                    android:singleLine="true"
                     android:textSize="10sp"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif-medium"
@@ -245,7 +247,7 @@
                 android:minWidth="52dp"
                 android:orientation="vertical"
                 android:gravity="center"
-                android:paddingHorizontal="10dp"
+                android:paddingHorizontal="4dp"
                 android:paddingVertical="3dp">
 
                 <ImageView
@@ -261,6 +263,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Settings"
+                    android:singleLine="true"
                     android:textSize="10sp"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif-medium"

@@ -1,9 +1,11 @@
 # Advanced assistant changed files
 
-Comparison with baseline `f56bd1a`. Application changes are confined to Part 7. The root Android runtime workflow is the explicitly requested CI repair. This list records source scope, not feature acceptance; see [verification and limits](ADVANCED_ASSISTANT_PROGRESS.md).
+Comparison with baseline `f56bd1a`. Application changes are confined to Part 7. The two root Android workflow changes are the explicitly requested CI repair. This list records source scope, not feature acceptance; see [verification and limits](ADVANCED_ASSISTANT_PROGRESS.md).
 
 - `.github/workflows/android-runtime.yml`
+- `.github/workflows/android.yml`
 - `Part 7/app/build.gradle.kts`
+- `Part 7/build.gradle.kts`
 - `Part 7/app/src/androidTest/java/com/jarvis/assistant/data/memory/MemoryRepositoryTransactionInstrumentedTest.kt`
 - `Part 7/app/src/androidTest/java/com/jarvis/assistant/ui/ControlsNavigationInstrumentedTest.kt`
 - `Part 7/app/src/androidTest/java/com/jarvis/assistant/ui/LaunchSmokeInstrumentedTest.kt`
