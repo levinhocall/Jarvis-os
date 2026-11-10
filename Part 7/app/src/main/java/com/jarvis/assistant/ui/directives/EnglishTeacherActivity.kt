@@ -36,6 +36,7 @@ class EnglishTeacherActivity : DirectiveActivity() {
     private lateinit var recordButton: MaterialButton
     private lateinit var sendButton: MaterialButton
     private var recorder: MediaRecorder? = null
+    private var microphoneLease: com.jarvis.assistant.audio.MicrophoneOwnership.Lease? = null
     private var audio: File? = null
     private var request: Job? = null
     private var lastReply = ""
@@ -132,6 +133,11 @@ class EnglishTeacherActivity : DirectiveActivity() {
         if (com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value) {
             notice("End the live voice session before recording a learning sample."); return
         }
+        val lease = com.jarvis.assistant.audio.MicrophoneOwnership.acquire(
+            com.jarvis.assistant.audio.MicrophoneOwner.LEARNING_SAMPLE
+        )
+        if (lease == null) { notice("Microphone is busy. Stop wake listening, dictation or voice enrollment, then retry."); return }
+        microphoneLease = lease
         try {
             val file = File.createTempFile("english-practice-", ".m4a", cacheDir); audio = file
             val recording = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else MediaRecorder()
@@ -141,7 +147,10 @@ class EnglishTeacherActivity : DirectiveActivity() {
             recording.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             recording.setAudioSamplingRate(16000); recording.setAudioEncodingBitRate(64000)
             recording.setMaxDuration(30000); recording.setOutputFile(file.absolutePath)
-            recording.setOnInfoListener { _, what, _ -> if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
+            recording.setOnInfoListener { _, what, _ -> if (recorder === recording && what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
+            recording.setOnErrorListener { _, _, _ -> if (recorder === recording) {
+                abortRecording(); status.text = "Recording interrupted. No assessment was saved."
+            } }
             recording.prepare(); recording.start()
             recordButton.text = "Stop and assess recording"; sendButton.isEnabled = false
             status.text = "Recording. The stopped sample is sent to Gemini for an audio-based assessment."
@@ -150,12 +159,21 @@ class EnglishTeacherActivity : DirectiveActivity() {
     private fun finishRecording() {
         val current = recorder ?: return
         val file = audio; recorder = null; audio = null
-        if (file == null) { current.release(); status.text = "Recording file unavailable."; return }
-        try { current.stop(); current.release(); recordButton.text = "Record & assess with Gemini (up to 30s)"; submit(file) }
-        catch (_: Exception) { current.release(); file?.delete(); sendButton.isEnabled = true; status.text = "Recording was too short or interrupted. No assessment was saved." }
+        val lease = microphoneLease; microphoneLease = null
+        try {
+            check(file != null) { "Recording file unavailable" }
+            current.stop()
+            recordButton.text = "Record & assess with Gemini (up to 30s)"
+        } catch (_: Exception) {
+            file?.delete(); sendButton.isEnabled = true
+            status.text = "Recording was too short or interrupted. No assessment was saved."
+            return
+        } finally { runCatching { current.release() }; lease?.close() }
+        submit(file)
     }
     private fun abortRecording() {
-        runCatching { recorder?.stop() }; recorder?.release(); recorder = null
+        runCatching { recorder?.stop() }; runCatching { recorder?.release() }; recorder = null
+        microphoneLease?.close(); microphoneLease = null
         audio?.delete(); audio = null
         if (::recordButton.isInitialized) { recordButton.text = "Record & assess with Gemini (up to 30s)"; sendButton.isEnabled = profileLoaded && request?.isActive != true; recordButton.isEnabled = profileLoaded && request?.isActive != true }
     }

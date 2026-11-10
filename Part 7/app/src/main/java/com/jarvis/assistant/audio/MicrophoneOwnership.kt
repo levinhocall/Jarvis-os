@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class MicrophoneOwner { VOICE_SESSION, WAKE_WORD, VOICE_ENROLLMENT }
+enum class MicrophoneOwner { VOICE_SESSION, WAKE_WORD, VOICE_ENROLLMENT, LOCAL_DICTATION, LEARNING_SAMPLE }
 
 /** Process-local exclusivity for existing capture implementations, not another audio engine. */
 object MicrophoneOwnership {

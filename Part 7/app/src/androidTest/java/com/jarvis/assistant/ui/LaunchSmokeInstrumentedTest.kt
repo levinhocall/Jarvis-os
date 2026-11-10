@@ -92,12 +92,45 @@ class LaunchSmokeInstrumentedTest {
             org.junit.Assert.assertTrue(com.jarvis.assistant.background.JarvisConversationService.isStandby.value)
             org.junit.Assert.assertTrue(com.jarvis.assistant.audio.wake.WakeDiagnostics.listening.value)
             org.junit.Assert.assertTrue(com.jarvis.assistant.audio.wake.WakeDiagnostics.testing.value)
+            org.junit.Assert.assertEquals(com.jarvis.assistant.audio.MicrophoneOwner.WAKE_WORD,
+                com.jarvis.assistant.audio.MicrophoneOwnership.owner.value)
+            org.junit.Assert.assertNull(com.jarvis.assistant.audio.MicrophoneOwnership.acquire(
+                com.jarvis.assistant.audio.MicrophoneOwner.VOICE_ENROLLMENT))
         } finally {
             instrumentation.runOnMainSync { activity.startService(Intent(activity,com.jarvis.assistant.background.JarvisConversationService::class.java).setAction(com.jarvis.assistant.background.JarvisConversationService.ACTION_STOP_ALL)) }
             kotlinx.coroutines.withTimeout(10_000) { com.jarvis.assistant.background.JarvisConversationService.isStandby.first { !it } }
             org.junit.Assert.assertFalse(com.jarvis.assistant.audio.wake.WakeDiagnostics.listening.value)
             org.junit.Assert.assertFalse(com.jarvis.assistant.audio.wake.WakeDiagnostics.testing.value)
+            org.junit.Assert.assertNull(com.jarvis.assistant.audio.MicrophoneOwnership.owner.value)
             instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+    @Test fun realAudioCaptureIsExclusiveAndScopeCancellationReleasesIt() = runBlocking {
+        prepareHomePermissions()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val scenario = androidx.test.core.app.ActivityScenario.launch<com.jarvis.assistant.ui.directives.WakeWordActivity>(
+            Intent(context,com.jarvis.assistant.ui.directives.WakeWordActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+        val frame = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val recorder = com.jarvis.assistant.audio.AudioRecorder { bytes, _, _ -> if(bytes.isNotEmpty()) frame.complete(Unit) }
+        val competing = com.jarvis.assistant.audio.AudioRecorder { _, _, _ -> }
+        try {
+            withContext(Dispatchers.IO) {
+                org.junit.Assert.assertTrue("Android AudioRecord failed to start", recorder.start(scope))
+                org.junit.Assert.assertFalse("Second capture must be denied", competing.start(scope))
+            }
+            kotlinx.coroutines.withTimeout(8000) { frame.await() }
+            org.junit.Assert.assertEquals(com.jarvis.assistant.audio.MicrophoneOwner.VOICE_SESSION,
+                com.jarvis.assistant.audio.MicrophoneOwnership.owner.value)
+            scope.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+            kotlinx.coroutines.withTimeout(8000) { com.jarvis.assistant.audio.MicrophoneOwnership.owner.first { it == null } }
+            org.junit.Assert.assertFalse(recorder.isActive)
+        } finally {
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                recorder.stop(); competing.stop(); scope.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+            }
+            scenario.close()
         }
     }
     @Test fun customWakeNameUpdatesReferenceStylePhrasePreview() {

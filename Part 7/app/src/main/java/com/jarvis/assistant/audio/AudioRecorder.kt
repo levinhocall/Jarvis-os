@@ -55,6 +55,7 @@ class AudioRecorder(
     @Synchronized
     fun start(scope: CoroutineScope): Boolean {
         if (isRecording.get()) return true
+        if (!scope.isActive) return false
 
         val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         if (minBufferSize == AudioRecord.ERROR || minBufferSize == AudioRecord.ERROR_BAD_VALUE) {
@@ -277,6 +278,13 @@ class AudioRecorder(
                             Log.e(TAG, "AudioRecord auto-recovery failed: ${reInitEx.message}", reInitEx)
                             delay(1000)
                         }
+                    }
+                }
+            }.also { captureJob ->
+                captureJob.invokeOnCompletion {
+                    synchronized(this@AudioRecorder) {
+                        // An old capture's cancellation cannot tear down a replacement.
+                        if (lifecycleGeneration.get() == generation) stop()
                     }
                 }
             }
