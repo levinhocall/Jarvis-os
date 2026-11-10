@@ -6,6 +6,7 @@ on:
     branches: [ main ]
     paths:
       - "Part 7/**"
+      - "!Part 7/docs/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
     inputs:
