@@ -3,6 +3,9 @@ package com.jarvis.assistant.automation.agent
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -20,25 +23,37 @@ object SerializedActionExecutor {
     private val mutex = Mutex()
     private val isCancelled = AtomicBoolean(false)
     private val taskGeneration = AtomicLong(0L)
+    private val lifecycleLock = Any()
+    private var activeActionJob: Job? = null
 
     val isBusy: Boolean
         get() = mutex.isLocked
 
     fun cancelAllPendingActions() {
         Log.w(TAG, "Cancelling all active/pending UI actions")
-        isCancelled.set(true)
-        taskGeneration.incrementAndGet()
+        advanceGeneration(cancelled = true)
     }
 
     fun resetCancellation() {
-        taskGeneration.incrementAndGet()
-        isCancelled.set(false)
+        advanceGeneration(cancelled = false)
     }
 
     /** Starts a fresh task epoch; actions queued by an older task remain invalid. */
     fun startNewTask(): Long {
-        isCancelled.set(false)
-        return taskGeneration.incrementAndGet()
+        return advanceGeneration(cancelled = false)
+    }
+
+    private fun advanceGeneration(cancelled: Boolean): Long {
+        val (generation, previous) = synchronized(lifecycleLock) {
+            isCancelled.set(cancelled)
+            val generation = taskGeneration.incrementAndGet()
+            val previous = activeActionJob
+            activeActionJob = null
+            generation to previous
+        }
+        // Cancel outside the state lock: action cleanup can publish its own completion.
+        previous?.cancel(CancellationException("UI task was stopped or replaced"))
+        return generation
     }
 
     /**
@@ -55,41 +70,44 @@ object SerializedActionExecutor {
         // cannot accidentally revive an older queued mutation.
         val submittedGeneration = expectedGeneration ?: taskGeneration.get()
         return withContext(Dispatchers.IO) {
-        if (isCancelled.get() || submittedGeneration != taskGeneration.get()) {
-            Log.w(TAG, "Action '$actionName' rejected: Task is cancelled")
-            return@withContext null
-        }
-
-        val startTime = System.currentTimeMillis()
-        Log.d(TAG, "Requesting lock for UI action: '$actionName'")
-
-        mutex.withLock {
             if (isCancelled.get() || submittedGeneration != taskGeneration.get()) {
-                Log.w(TAG, "Action '$actionName' aborted after lock acquisition: Task is cancelled")
-                return@withLock null
+                Log.w(TAG, "UI action rejected: task is cancelled or superseded")
+                return@withContext null
             }
-
-            Log.i(TAG, ">>> STARTING SERIALIZED ACTION: '$actionName'")
+            // Log only a known category, never a caller-supplied UI label or message.
+            val category = actionName.substringBefore(':').lowercase(java.util.Locale.ROOT)
+                .takeIf { it in setOf("click", "type", "scroll", "key", "tap", "swipe") } ?: "ui"
+            val startTime = System.nanoTime()
             try {
+                // Queueing is part of the deadline; a blocked mutex must not extend a tool budget.
                 val result = withTimeoutOrNull(timeoutMs) {
-                    block()
+                    mutex.withLock {
+                        val actionJob = currentCoroutineContext()[Job] ?: return@withLock null
+                        val registered = synchronized(lifecycleLock) {
+                            if (isCancelled.get() || submittedGeneration != taskGeneration.get()) false
+                            else { activeActionJob = actionJob; true }
+                        }
+                        if (!registered) return@withLock null
+                        try {
+                            currentCoroutineContext().ensureActive()
+                            block()
+                        } finally {
+                            synchronized(lifecycleLock) {
+                                if (activeActionJob === actionJob) activeActionJob = null
+                            }
+                        }
+                    }
                 }
-
-                val elapsed = System.currentTimeMillis() - startTime
-                if (result == null) {
-                    Log.e(TAG, "!!! ACTION TIMED OUT after ${elapsed}ms: '$actionName'")
-                } else {
-                    Log.i(TAG, "<<< COMPLETED ACTION '$actionName' in ${elapsed}ms")
-                }
-                return@withLock result
+                val elapsed = (System.nanoTime() - startTime) / 1_000_000
+                Log.i(TAG, "UI $category action returned in ${elapsed}ms; resultAvailable=${result != null}")
+                result
             } catch (e: CancellationException) {
-                Log.w(TAG, "Action '$actionName' was cancelled: ${e.message}")
+                Log.w(TAG, "UI action cancelled")
                 throw e
             } catch (e: Exception) {
-                Log.e(TAG, "Exception during action '$actionName': ${e.message}", e)
-                return@withLock null
+                Log.e(TAG, "UI action failed (${e.javaClass.simpleName})")
+                null
             }
-        }
         }
     }
 }
