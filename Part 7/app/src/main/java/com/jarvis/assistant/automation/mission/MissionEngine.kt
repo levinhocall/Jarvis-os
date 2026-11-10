@@ -1259,6 +1259,13 @@ object MissionEngine {
             // 2. Precondition & Tool Validation Check
             val validation = ToolRegistry.validate(currentStep.toolName, currentStep.parameters, context)
             when (validation) {
+                is ToolValidationResult.InvalidParameters -> {
+                    currentStep = currentStep.copy(status = MissionStepStatus.BLOCKED,
+                        failureReason = "Invalid parameter types: ${validation.fields.joinToString()}")
+                    updatedSteps[index] = currentStep
+                    finalizeFailure(mission, updatedSteps, index, currentStep.failureReason!!, completedCount, unverifiedNotes)
+                    return
+                }
                 is ToolValidationResult.MissingParameters -> {
                     currentStep = currentStep.copy(
                         status = MissionStepStatus.BLOCKED,
@@ -1662,6 +1669,9 @@ object MissionEngine {
         }
 
         return when (val validation = ToolRegistry.validate(step.toolName, step.parameters, context)) {
+            is ToolValidationResult.InvalidParameters -> Pair(false, MissionVerificationEvidence(
+                EvidenceType.UNVERIFIED, false, "Invalid parameter types: ${validation.fields.joinToString()}; execution was not attempted."
+            ))
             ToolValidationResult.Valid -> executeSingleStep(step, context)
             is ToolValidationResult.UnknownTool -> Pair(false, MissionVerificationEvidence(
                 EvidenceType.UNVERIFIED, false, "Unknown tool '${validation.toolName}'; execution was not attempted."

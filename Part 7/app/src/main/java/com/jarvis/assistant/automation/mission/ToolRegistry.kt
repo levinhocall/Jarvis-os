@@ -11,6 +11,7 @@ sealed class ToolValidationResult {
     object Valid : ToolValidationResult()
     data class UnknownTool(val toolName: String) : ToolValidationResult()
     data class MissingParameters(val missingParams: List<String>) : ToolValidationResult()
+    data class InvalidParameters(val fields: List<String>) : ToolValidationResult()
     data class MissingPermissions(val missingPermissions: List<String>) : ToolValidationResult()
     data class AccessibilityUnavailable(val guidance: String) : ToolValidationResult()
 }
@@ -383,6 +384,8 @@ object ToolRegistry {
         if (missing.isNotEmpty()) {
             return ToolValidationResult.MissingParameters(missing)
         }
+        val invalid = ToolArgumentValidator.invalidFields(tool, parameters)
+        if (invalid.isNotEmpty()) return ToolValidationResult.InvalidParameters(invalid)
 
         // 2. Validate platform permissions (if context provided)
         if (context != null && tool.requiredPermissions.isNotEmpty()) {

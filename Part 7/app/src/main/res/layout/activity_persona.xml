@@ -116,6 +116,13 @@
                         android:text="Ready to help, NAZIB."
                         android:textColor="?attr/themeTextMuted"
                         android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAllPersonalities"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:text="Choose conversation personality" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

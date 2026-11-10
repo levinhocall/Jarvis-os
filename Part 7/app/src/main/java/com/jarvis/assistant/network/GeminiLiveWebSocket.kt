@@ -58,11 +58,10 @@ class GeminiLiveWebSocket(
 
     private val client = sharedClient
 
-    private var activeModel: String = when (model) {
-        GeminiConstants.MODEL_3_8_LIVE -> GeminiConstants.MODEL_3_8_LIVE
-        GeminiConstants.MODEL_3_1_FLASH_AGENT -> GeminiConstants.MODEL_3_1_FLASH
-        else -> if (model.isNotBlank() && !model.contains("2.5")) model else GeminiConstants.DEFAULT_MODEL
-    }
+    // The owner selects a ListModels-discovered Bidi model. Never rewrite its version here.
+    private var activeModel: String = model
+    private val resumption = LiveSessionResumption()
+    @Volatile private var toolContracts = LiveToolContracts(emptyList())
 
     private var webSocket: WebSocket? = null
     private val isConnected = AtomicBoolean(false)
@@ -142,7 +141,7 @@ class GeminiLiveWebSocket(
             webSocket = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     Log.d(TAG, "WebSocket connected to Gemini Live. Sending BidiSetup...")
-                    resetToolCallDeduplication()
+                    // Retain bounded tool IDs across a resumed connection; replay must not repeat side effects.
                     isConnected.set(true)
                     isSetupComplete.set(false)
                     listener.onConnectionStateChanged("CONFIGURING...")
@@ -203,18 +202,6 @@ class GeminiLiveWebSocket(
                     }
 
                     if (code == 1008) {
-                        val isModelError = reason.contains("BidiGenerateContent", ignoreCase = true) ||
-                                           reason.contains("not found", ignoreCase = true) ||
-                                           reason.contains("not supported", ignoreCase = true)
-                        if (isModelError) {
-                            if (activeModel != GeminiConstants.MODEL_3_8_LIVE) {
-                                Log.w(TAG, "Model rejected by Gemini (code=$code). Auto-falling back to ${GeminiConstants.MODEL_3_8_LIVE}")
-                                activeModel = GeminiConstants.MODEL_3_8_LIVE
-                                listener.onConnectionStateChanged("RECONNECTING...")
-                                requestReconnect()
-                                return
-                            }
-                        }
                         listener.onError("Gemini setup was rejected. Check the selected model and API access.", isFatal = true, errorCode = "SETUP_REJECTED")
                         listener.onConnectionStateChanged("OFFLINE")
                     } else if (!isManuallyStopped.get()) {
@@ -299,6 +286,9 @@ class GeminiLiveWebSocket(
         val setup = JSONObject().apply {
             put("setup", JSONObject().apply {
                 put("model", activeModel)
+                put("session_resumption", JSONObject().apply {
+                    resumption.forAccount(activeApiKey)?.let { put("handle", it) }
+                })
                 put("system_instruction", JSONObject().apply {
                     put("parts", JSONArray().put(JSONObject().put("text", effectivePrompt)))
                 })
@@ -314,14 +304,6 @@ class GeminiLiveWebSocket(
                         })
                     })
                     put("temperature", 0.6)
-                    // Gemini 2.5 Flash native audio has thinking enabled by default (budget=2048),
-                    // which causes a 2-3 second delay before generating speech.
-                    // Setting thinking_budget to 0 disables chain-of-thought, yielding instant (<1s) conversational response.
-                    if (activeModel.contains("2.5")) {
-                        put("thinking_config", JSONObject().apply {
-                            put("thinking_budget", 0)
-                        })
-                    }
                 })
                 put("tools", JSONArray().put(JSONObject().apply {
                     put("functionDeclarations", JSONArray().apply {
@@ -755,6 +737,11 @@ class GeminiLiveWebSocket(
             })
         }
         val json = setup.toString()
+        val declarations = setup.getJSONObject("setup").getJSONArray("tools").getJSONObject(0)
+            .getJSONArray("functionDeclarations")
+        toolContracts = LiveToolContracts((0 until declarations.length()).map {
+            com.google.gson.JsonParser.parseString(declarations.getJSONObject(it).toString()).asJsonObject
+        })
         Log.d(TAG, "Sending BidiSetup payload to Gemini Live with tools")
         ws.send(json)
     }
@@ -799,6 +786,10 @@ class GeminiLiveWebSocket(
                 return
             }
 
+            json.optJSONObject("sessionResumptionUpdate")?.let { update ->
+                resumption.update(update.optBoolean("resumable", false), update.optString("newHandle").takeIf { it.isNotBlank() })
+            }
+
             // 0. Server setupComplete handshake acknowledgment
             if (json.has("setupComplete")) {
                 Log.i(TAG, "Server acknowledged setup: setupComplete received. Session is now LIVE!")
@@ -834,7 +825,7 @@ class GeminiLiveWebSocket(
                             // Never log tool arguments or returned data: these can contain
                             // private message text, contact details, or other user content.
                             Log.i(TAG, "Gemini invoked toolCall: $name (id=$id)")
-                            listener.onToolCall(id, name, args)
+                            dispatchValidatedToolCall(id, name, args)
                         }
                     }
                 }
@@ -853,9 +844,9 @@ class GeminiLiveWebSocket(
                             val name = call.optString("name", "")
                             val id = call.optString("id", "")
                             val args = call.optJSONObject("args") ?: JSONObject()
-                            if (name.isNotEmpty()) {
+                            if (name.isNotEmpty() && shouldDispatchToolCall(id)) {
                                 Log.i(TAG, "Gemini invoked toolCall (serverContent): $name (id=$id)")
-                                listener.onToolCall(id, name, args)
+                                dispatchValidatedToolCall(id, name, args)
                             }
                         }
                     }
@@ -958,6 +949,12 @@ class GeminiLiveWebSocket(
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing incoming server JSON: ${e.message}", e)
         }
+    }
+
+    private fun dispatchValidatedToolCall(id: String, name: String, args: JSONObject) {
+        val rejection = toolContracts.rejection(name, com.google.gson.JsonParser.parseString(args.toString()).asJsonObject)
+        if (rejection == null) listener.onToolCall(id, name, args)
+        else sendToolResponse(id, name, JSONObject().put("success", false).put("error", "INVALID_TOOL_ARGUMENTS").put("message", rejection))
     }
 
     fun sendToolResponse(callId: String, functionName: String, result: JSONObject) {

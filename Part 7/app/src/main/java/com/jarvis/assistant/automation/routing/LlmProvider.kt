@@ -5,6 +5,8 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.jarvis.assistant.automation.agent.GeminiSchemaConverter
 import com.jarvis.assistant.automation.agent.LlmStepDecision
+import com.jarvis.assistant.automation.agent.awaitCouncilResponse
+import com.jarvis.assistant.automation.agent.toNativeToolValue
 import com.jarvis.assistant.automation.mission.ToolDefinition
 import com.jarvis.assistant.data.preferences.AppPreferences
 import com.jarvis.assistant.data.model.GeminiConstants
@@ -29,7 +31,8 @@ data class LlmRequest(
     val systemPrompt: String? = null,
     val temperature: Float = 0.7f,
     val maxTokens: Int = 1024,
-    val tools: List<ToolDefinition> = emptyList()
+    val tools: List<ToolDefinition> = emptyList(),
+    val requestKind: com.jarvis.assistant.network.GeminiRequestKind = com.jarvis.assistant.network.GeminiRequestKind.FAST_TEXT
 )
 
 data class LlmResponse(
@@ -80,7 +83,11 @@ class GeminiProvider(
             throw IllegalStateException("No active Gemini API key available in key pool.")
         }
 
-        val modelName = GeminiConstants.MODEL_3_8_FLASH.removePrefix("models/")
+        require(request.requestKind != com.jarvis.assistant.network.GeminiRequestKind.LIVE_AUDIO) {
+            "Live audio must use the existing VoiceSessionManager, not a REST provider."
+        }
+        val modelName = com.jarvis.assistant.network.GeminiModelCatalog.resolve(currentKey, request.requestKind)
+            .removePrefix("models/")
         val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent"
 
         val contents = mutableListOf<Map<String, Any>>()
@@ -92,7 +99,9 @@ class GeminiProvider(
         )
 
         val payload = mutableMapOf<String, Any>(
-            "contents" to contents
+            "contents" to contents,
+            "generationConfig" to mapOf("temperature" to request.temperature.coerceIn(0f, 2f),
+                "maxOutputTokens" to request.maxTokens.coerceIn(1, 8192))
         )
 
         if (!request.systemPrompt.isNullOrBlank()) {
@@ -110,20 +119,16 @@ class GeminiProvider(
             .post(reqBody)
             .build()
 
-        val httpResponse = try {
-            client.newCall(httpRequest).execute()
-        } catch (e: Exception) {
-            throw e
-        }
+        val httpResponse = client.newCall(httpRequest).awaitCouncilResponse()
 
         val latency = System.currentTimeMillis() - startTime
-        val respBody = httpResponse.body?.string() ?: ""
+        val respBody = httpResponse.body
 
         if (httpResponse.code == 429) {
             preferences.reportKeyRateLimit("gemini", currentKey)
             throw IllegalStateException("Gemini Rate limit (429) encountered. Cooldown applied to key.")
         }
-        if (httpResponse.code in listOf(401, 403)) {
+        if (httpResponse.code == 401 || respBody.contains("API_KEY_INVALID")) {
             preferences.reportKeyInvalid("gemini", currentKey)
             throw IllegalStateException("Gemini Authentication failed (${httpResponse.code}). Key marked invalid.")
         }
@@ -142,6 +147,7 @@ class GeminiProvider(
             if (parts != null) {
                 for (i in 0 until parts.size()) {
                     val p = parts.get(i).asJsonObject
+                    if (p.get("thought")?.asBoolean == true) continue
                     if (p.has("text")) {
                         textResult += p.get("text").asString
                     }
@@ -151,7 +157,7 @@ class GeminiProvider(
                         val argsMap = mutableMapOf<String, Any?>()
                         if (fn.has("args") && fn.get("args").isJsonObject) {
                             fn.getAsJsonObject("args").entrySet().forEach { (k, v) ->
-                                argsMap[k] = if (v.isJsonPrimitive) v.asString else v.toString()
+                                argsMap[k] = v.toNativeToolValue()
                             }
                         }
                         toolCalls.add(LlmStepDecision.InvokeTool(fnName, argsMap))

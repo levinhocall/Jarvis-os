@@ -175,9 +175,9 @@ class GeminiFunctionCallProvider(
         val apiKey = apiKeyProvider()
         if (apiKey.isBlank() || prompt.isBlank()) return@withContext null
         try {
-            val model = modelProvider().removePrefix("models/").ifBlank {
-                com.jarvis.assistant.data.model.GeminiConstants.MODEL_3_8_FLASH.removePrefix("models/")
-            }
+            val model = com.jarvis.assistant.network.GeminiModelCatalog.resolve(
+                apiKey, com.jarvis.assistant.network.GeminiRequestKind.REASONING, modelProvider()
+            ).removePrefix("models/")
             val payload = mapOf(
                 "contents" to listOf(mapOf("role" to "user", "parts" to listOf(mapOf("text" to prompt.take(12000))))),
                 "generationConfig" to mapOf("temperature" to 0.2, "maxOutputTokens" to 400)
@@ -222,7 +222,9 @@ class GeminiFunctionCallProvider(
         }
 
         try {
-            val model = modelProvider().removePrefix("models/").ifBlank { com.jarvis.assistant.data.model.GeminiConstants.MODEL_3_8_FLASH.removePrefix("models/") }
+            val model = com.jarvis.assistant.network.GeminiModelCatalog.resolve(
+                apiKey, com.jarvis.assistant.network.GeminiRequestKind.REASONING, modelProvider()
+            ).removePrefix("models/")
             val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
             val contents = mutableListOf<Map<String, Any>>()
 
@@ -331,6 +333,8 @@ class GeminiFunctionCallProvider(
 
             LlmStepDecision.Abort("No actionable function call returned by model.")
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.e("GeminiPlannerProvider", "Function-call request failed (${e.javaClass.simpleName}).")
             LlmStepDecision.Abort("Provider execution failed (${e.javaClass.simpleName}).")

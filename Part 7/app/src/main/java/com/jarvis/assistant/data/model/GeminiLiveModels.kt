@@ -70,7 +70,9 @@ object GeminiConstants {
         PERSONALITY_NAZIB,
         PERSONALITY_COMPANION,
         PERSONALITY_FOCUS,
-        PERSONALITY_PROFESSIONAL
+        PERSONALITY_PROFESSIONAL,
+        "NORMAL", "FRIENDLY", "PROFESSIONAL", "FUNNY", "COMPANION", "GF_MODE",
+        "TEACHER", "DEVELOPER", "HUNGRY", "NAUTANKI"
     )
 
     const val WS_BASE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"

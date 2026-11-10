@@ -25,7 +25,10 @@ object AuraCloudClient {
         val prefs = JarvisApp.instance.preferences
         val key = (prefs.getNextActiveKey("gemini") ?: prefs.apiKey).trim()
         check(key.isNotEmpty()) { "Configure Gemini first" }
-        val response = http.newCall(Request.Builder().url("https://generativelanguage.googleapis.com/v1beta/models/${model.removePrefix("models/")}:generateContent")
+        // Image output has a separate explicit model contract; do not route it to a text fallback.
+        val selectedModel = if (model.contains("image", true)) model else
+            com.jarvis.assistant.network.GeminiModelCatalog.resolve(key, com.jarvis.assistant.network.GeminiRequestKind.FAST_TEXT)
+        val response = http.newCall(Request.Builder().url("https://generativelanguage.googleapis.com/v1beta/models/${selectedModel.removePrefix("models/")}:generateContent")
             .header("x-goog-api-key",key).post(payload.toString().toRequestBody("application/json".toMediaType())).build()).awaitCouncilResponse(limit)
         check(response.isSuccessful) { "Provider request failed (${response.code})" }
         return JSONObject(response.body)

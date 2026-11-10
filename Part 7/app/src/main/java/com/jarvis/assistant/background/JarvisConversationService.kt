@@ -928,6 +928,8 @@ class JarvisConversationService : Service() {
         }
     }
 
+    private var sessionBootstrapJob: Job? = null
+
     private fun beginActiveConversation(wakeTriggered: Boolean = false) {
         VoskModelManager.init(applicationContext, serviceScope, preferences.isOwnerVoiceEnabled)
         if (_isSessionOn.value) return
@@ -1030,7 +1032,8 @@ class JarvisConversationService : Service() {
             }
         ).apply { start() }
 
-        serviceScope.launch(Dispatchers.IO) {
+        sessionBootstrapJob?.cancel()
+        sessionBootstrapJob = serviceScope.launch(Dispatchers.IO) {
             if (apiKey.isBlank()) {
                 withContext(Dispatchers.Main.immediate) {
                     if (_isSessionOn.value) {
@@ -1047,12 +1050,34 @@ class JarvisConversationService : Service() {
             voiceSessionManager?.awaitStopped()
             voiceSessionManager = null
             val systemPrompt = generateCurrentSystemPrompt()
+            val discoveredLiveModel = try {
+                com.jarvis.assistant.network.GeminiModelCatalog.resolve(
+                    apiKey, com.jarvis.assistant.network.GeminiRequestKind.LIVE_AUDIO, preferences.aiModel
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                withContext(Dispatchers.Main.immediate) {
+                    if (_isSessionOn.value) {
+                        _connectionStatus.value = "OFFLINE"
+                        _liveError.value = JarvisLiveError(
+                            title = "MODEL DISCOVERY UNAVAILABLE",
+                            message = "Check network, API key and project access; local commands remain available.",
+                            errorCode = "MODEL_DISCOVERY_UNAVAILABLE", actionText = "RETRY"
+                        )
+                        setConversationState(ConversationState.ERROR)
+                        updateNotification()
+                        _events.emit("Gemini model discovery unavailable. Check network, API key and project access; local commands remain available.")
+                    }
+                }
+                return@launch
+            }
 
             withContext(Dispatchers.Main) {
                 if (!_isSessionOn.value) return@withContext
                 liveWebSocket = GeminiLiveWebSocket(
                     apiKey = apiKey,
-                    model = preferences.aiModel,
+                    model = discoveredLiveModel,
                     voiceName = preferences.voice,
                     systemPrompt = systemPrompt,
                     listener = object : GeminiLiveWebSocket.Listener {
@@ -3586,6 +3611,8 @@ class JarvisConversationService : Service() {
     }
 
     private fun stopActiveConversation() {
+        sessionBootstrapJob?.cancel()
+        sessionBootstrapJob = null
         inactivityJob?.cancel()
         inactivityJob = null
         cancelAllActiveTools()

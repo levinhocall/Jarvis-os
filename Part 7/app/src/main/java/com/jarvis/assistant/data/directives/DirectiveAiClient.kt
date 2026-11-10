@@ -45,7 +45,9 @@ class DirectiveAiClient(private val preferences: AppPreferences) {
                 addProperty("temperature", 0.3)
             })
         }
-        val model = GeminiConstants.MODEL_3_8_FLASH.removePrefix("models/")
+        val model = com.jarvis.assistant.network.GeminiModelCatalog.resolve(
+            key, com.jarvis.assistant.network.GeminiRequestKind.FAST_TEXT
+        ).removePrefix("models/")
         val response = http.newCall(Request.Builder()
             .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
             .header("x-goog-api-key", key)

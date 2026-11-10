@@ -1,0 +1,59 @@
+# Advanced assistant integration — verified repository map
+
+Baseline: `f56bd1a`, main, inspected 2026-11-10. Remote main matched local before editing. Scope: Part 7 only. No Shizuku references found in the active source or Gradle configuration.
+
+## Phase 1 integration status
+
+Existing security is distributed across `security/sandbox/RiskPolicy`, permission checks, mission approvals, owner verification, and provenance/screen sanitization. It is not a single completed Phase 1 acceptance artifact. `MissionEngine` checks permissions, accessibility and approvals before side effects; its checkpoint/recovery logic preserves non-idempotent actions. `ExplicitMessageAuthorization` also recognizes bounded exact user commands. This is not blanket permission to send arbitrary model-generated messages. Full cross-entry-point policy verification remains open.
+
+## Existing architecture and ownership
+
+```mermaid
+flowchart TD
+  UI[XML Home / Chat / Voice screens] --> Service[JarvisConversationService]
+  Service --> Session[existing VoiceSessionManager]
+  Session --> Live[GeminiLiveWebSocket]
+  Live --> Service
+  Service --> Native[existing native tool dispatcher]
+  Service --> Mission[MissionEngine]
+  Mission --> Registry[ToolRegistry validation]
+  Mission --> Planner[LlmPlanner / GeminiFunctionCallProvider]
+  Mission --> Driver[existing Accessibility / Android APIs]
+  Service --> Context[PromptGenerator / existing memory context]
+  Context --> Memory[existing Room / SQLCipher repositories]
+  Mission --> Memory
+```
+
+Live session reconnect ownership already exists; adding a second live session coordinator would duplicate it. Tool calls have per-connection duplicate-ID suppression and the service serializes execution with a mutex. Live PCM and transcripts already stream through the service. Native tool dispatch and mission tools use different declarations; consolidating schemas requires compatibility review rather than alias-only remapping (aliases can use different argument names). Existing REST provider abstractions and CognitiveRouter exist, but the generic provider is not the primary chat/voice owner. Chat is connected to the existing conversation service, not an independent REST chatbot.
+
+## Remaining-work checklist
+
+- Phase 2: shared capability-aware model discovery; remove execution reliance on unverified model IDs; preserve cancellation and JSON types; strict tool argument schemas; complete personality choices without changing authority; bounded multilingual context/follow-up regression coverage; reconcile native and mission contracts; verify actual API access when available.
+- Phase 3: audit existing Vosk downloader/model manager, wake matcher, authoritative mic transitions, interruption/audio focus and screen-off lifecycle. Recognition accuracy requires real acoustic tests.
+- Phase 4: audit current PhoneControlManager, contact selection, notifications, SMS, alarm/timer/reminder and device-control paths; enforce draft/approval/observable result semantics.
+- Phase 5: audit semantic nodes, stale detection, transition waits, retry limits and approval boundaries in the existing accessibility/mission implementation.
+- Phase 6: audit existing SQLCipher database, migrations, memory extraction, multilingual retrieval, corrections, export and deletion; preserve all stored data.
+- Phase 7: audit existing mission planning, persisted checkpoints, replay prevention, approvals, observation verification and recovery.
+- Phase 8: assess existing advanced controls. No raw AI-to-shell, privilege bypass, or new root/ADB connection will be enabled by default.
+- Phase 9: build on existing real-time renderer and XML screens; audit actual state binding, fallback, reduced motion, dashboard and floating interface. No unsupported 3D-avatar claims.
+- Phase 10: complete regression/lint/build/signature/artifact checks, release review and available emulator testing. Stable signing, installed-version upgrade preservation, real HyperOS behavior, acoustic quality and thermal/battery profiling remain explicit verification requirements.
+
+## Phase 2 gaps established by source inspection
+
+REST planner and provider use hardcoded model names; Live constructor rewrites some requested models based on string matching. None establishes current account availability. Registry validates presence but not parameter types. Generic Gemini provider converts all primitive function arguments to strings and uses a blocking uncancellable network call. Planner catches cancellation in its general exception handler. Existing personality options are incomplete and some prompt styles force English/Hinglish regardless of the configured language. These are the first compatible integration targets.
+
+## Phase 2 implementation checkpoint
+
+- `GeminiModelCatalog`: shared account-scoped ListModels discovery using existing OkHttp/cancellable request code, pagination bounds, ten-minute cache (eight account fingerprints maximum), method-filtered Live/text selection and task-specific Flash/Pro preference. User selection is honored only when advertised and compatible. No key in request URLs, logs or persistent discovery cache. Discovery does not certify model tool/image/input-audio support; server setup/request acceptance is still required.
+- Existing Live service resolves an advertised Bidi model before connecting. Its cancellable bootstrap job is stopped with the session. The transport preserves that model instead of version-string rewriting or an unverified fallback after rejection.
+- Existing planner and generic Gemini provider share discovery; planner cancellation propagates, generic Gemini HTTP uses the existing cancellable bounded response reader, and function arguments preserve native JSON types. Directive text requests and Aura text/search decisions use the same discovery. Image generation retains its separate explicit contract and is not incorrectly routed to a text-only fallback.
+- `ToolArgumentValidator` rejects numeric/boolean string coercion, fractional/overflowing integers and non-finite numbers before mission execution. Live argument contracts are derived from the exact advertised declarations, with required/type/unknown-field checks before dispatch. Nested Live function calls now use the same duplicate-ID check as top-level calls; bounded deduplication survives reconnect.
+- Provider session-resumption handles are held only in memory and cleared on account change/revocation; the transport requests resumption and consumes server updates. This is protocol integration, not proof that a particular model/account will accept resumption.
+- Ten personality styles are selectable in the existing XML Persona screen. Legacy saved options remain readable. Style instructions respect configured language, non-human identity and authorization/privacy rules. The saved style is used when the existing session builds its next system instruction; immediate mid-session style changes are not claimed.
+- Existing local-memory privacy boundary remains intact: `generateCurrentSystemPrompt` intentionally excludes stored personal memories/profiles/transcripts from cloud prompts. No memory data or database schema was changed. In-session Live conversation context stays with the provider during that session; full follow-up recovery still needs live acceptance tests and must not silently upload historical private data.
+
+Phase 2 is not yet fully accepted: actual account/model discovery, Live setup/audio/resumption, multilingual multi-turn clarification, native/mission cross-route authorization and timeout behavior need end-to-end verification. Generic non-Gemini providers and the explicit image model contract are not claimed consolidated. Phases 3–10 are not marked completed on the basis of this checkpoint. No phase is accepted merely because its files exist.
+
+First validation attempt failed at test compilation (missing `userName` fixture argument and source/test edits made while Gradle's source snapshot was being compiled). The argument was corrected and verification was restarted against a stable source snapshot. Only the final check results count as verification.
+
+Verified checkpoint: `:app:testDebugUnitTest :app:lintDebug :app:compileDebugAndroidTestKotlin` completed successfully in 5m 47s (`work/advanced-phase2-final-validation.log`). JVM result: 466 tests, zero failures/errors, one existing environment skip. Instrumentation sources compiled; instrumentation was not executed in this checkpoint. No new APK, installation, device test or real cloud tool action is claimed. Parts 1–6 and repository workflows remain unchanged.

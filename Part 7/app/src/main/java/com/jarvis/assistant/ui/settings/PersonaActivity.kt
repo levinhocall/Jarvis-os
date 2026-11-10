@@ -41,7 +41,7 @@ class PersonaActivity : AppCompatActivity() {
             GeminiConstants.PERSONALITY_GIRLFRIEND -> GeminiConstants.PERSONALITY_GIRLFRIEND
             GeminiConstants.PERSONALITY_BOYFRIEND -> GeminiConstants.PERSONALITY_BOYFRIEND
             GeminiConstants.PERSONALITY_TECHGPT_X -> GeminiConstants.PERSONALITY_TECHGPT_X
-            else -> GeminiConstants.PERSONALITY_ASSISTANT
+            else -> current.takeIf { it in GeminiConstants.SUPPORTED_PERSONALITIES } ?: GeminiConstants.PERSONALITY_ASSISTANT
         }
         selectPersona(initialPersona, updateVoiceDefault = false)
 
@@ -53,6 +53,16 @@ class PersonaActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
+        binding.btnAllPersonalities.setOnClickListener {
+            val choices = com.jarvis.assistant.data.personalization.AssistantPersonality.entries
+            val selected = choices.indexOf(com.jarvis.assistant.data.personalization.AssistantPersonality.resolve(currentSelectedPersona))
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Conversation personality")
+                .setSingleChoiceItems(choices.map { it.displayName }.toTypedArray(), selected) { dialog, index ->
+                    selectPersona(choices[index].name, updateVoiceDefault = false)
+                    dialog.dismiss()
+                }.setNegativeButton("Cancel", null).show()
+        }
         binding.etUserName.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = updatePersonaPreview()
@@ -104,7 +114,7 @@ class PersonaActivity : AppCompatActivity() {
             GeminiConstants.PERSONALITY_GIRLFRIEND -> "Pari"
             GeminiConstants.PERSONALITY_BOYFRIEND -> "Kabir"
             GeminiConstants.PERSONALITY_TECHGPT_X -> "NAZIB"
-            else -> "Jarvis Pro"
+            else -> com.jarvis.assistant.data.personalization.AssistantPersonality.resolve(currentSelectedPersona).displayName
         }
         val operator = binding.etUserName.text?.toString()?.trim().takeUnless { it.isNullOrBlank() } ?: "NAZIB"
         binding.tvPersonaPreview.text = "$persona · ${getSelectedVoice()}"
@@ -148,7 +158,7 @@ class PersonaActivity : AppCompatActivity() {
             GeminiConstants.PERSONALITY_GIRLFRIEND -> "Pari (Girlfriend Mode)"
             GeminiConstants.PERSONALITY_BOYFRIEND -> "Kabir (Boyfriend Mode)"
             GeminiConstants.PERSONALITY_TECHGPT_X -> "NAZIB Neural Core"
-            else -> "Jarvis Pro"
+            else -> com.jarvis.assistant.data.personalization.AssistantPersonality.resolve(currentSelectedPersona).displayName
         }
 
         Toast.makeText(
