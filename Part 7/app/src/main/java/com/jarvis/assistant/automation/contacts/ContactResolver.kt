@@ -9,7 +9,7 @@ import androidx.core.content.ContextCompat
 import java.util.Locale
 import kotlin.math.min
 
-class ContactResolver(private val context: Context) {
+class ContactResolver(private val context: Context) : ContactLookup {
 
     companion object {
         private const val TAG = "ContactResolver"
@@ -35,7 +35,7 @@ class ContactResolver(private val context: Context) {
      * Resolves a contact query. Supports literal names with digits ("Gufran Khan 4", "Papa 2")
      * as well as trailing index disambiguation ("gufran khan 4" -> 4th Gufran Khan).
      */
-    fun resolveContact(query: String, explicitIndex: Int? = null): ContactResolutionResult {
+    override fun resolveContact(query: String, explicitIndex: Int?): ContactResolutionResult {
         if (!hasPermission()) {
             Log.w(TAG, "Cannot resolve contacts: READ_CONTACTS permission not granted")
             return ContactResolutionResult.PermissionDenied

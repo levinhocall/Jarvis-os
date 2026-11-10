@@ -8,7 +8,8 @@ import android.util.Log
 import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
 import com.jarvis.assistant.automation.contacts.ContactInfo
 import com.jarvis.assistant.automation.contacts.ContactResolutionResult
-import com.jarvis.assistant.automation.contacts.ContactResolver
+import com.jarvis.assistant.automation.contacts.ContactLookup
+import com.jarvis.assistant.automation.contacts.ContactChoiceResolver
 import com.jarvis.assistant.util.ActivityLauncherHelper
 import java.net.URLEncoder
 
@@ -21,7 +22,7 @@ data class PendingWhatsAppDraft(
 
 class WhatsAppAssistant(
     private val context: Context,
-    private val contactResolver: ContactResolver
+    private val contactResolver: ContactLookup
 ) {
     companion object {
         private const val TAG = "WhatsAppAssistant"
@@ -30,21 +31,29 @@ class WhatsAppAssistant(
 
     private var pendingDraft: PendingWhatsAppDraft? = null
     private var disambiguationCandidates: List<ContactInfo>? = null
+    private var pendingMessageForChoice: String? = null
+    private var pendingRecipientForMessage: String? = null
 
     fun hasPendingDraft(): Boolean = pendingDraft != null
 
     fun isAwaitingDisambiguation(): Boolean = !disambiguationCandidates.isNullOrEmpty()
 
     fun createDraft(targetContact: String, messageText: String): String {
-        val cleanContact = targetContact.trim()
+        val cleanContact = targetContact.trim().ifBlank { pendingRecipientForMessage.orEmpty() }
         val cleanMessage = messageText.trim()
+        // A new/updated request cannot inherit a send-ready draft from an older recipient.
+        pendingDraft = null
+        disambiguationCandidates = null
+        pendingMessageForChoice = null
 
         if (cleanContact.isBlank()) {
             return "Who would you like to message on WhatsApp, sir?"
         }
         if (cleanMessage.isBlank()) {
+            pendingRecipientForMessage = cleanContact
             return "What message would you like to send to $cleanContact?"
         }
+        pendingRecipientForMessage = null
 
         val resolution = contactResolver.resolveContact(cleanContact)
         when (resolution) {
@@ -60,6 +69,7 @@ class WhatsAppAssistant(
             }
             is ContactResolutionResult.MultipleMatches -> {
                 disambiguationCandidates = resolution.candidates
+                pendingMessageForChoice = cleanMessage
                 val names = resolution.candidates.take(3).map { it.name }.joinToString(" and ")
                 return "Which $cleanContact? I found $names."
             }
@@ -89,33 +99,22 @@ class WhatsAppAssistant(
 
     fun handleDisambiguationChoice(userChoice: String, pendingMessage: String = ""): String {
         val candidates = disambiguationCandidates ?: return "No contact disambiguation in progress."
-        val chosen = candidates.find {
-            it.name.contains(userChoice, ignoreCase = true) || userChoice.contains(it.name, ignoreCase = true)
-        } ?: candidates.firstOrNull()
-
+        val chosen = ContactChoiceResolver.choose(candidates, userChoice)
+            ?: return "I couldn't identify a unique contact. Say their full name or the numbered choice; nothing was sent."
+        // Call/delete ambiguity must not turn into an unrelated message draft.
+        val originalMessage = pendingMessageForChoice
+            ?: return "Repeat the call or delete request with the exact contact. No message draft was created."
+        val msg = pendingMessage.trim().ifBlank { originalMessage }
+        if (msg.isBlank()) return "What message should I write for ${chosen.name}?"
         disambiguationCandidates = null
-
-        return if (chosen != null) {
-            val msg = if (pendingMessage.isNotBlank()) pendingMessage else "Hello"
-            pendingDraft = PendingWhatsAppDraft(
-                contactName = chosen.name,
-                phoneNumber = chosen.phoneNumber,
-                message = msg
-            )
-            "Draft ready for ${chosen.name}. Should I send it?"
-        } else {
-            "I couldn't identify which contact you meant, sir."
-        }
+        pendingMessageForChoice = null
+        pendingDraft = PendingWhatsAppDraft(chosen.name, chosen.phoneNumber, msg)
+        return "Draft ready for ${chosen.name}: \"$msg\". Should I send it?"
     }
 
     fun sendMessageDirectly(targetContact: String, messageText: String): String {
-        val cleanContact = targetContact.trim()
-        val cleanMessage = messageText.trim()
-        if (cleanContact.isBlank()) return "Who would you like to message on WhatsApp, sir?"
-        if (cleanMessage.isBlank()) return "What message would you like to send to $cleanContact?"
-
-        val draftResult = createDraft(cleanContact, cleanMessage)
-        return if (hasPendingDraft()) {
+        val draftResult = createDraft(targetContact, messageText)
+        return if (hasPendingDraft() && !isAwaitingDisambiguation()) {
             confirmAndSend()
         } else {
             draftResult
@@ -123,6 +122,7 @@ class WhatsAppAssistant(
     }
 
     fun confirmAndSend(): String {
+        if (isAwaitingDisambiguation()) return "Choose the exact contact first. Nothing was sent."
         val draft = pendingDraft ?: return "There is no draft waiting to be sent."
         val message = draft.message
         val phone = draft.phoneNumber
@@ -193,16 +193,26 @@ class WhatsAppAssistant(
     }
 
     fun cancelDraft(): String {
-        return if (pendingDraft != null) {
-            val name = pendingDraft?.contactName
-            pendingDraft = null
+        val name = pendingDraft?.contactName ?: pendingRecipientForMessage
+        val hadChoice = isAwaitingDisambiguation()
+        pendingDraft = null
+        pendingRecipientForMessage = null
+        pendingMessageForChoice = null
+        disambiguationCandidates = null
+        return if (name != null) {
             "Draft cancelled for $name. I did not send it."
+        } else if (hadChoice) {
+            "Pending contact choice cancelled. Nothing was sent."
         } else {
             "No active draft to cancel."
         }
     }
 
     fun makeCall(targetContact: String, isVideo: Boolean): String {
+        pendingDraft = null
+        pendingMessageForChoice = null
+        pendingRecipientForMessage = null
+        disambiguationCandidates = null
         val cleanContact = targetContact.trim()
         if (cleanContact.isBlank()) {
             return "Who would you like to call on WhatsApp?"
@@ -285,6 +295,10 @@ class WhatsAppAssistant(
      *   "delete that message").
      */
     fun deleteLastMessage(targetContact: String?, forEveryone: Boolean): String {
+        pendingDraft = null
+        pendingMessageForChoice = null
+        pendingRecipientForMessage = null
+        disambiguationCandidates = null
         val cleanContact = targetContact?.trim().orEmpty()
         val callType = if (forEveryone) "for everyone" else "for me"
 

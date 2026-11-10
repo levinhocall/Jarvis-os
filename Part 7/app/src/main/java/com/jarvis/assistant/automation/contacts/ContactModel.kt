@@ -1,5 +1,9 @@
 package com.jarvis.assistant.automation.contacts
 
+interface ContactLookup {
+    fun resolveContact(query: String, explicitIndex: Int? = null): ContactResolutionResult
+}
+
 data class ContactInfo(
     val id: String,
     val name: String,
