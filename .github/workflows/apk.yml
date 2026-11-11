@@ -1,19 +1,9 @@
-name: Android CI
-run-name: Verify JARVIS OS from ${{ github.ref_name }}
+name: Android APK (manual)
+run-name: Build JARVIS OS APK from ${{ github.ref_name }}
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - "Part 7/**"
-      - "!Part 7/docs/**"
-      - ".github/workflows/android.yml"
   workflow_dispatch:
     inputs:
-      build_apk:
-        description: "Build an APK only when explicitly requested for final device testing"
-        type: boolean
-        default: false
       publish_release:
         description: "Keep the tested APK in a permanent GitHub prerelease"
         type: boolean
@@ -23,12 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  group: android-apk-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Verify source (APK is opt-in)
+    name: Verify, build and optionally publish APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -47,11 +37,11 @@ jobs:
           git checkout --detach FETCH_HEAD
 
       - name: Reserve the exact CI source tag before main advances
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk && inputs.publish_release
+        if: inputs.publish_release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: debug-ci-${{ github.run_number }}
+          RELEASE_TAG: debug-ci-apk-${{ github.run_id }}
         run: |
           if existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null); then
             test "$existing_sha" = "$GITHUB_SHA"
@@ -91,21 +81,19 @@ jobs:
         run: ./gradlew :app:compileDebugAndroidTestKotlin --no-daemon --stacktrace
 
       - name: Build debug APK
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Generate APK checksum
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk
         working-directory: "Part 7/app/build/outputs/apk/debug"
         run: sha256sum app-debug.apk > app-debug.apk.sha256
 
       - name: Publish permanent CI APK download
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk && inputs.publish_release
+        if: inputs.publish_release
         working-directory: "Part 7/app/build/outputs/apk/debug"
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: debug-ci-${{ github.run_number }}
+          RELEASE_TAG: debug-ci-apk-${{ github.run_id }}
           RELEASE_TITLE: JARVIS OS debug APK (CI ${{ github.run_number }})
           SOURCE_SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

@@ -8,6 +8,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import com.jarvis.assistant.data.chat.ChatDao
 import com.jarvis.assistant.data.chat.ChatMessageEntity
+import com.jarvis.assistant.data.chat.ChatMigrationReceiptEntity
 import com.jarvis.assistant.data.chat.ChatSessionEntity
 import com.jarvis.assistant.data.mission.MissionDao
 import com.jarvis.assistant.data.mission.MissionEntity
@@ -22,6 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MemoryEntity::class,
         ChatSessionEntity::class,
         ChatMessageEntity::class,
+        ChatMigrationReceiptEntity::class,
         MissionEntity::class,
         NotificationHistoryEntity::class,
         MemorySyncStateEntity::class,
@@ -30,10 +32,27 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LearningAttemptEntity::class,
         AutonomyDecisionEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class MemoryDatabase : RoomDatabase() {
+
+    private val openScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+    )
+    private val readiness = DatabaseReadiness(openScope) {
+        android.os.Trace.beginSection("JARVIS.SQLCipher.open")
+        try { openHelper.writableDatabase } finally { android.os.Trace.endSection() }
+        this@MemoryDatabase
+    }
+
+    val initializationState: kotlinx.coroutines.flow.StateFlow<DatabaseState<MemoryDatabase>> = readiness.state
+
+    /** Retains the existing Unit-returning callback signature used by repositories. */
+    suspend fun awaitReady() { readiness.awaitReady() }
+
+    /** Deadline limits only the waiter; native encryption/migration continues on its owned IO scope. */
+    suspend fun awaitReady(timeoutMs: Long): MemoryDatabase = readiness.awaitReady(timeoutMs)
 
     abstract fun directiveDao(): DirectiveDao
     abstract fun memoryDao(): MemoryDao
@@ -165,6 +184,49 @@ abstract class MemoryDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_autonomy_decisions_createdAt ON autonomy_decisions(createdAt)")
             }
         }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Room runs this in its upgrade transaction on the existing owned IO opener.
+                // Keep the source scan immutable: only rowid/position pairs go into the temp map.
+                // The indexed lookup avoids a quadratic COUNT and does not materialize chat in Kotlin.
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TEMP TABLE jarvis_chat_position_backfill (messageRowId INTEGER PRIMARY KEY NOT NULL, position INTEGER NOT NULL)")
+                db.compileStatement("INSERT INTO jarvis_chat_position_backfill(messageRowId,position) VALUES (?,?)").use { insert ->
+                    db.query("SELECT rowid,sessionId FROM chat_messages ORDER BY sessionId COLLATE BINARY,timestamp,rowid").use { rows ->
+                        var previousSession: String? = null
+                        var position = 0L
+                        while (rows.moveToNext()) {
+                            val session = rows.getString(1)
+                            if (session != previousSession) { position = 0L; previousSession = session }
+                            insert.bindLong(1, rows.getLong(0))
+                            insert.bindLong(2, position++)
+                            insert.executeInsert()
+                        }
+                    }
+                }
+                db.execSQL("UPDATE chat_messages SET position = (SELECT position FROM jarvis_chat_position_backfill WHERE messageRowId = chat_messages.rowid)")
+                db.execSQL("DROP TABLE jarvis_chat_position_backfill")
+                db.execSQL("CREATE INDEX index_chat_messages_sessionId_position ON chat_messages(sessionId,position)")
+                db.execSQL("""
+                    CREATE TABLE chat_migration_receipts (
+                        `key` TEXT NOT NULL PRIMARY KEY,
+                        sourceSha256 TEXT,
+                        payloadVersion INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        committedCursor INTEGER NOT NULL,
+                        uniqueMessageCount INTEGER NOT NULL,
+                        importSessionId TEXT,
+                        doneAtMs INTEGER,
+                        backupVersionCode INTEGER,
+                        cleanupDueAtMs INTEGER,
+                        cleanupOfferedAtMs INTEGER,
+                        updatedAtMs INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                // Empty on upgrade: Room history alone cannot prove that JSON was imported/backed up.
+            }
+        }
         @Volatile
         private var instance: MemoryDatabase? = null
 
@@ -178,7 +240,7 @@ abstract class MemoryDatabase : RoomDatabase() {
             }
 
         /** The SQLite helper owns corruption handling; never delegate to its deleting default. */
-        private fun preservingConfiguration(
+        internal fun preservingConfiguration(
             configuration: SupportSQLiteOpenHelper.Configuration
         ): SupportSQLiteOpenHelper.Configuration {
             val original = configuration.callback
@@ -210,6 +272,12 @@ abstract class MemoryDatabase : RoomDatabase() {
          * Application.onCreate therefore never waits for database encryption or file I/O.
          */
 
+        suspend fun getReadyInstance(
+            context: Context,
+            timeoutMs: Long = DatabaseReadiness.DEFAULT_WAIT_MS
+        ): MemoryDatabase = getInstance(context).awaitReady(timeoutMs)
+
+        // This builds only the Room facade. Never force open or await from this function.
         fun getInstance(context: Context): MemoryDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -221,7 +289,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                         DatabaseEncryption.prepare(context.applicationContext)
                             .create(preservingConfiguration(configuration))
                     })
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.
                     .build()

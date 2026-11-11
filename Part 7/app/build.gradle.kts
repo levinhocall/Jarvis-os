@@ -81,11 +81,15 @@ android {
         buildConfig = true
     }
 
+    sourceSets.getByName("androidTest").assets.srcDir("schemas")
+
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
 
     lint {
+        baseline = file("lint-baseline.xml")
+        warningsAsErrors = true
         disable += "NullSafeMutableLiveData"
     }
 }
@@ -162,9 +166,11 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.sqlite:sqlite-framework:2.7.0")
+    androidTestImplementation("androidx.room:room-testing:2.8.4")
 }
 
 

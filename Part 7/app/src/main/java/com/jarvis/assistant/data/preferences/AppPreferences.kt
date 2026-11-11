@@ -7,7 +7,6 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.jarvis.assistant.data.model.ChatTurn
 import com.jarvis.assistant.data.model.GeminiConstants
 
 class AppPreferences internal constructor(
@@ -649,24 +648,24 @@ class AppPreferences internal constructor(
         return favoriteSong
     }
 
-    fun loadChatHistory(): List<ChatTurn> {
-        val json = secureApiPrefs?.getString(KEY_CHAT_HISTORY, null) ?: return emptyList()
-        return try {
-            val type = object : TypeToken<List<ChatTurn>>() {}.type
-            gson.fromJson(json, type) ?: emptyList()
-        } catch (e: Exception) {
-            emptyList()
-        }
+    /** Migration source only; new transcripts are written exclusively to Room. */
+    fun readLegacyChatJson(): String? {
+        val secure = secureApiPrefs ?: error("Encrypted preferences unavailable; legacy chat retained.")
+        return secure.getString(KEY_CHAT_HISTORY, null)
+            ?: prefs.getString(KEY_CHAT_HISTORY, null)
     }
 
-    fun saveChatHistory(history: List<ChatTurn>) {
-        val json = gson.toJson(history)
-        writeSecureString(KEY_CHAT_HISTORY, json)
+    /** Clear only the exact snapshot which was verified in Room. */
+    fun clearMigratedChatJson(expectedJson: String) {
+        check(readLegacyChatJson() == expectedJson) { "Legacy chat changed during import; retained for retry." }
+        clearChatHistory()
     }
 
     fun clearChatHistory() {
-        secureApiPrefs?.edit()?.remove(KEY_CHAT_HISTORY)?.commit()
-        prefs.edit().remove(KEY_CHAT_HISTORY).commit()
+        val secure = secureApiPrefs ?: error("Encrypted preferences unavailable; legacy chat retained.")
+        // Remove any old plaintext copy first: an interrupted clear must not resurrect it.
+        check(prefs.edit().remove(KEY_CHAT_HISTORY).commit()) { "Could not clear legacy plaintext chat." }
+        check(secure.edit().remove(KEY_CHAT_HISTORY).commit()) { "Could not clear legacy encrypted chat." }
     }
 
     // --- Key Pool & Multi-Provider Architecture (Phase 5) ---
