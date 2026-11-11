@@ -69,4 +69,3 @@ jobs:
 
       - name: Compile Android runtime tests without assembling APKs
         run: ./gradlew :app:compileDebugAndroidTestKotlin --no-daemon --stacktrace
-
