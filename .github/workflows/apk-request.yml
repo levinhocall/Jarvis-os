@@ -1,0 +1,43 @@
+name: Request tested main APK
+run-name: Request APK for ${{ github.ref_name }}
+
+on:
+  push:
+    tags: ['apk-request-*']
+
+# Only this explicit tag request may start the separate manual APK workflow.
+# Verification/PR jobs retain read-only tokens. No third-party actions are used.
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: apk-request-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require current main and successful verification of its exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$GITHUB_SHA" = "$main_sha"
+          successful_runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f event=push -f status=success \
+            --jq '[.workflow_runs[] | select(.head_branch == "main")] | length')"
+          test "$successful_runs" -gt 0
+
+      - name: Start the existing manual APK workflow at the exact requested tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run apk.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f publish_release=true
+          echo "APK workflow requested for verified source $GITHUB_SHA. Check its run for the actual build result." >> "$GITHUB_STEP_SUMMARY"
