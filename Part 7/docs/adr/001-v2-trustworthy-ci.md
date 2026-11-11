@@ -38,3 +38,8 @@ No audio, database or UI threading changes. CI jobs run in isolated runners; loc
 GitHub owner-only policy is not changed. Local-action allowance must be demonstrated by a real branch/PR run. If policy or runtime blocks the adapter, document the exact rejection and retain read-only tests/lint rather than reintroducing blocked external actions or silently claiming uploads.
 
 Rollback: revert the A2 commit(s), restoring previous android.yml/android-apk.yml and lint configuration/baseline. This changes no app data or schema. Do not merge or dispatch APK while phase gates remain outstanding.
+
+
+## Initial baseline review after hosted execution
+
+Hosted a142178/46c2fd7 runs executed jobs and uploaded actual artifacts but correctly failed the lint gate on 23 additional metadata-based dependency-version notices absent from the local cached baseline. Safe diagnostic output proved all were 22 GradleDependency + one wrapper-version notice for **existing** pinned source dependencies. HOSTED_DEPENDENCY_NOTICES.json preserves exact source/run/locations. Seed the initial baseline with these reviewed exact notices as well (1,423 total entries); do not disable categories, auto-update baselines in CI, upgrade unrelated dependencies or misreport the failed runs as green. Local-action allowance/report uploads are demonstrated; cache miss observed, warm-hit/save unverified on feature branches.
