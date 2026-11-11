@@ -14,7 +14,7 @@ Encryption passphrases, database name/version, all eight-version migration regis
 
 Use a disposable Android 16 emulator or a backed-up test installation. Compare baseline and this branch with identical data, thermal state and build type; do not clear the real user's data or change signing keys. Warm filesystem caches and genuine device-cold starts are different measurements.
 
-1. Capture at least 10 force-stopped starts per revision with `adb shell am start -S -W -n com.jarvis.assistant/.MainActivity` (verify the actual launcher component from the merged manifest first). Record median/p95 `TotalTime` and `WaitTime`.
+1. Capture at least 10 force-stopped starts per revision with `adb shell am start -S -W -n com.jarvis.assistant/.ui.home.MainActivity` (the current manifest launcher aliases target `.ui.home.MainActivity`; recheck the merged manifest for the tested build). Record median/p95 `TotalTime` and `WaitTime`.
 2. Record a system trace in Android Studio/Perfetto with app tracing, scheduling, CPU frequency, disk and frame timeline. Inspect the **JARVIS.SQLCipher.open** trace section. It must run on a worker, never the main thread; compare main-thread runnable/blocking slices and time to first frame.
 3. Separately test an existing pre-encryption database copy, existing encrypted data and a fresh install. Log only durations/counts, never keys or records. Verify memory/chat counts before/after migration.
 4. Run `ColdRoomDispatchInstrumentedTest` and the real encrypted migration tests. In debug profiling temporarily enable StrictMode disk reads/writes on Main to find other startup I/O; do not infer no disk I/O merely from a successful unit test.
