@@ -58,4 +58,18 @@ class DatabaseReadinessTest {
             assertEquals(DatabaseReadiness.State.FAILED, gate.state.value)
         } finally { scope.cancel() }
     }
+    @Test fun cancellingTheOwnerUnblocksWaitersWithoutClaimingReady() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val entered = CompletableDeferred<Unit>()
+        val hold = CompletableDeferred<Unit>()
+        val gate = DatabaseReadiness(scope) { entered.complete(Unit); hold.await() }
+        try {
+            val result = async { runCatching { gate.awaitReady() } }
+            withTimeout(5_000) { entered.await() }
+            scope.cancel()
+            val error = withTimeout(5_000) { result.await().exceptionOrNull() }
+            assertTrue(error is CancellationException)
+            assertEquals(DatabaseReadiness.State.FAILED, gate.state.value)
+        } finally { scope.cancel() }
+    }
 }
