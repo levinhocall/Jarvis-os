@@ -35,7 +35,7 @@ interface AuditDao {
     suspend fun pruneOldest(count: Int): Int
 }
 
-@Database(entities = [AuditEntity::class], version = 1, exportSchema = false)
+@Database(entities = [AuditEntity::class], version = 1, exportSchema = true)
 abstract class AuditDatabase : RoomDatabase() {
     abstract fun auditDao(): AuditDao
 

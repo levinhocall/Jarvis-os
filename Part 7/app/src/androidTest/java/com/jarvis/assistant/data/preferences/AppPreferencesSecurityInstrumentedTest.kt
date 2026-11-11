@@ -2,7 +2,7 @@ package com.jarvis.assistant.data.preferences
 
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.jarvis.assistant.data.model.ChatTurn
+import com.jarvis.assistant.data.chat.LegacyChatImport
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -71,6 +71,7 @@ class AppPreferencesSecurityInstrumentedTest {
         val encryptedName = "jarvis_test_secure_$suffix"
         val legacy = context.getSharedPreferences(legacyName, Context.MODE_PRIVATE)
         val profileJson = "[0.1,0.2,0.3]"
+        val legacyChatJson = """[{"id":"test-old","userTranscript":"hello","jarvisResponse":"hi","timestamp":1}]"""
         val samplesJson = "[[0.1,0.2,0.3],[0.2,0.3,0.4]]"
 
         legacy.edit()
@@ -81,7 +82,7 @@ class AppPreferencesSecurityInstrumentedTest {
             .putBoolean("key_owner_voice_enabled", true)
             .putString("key_user_location", "Legacy private location")
             .putString("key_user_birthday", "2000-01-01")
-            .putString("key_chat_history", "[]")
+            .putString("key_chat_history", legacyChatJson)
             .commit()
 
         val preferences = AppPreferences(context, legacyName, encryptedName)
@@ -99,9 +100,11 @@ class AppPreferencesSecurityInstrumentedTest {
         assertFalse(legacy.contains("key_chat_history"))
 
         preferences.userLocation = "Encrypted private location"
-        preferences.saveChatHistory(listOf(ChatTurn(userTranscript = "hello", jarvisResponse = "hi")))
+        assertEquals(legacyChatJson, preferences.readLegacyChatJson())
         assertEquals("Encrypted private location", preferences.userLocation)
-        assertEquals(1, preferences.loadChatHistory().size)
+        assertEquals(2, LegacyChatImport.plan(preferences.readLegacyChatJson()!!).messages.size)
+        preferences.clearMigratedChatJson(legacyChatJson)
+        assertNull(preferences.readLegacyChatJson())
         assertFalse(legacy.contains("key_user_location"))
         assertFalse(legacy.contains("key_chat_history"))
         assertFalse(preferences.headsetWhisperEnabled)

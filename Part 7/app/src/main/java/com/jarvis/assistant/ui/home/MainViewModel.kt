@@ -91,16 +91,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<JarvisApp>()
             runCatching {
-                app.chatRepository.restoreLegacyHistory()
-                val sessionId = conversationRepository.restoreMostRecentActiveSession()
-                    ?: conversationRepository.createNewSession("Voice Conversation").id
-                // Read/import/clear legacy history under the repository's write lock so
-                // a concurrent Clear History action cannot resurrect deleted messages.
                 conversationRepository.migrateLegacyHistory(
-                    sessionId = sessionId,
-                    loadLegacyTurns = { app.chatRepository.turns.value },
-                    clearLegacyHistory = { app.chatRepository.clearHistory() }
+                    loadLegacyJson = app.chatRepository::readLegacyJson,
+                    clearLegacyHistory = app.chatRepository::clearMigratedJson
                 )
+                conversationRepository.restoreMostRecentActiveSession()
             }.onFailure {
                 if (it is kotlinx.coroutines.CancellationException) throw it
                 _eventFlow.emit(com.jarvis.assistant.core.diagnostics.StorageHealth.record(it))

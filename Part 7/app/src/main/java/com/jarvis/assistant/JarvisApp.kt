@@ -102,8 +102,8 @@ class JarvisApp : Application() {
         memoryDatabase = MemoryDatabase.getInstance(this)
         // Strictly on-device memory: Room + SQLCipher stores memories locally.
         // Embeddings use the deterministic local provider; no remote endpoint is configured.
-        memoryRepository = MemoryRepository(memoryDatabase.memoryDao())
-        conversationRepository = com.jarvis.assistant.data.chat.ConversationRepository(memoryDatabase.chatDao())
+        memoryRepository = MemoryRepository(memoryDatabase.memoryDao(), awaitReady = memoryDatabase::awaitReady)
+        conversationRepository = com.jarvis.assistant.data.chat.ConversationRepository(memoryDatabase.chatDao(), awaitReady = memoryDatabase::awaitReady)
         memoryManager = MemoryManager(memoryRepository, preferences, appScope)
 
         // Automation Systems
@@ -140,6 +140,16 @@ class JarvisApp : Application() {
             )
         )
         appScope.launch(Dispatchers.IO) {
+            memoryDatabase.awaitReady()
+            // Also migrate headless service starts; do not depend on opening a screen first.
+            try {
+                conversationRepository.migrateLegacyHistory(
+                    chatRepository::readLegacyJson, chatRepository::clearMigratedJson
+                )
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                com.jarvis.assistant.core.diagnostics.StorageHealth.record(error)
+            }
             unifiedRuntime.missionCoordinator.restorePersistedState()
             unifiedRuntime.bootSelfTest(context = this@JarvisApp)
             com.jarvis.assistant.automation.mission.MissionEngine.resumeNonTerminalMissions(this@JarvisApp)

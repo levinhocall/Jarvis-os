@@ -75,7 +75,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
                             prefs.notificationHistoryEnabled = false
                             historyJob?.cancel()
                             lifecycleScope.launch(Dispatchers.IO + storageErrors) {
-                                MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().clearAll()
+                                MemoryDatabase.getReadyInstance(applicationContext).notificationHistoryDao().clearAll()
                                 withContext(Dispatchers.Main) { renderEmpty("History is off. No notification text is being saved.") }
                             }
                         }.show()
@@ -93,7 +93,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
         actions.addView(Button(this).apply { text = "Unread"; setOnClickListener { showUnreadOnly = true; observeHistory() } })
         actions.addView(Button(this).apply {
             text = "Mark all read"
-            setOnClickListener { lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().markAllRead() } }
+            setOnClickListener { lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getReadyInstance(applicationContext).notificationHistoryDao().markAllRead() } }
         })
         actions.addView(Button(this).apply {
             text = "Clear"
@@ -103,7 +103,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
                     .setMessage("This cannot be undone.")
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Clear") { _, _ ->
-                        lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().clearAll() }
+                        lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getReadyInstance(applicationContext).notificationHistoryDao().clearAll() }
                     }.show()
             }
         })
@@ -145,7 +145,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
             return
         }
         historyJob = lifecycleScope.launch(storageErrors) {
-            val dao = withContext(Dispatchers.IO) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao() }
+            val dao = withContext(Dispatchers.IO) { MemoryDatabase.getReadyInstance(applicationContext).notificationHistoryDao() }
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 val stream = if (showUnreadOnly) dao.observeUnread() else dao.observeRecent()
                 combine(stream, query) { items, search -> items to search }.collectLatest { (items, search) ->
@@ -165,7 +165,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
         notificationAdapter.submitList(audited.first)
         for (item in audited.second) {
             if (pendingCredentialCleanup.add(item.id)) lifecycleScope.launch(Dispatchers.IO + storageErrors) {
-                try { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().delete(item.id) }
+                try { MemoryDatabase.getReadyInstance(applicationContext).notificationHistoryDao().delete(item.id) }
                 finally { withContext(Dispatchers.Main) { pendingCredentialCleanup.remove(item.id) } }
             }
         }
@@ -186,7 +186,7 @@ class NotificationHistoryActivity : AppCompatActivity() {
         fun bind(item: NotificationHistoryEntity) {
             val time = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(item.timestamp))
             text.text = "${if (item.isRead) "✓" else "●"} ${item.sender.ifBlank { item.packageName }}\n${item.message}\n$time · ${item.packageName}"
-            text.setOnClickListener { lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getInstance(applicationContext).notificationHistoryDao().markRead(item.id) } }
+            text.setOnClickListener { lifecycleScope.launch(Dispatchers.IO + storageErrors) { MemoryDatabase.getReadyInstance(applicationContext).notificationHistoryDao().markRead(item.id) } }
         }
     }
 

@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 class AutonomyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         if (!AuraOptions.enabled("autonomy")) return Result.success()
-        val dao=MemoryDatabase.getInstance(applicationContext).directiveDao()
+        val dao=MemoryDatabase.getReadyInstance(applicationContext).directiveDao()
         suspend fun record(reason: String, action: String) { dao.addDecision(AutonomyDecisionEntity(reason=reason,action=action)); dao.trimDecisions() }
         return try {
             if (AutonomyPolicy.quietHour(LocalTime.now().hour)) { record("Quiet hours: 23:00–07:00 local time. No cloud request, speech or action.","QUIET"); return Result.success() }

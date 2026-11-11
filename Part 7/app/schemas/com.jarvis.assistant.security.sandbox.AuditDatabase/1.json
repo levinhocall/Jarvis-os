@@ -1,0 +1,78 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "a40c0e042dbd07e96b65f6dfe7b3478b",
+    "entities": [
+      {
+        "tableName": "audit_ledger",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestamp` INTEGER NOT NULL, `actionName` TEXT NOT NULL, `invoker` TEXT NOT NULL, `threatDetected` TEXT, `isAllowed` INTEGER NOT NULL, `details` TEXT NOT NULL, `prevSignatureHash` TEXT NOT NULL, `currentSignatureHash` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionName",
+            "columnName": "actionName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "invoker",
+            "columnName": "invoker",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "threatDetected",
+            "columnName": "threatDetected",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isAllowed",
+            "columnName": "isAllowed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "details",
+            "columnName": "details",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "prevSignatureHash",
+            "columnName": "prevSignatureHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentSignatureHash",
+            "columnName": "currentSignatureHash",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a40c0e042dbd07e96b65f6dfe7b3478b')"
+    ]
+  }
+}

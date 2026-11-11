@@ -5,40 +5,37 @@ import com.jarvis.assistant.data.memory.vector.EmbeddingProvider
 import com.jarvis.assistant.data.memory.vector.ScoredMemory
 import com.jarvis.assistant.data.memory.vector.VectorSearchEngine
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import java.util.Locale
 
 class MemoryRepository(
     private val memoryDao: MemoryDao,
     private val embeddingProvider: EmbeddingProvider = DeterministicLocalEmbeddingProvider(),
-    private val vectorSearchEngine: VectorSearchEngine = VectorSearchEngine()
+    private val vectorSearchEngine: VectorSearchEngine = VectorSearchEngine(),
+    private val awaitReady: suspend () -> Unit = {}
 ) {
-    fun getAllMemoriesFlow(): Flow<List<MemoryEntity>> = memoryDao.getAllMemoriesFlow()
-    fun getActiveMemoriesFlow(): Flow<List<MemoryEntity>> = memoryDao.getActiveMemoriesFlow()
-
-    suspend fun getAllMemories(): List<MemoryEntity> = memoryDao.getAllMemories()
-
-    fun getMemoriesByCategoryFlow(category: String): Flow<List<MemoryEntity>> {
-        return if (category == "All") {
-            memoryDao.getAllMemoriesFlow()
-        } else {
-            memoryDao.getMemoriesByCategoryFlow(category)
-        }
+    private fun <T> readyFlow(source: () -> Flow<T>): Flow<T> = kotlinx.coroutines.flow.flow {
+        awaitReady()
+        emitAll(source())
     }
 
-    fun getMemoriesByTypeFlow(type: String): Flow<List<MemoryEntity>> =
-        memoryDao.getMemoriesByTypeFlow(type)
+    private suspend fun readyDao(): MemoryDao { awaitReady(); return memoryDao }
 
-    fun searchMemoriesFlow(query: String): Flow<List<MemoryEntity>> =
-        memoryDao.searchMemoriesFlow(query)
-
-    suspend fun searchMemories(query: String): List<MemoryEntity> =
-        memoryDao.searchMemories(query)
+    fun getAllMemoriesFlow(): Flow<List<MemoryEntity>> = readyFlow { memoryDao.getAllMemoriesFlow() }
+    fun getActiveMemoriesFlow(): Flow<List<MemoryEntity>> = readyFlow { memoryDao.getActiveMemoriesFlow() }
+    suspend fun getAllMemories(): List<MemoryEntity> = readyDao().getAllMemories()
+    fun getMemoriesByCategoryFlow(category: String): Flow<List<MemoryEntity>> = readyFlow {
+        if (category == "All") memoryDao.getAllMemoriesFlow() else memoryDao.getMemoriesByCategoryFlow(category)
+    }
+    fun getMemoriesByTypeFlow(type: String): Flow<List<MemoryEntity>> = readyFlow { memoryDao.getMemoriesByTypeFlow(type) }
+    fun searchMemoriesFlow(query: String): Flow<List<MemoryEntity>> = readyFlow { memoryDao.searchMemoriesFlow(query) }
+    suspend fun searchMemories(query: String): List<MemoryEntity> = readyDao().searchMemories(query)
 
     /**
      * Semantic vector search combined with keyword retrieval.
      */
     suspend fun searchMemoriesSemantic(query: String, limit: Int = 10): List<ScoredMemory> {
-        var active = memoryDao.getAllMemories()
+        var active = readyDao().getAllMemories()
         // Re-index stale local representations in bounded batches. The production provider
         // uses on-device hashing; no neural backend receives memory contents.
         val stale = active.filter {
@@ -51,7 +48,7 @@ class MemoryRepository(
             stale.forEachIndexed { index, memory ->
                 val vector = vectors.getOrNull(index)
                 if (vector != null && vector.size == embeddingProvider.dimension) {
-                    memoryDao.updateEmbeddingIfUnchanged(
+                    readyDao().updateEmbeddingIfUnchanged(
                         memory,
                         vectorSearchEngine.serializeEmbedding(vector),
                         embeddingProvider.modelName,
@@ -59,7 +56,7 @@ class MemoryRepository(
                     )
                 }
             }
-            active = memoryDao.getAllMemories()
+            active = readyDao().getAllMemories()
         }
         return vectorSearchEngine.search(query, active, embeddingProvider, limit)
     }
@@ -113,7 +110,7 @@ class MemoryRepository(
             pinned = false
         )
 
-        return memoryDao.insertReplacingActiveMemory(entity)
+        return readyDao().insertReplacingActiveMemory(entity)
     }
 
     /**
@@ -143,7 +140,7 @@ class MemoryRepository(
      * Corrects a memory and updates embedding.
      */
     suspend fun correct(memoryId: Long, newContent: String, expectedMemory: MemoryEntity? = null): Boolean {
-        val all = memoryDao.getAllMemories()
+        val all = readyDao().getAllMemories()
         val target = all.firstOrNull { it.id == memoryId } ?: return false
         if (expectedMemory != null && target != expectedMemory) return false
         val sanitized = EpisodicVectorMemory.sanitizeForStorage(newContent).trim()
@@ -162,7 +159,7 @@ class MemoryRepository(
             embeddingModel = embeddingProvider.modelName,
             embeddingDimension = embeddingProvider.dimension
         )
-        return memoryDao.updateMemoryIfUnchanged(target, updated)
+        return readyDao().updateMemoryIfUnchanged(target, updated)
     }
 
     /**
@@ -170,14 +167,14 @@ class MemoryRepository(
      */
     suspend fun forget(memoryId: Long, permanent: Boolean = false) {
         if (permanent) {
-            memoryDao.permanentlyDeleteMemoryById(memoryId)
+            readyDao().permanentlyDeleteMemoryById(memoryId)
         } else {
-            memoryDao.softDeleteMemory(memoryId)
+            readyDao().softDeleteMemory(memoryId)
         }
     }
 
     suspend fun setPinned(memoryId: Long, pinned: Boolean) {
-        memoryDao.setPinned(memoryId, pinned)
+        readyDao().setPinned(memoryId, pinned)
     }
 
     /**
@@ -254,13 +251,13 @@ class MemoryRepository(
     }
 
     suspend fun cleanupExpiredMemories(): Int {
-        return memoryDao.deleteExpiredMemories(System.currentTimeMillis())
+        return readyDao().deleteExpiredMemories(System.currentTimeMillis())
     }
 
     private val gson = com.google.gson.GsonBuilder().setPrettyPrinting().create()
 
     suspend fun exportMemoriesAsJson(): String {
-        val list = memoryDao.getAllMemories()
+        val list = readyDao().getAllMemories()
         require(list.size <= 10_000) { "Memory backup exceeds the import record limit." }
         val json = gson.toJson(list)
         require(json.toByteArray(Charsets.UTF_8).size <= 5_000_000) {
@@ -305,7 +302,7 @@ class MemoryRepository(
                 )
             }.getOrNull()
             if (imported != null && imported > 0L) {
-                if (item.pinned) runCatching { memoryDao.setPinned(imported, true) }
+                if (item.pinned) runCatching { readyDao().setPinned(imported, true) }
                 count++
             }
         }
@@ -313,20 +310,20 @@ class MemoryRepository(
     }
 
     suspend fun updateMemory(memory: MemoryEntity) {
-        memoryDao.updateMemory(memory.copy(timestamp = System.currentTimeMillis()))
+        readyDao().updateMemory(memory.copy(timestamp = System.currentTimeMillis()))
     }
 
-    suspend fun permanentlyDeleteMemoryById(id: Long): Int = memoryDao.permanentlyDeleteMemoryById(id)
+    suspend fun permanentlyDeleteMemoryById(id: Long): Int = readyDao().permanentlyDeleteMemoryById(id)
 
     suspend fun deleteMemoryById(id: Long) {
-        memoryDao.deleteMemoryById(id)
+        readyDao().deleteMemoryById(id)
     }
 
     suspend fun deleteMemoriesByKeyword(keyword: String): Int {
-        return memoryDao.deleteMemoriesByKeyword(keyword)
+        return readyDao().deleteMemoriesByKeyword(keyword)
     }
 
     suspend fun clearAll() {
-        memoryDao.clearAllMemories()
+        readyDao().clearAllMemories()
     }
 }

@@ -85,6 +85,28 @@ interface ChatDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessages(messages: List<ChatMessageEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertLegacyMessages(messages: List<ChatMessageEntity>)
+
+    @Query("SELECT * FROM chat_messages WHERE id = :messageId LIMIT 1")
+    suspend fun getMessageById(messageId: String): ChatMessageEntity?
+
+    /** Commit and verify the whole import before its preference snapshot may be erased. */
+    @Transaction
+    suspend fun importLegacyVerified(session: ChatSessionEntity, messages: List<ChatMessageEntity>) {
+        val missing = messages.filter { getMessageById(it.id) == null }
+        if (missing.isNotEmpty()) {
+            if (getSessionById(session.id) == null) insertSession(session)
+            insertLegacyMessages(missing)
+        }
+        for (expected in messages) {
+            val actual = getMessageById(expected.id)
+            check(actual != null && actual.role == expected.role && actual.content == expected.content &&
+                actual.timestamp == expected.timestamp) { "Legacy chat verification failed; source retained." }
+            check(getSessionById(actual.sessionId) != null) { "Imported chat session missing; source retained." }
+        }
+    }
+
     @Update
     suspend fun updateMessage(message: ChatMessageEntity)
 
