@@ -87,7 +87,7 @@ class RoomMigrationInstrumentedTest {
             val current = openRoom(name, key)
             try {
                 current.awaitReady()
-                assertEquals(8, current.openHelper.writableDatabase.version)
+                assertEquals(9, current.openHelper.writableDatabase.version)
                 assertMemory(current.openHelper.writableDatabase)
                 assertEquals("hello", current.chatDao().getMessagesForSession("chat").single().content)
                 assertEquals("Preserved", current.missionDao().getMissionById("mission")!!.goal)
@@ -170,7 +170,8 @@ class RoomMigrationInstrumentedTest {
             })
             .addMigrations(MemoryDatabase.MIGRATION_1_2, MemoryDatabase.MIGRATION_2_3,
                 MemoryDatabase.MIGRATION_3_4, MemoryDatabase.MIGRATION_4_5,
-                MemoryDatabase.MIGRATION_5_6, MemoryDatabase.MIGRATION_6_7, MemoryDatabase.MIGRATION_7_8)
+                MemoryDatabase.MIGRATION_5_6, MemoryDatabase.MIGRATION_6_7, MemoryDatabase.MIGRATION_7_8,
+                MemoryDatabase.MIGRATION_8_9)
             .build()
 
     private fun assertMemory(db: SupportSQLiteDatabase) {
