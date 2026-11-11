@@ -15,7 +15,7 @@ class IdeaReviewWorker(context: Context, parameters: WorkerParameters) : Corouti
         val saver = (applicationContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode
         if (!com.jarvis.assistant.util.DirectivePowerPolicy.backgroundAllowed(prefs.powerProfile, saver)) return Result.retry()
         return try {
-            val dao = MemoryDatabase.getInstance(applicationContext).directiveDao()
+            val dao = MemoryDatabase.getReadyInstance(applicationContext).directiveDao()
             val client = DirectiveAiClient(prefs)
             for (idea in dao.unreviewedIdeas(3)) {
                 if (!prefs.ideasCloudReviewEnabled || isStopped) break

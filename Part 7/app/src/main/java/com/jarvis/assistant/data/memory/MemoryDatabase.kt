@@ -35,6 +35,17 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 )
 abstract class MemoryDatabase : RoomDatabase() {
 
+    private val openScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+    )
+    private val readiness = DatabaseReadiness(openScope) {
+        android.os.Trace.beginSection("JARVIS.SQLCipher.open")
+        try { openHelper.writableDatabase } finally { android.os.Trace.endSection() }
+    }
+
+    /** Explicit readiness for consumers; encryption and Room migration validation run on IO. */
+    suspend fun awaitReady() = readiness.awaitReady()
+
     abstract fun directiveDao(): DirectiveDao
     abstract fun memoryDao(): MemoryDao
     abstract fun chatDao(): ChatDao
@@ -210,6 +221,10 @@ abstract class MemoryDatabase : RoomDatabase() {
          * Application.onCreate therefore never waits for database encryption or file I/O.
          */
 
+        suspend fun getReadyInstance(context: Context): MemoryDatabase =
+            getInstance(context).also { it.awaitReady() }
+
+        // This builds only the Room facade. Never force open or await from this function.
         fun getInstance(context: Context): MemoryDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(

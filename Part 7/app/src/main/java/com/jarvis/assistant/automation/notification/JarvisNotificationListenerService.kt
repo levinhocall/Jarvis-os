@@ -99,7 +99,7 @@ class JarvisNotificationListenerService : NotificationListenerService() {
         persistenceScope.launch(Dispatchers.IO) {
             if (!com.jarvis.assistant.data.preferences.AppPreferences(applicationContext).notificationHistoryEnabled) return@launch
             runCatching {
-                val dao = com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext).notificationHistoryDao()
+                val dao = com.jarvis.assistant.data.memory.MemoryDatabase.getReadyInstance(applicationContext).notificationHistoryDao()
                 dao.getAllForPrivacyAudit().forEach { item ->
                     if (NotificationPrivacyFilter.sanitize(item.sender, item.message).containsCredential) {
                         dao.delete(item.id)
@@ -173,7 +173,7 @@ class JarvisNotificationListenerService : NotificationListenerService() {
                     return@launch
                 }
                 runCatching {
-                    val database = com.jarvis.assistant.data.memory.MemoryDatabase.getInstance(applicationContext)
+                    val database = com.jarvis.assistant.data.memory.MemoryDatabase.getReadyInstance(applicationContext)
                     database.notificationHistoryDao().insert(
                         com.jarvis.assistant.data.notification.NotificationHistoryEntity(
                             id = sbn.key,

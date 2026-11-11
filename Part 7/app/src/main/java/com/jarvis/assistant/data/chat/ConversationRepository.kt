@@ -1,6 +1,7 @@
 package com.jarvis.assistant.data.chat
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,20 +10,27 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 
 class ConversationRepository(
-    private val chatDao: ChatDao
+    private val chatDao: ChatDao,
+    private val awaitReady: suspend () -> Unit = {}
 ) {
     private val _currentSessionId = MutableStateFlow<String?>(null)
     private val turnWriteMutex = Mutex()
     val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
 
-    fun getActiveSessionsFlow(): Flow<List<ChatSessionEntity>> = chatDao.getActiveSessionsFlow()
-    fun getArchivedSessionsFlow(): Flow<List<ChatSessionEntity>> = chatDao.getArchivedSessionsFlow()
+    private suspend fun readyDao(): ChatDao { awaitReady(); return chatDao }
+    private fun <T> readyFlow(source: () -> Flow<T>): Flow<T> = kotlinx.coroutines.flow.flow {
+        awaitReady()
+        emitAll(source())
+    }
 
-    suspend fun getSession(id: String): ChatSessionEntity? = chatDao.getSessionById(id)
+    fun getActiveSessionsFlow(): Flow<List<ChatSessionEntity>> = readyFlow { chatDao.getActiveSessionsFlow() }
+    fun getArchivedSessionsFlow(): Flow<List<ChatSessionEntity>> = readyFlow { chatDao.getArchivedSessionsFlow() }
+
+    suspend fun getSession(id: String): ChatSessionEntity? = readyDao().getSessionById(id)
 
     /** Restores the latest non-archived session after process recreation. */
     suspend fun restoreMostRecentActiveSession(): String? {
-        val session = chatDao.getMostRecentActiveSession()
+        val session = readyDao().getMostRecentActiveSession()
         _currentSessionId.value = session?.id
         return session?.id
     }
@@ -37,7 +45,7 @@ class ConversationRepository(
             pinned = false,
             systemPrompt = systemPrompt
         )
-        chatDao.insertSession(session)
+        readyDao().insertSession(session)
         _currentSessionId.value = session.id
         return session
     }
@@ -45,16 +53,16 @@ class ConversationRepository(
     /** Atomically archives the active session and creates a fresh conversation. */
     suspend fun startNewSession(title: String = "New Chat"): ChatSessionEntity = turnWriteMutex.withLock {
         val currentId = _currentSessionId.value
-        val current = currentId?.let { chatDao.getSessionById(it) }?.takeIf { !it.isArchived }
-            ?: chatDao.getMostRecentActiveSession()
+        val current = currentId?.let { readyDao().getSessionById(it) }?.takeIf { !it.isArchived }
+            ?: readyDao().getMostRecentActiveSession()
         if (current != null && !current.isArchived) {
-            chatDao.setArchived(current.id, true)
+            readyDao().setArchived(current.id, true)
         }
         createNewSession(title)
     }
 
     suspend fun selectSession(sessionId: String) {
-        val session = chatDao.getSessionById(sessionId)
+        val session = readyDao().getSessionById(sessionId)
         if (session != null) {
             _currentSessionId.value = sessionId
         }
@@ -62,39 +70,39 @@ class ConversationRepository(
 
     suspend fun renameSession(sessionId: String, newTitle: String) {
         val cleanTitle = newTitle.trim().ifEmpty { "Chat" }
-        chatDao.renameSession(sessionId, cleanTitle)
+        readyDao().renameSession(sessionId, cleanTitle)
     }
 
     suspend fun archiveSession(sessionId: String, isArchived: Boolean) {
-        chatDao.setArchived(sessionId, isArchived)
+        readyDao().setArchived(sessionId, isArchived)
         if (isArchived && _currentSessionId.value == sessionId) {
             _currentSessionId.value = null
         }
     }
 
     suspend fun pinSession(sessionId: String, pinned: Boolean) {
-        chatDao.setPinned(sessionId, pinned)
+        readyDao().setPinned(sessionId, pinned)
     }
 
     suspend fun deleteSession(sessionId: String) {
-        chatDao.deleteMessagesForSession(sessionId)
-        chatDao.deleteSession(sessionId)
+        readyDao().deleteMessagesForSession(sessionId)
+        readyDao().deleteSession(sessionId)
         if (_currentSessionId.value == sessionId) {
             _currentSessionId.value = null
         }
     }
 
     suspend fun searchSessions(query: String): List<ChatSessionEntity> =
-        chatDao.searchSessions(query.trim())
+        readyDao().searchSessions(query.trim())
 
     fun getMessagesFlow(sessionId: String): Flow<List<ChatMessageEntity>> =
-        chatDao.getMessagesForSessionFlow(sessionId)
+        readyFlow { chatDao.getMessagesForSessionFlow(sessionId) }
 
     fun getRecentMessagesFlow(): Flow<List<ChatMessageEntity>> =
-        chatDao.getRecentMessagesFlow()
+        readyFlow { chatDao.getRecentMessagesFlow() }
 
     suspend fun clearAllConversationData(clearLegacyHistory: () -> Unit = {}) = turnWriteMutex.withLock {
-        chatDao.clearAllConversationData()
+        readyDao().clearAllConversationData()
         _currentSessionId.value = null
         clearLegacyHistory()
     }
@@ -117,10 +125,10 @@ class ConversationRepository(
     }
 
     suspend fun getMessages(sessionId: String): List<ChatMessageEntity> =
-        chatDao.getMessagesForSession(sessionId)
+        readyDao().getMessagesForSession(sessionId)
 
     suspend fun getMessagesPaged(sessionId: String, limit: Int, offset: Int): List<ChatMessageEntity> =
-        chatDao.getMessagesPaged(sessionId, limit, offset)
+        readyDao().getMessagesPaged(sessionId, limit, offset)
 
     suspend fun addMessage(
         sessionId: String,
@@ -138,15 +146,15 @@ class ConversationRepository(
             status = status,
             metadata = metadata
         )
-        chatDao.insertMessage(message)
-        chatDao.updateSessionTimestamp(sessionId, message.timestamp)
+        readyDao().insertMessage(message)
+        readyDao().updateSessionTimestamp(sessionId, message.timestamp)
 
         // Automatically update title from first user message if title is still "New Chat"
         if (role == "USER") {
-            val session = chatDao.getSessionById(sessionId)
+            val session = readyDao().getSessionById(sessionId)
             if (session != null && (session.title == "New Chat" || session.title.isBlank())) {
                 val generatedTitle = generateTitleFromMessage(content)
-                chatDao.renameSession(sessionId, generatedTitle, message.timestamp)
+                readyDao().renameSession(sessionId, generatedTitle, message.timestamp)
             }
         }
 
@@ -163,8 +171,8 @@ class ConversationRepository(
         if (user.isBlank() && assistant.isBlank()) return@withLock null
 
         val existingId = _currentSessionId.value
-        val existing = existingId?.let { chatDao.getSessionById(it) }?.takeIf { !it.isArchived }
-            ?: chatDao.getMostRecentActiveSession()?.also { _currentSessionId.value = it.id }
+        val existing = existingId?.let { readyDao().getSessionById(it) }?.takeIf { !it.isArchived }
+            ?: readyDao().getMostRecentActiveSession()?.also { _currentSessionId.value = it.id }
         val session = if (existing != null) {
             existing
         } else {
@@ -191,8 +199,8 @@ class ConversationRepository(
         sessionId: String,
         turns: List<com.jarvis.assistant.data.model.ChatTurn>
     ) {
-        val session = chatDao.getSessionById(sessionId) ?: return
-        val existing = chatDao.getMessagesForSession(sessionId)
+        val session = readyDao().getSessionById(sessionId) ?: return
+        val existing = readyDao().getMessagesForSession(sessionId)
         val existingContent = existing.map { it.role.uppercase() to it.content }.toSet()
         val imported = mutableListOf<ChatMessageEntity>()
         turns.forEach { turn ->
@@ -222,18 +230,18 @@ class ConversationRepository(
             }
         }
         if (imported.isNotEmpty()) {
-            chatDao.insertMessages(imported)
+            readyDao().insertMessages(imported)
             val latest = imported.maxOf { it.timestamp }
-            chatDao.updateSessionTimestamp(sessionId, maxOf(session.updatedAt, latest))
+            readyDao().updateSessionTimestamp(sessionId, maxOf(session.updatedAt, latest))
         }
     }
 
     suspend fun deleteMessage(messageId: String) {
-        chatDao.deleteMessage(messageId)
+        readyDao().deleteMessage(messageId)
     }
 
     suspend fun searchMessages(query: String): List<ChatMessageEntity> =
-        chatDao.searchMessages(query.trim())
+        readyDao().searchMessages(query.trim())
 
     private fun generateTitleFromMessage(userMessage: String): String {
         val trimmed = userMessage.trim().lines().firstOrNull()?.trim() ?: "New Chat"
