@@ -141,6 +141,15 @@ class JarvisApp : Application() {
         )
         appScope.launch(Dispatchers.IO) {
             memoryDatabase.awaitReady()
+            // Also migrate headless service starts; do not depend on opening a screen first.
+            try {
+                conversationRepository.migrateLegacyHistory(
+                    chatRepository::readLegacyJson, chatRepository::clearMigratedJson
+                )
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                com.jarvis.assistant.core.diagnostics.StorageHealth.record(error)
+            }
             unifiedRuntime.missionCoordinator.restorePersistedState()
             unifiedRuntime.bootSelfTest(context = this@JarvisApp)
             com.jarvis.assistant.automation.mission.MissionEngine.resumeNonTerminalMissions(this@JarvisApp)

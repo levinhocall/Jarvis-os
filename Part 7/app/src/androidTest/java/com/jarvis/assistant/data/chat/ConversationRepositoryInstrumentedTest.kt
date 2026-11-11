@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -75,6 +76,37 @@ class ConversationRepositoryInstrumentedTest {
         assertEquals(4, messages.size)
         assertEquals(listOf("USER", "ASSISTANT", "USER", "ASSISTANT"), messages.map { it.role })
         assertEquals(listOf("Question", "Answer", "Second", "Second answer"), messages.map { it.content })
+    }
+
+    @Test
+    fun verifiedLegacyImportCommitsBeforeClearAndRetriesWithoutDuplicates() = runBlocking {
+        val repository = ConversationRepository(database.chatDao())
+        var raw: String? = """[{"id":"old","userTranscript":"Repeated","jarvisResponse":"Reply","timestamp":100}]"""
+        assertTrue(runCatching {
+            repository.migrateLegacyHistory({ raw }) { error("stopped before clear") }
+        }.isFailure)
+        repository.migrateLegacyHistory({ raw }) {
+            raw = null
+        }
+        assertNull(raw)
+        assertEquals(2, database.chatDao().getMessagesForSession("jarvis-legacy-chat-import").size)
+    }
+
+    @Test
+    fun conflictingLegacyImportRollsBackAndDoesNotClearSource() = runBlocking {
+        val repository = ConversationRepository(database.chatDao())
+        val raw = """[{"id":"old","userTranscript":"Repeated","jarvisResponse":"Reply","timestamp":100}]"""
+        val plan = LegacyChatImport.plan(raw)
+        database.chatDao().insertSession(plan.session)
+        database.chatDao().insertMessage(plan.messages.first().copy(content = "edited"))
+        var cleared = false
+        assertTrue(runCatching {
+            repository.migrateLegacyHistory({ raw }) { cleared = true }
+        }.isFailure)
+        assertFalse(cleared)
+        val rows = database.chatDao().getMessagesForSession(plan.session.id)
+        assertEquals(1, rows.size) // The attempted missing assistant insert was rolled back.
+        assertEquals("edited", rows.single().content)
     }
 
     @Test

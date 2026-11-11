@@ -107,21 +107,15 @@ class ConversationRepository(
         clearLegacyHistory()
     }
 
-    /**
-     * Reads, imports, and clears the legacy history while holding the same mutex used by
-     * new-session creation and full-history deletion. This prevents a concurrent clear
-     * from being followed by a stale migration that resurrects deleted messages.
-     */
+    /** The write lock also covers clear-history, so an old import cannot resurrect deleted chat. */
     suspend fun migrateLegacyHistory(
-        sessionId: String,
-        loadLegacyTurns: () -> List<com.jarvis.assistant.data.model.ChatTurn>,
-        clearLegacyHistory: () -> Unit
+        loadLegacyJson: () -> String?,
+        clearLegacyHistory: (String) -> Unit
     ) = turnWriteMutex.withLock {
-        val legacyTurns = loadLegacyTurns()
-        if (legacyTurns.isNotEmpty()) {
-            mergeHistoricalTurnsLocked(sessionId, legacyTurns)
-            clearLegacyHistory()
-        }
+        val raw = loadLegacyJson() ?: return@withLock
+        val plan = LegacyChatImport.plan(raw) // Corrupt input throws; never erase it as "empty".
+        readyDao().importLegacyVerified(plan.session, plan.messages)
+        clearLegacyHistory(raw) // Only after the Room transaction committed and rows verified.
     }
 
     suspend fun getMessages(sessionId: String): List<ChatMessageEntity> =
@@ -199,41 +193,10 @@ class ConversationRepository(
         sessionId: String,
         turns: List<com.jarvis.assistant.data.model.ChatTurn>
     ) {
-        val session = readyDao().getSessionById(sessionId) ?: return
-        val existing = readyDao().getMessagesForSession(sessionId)
-        val existingContent = existing.map { it.role.uppercase() to it.content }.toSet()
-        val imported = mutableListOf<ChatMessageEntity>()
-        turns.forEach { turn ->
-            val user = turn.userTranscript.trim()
-            val assistant = turn.jarvisResponse.trim()
-            if (user.isNotBlank() && ("USER" to user) !in existingContent) {
-                imported.add(
-                    ChatMessageEntity(
-                        id = UUID.nameUUIDFromBytes(("old:" + turn.id + ":user").toByteArray()).toString(),
-                        sessionId = sessionId,
-                        role = "USER",
-                        content = user,
-                        timestamp = turn.timestamp
-                    )
-                )
-            }
-            if (assistant.isNotBlank() && ("ASSISTANT" to assistant) !in existingContent) {
-                imported.add(
-                    ChatMessageEntity(
-                        id = UUID.nameUUIDFromBytes(("old:" + turn.id + ":assistant").toByteArray()).toString(),
-                        sessionId = sessionId,
-                        role = "ASSISTANT",
-                        content = assistant,
-                        timestamp = turn.timestamp + 1L
-                    )
-                )
-            }
-        }
-        if (imported.isNotEmpty()) {
-            readyDao().insertMessages(imported)
-            val latest = imported.maxOf { it.timestamp }
-            readyDao().updateSessionTimestamp(sessionId, maxOf(session.updatedAt, latest))
-        }
+        val session = readyDao().getSessionById(sessionId)
+            ?: error("Import target session is missing; legacy history retained.")
+        val messages = LegacyChatImport.messages(sessionId, turns)
+        readyDao().importLegacyVerified(session, messages)
     }
 
     suspend fun deleteMessage(messageId: String) {

@@ -428,6 +428,12 @@ class FakeChatDao : ChatDao {
         this.messages.addAll(messages)
     }
 
+    override suspend fun getMessageById(messageId: String): ChatMessageEntity? = messages.firstOrNull { it.id == messageId }
+
+    override suspend fun insertLegacyMessages(messages: List<ChatMessageEntity>) {
+        messages.forEach { message -> if (getMessageById(message.id) == null) this.messages.add(message) }
+    }
+
     override suspend fun updateMessage(message: ChatMessageEntity) {
         val idx = messages.indexOfFirst { it.id == message.id }
         if (idx >= 0) messages[idx] = message
