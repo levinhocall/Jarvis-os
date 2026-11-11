@@ -84,6 +84,9 @@ class RoomMigrationInstrumentedTest {
         try {
             withContext(Dispatchers.Main) {
                 db.awaitReady()
+                val ready = db.initializationState.value
+                assertTrue(ready is DatabaseState.Ready<*>)
+                assertSame(db, (ready as DatabaseState.Ready<*>).database)
                 assertTrue(db.memoryDao().getAllMemories().isEmpty())
             }
         } finally { withContext(Dispatchers.IO) { db.close(); context.deleteDatabase(name) } }
