@@ -119,6 +119,26 @@ jobs:
           key: jarvis-gradle-${{ runner.os }}-${{ hashFiles('Part 7/**/*.gradle*', 'Part 7/gradle/wrapper/gradle-wrapper.properties', '.github/actions/ci-services/package-lock.json') }}
       - name: Run New-issue lint gate
         run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+      - name: Summarize lint categories and safe dependency notices
+        if: always()
+        run: |
+          python3 - <<'PY_REPORT'
+          from pathlib import Path
+          from collections import Counter
+          import xml.etree.ElementTree as ET
+          import json
+          report = Path('app/build/reports/lint-results-debug.xml')
+          if not report.exists():
+              print('Lint report was not generated; inspect the Gradle failure above.')
+          else:
+              issues = ET.parse(report).getroot().findall('issue')
+              print('Lint categories:', dict(Counter(x.get('id') for x in issues)))
+              for issue in issues:
+                  safe = issue.get('id') in {'AndroidGradlePluginVersion', 'GradleDependency', 'NewerVersionAvailable'}
+                  print(json.dumps({'id': issue.get('id'), 'severity': issue.get('severity'),
+                      'dependency_notice': issue.get('message') if safe else 'See report artifact for details.',
+                      'locations': [{'file': x.get('file'), 'line': x.get('line')} for x in issue.findall('location')]}, ensure_ascii=True))
+          PY_REPORT
       - name: Reject uncommitted Room schema drift
         run: |
           git diff --exit-code -- app/schemas
