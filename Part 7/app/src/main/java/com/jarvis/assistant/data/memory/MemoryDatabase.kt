@@ -189,7 +189,7 @@ abstract class MemoryDatabase : RoomDatabase() {
             }
 
         /** The SQLite helper owns corruption handling; never delegate to its deleting default. */
-        private fun preservingConfiguration(
+        internal fun preservingConfiguration(
             configuration: SupportSQLiteOpenHelper.Configuration
         ): SupportSQLiteOpenHelper.Configuration {
             val original = configuration.callback
