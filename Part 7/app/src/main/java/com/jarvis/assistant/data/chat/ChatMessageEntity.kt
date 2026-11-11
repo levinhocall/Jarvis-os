@@ -1,6 +1,7 @@
 package com.jarvis.assistant.data.chat
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
@@ -9,7 +10,8 @@ import java.util.UUID
     tableName = "chat_messages",
     indices = [
         Index("sessionId"),
-        Index("timestamp")
+        Index("timestamp"),
+        Index(value = ["sessionId", "position"])
     ]
 )
 data class ChatMessageEntity(
@@ -20,5 +22,7 @@ data class ChatMessageEntity(
     val content: String,
     val timestamp: Long = System.currentTimeMillis(),
     val status: String = "SENT", // "SENT", "DELIVERED", "FAILED", "STREAMING"
-    val metadata: String = "{}"
+    val metadata: String = "{}",
+    // Staged in v9: readers/allocation remain timestamp-based until the importer review.
+    @ColumnInfo(defaultValue = "0") val position: Long = 0L
 )

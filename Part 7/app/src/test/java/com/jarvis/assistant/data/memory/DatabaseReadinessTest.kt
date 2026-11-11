@@ -135,4 +135,31 @@ class DatabaseReadinessTest {
         assertEquals(now, testScheduler.currentTime)
         assertEquals(1, opens)
     }
+
+    @Test fun slowMigrationBeyondDefaultAndBootWaitsRemainsLoadingThenBecomesReady() = runTest {
+        var opens = 0
+        val gate = DatabaseReadiness(backgroundScope) {
+            opens++
+            delay(125_000) // Virtual time only: this is not a measured migration duration.
+            "migrated database"
+        }
+        val defaultWait = async { runCatching { gate.awaitReady() } }
+        val bootWait = async { runCatching { gate.awaitReady(120_000) } }
+        runCurrent()
+        advanceTimeBy(30_001)
+        runCurrent()
+        assertTrue(defaultWait.await().exceptionOrNull() is DatabaseReadinessTimeoutException)
+        assertEquals(DatabaseState.Loading, gate.state.value)
+        assertFalse(bootWait.isCompleted)
+        advanceTimeBy(90_000)
+        runCurrent()
+        assertTrue(bootWait.await().exceptionOrNull() is DatabaseReadinessTimeoutException)
+        assertEquals(DatabaseState.Loading, gate.state.value)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals("migrated database", gate.awaitReady(1))
+        assertEquals(DatabaseState.Ready("migrated database"), gate.state.value)
+        assertEquals(1, opens)
+    }
+
 }
