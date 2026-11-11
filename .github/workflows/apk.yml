@@ -87,6 +87,22 @@ jobs:
         working-directory: "Part 7/app/build/outputs/apk/debug"
         run: sha256sum app-debug.apk > app-debug.apk.sha256
 
+      - name: Verify APK signature and package identity
+        working-directory: "Part 7/app/build/outputs/apk/debug"
+        run: |
+          set -euo pipefail
+          jarvis_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          "$jarvis_sdk_root/build-tools/35.0.0/apksigner" verify --verbose --print-certs app-debug.apk | tee app-debug.signature.txt
+          "$jarvis_sdk_root/build-tools/35.0.0/aapt" dump badging app-debug.apk > app-debug.badging.txt
+          python3 - <<'PY_IDENTITY'
+          from pathlib import Path
+          import re
+          badging = Path('app-debug.badging.txt').read_text()
+          assert re.search(r"^package: name='com\.jarvis\.assistant' ", badging, re.M), 'Unexpected APK package'
+          assert "targetSdkVersion:'36'" in badging, 'Unexpected target SDK'
+          print('Verified package com.jarvis.assistant and target SDK 36')
+          PY_IDENTITY
+
       - name: Publish permanent CI APK download
         if: inputs.publish_release
         working-directory: "Part 7/app/build/outputs/apk/debug"
@@ -106,10 +122,12 @@ jobs:
           Download app-debug.apk to install. app-debug.apk.sha256 verifies the APK.
           This is a development-signed test build, not a production release.
           Back up local memories before replacing an installation signed with another key.
+          Native Android/SQLCipher instrumentation and physical installation/upgrade were not executed by this workflow.
+          This source includes the staged v9 schema. The new isolated legacy backup/cleanup protocol is not enabled yet.
           EOF_NOTES
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 output-metadata.json --clobber
+            gh release upload "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 app-debug.signature.txt output-metadata.json --clobber
           else
-            gh release create "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 output-metadata.json --target "$SOURCE_SHA" --title "$RELEASE_TITLE" --notes-file release-notes.md --prerelease --latest=false --verify-tag
+            gh release create "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 app-debug.signature.txt output-metadata.json --target "$SOURCE_SHA" --title "$RELEASE_TITLE" --notes-file release-notes.md --prerelease --latest=false --verify-tag
           fi
           gh release view "$RELEASE_TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
