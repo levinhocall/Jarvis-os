@@ -1,0 +1,18 @@
+name: JARVIS CI reports and dependency cache
+description: Local repository action using pinned official GitHub SDKs; no external uses action.
+inputs:
+  mode:
+    description: reports, restore-cache or save-cache
+    required: true
+  kind:
+    description: unit or lint report roots
+    default: unit
+  name:
+    description: Artifact name within this workflow run
+    default: verification-reports
+  key:
+    description: Dependency cache key
+    default: unused
+runs:
+  using: node24
+  main: index.mjs
