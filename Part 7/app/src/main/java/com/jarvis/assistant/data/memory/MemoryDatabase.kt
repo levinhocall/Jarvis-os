@@ -41,10 +41,16 @@ abstract class MemoryDatabase : RoomDatabase() {
     private val readiness = DatabaseReadiness(openScope) {
         android.os.Trace.beginSection("JARVIS.SQLCipher.open")
         try { openHelper.writableDatabase } finally { android.os.Trace.endSection() }
+        this@MemoryDatabase
     }
 
-    /** Explicit readiness for consumers; encryption and Room migration validation run on IO. */
-    suspend fun awaitReady() = readiness.awaitReady()
+    val initializationState: kotlinx.coroutines.flow.StateFlow<DatabaseState<MemoryDatabase>> = readiness.state
+
+    /** Retains the existing Unit-returning callback signature used by repositories. */
+    suspend fun awaitReady() { readiness.awaitReady() }
+
+    /** Deadline limits only the waiter; native encryption/migration continues on its owned IO scope. */
+    suspend fun awaitReady(timeoutMs: Long): MemoryDatabase = readiness.awaitReady(timeoutMs)
 
     abstract fun directiveDao(): DirectiveDao
     abstract fun memoryDao(): MemoryDao
@@ -221,8 +227,10 @@ abstract class MemoryDatabase : RoomDatabase() {
          * Application.onCreate therefore never waits for database encryption or file I/O.
          */
 
-        suspend fun getReadyInstance(context: Context): MemoryDatabase =
-            getInstance(context).also { it.awaitReady() }
+        suspend fun getReadyInstance(
+            context: Context,
+            timeoutMs: Long = DatabaseReadiness.DEFAULT_WAIT_MS
+        ): MemoryDatabase = getInstance(context).awaitReady(timeoutMs)
 
         // This builds only the Room facade. Never force open or await from this function.
         fun getInstance(context: Context): MemoryDatabase {

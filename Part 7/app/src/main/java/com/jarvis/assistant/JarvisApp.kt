@@ -85,6 +85,12 @@ class JarvisApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        if (BuildConfig.DEBUG) {
+            android.os.StrictMode.setThreadPolicy(
+                android.os.StrictMode.ThreadPolicy.Builder(android.os.StrictMode.getThreadPolicy())
+                    .detectDiskReads().detectDiskWrites().penaltyLog().build()
+            )
+        }
         SecurityManager.verify(this)
         instance = this
         preferences = AppPreferences(this)
@@ -140,7 +146,7 @@ class JarvisApp : Application() {
             )
         )
         appScope.launch(Dispatchers.IO) {
-            memoryDatabase.awaitReady()
+            memoryDatabase.awaitReady(120_000L)
             // Also migrate headless service starts; do not depend on opening a screen first.
             try {
                 conversationRepository.migrateLegacyHistory(
