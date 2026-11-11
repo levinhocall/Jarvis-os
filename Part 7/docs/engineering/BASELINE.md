@@ -8,12 +8,12 @@ Snapshot: `2084fe301cf60bcd2bd745048b2c9ef5a75b38e2`, 2026-11-11 UTC. This task 
 | --- | --- |
 | Kotlin production source | 288 `.kt` files; 55,933 lines under `app/src/main/java` (Python Path.rglob + splitlines). |
 | App identity / SDK | `app/build.gradle.kts:27` namespace com.jarvis.assistant; min SDK 26, compile/target 36; version 149 / 1.11.0. See defaultConfig. |
-| Gradle/toolchain | `build.gradle.kts:2` AGP **8.10.1**, Kotlin **2.2.20**, KAPT; wrapper 8.11.1 (`gradle/wrapper/gradle-wrapper.properties`). JVM 17 (`app/build.gradle.kts:70`). The pack's AGP 8.9.1 is stale. |
+| Gradle/toolchain | `build.gradle.kts:2` AGP **8.10.1**, Kotlin **2.2.20**, KAPT; wrapper 8.11.1 (`gradle/wrapper/gradle-wrapper.properties`). JVM 17 (`app/build.gradle.kts:75`). The pack's AGP 8.9.1 is stale. |
 | UI | Views/XML/ViewBinding remain the primary screens. An opt-in Compose orb already exists (`app/build.gradle.kts:79`, `ui/orb/VoiceOrb.kt:1`); the pack's blanket “NO Compose present” assumption is stale. This audit does not migrate or remove it. |
-| Room / SQLCipher | `data/memory/MemoryDatabase.kt:32` version **8**, exportSchema=true; migrations 1→8. `data/memory/DatabaseReadiness.kt:27` exposes nonblocking readiness. No production runBlocking found. |
+| Room / SQLCipher | `data/memory/MemoryDatabase.kt:33` version **8**, exportSchema=true; migrations 1→8. `data/memory/DatabaseReadiness.kt:27` exposes nonblocking readiness. No production runBlocking found. |
 | Chat | `data/chat/ConversationRepository.kt:111` imports verified legacy JSON; `data/repository/ChatRepository.kt:5` is read/clear-only. `data/memory/MemoryManager.kt:29` stores in-process context; facts go through MemoryRepository. No legacy writer API remains. |
 | Checkpoints | `JarvisApp.kt:126` constructs LongHorizonMissionCoordinator with PersistentMissionCheckpointStorage, not the in-memory default assumed by B3. Persistence is encrypted prefs, not Room (`PersistentMissionCheckpointStorage.kt:12`). |
-| Audit schema | `security/sandbox/AuditEntities.kt:49` exportSchema=true; v1 schema committed. Existing memory exports v6–v8 plus historical-source fixture endpoints v1/v5; v2–v4 original snapshots absent (`app/schemas/README.md`). |
+| Audit schema | `security/sandbox/AuditEntities.kt:38` exportSchema=true; v1 schema committed. Existing memory exports v6–v8 plus historical-source fixture endpoints v1/v5; v2–v4 original snapshots absent (`app/schemas/README.md`). |
 
 ## Executed baseline checks
 
