@@ -1,0 +1,115 @@
+name: Android APK (manual)
+run-name: Build JARVIS OS APK from ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Keep the tested APK in a permanent GitHub prerelease"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Verify, build and optionally publish APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: "Part 7"
+    steps:
+      - name: Fetch exact application source without a checkout action
+        working-directory: ${{ github.workspace }}
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 --filter=blob:none origin "$GITHUB_SHA"
+          git sparse-checkout set --cone "Part 7" ".github"
+          git checkout --detach FETCH_HEAD
+
+      - name: Reserve the exact CI source tag before main advances
+        if: inputs.publish_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: debug-ci-apk-${{ github.run_id }}
+        run: |
+          if existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null); then
+            test "$existing_sha" = "$GITHUB_SHA"
+          else
+            gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA" --silent
+          fi
+
+      - name: Verify official Gradle wrapper checksum
+        run: echo "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
+
+      - name: Select preinstalled JDK 17
+        run: |
+          test -x "$JAVA_HOME_17_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+
+      - name: Install Android 16 SDK
+        run: |
+          jarvis_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          "$jarvis_sdk_root/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Verify Gradle environment
+        run: ./gradlew --version --no-daemon
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Verify local-memory migration preservation
+        run: |
+          python3 scripts/verify-directive-migration.py
+          python3 scripts/verify-directive-migration.py 7 8
+
+      - name: Run Android lint
+        run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+
+      - name: Compile Android runtime tests without assembling APKs
+        run: ./gradlew :app:compileDebugAndroidTestKotlin --no-daemon --stacktrace
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Generate APK checksum
+        working-directory: "Part 7/app/build/outputs/apk/debug"
+        run: sha256sum app-debug.apk > app-debug.apk.sha256
+
+      - name: Publish permanent CI APK download
+        if: inputs.publish_release
+        working-directory: "Part 7/app/build/outputs/apk/debug"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: debug-ci-apk-${{ github.run_id }}
+          RELEASE_TITLE: JARVIS OS debug APK (CI ${{ github.run_number }})
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat > release-notes.md <<EOF_NOTES
+          Debug APK produced by GitHub Actions after unit tests and lint passed.
+          Source commit: $SOURCE_SHA
+          CI run: $RUN_URL
+
+          Download app-debug.apk to install. app-debug.apk.sha256 verifies the APK.
+          This is a development-signed test build, not a production release.
+          Back up local memories before replacing an installation signed with another key.
+          EOF_NOTES
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 output-metadata.json --clobber
+          else
+            gh release create "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 output-metadata.json --target "$SOURCE_SHA" --title "$RELEASE_TITLE" --notes-file release-notes.md --prerelease --latest=false --verify-tag
+          fi
+          gh release view "$RELEASE_TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"

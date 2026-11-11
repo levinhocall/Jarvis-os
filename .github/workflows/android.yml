@@ -3,36 +3,29 @@ run-name: Verify JARVIS OS from ${{ github.ref_name }}
 
 on:
   push:
-    branches: [ main ]
     paths:
       - "Part 7/**"
       - "!Part 7/docs/**"
-      - ".github/workflows/android.yml"
+      - ".github/workflows/android*.yml"
+  pull_request:
+    paths:
+      - "Part 7/**"
+      - "!Part 7/docs/**"
+      - ".github/workflows/android*.yml"
   workflow_dispatch:
-    inputs:
-      build_apk:
-        description: "Build an APK only when explicitly requested for final device testing"
-        type: boolean
-        default: false
-      publish_release:
-        description: "Keep the tested APK in a permanent GitHub prerelease"
-        type: boolean
-        default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  group: android-ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Verify source (APK is opt-in)
+  verify:
+    name: Unit tests and lint (no APK)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    permissions:
-      contents: write
     defaults:
       run:
         working-directory: "Part 7"
@@ -45,19 +38,6 @@ jobs:
           git fetch --depth=1 --filter=blob:none origin "$GITHUB_SHA"
           git sparse-checkout set --cone "Part 7" ".github"
           git checkout --detach FETCH_HEAD
-
-      - name: Reserve the exact CI source tag before main advances
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk && inputs.publish_release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: debug-ci-${{ github.run_number }}
-        run: |
-          if existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null); then
-            test "$existing_sha" = "$GITHUB_SHA"
-          else
-            gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA" --silent
-          fi
 
       - name: Verify official Gradle wrapper checksum
         run: echo "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
@@ -90,38 +70,3 @@ jobs:
       - name: Compile Android runtime tests without assembling APKs
         run: ./gradlew :app:compileDebugAndroidTestKotlin --no-daemon --stacktrace
 
-      - name: Build debug APK
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
-
-      - name: Generate APK checksum
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk
-        working-directory: "Part 7/app/build/outputs/apk/debug"
-        run: sha256sum app-debug.apk > app-debug.apk.sha256
-
-      - name: Publish permanent CI APK download
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk && inputs.publish_release
-        working-directory: "Part 7/app/build/outputs/apk/debug"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: debug-ci-${{ github.run_number }}
-          RELEASE_TITLE: JARVIS OS debug APK (CI ${{ github.run_number }})
-          SOURCE_SHA: ${{ github.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          cat > release-notes.md <<EOF_NOTES
-          Debug APK produced by GitHub Actions after unit tests and lint passed.
-          Source commit: $SOURCE_SHA
-          CI run: $RUN_URL
-
-          Download app-debug.apk to install. app-debug.apk.sha256 verifies the APK.
-          This is a development-signed test build, not a production release.
-          Back up local memories before replacing an installation signed with another key.
-          EOF_NOTES
-          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 output-metadata.json --clobber
-          else
-            gh release create "$RELEASE_TAG" app-debug.apk app-debug.apk.sha256 output-metadata.json --target "$SOURCE_SHA" --title "$RELEASE_TITLE" --notes-file release-notes.md --prerelease --latest=false --verify-tag
-          fi
-          gh release view "$RELEASE_TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
