@@ -31,6 +31,7 @@ import com.jarvis.assistant.util.VisualMotionSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.catch
 
 class ControlsFragment : Fragment() {
     private var binding: FragmentControlsBinding? = null
@@ -67,7 +68,11 @@ class ControlsFragment : Fragment() {
                 launch { JarvisConversationService.connectionStatus.collect { binding?.tvControlVoice?.text = "Voice connection: ${it.lowercase().replace('_', ' ')}" } }
                 launch { MicrophoneOwnership.owner.collect { binding?.tvControlMic?.text = "Microphone: ${it?.name?.lowercase()?.replace('_', ' ') ?: "idle"}" } }
                 launch { AccessibilityHealthModel.state.collect { renderAccessibility() } }
-                launch { app.memoryRepository.getAllMemoriesFlow().collect { binding?.tvControlMemory?.text = "${it.size} saved memories · stored on this phone" } }
+                launch { app.memoryRepository.getAllMemoriesFlow().catch { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    com.jarvis.assistant.core.diagnostics.StorageHealth.record(error)
+                    binding?.tvControlMemory?.text = "Local memory unavailable · data retained · open Diagnostics"
+                }.collect { binding?.tvControlMemory?.text = "${it.size} saved memories · stored on this phone" } }
             }
         }
     }

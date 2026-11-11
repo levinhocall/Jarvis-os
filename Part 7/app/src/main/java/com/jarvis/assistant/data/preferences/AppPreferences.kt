@@ -462,6 +462,10 @@ class AppPreferences internal constructor(
         get() = prefs.getString(KEY_CUSTOM_THEME_COLOR, "#FFFFFF") ?: "#FFFFFF"
         set(value) = prefs.edit().putString(KEY_CUSTOM_THEME_COLOR, value.trim()).apply()
 
+    var orbEyeOptions: String
+        get() = prefs.getString("orb_eye_options", "{}") ?: "{}"
+        set(value) = prefs.edit().putString("orb_eye_options", value).apply()
+
     var orbPreset: String
         get() {
             val value = prefs.getString(KEY_ORB_PRESET, "classic") ?: "classic"

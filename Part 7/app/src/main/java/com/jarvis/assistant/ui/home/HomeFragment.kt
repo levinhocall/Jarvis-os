@@ -242,6 +242,7 @@ class HomeFragment : Fragment() {
 
     private fun syncOrbMotion() {
         val web = _binding?.orbWebView ?: return
+        if (isPageLoaded) web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.configure("+com.jarvis.assistant.ui.orb.OrbAppearance.configuration(web.context).toString()+");", null)
         if (isPageLoaded) web.evaluateJavascript(
             "window.JarvisOrb && window.JarvisOrb.setReducedMotion(${com.jarvis.assistant.util.VisualMotionSettings.isReduced(web.context)});", null)
     }
@@ -311,11 +312,12 @@ class HomeFragment : Fragment() {
     }
 
     fun setOrbState(state: String) {
-        pendingOrbState = state
+        val visual = com.jarvis.assistant.ui.orb.OrbVisualState.current(state)
+        pendingOrbState = visual
         activity?.runOnUiThread { _binding?.realisticAvatar?.setStateKey(state) }
         if (!isPageLoaded) return
         activity?.runOnUiThread {
-            _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$state');", null)
+            _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$visual');", null)
         }
     }
 
@@ -540,7 +542,7 @@ class HomeFragment : Fragment() {
                     }.collect { status ->
                         updateMicVisuals(status)
                         if (!status.isOn) {
-                            setOrbState("idle")
+                            setOrbState("sleeping")
                             binding.tvListeningStatus.text = "JARVIS OFF • TAP TO START"
                             binding.tvListeningStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_subtle))
                             binding.tvHoldHint.text = "Tap mic or orb to power on"
@@ -577,7 +579,7 @@ class HomeFragment : Fragment() {
                                     binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#3B82F6"))
                                 }
                                 ConversationState.CONNECTING -> {
-                                    setOrbState("thinking")
+                                    setOrbState("waking")
                                     binding.tvListeningStatus.text = "CONNECTING TO GEMINI..."
                                     binding.tvListeningStatus.setTextColor(Color.parseColor("#F59E0B"))
                                     binding.tvHoldHint.text = "Establishing secure voice session..."
@@ -598,7 +600,7 @@ class HomeFragment : Fragment() {
                                     binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#EF4444"))
                                 }
                                 ConversationState.LISTENING, ConversationState.INTERRUPTED -> {
-                                    setOrbState("listening")
+                                    setOrbState(if(status.state == ConversationState.INTERRUPTED) "interrupted" else "listening")
                                     binding.tvListeningStatus.text = "MIC ON • LISTENING..."
                                     binding.tvListeningStatus.setTextColor(Color.parseColor("#10B981"))
                                     binding.tvHoldHint.text = "Speak now • Tap to mute • Hold to power off"
@@ -634,7 +636,7 @@ class HomeFragment : Fragment() {
                                     )
                                 }
                                 ConversationState.EXECUTING -> {
-                                    setOrbState("thinking")
+                                    setOrbState("executing")
                                     binding.tvListeningStatus.text = "EXECUTING MISSION..."
                                     binding.tvListeningStatus.setTextColor(Color.parseColor("#3B82F6"))
                                     binding.tvHoldHint.text = "Tap to view progress or cancel"

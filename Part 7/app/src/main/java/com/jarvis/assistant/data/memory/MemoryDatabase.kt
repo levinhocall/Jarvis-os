@@ -16,7 +16,6 @@ import com.jarvis.assistant.data.notification.NotificationHistoryDao
 import com.jarvis.assistant.data.memory.sync.MemorySyncStateEntity
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.SupportSQLiteDatabase
-import android.os.Looper
 
 @Database(
     entities = [
@@ -210,55 +209,6 @@ abstract class MemoryDatabase : RoomDatabase() {
          * until Room first opens the database. Room DAO operations are dispatched off-main;
          * Application.onCreate therefore never waits for database encryption or file I/O.
          */
-        private class DeferredSqlCipherOpenHelperFactory(context: Context) : SupportSQLiteOpenHelper.Factory {
-            private val appContext = context.applicationContext
-
-            override fun create(configuration: SupportSQLiteOpenHelper.Configuration): SupportSQLiteOpenHelper {
-                return object : SupportSQLiteOpenHelper {
-                    @Volatile private var delegate: SupportSQLiteOpenHelper? = null
-                    @Volatile private var writeAheadLoggingEnabled = false
-
-                    private fun getDelegate(): SupportSQLiteOpenHelper {
-                        // Room 2.8 checks inTransaction() on the collector's dispatcher before
-                        // moving a suspending query to its executor. A cached helper is safe;
-                        // only cold SQLCipher/Keystore initialization must stay off main.
-                        delegate?.let { return it }
-                        check(Looper.myLooper() != Looper.getMainLooper()) {
-                            "JARVIS database must be opened from a background dispatcher."
-                        }
-                        return synchronized(this) {
-                            delegate ?: DatabaseEncryption.prepare(appContext)
-                                .create(preservingConfiguration(configuration))
-                                .also { helper ->
-                                    helper.setWriteAheadLoggingEnabled(writeAheadLoggingEnabled)
-                                    delegate = helper
-                                }
-                        }
-                    }
-
-                    override val databaseName: String?
-                        get() = configuration.name
-
-                    override val writableDatabase: SupportSQLiteDatabase
-                        get() = getDelegate().writableDatabase
-
-                    override val readableDatabase: SupportSQLiteDatabase
-                        get() = getDelegate().readableDatabase
-
-                    override fun setWriteAheadLoggingEnabled(enabled: Boolean) {
-                        writeAheadLoggingEnabled = enabled
-                        delegate?.setWriteAheadLoggingEnabled(enabled)
-                    }
-
-                    override fun close() {
-                        synchronized(this) {
-                            delegate?.close()
-                            delegate = null
-                        }
-                    }
-                }
-            }
-        }
 
         fun getInstance(context: Context): MemoryDatabase {
             return instance ?: synchronized(this) {
@@ -267,7 +217,10 @@ abstract class MemoryDatabase : RoomDatabase() {
                     MemoryDatabase::class.java,
                     DATABASE_NAME
                 )
-                    .openHelperFactory(DeferredSqlCipherOpenHelperFactory(context.applicationContext))
+                    .openHelperFactory(DeferredSqlCipherOpenHelperFactory { configuration ->
+                        DatabaseEncryption.prepare(context.applicationContext)
+                            .create(preservingConfiguration(configuration))
+                    })
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .addCallback(corruptionRecoveryCallback(context.applicationContext))
                     // Never silently erase private memory, chats, or missions when a migration is missing.

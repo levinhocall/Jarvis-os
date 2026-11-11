@@ -3,9 +3,9 @@ package com.jarvis.assistant.automation.mission
 import java.util.concurrent.ConcurrentHashMap
 
 class LongHorizonMissionCoordinator(
-    private val checkpointStorage: CheckpointStorage = InMemoryCheckpointStorage()
+    private val checkpointStorage: CheckpointStorage
 ) {
-    private val missions = ConcurrentHashMap<String, LongHorizonMissionState>().apply {
+    private val missions by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { ConcurrentHashMap<String, LongHorizonMissionState>().apply {
         checkpointStorage.getAllMissionStates().forEach { restored ->
             val safeState = if (restored.status == LongHorizonStatus.EXECUTING ||
                 restored.status == LongHorizonStatus.PLANNING ||
@@ -14,7 +14,10 @@ class LongHorizonMissionCoordinator(
             put(safeState.missionId, safeState)
             if (safeState != restored) checkpointStorage.saveMissionState(safeState)
         }
-    }
+    } }
+
+    /** Call on the boot/mission worker; constructing a coordinator performs no storage I/O. */
+    fun restorePersistedState() { missions.size }
 
     private fun storeMission(mission: LongHorizonMissionState) {
         // Persist first: do not publish an in-memory state that the durable store rejected.

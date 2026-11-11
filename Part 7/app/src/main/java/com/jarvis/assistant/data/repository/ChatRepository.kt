@@ -11,11 +11,14 @@ class ChatRepository(private val preferences: AppPreferences) {
     private val _turns = MutableStateFlow<List<ChatTurn>>(emptyList())
     val turns: StateFlow<List<ChatTurn>> = _turns.asStateFlow()
 
-    init {
+    /** Import source only; all current production writes go to ConversationRepository/Room. */
+    @Synchronized
+    fun restoreLegacyHistory() {
         _turns.value = preferences.loadChatHistory()
     }
 
     @Synchronized
+    @Deprecated("Legacy import facade only. Persist new turns with ConversationRepository.appendTurn.")
     fun addTurn(userText: String, jarvisText: String) {
         val cleanUser = userText.trim()
         val cleanJarvis = jarvisText.trim()

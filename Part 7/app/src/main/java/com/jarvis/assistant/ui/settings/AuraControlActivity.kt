@@ -46,6 +46,34 @@ class AuraControlActivity : AppCompatActivity() {
             setPadding(0, dp(10), 0, dp(10))
         }
         root.addView(telemetry)
+        root.addView(action("Living Eye · motion, blink & light") {
+            val options = runCatching { org.json.JSONObject(preferences.orbEyeOptions) }.getOrDefault(org.json.JSONObject())
+            val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(12), dp(20), dp(12)) }
+            val blink = androidx.appcompat.widget.SwitchCompat(this).apply {
+                text = "Natural blinking"; minHeight = dp(48); isChecked = options.optBoolean("blink", true)
+                setOnCheckedChangeListener { _, checked -> options.put("blink", checked); preferences.orbEyeOptions = options.toString() }
+            }
+            panel.addView(blink)
+            for ((key, title, min, max) in listOf(
+                listOf("intensity", "Visual intensity", "0.3", "1.5"), listOf("glow", "Glow", "0", "1.5"),
+                listOf("density", "Particle density", "0", "1"), listOf("movement", "Eye movement", "0", "1"),
+                listOf("speed", "Animation speed", "0.4", "1.6"), listOf("size", "Orb size", "0.7", "1.15")
+            )) {
+                val low = min.toDouble(); val high = max.toDouble()
+                panel.addView(TextView(this).apply { text = title; setTextColor(color(R.attr.themeTextPrimary)) })
+                panel.addView(android.widget.SeekBar(this).apply {
+                    this.max = 100; minimumHeight = dp(48); contentDescription = title
+                    progress = (((options.optDouble(key, 1.0).coerceIn(low, high)-low)/(high-low))*100).toInt()
+                    setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(bar: android.widget.SeekBar?, value: Int, user: Boolean) { if(user){options.put(key, low+(high-low)*value/100.0);preferences.orbEyeOptions=options.toString()} }
+                        override fun onStartTrackingTouch(bar: android.widget.SeekBar?) {}
+                        override fun onStopTrackingTouch(bar: android.widget.SeekBar?) {}
+                    })
+                })
+            }
+            MaterialAlertDialogBuilder(this).setTitle("Living holographic eye")
+                .setView(android.widget.ScrollView(this).apply { addView(panel) }).setPositiveButton("Done", null).show()
+        })
         root.addView(action("Background power policy") {
             val profiles = arrayOf("Battery Saver", "Balanced", "Performance")
             val values = arrayOf("saver", "balanced", "performance")

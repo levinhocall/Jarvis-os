@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -90,6 +91,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<JarvisApp>()
             runCatching {
+                app.chatRepository.restoreLegacyHistory()
                 val sessionId = conversationRepository.restoreMostRecentActiveSession()
                     ?: conversationRepository.createNewSession("Voice Conversation").id
                 // Read/import/clear legacy history under the repository's write lock so
@@ -100,13 +102,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     clearLegacyHistory = { app.chatRepository.clearHistory() }
                 )
             }.onFailure {
+                if (it is kotlinx.coroutines.CancellationException) throw it
+                _eventFlow.emit(com.jarvis.assistant.core.diagnostics.StorageHealth.record(it))
                 android.util.Log.e("MainViewModel", "Could not restore/migrate Room chat history", it)
             }
             conversationRepository.currentSessionId.collectLatest { sessionId ->
                 if (sessionId == null) {
                     _chatTurns.value = emptyList()
                 } else {
-                    conversationRepository.getMessagesFlow(sessionId).collect { messages ->
+                    conversationRepository.getMessagesFlow(sessionId).catch { error ->
+                        if (error is kotlinx.coroutines.CancellationException) throw error
+                        _eventFlow.emit(com.jarvis.assistant.core.diagnostics.StorageHealth.record(error))
+                    }.collect { messages ->
                         _chatTurns.value = ConversationTurnMapper.toTurns(messages)
                     }
                 }

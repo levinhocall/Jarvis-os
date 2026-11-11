@@ -139,7 +139,8 @@ class JarvisApp : Application() {
                 onApiKeySuccess = { key -> preferences.reportKeySuccess("gemini", key) }
             )
         )
-        appScope.launch {
+        appScope.launch(Dispatchers.IO) {
+            unifiedRuntime.missionCoordinator.restorePersistedState()
             unifiedRuntime.bootSelfTest(context = this@JarvisApp)
             com.jarvis.assistant.automation.mission.MissionEngine.resumeNonTerminalMissions(this@JarvisApp)
         }

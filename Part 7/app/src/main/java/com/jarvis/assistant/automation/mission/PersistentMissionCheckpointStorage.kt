@@ -12,14 +12,14 @@ import kotlin.concurrent.withLock
 class PersistentMissionCheckpointStorage(context: Context) : CheckpointStorage {
     private val lock = ReentrantLock()
     private val gson = Gson()
-    private val preferences: SharedPreferences
-
-    init {
+    // Constructing the runtime on Application.onCreate must not wait for Keystore/disk.
+    // First actual storage use is on the application's background boot/mission path.
+    private val preferences: SharedPreferences by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         val appContext = context.applicationContext
         val masterKey = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
-        preferences = EncryptedSharedPreferences.create(
+        EncryptedSharedPreferences.create(
             appContext,
             PREFERENCES_NAME,
             masterKey,

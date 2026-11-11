@@ -1,15 +1,6 @@
 name: Android 16 Runtime Verification
 on:
   workflow_dispatch:
-  push:
-    branches: [main, 'feature/**']
-    paths:
-      - '.github/workflows/android-runtime.yml'
-      - 'Part 7/app/src/**'
-      - 'Part 7/app/build.gradle.kts'
-      - 'Part 7/build.gradle.kts'
-      - 'Part 7/gradle.properties'
-      - 'Part 7/gradle/**'
 concurrency:
   group: android-runtime-${{ github.ref }}
   cancel-in-progress: true

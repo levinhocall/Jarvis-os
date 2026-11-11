@@ -16,7 +16,7 @@ class JarvisUnifiedRuntimeTest {
 
     @Before
     fun setUp() {
-        runtime = JarvisUnifiedRuntime()
+        runtime = JarvisUnifiedRuntime(missionCoordinator = com.jarvis.assistant.automation.mission.LongHorizonMissionCoordinator(com.jarvis.assistant.automation.mission.InMemoryCheckpointStorage()))
     }
 
     @Test

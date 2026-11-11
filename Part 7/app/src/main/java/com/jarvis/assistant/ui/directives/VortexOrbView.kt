@@ -36,9 +36,7 @@ class VortexOrbView(context:Context):FrameLayout(context),DefaultLifecycleObserv
         web.loadUrl("https://appassets.androidplatform.net/assets/orb.html")
     }
     fun updateState(value:String) {
-        visualState=when(value.lowercase(java.util.Locale.ROOT)) {
-            "listening","connected","interrupted"->"listening";"thinking","connecting","executing","recovering"->"thinking";"speaking"->"speaking";"error","failed"->"error";else->"idle"
-        }
+        visualState=com.jarvis.assistant.ui.orb.OrbVisualState.current(value)
         if(ready) web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$visualState');",null)
     }
     private fun pushAudio(force:Boolean=false) {
@@ -48,6 +46,7 @@ class VortexOrbView(context:Context):FrameLayout(context),DefaultLifecycleObserv
         web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setExternalAudio($level);",null)
     }
     private fun applyMotionPolicy() {
+        if(ready) web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.configure("+com.jarvis.assistant.ui.orb.OrbAppearance.configuration(context).toString()+");",null)
         if(ready) web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setReducedMotion(${com.jarvis.assistant.util.VisualMotionSettings.isReduced(context)});",null)
     }
     override fun onResume(owner:LifecycleOwner) {web.onResume();web.resumeTimers();applyMotionPolicy()}

@@ -82,6 +82,13 @@
         </LinearLayout>
 
         <!-- Search Input -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="Stored on this phone · Local similarity search; neural model not configured"
+            android:textSize="12sp"
+            android:textColor="?attr/themeTextSecondary" />
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/tilSearch"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"

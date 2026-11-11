@@ -39,7 +39,7 @@ class JarvisUnifiedRuntime(
     val router: CognitiveRouter = CognitiveRouter(),
     val offlineCoordinator: OfflineIntelligenceCoordinator = OfflineIntelligenceCoordinator(),
     val provenanceCoordinator: KnowledgeProvenanceCoordinator = KnowledgeProvenanceCoordinator(),
-    val missionCoordinator: LongHorizonMissionCoordinator = LongHorizonMissionCoordinator(),
+    val missionCoordinator: LongHorizonMissionCoordinator,
     val devAgent: SoftwareEngineeringAgent = SoftwareEngineeringAgent(),
     val evaluator: BenchmarkEvaluator = BenchmarkEvaluator()
 ) {
