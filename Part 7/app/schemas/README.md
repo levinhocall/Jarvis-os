@@ -10,7 +10,7 @@
 Historical source provenance:
 
 - V1 memory declaration: `git show d227bca^:'Part 7/app/src/main/java/com/jarvis/assistant/data/memory/MemoryEntity.kt'`, six original fields, before the v2 provenance additions.
-- V5 memory declaration: `git show 81c5ec1:'Part 7/app/src/main/java/com/jarvis/assistant/data/memory/MemoryEntity.kt'`, before v6 sync fields. The v5 database entity list is verified from `MemoryDatabase.kt` at that same commit. Chat/mission/notification entity table declarations are unchanged from those historical definitions.
+- V5 memory declaration: `git show 81c5ec1:'Part 7/app/src/main/java/com/jarvis/assistant/data/memory/MemoryEntity.kt'`, before v6 sync fields. The v5 database entity list is verified from `MemoryDatabase.kt` at that same commit. Chat/session/mission/notification declarations are now frozen as test-only Historical*V5 types from those historical definitions, with no production-entity imports. Live schema changes must never change the v5 identity hash `5a1ef08ec69aa450a6910b77c3e04905`.
 
 Only persisted entity declarations are reproduced, with renamed Kotlin test types; convenience methods and constants are omitted/inlined. Room generates actual SQL, identity hashes, indices and field metadata. To refresh these **fixtures**, run `:app:compileDebugAndroidTestKotlin`, then copy the two Historical schema JSON files into the matching `MemoryDatabase/1.json` and `5.json` paths and review their diff. Do not relabel them as original release artifacts or invent intermediate v2–v4 exports.
 

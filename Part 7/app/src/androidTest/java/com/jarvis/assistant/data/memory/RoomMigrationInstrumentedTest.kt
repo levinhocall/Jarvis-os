@@ -60,7 +60,28 @@ class RoomMigrationInstrumentedTest {
             // Reopen through a real Room v5 implementation, including Room identity validation.
             val historical = Room.databaseBuilder(context, HistoricalV5Database::class.java, name)
                 .openHelperFactory(factory()).build()
-            try { assertEquals(listOf(1L), historical.memoryDao().memoryIds()) }
+            try {
+                assertEquals(listOf(1L), historical.memoryDao().memoryIds())
+                val frozen = historical.openHelper.writableDatabase
+                frozen.query("PRAGMA table_info(chat_messages)").use { columns ->
+                    val names = mutableListOf<String>()
+                    while (columns.moveToNext()) names += columns.getString(columns.getColumnIndexOrThrow("name"))
+                    assertEquals(listOf("id", "sessionId", "role", "content", "timestamp", "status", "metadata"), names)
+                }
+                frozen.query("SELECT id,sessionId,role,content,timestamp,status,metadata FROM chat_messages").use {
+                    assertTrue(it.moveToFirst())
+                    assertEquals("msg", it.getString(0)); assertEquals("chat", it.getString(1))
+                    assertEquals("USER", it.getString(2)); assertEquals("hello", it.getString(3))
+                    assertEquals(1L, it.getLong(4)); assertEquals("SENT", it.getString(5))
+                    assertEquals("{}", it.getString(6)); assertFalse(it.moveToNext())
+                }
+                frozen.query("SELECT goal FROM missions WHERE id='mission'").use {
+                    assertTrue(it.moveToFirst()); assertEquals("Preserved", it.getString(0))
+                }
+                frozen.query("SELECT message FROM notification_history WHERE id='note'").use {
+                    assertTrue(it.moveToFirst()); assertEquals("preserved", it.getString(0))
+                }
+            }
             finally { historical.close() }
 
             val current = openRoom(name, key)
