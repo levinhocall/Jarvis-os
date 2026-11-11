@@ -1,0 +1,142 @@
+name: Part 7 verification
+run-name: Verify JARVIS OS from ${{ github.ref_name }}
+
+on:
+  push:
+    paths: ['Part 7/**', '.github/workflows/**', '.github/actions/ci-services/**']
+  pull_request:
+    paths: ['Part 7/**', '.github/workflows/**', '.github/actions/ci-services/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: part7-ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: JVM unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: 'Part 7'
+    steps:
+      - name: Fetch exact application source without external checkout action
+        working-directory: ${{ github.workspace }}
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 --filter=blob:none origin "$GITHUB_SHA"
+          git sparse-checkout set --cone "Part 7" ".github"
+          git checkout --detach FETCH_HEAD
+      - name: Verify official Gradle wrapper checksum
+        run: echo "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
+      - name: Select JDK 17 and Android 16 SDK
+        run: |
+          test -x "$JAVA_HOME_17_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+          jarvis_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          "$jarvis_sdk_root/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"
+      - name: Install locked CI SDKs (no lifecycle scripts)
+        working-directory: .github/actions/ci-services
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test local CI action
+        working-directory: .github/actions/ci-services
+        run: npm test
+      - name: Restore Gradle dependency cache
+        uses: ./.github/actions/ci-services
+        with:
+          mode: restore-cache
+          key: jarvis-gradle-${{ runner.os }}-${{ hashFiles('Part 7/**/*.gradle*', 'Part 7/gradle/wrapper/gradle-wrapper.properties', '.github/actions/ci-services/package-lock.json') }}
+      - name: Run JVM unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+      - name: Verify local-memory migration preservation
+        run: |
+          python3 scripts/verify-directive-migration.py
+          python3 scripts/verify-directive-migration.py 7 8
+      - name: Compile Android runtime tests without APK assembly
+        run: ./gradlew :app:compileDebugAndroidTestKotlin --no-daemon --stacktrace
+      - name: Reject uncommitted Room schema drift
+        run: |
+          git diff --exit-code -- app/schemas
+          jarvis_new_schemas="$(git ls-files --others --exclude-standard app/schemas)"
+          if [ -n "$jarvis_new_schemas" ]; then
+            echo "Uncommitted Room schemas detected; export and commit them with the migration."
+            exit 1
+          fi
+      - name: Upload unit reports
+        if: always()
+        uses: ./.github/actions/ci-services
+        with:
+          mode: reports
+          kind: unit
+          name: unit-reports
+      - name: Save dependency cache on successful main pushes
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: ./.github/actions/ci-services
+        with:
+          mode: save-cache
+          key: jarvis-gradle-${{ runner.os }}-${{ hashFiles('Part 7/**/*.gradle*', 'Part 7/gradle/wrapper/gradle-wrapper.properties', '.github/actions/ci-services/package-lock.json') }}
+  lint:
+    name: New-issue lint gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: 'Part 7'
+    steps:
+      - name: Fetch exact application source without external checkout action
+        working-directory: ${{ github.workspace }}
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 --filter=blob:none origin "$GITHUB_SHA"
+          git sparse-checkout set --cone "Part 7" ".github"
+          git checkout --detach FETCH_HEAD
+      - name: Verify official Gradle wrapper checksum
+        run: echo "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
+      - name: Select JDK 17 and Android 16 SDK
+        run: |
+          test -x "$JAVA_HOME_17_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+          jarvis_sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          "$jarvis_sdk_root/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"
+      - name: Install locked CI SDKs (no lifecycle scripts)
+        working-directory: .github/actions/ci-services
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test local CI action
+        working-directory: .github/actions/ci-services
+        run: npm test
+      - name: Restore Gradle dependency cache
+        uses: ./.github/actions/ci-services
+        with:
+          mode: restore-cache
+          key: jarvis-gradle-${{ runner.os }}-${{ hashFiles('Part 7/**/*.gradle*', 'Part 7/gradle/wrapper/gradle-wrapper.properties', '.github/actions/ci-services/package-lock.json') }}
+      - name: Run New-issue lint gate
+        run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+      - name: Reject uncommitted Room schema drift
+        run: |
+          git diff --exit-code -- app/schemas
+          jarvis_new_schemas="$(git ls-files --others --exclude-standard app/schemas)"
+          if [ -n "$jarvis_new_schemas" ]; then
+            echo "Uncommitted Room schemas detected; export and commit them with the migration."
+            exit 1
+          fi
+      - name: Upload lint reports
+        if: always()
+        uses: ./.github/actions/ci-services
+        with:
+          mode: reports
+          kind: lint
+          name: lint-reports
+      - name: Save dependency cache on successful main pushes
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: ./.github/actions/ci-services
+        with:
+          mode: save-cache
+          key: jarvis-gradle-${{ runner.os }}-${{ hashFiles('Part 7/**/*.gradle*', 'Part 7/gradle/wrapper/gradle-wrapper.properties', '.github/actions/ci-services/package-lock.json') }}
