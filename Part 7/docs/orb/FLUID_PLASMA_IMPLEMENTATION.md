@@ -45,3 +45,30 @@ M1 gate: `:app:testDebugUnitTest --tests '*PlasmaPresentationTest' --no-daemon
 speech, queued vs audible output, interruption conflation, old session rejection,
 stale envelopes, TTS confidence and playback during transport disconnect.
 Existing Kotlin/Room processor warnings remain; they are not suppressed.
+
+## M2 renderer gate
+
+Original `plasma-orb.js` uses the packaged Three.js with one analytic shaded volume,
+bounded four-octave noise, no full ray march, no eye/rings/particles. Mode is selected
+before allocating legacy geometry. Canvas fallback extends PremiumOrbView. OrbWebHost
+owns local-only loading, failure signal, visibility, coalesced presentation and disposal.
+The only JavaScript interface method reports renderer failure; it cannot control Android.
+Existing preferences default to the legacy scene; fluid plasma is a new explicit selection.
+
+Executed: `node scripts/test-plasma-motion.cjs` (14 checks PASS),
+`node scripts/test-eye-behavior.cjs` (PASS), and
+`node scripts/test-plasma-webgl.cjs` (PASS). Desktop Chromium/SwiftShader compiled/rendered
+one shader program, all eight states, epoch reset, hidden/reduced-motion pause, context
+loss, idempotent disposal, forced initialization failure and legacy scene loading.
+A browser screenshot was inspected. This is not Android visual/performance certification.
+Native fallback rendering/device context-loss handoff: NOT TESTED; no Android device/emulator
+is available. Native compile is included in the subsequent Gradle gate/final verification.
+
+M2 native compile + M3 gate: first Gradle attempt failed because WebViewClientCompat's
+platform onReceivedError overload is final. Corrected to WebResourceErrorCompat.
+Rerun `:app:testDebugUnitTest --tests '*PlasmaPresentationTest' --tests
+'*PcmEnvelopeFollowerTest' --tests '*LoudspeakerBargeIn*' --tests '*MicrophoneOwnershipTest'
+--no-daemon --offline` completed successfully in 3m 25s. Native host/fallback compiled.
+Display-only follower consumes existing PCM, full-scale RMS, -55 dB gate/soft knee,
+35 ms attack and 200 ms release. Existing VAD thresholds are unchanged. No second recorder.
+Phone microphone/noise/route measurements remain NOT TESTED.

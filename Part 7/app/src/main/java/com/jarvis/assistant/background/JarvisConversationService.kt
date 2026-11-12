@@ -1711,7 +1711,13 @@ class JarvisConversationService : Service() {
             }
         }
 
+        val microphoneEnvelope = com.jarvis.assistant.audio.PcmEnvelopeFollower()
         val recorder = AudioRecorder { chunk, amplitude, frequencyData ->
+            val displayTime = SystemClock.elapsedRealtime()
+            val envelope = microphoneEnvelope.accept(chunk, displayTime, chunk.isNotEmpty())
+            presentationStore.update(presentationToken) {
+                it.copy(microphone = VoiceEnvelope(if (it.muted) 0f else envelope, displayTime, it.interruptionGeneration))
+            }
             if (_isSessionOn.value) {
                 val now = System.currentTimeMillis()
 
