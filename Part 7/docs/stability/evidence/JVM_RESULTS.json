@@ -1,0 +1,942 @@
+{
+  "date_utc": "2026-11-12",
+  "kind": "Executed JVM tests, not instrumentation/device results",
+  "task": ":app:testDebugUnitTest",
+  "totals": {
+    "tests": 561,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "suites": [
+    {
+      "name": "com.jarvis.assistant.audio.AdaptiveVadEngineTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "4e50e280cdb7f4cfc0519a5c36cc7eed928e752d87050b6f621dea25e9e72083",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.AudioFrequencyOverflowTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "988adc9c94a8e2764b3010ede70fa2a1dee52f8a5f1bc53493cd64acc18e79e5",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.AudioRecoveryBudgetTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "fcb9282f7cb9dc07eab0f47186ae17b1ff42f049b9c2ba70d284fd7a6b61099e",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.AudioRoutingAndStabilityTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "61aa5d93e79392d84578d88db1ca98c624b47a0bb5b893b6f73218140f67b6ac",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.BoundedAudioResponseTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "0b5f13f69dfe72268224455c682125feeeae2d207327aaf8e83355b713395664",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.LoudspeakerBargeInRegressionTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "5e931f25ed0e33f98df2a935263a686fd156bb9a8320827316772208319bbf25",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.LoudspeakerBargeInTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "137516651577702ac29ab7e574de28f9243a5229dd835de3366461752ac12dbf",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.MicrophoneOwnershipTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "00777087849dad50b598c48a61fb762a333fda74c0302bbb563ea27658fa623e",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.OwnerVoiceSecurityTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "e4642601fe916c9442316fd47271ea77661fb72fd8804c4a3201c0e9ecd122c8",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.PcmPlaybackQueueTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "2fa5903012ae163838f854b614ffc28e3f87978781eb10298249157943e3649c",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.PcmWritePumpTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "5a83439fe24c9cd9d58ef7db58b27c88b89621a0ec6ed3f5382d2a49864859b7",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.VoiceInterruptionCoordinatorEnhancedTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "221d3596ef5cd271bf13ec55df7e16ee5e87a1777bf129ed87e3381832d661f5",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.WakePhraseMatcherTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "547d1d9ad1b1adf178abedfa66991f0d2c4d4d0c761a1835d8fec30a257563c9",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.wake.ModelArchiveTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "f164f1aba88d98b72097c987edd95f79f65511ebf401bc498fb008c22fb988df",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.audio.wake.WakeMatcherTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "8dd6a917b424ab0748a865443db1673966be58a2ac17a9c3216d351739150207",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.accessibility.AccessibilityCallbackFailureTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "24672816f4f1dd811d1257f66b5309021772662e3ada84dbbc27cd84077deeb1",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.accessibility.AccessibilityGestureGateTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "fd2d5ac3068eacc17996aec325dbf9adafbdf722b4bdffd35ea05e1872078000",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.accessibility.AccessibilityHealthModelTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "79e03d5602d209158d3624fb3f86367bada25785b75669249fd939ce4c7ca55a",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.accessibility.AccessibilityLegacyTargetPolicyTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "aa6d357baf1e516753e4bc4bd1e5d29a352d010eba51f3dfdeef0058f73a7755",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.accessibility.AccessibilitySessionHealthTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "51299885212239d79a5dad7f9532cf4986fbea30a60b7e3511b8825879f36b6c",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.accessibility.AccessibilityTraversalBudgetTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "ea869276496567551b09948d5f1be2772601edf1f47c3e01be2c77ecc0d68140",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.accessibility.AccessibilityWindowPolicyTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "9012786c7a17b6687b5a8b1e5edb2bddd3655bc2813ee6a54472aa72ee52cb56",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.accessibility.BoundedTreeTraversalTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "b54cc14259e49571654b261c47cff169a374e126cec31d5d15ea9b3f1afd7d66",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.ActionObservationStabilityTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "b56f7e8b1c1ebcda3afdb7532891bfa8cdcc717ac38faf9ca8f6551623134d31",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.AgentTaskEngineTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "6b51814c7a760a402d0c46eae47325871cef0d2dcab333a74c4e76e962c64760",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.BargeInAndNavigationTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "34c6fe1b39cbaa45ea971812cfc5ae212b1d45bf334e068c63238eabd1990d92",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.CancellableCouncilRequestTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "075abd896d43e8a1c4b891b3e0ca192b1c560d2cd171323d35e53b349f534993",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.GeminiFunctionArgumentsTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "3cef2f7dfca958c7d01b7c6a2689919492c9afa876047f26a06baed016e7f283",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.LlmPlannerTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "818bec573580fca3400c5756901677149d992f5f53d2a5175afbf38528d700ab",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.Phase6To10UpgradeTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "511178bed486aef9fba5effec30f94e95e995f6ce9af70b07f480a1d2e917763",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.SelfHealingAgentLoopTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "8b414a76d1cb508beb1e1b5eb9e111cb6574e2d2e03b512187ea0f89f34f03cb",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.SerializedActionExecutorTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "209cc583e612b92da13eb309e4ab58e425477883292ac78fe9eccb446fa0a931",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.agent.TonyStarkProtocolsAndReflexTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "9e251b5ed3b479ecf89ab222c3689543ca817df5d6eba38549dce74df7e46ed0",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.command.MobileUtilityCommandParserTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "2c567b3f5b7703e6b12cf305d3b20c198d0ac329da9f7706a97411674ef3801e",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.contacts.ContactChoiceResolverTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "8ddc4dfc4331ef6e1df1a24ff4951daa3a9a9e435e2b189681d1fdfae627368d",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.contacts.ContactDisambiguationTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "16f35e2261d1408a3d2ba15d0d5ed1d60294f3e7d8018401d98aa54771efedf3",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.contacts.WhatsAppContactSelectionTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "295e3d776b746300a73dcdf0a158e07a401473f0a4ba20156b73dcd3a392a3df",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.contacts.WhatsAppDraftContextTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "5596d355b98bc7a25c35689858b033e7cb57b5320dfd20de1ec23fd55fb5fb71",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.council.BoundedAgentRunnerTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "2042e62e321a37a4d3a78e97dc0559ae5c3d81c94215b7417d2cac1e3ca49fc3",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.council.MultiAgentCouncilTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "78ece8a26954ba627edb7457987b472e94072f5086b311d7dec5c085fc29fb5b",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.dev.AutonomousSoftwareEngineeringAgentTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "1b9ece5537aa1a4488172184a3c3e41fafa5de7c987594b12389a6c264e70b0e",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.dev.DevEnvironmentAndTermuxBridgeTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "xml_sha256": "e9301d1f27ebcf7bd4267fb502219de48509a24200f74bad71bfdcc0aac3c3a4",
+      "skipped_cases": [
+        "detectEnvironment correctly identifies host dev environment"
+      ]
+    },
+    {
+      "name": "com.jarvis.assistant.automation.dev.SoftwareEngineeringAgentTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "1dc72d48a248e101d801c96142411d1148e6fd3191f840d2246a7f810d15e20d",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.grounding.ScreenGroundingEngineTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "c14bfe05b3ad5727501c5cac4f9a14f3619f4351817d4bd673cf2b32d20378e0",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.grounding.ScreenIntelligenceTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "1a4b3eb565f3b186d12a18af81a4d19b4cd5c7f4ea60cc1621701573c1f7c7c4",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.integration.UniversalActionTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "9a9667291086618f25009118df4bbbe5356a401cf71eb745e0b5c50a69dab5c1",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.intelligence.UniversalInformationTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "367c81bd3e1e4a47a9fbc9b6ca16dba3150f5c35d885646b2542a330a9befc86",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.mission.ExplicitMessageAuthorizationTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "8bd2626715003253b6a3e1caca58d421b7c200ce4f84e2118fdd7ba50c81ddbf",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.mission.LongHorizonMissionTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "e4586192f750555a981353f00047dee4da2af1e385614f34f2d0b0e66443841c",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.mission.MissionActionIdentityTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "2e8c4b1a2635bb677c77d5dc8b39c0642d66f6e9d6165577c89552ea172020df",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.mission.MissionApprovalCommandParserTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "e83f84d1df2164ceb98d5f876ccdf57817ea6f82d8476ec0155baf468e98ecb3",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.mission.MissionEngineTest",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "ea7ad58fb35fd0795624e34f3b39ce3fe47ab9b554b24a9267f9e1e64987d32c",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.mission.MissionRoutePolicyTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "2629c0cfe48af8b25f3c0fec212a5c8a05a4b6332cbeab1ed060724458e6721b",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.mission.MissionStartupLoadingTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "661c847c29e083dff87fe2b07abe1138b04947589de8adea86be486dcbe63f07",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.mission.ToolArgumentValidatorTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "35c1b674859cb8991405b813fb04cd2e01139f1f2a698ed803d398567a6a113a",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.notification.NotificationArchivePolicyTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "2c75c4caa9de9aae12f3fe64ec58895de3e434633a02478b58b0f729eb31b032",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.notification.NotificationPrivacyFilterTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "37c225569417c0990c7a00c5f2ffb9aadd17700e28dccf6fb73bc13169a50a24",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.offline.OfflineIntelligenceRouterTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "d6681eedcd2eeed7063087a781647d2f0e230e2c71bccd74212029510116d6d4",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.offline.OfflineIntelligenceTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "3725c3ddbc5a1d04211bf2a94ed9c0458bb42cb8793f3f745a886cc08c63e954",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.proactive.ProactiveIntelligenceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "9628999a38ffcd0d01b8df5f138adfce0001854e22b7a216ef312d44ab8faf4e",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.provenance.KnowledgeProvenanceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "41b143c00844825d5192f29c117910642585c02a836f6eba65de2dd311640551",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.reflex.OfflineReflexExecutorTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "86eb082c2339026bc6a1080531a6d7453c300590f3cec84bbf602ca20040ffff",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.routing.CognitiveRouterAndKeyPoolTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "38a25cf886c6b8e447baf946bffb62a7627b62b124734a9becb08c29a19acbd4",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.routing.CognitiveRouterTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "a7cb836d35e55214440dd18ac449c2943ea0221be56917fe441c01e8f7398fbd",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.automation.skills.SkillForgeTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "52fbd998c4da01d35d45fdd6e3c72d49db7b6912813db9a2ed490cd5d19ef129",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.background.ConversationServiceCollaboratorsTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "0526f0c6e3ff5d966780039c681626800dd71302e2cf75bd04219b9951df4b99",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.core.ambient.AmbientExperienceTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "eed104dcc5a59e89793f9a1f31fb25fce2a156f4a5c8d86b8640699d89908d23",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.core.eval.BenchmarkEvaluatorTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "18aef2f508f090e9e5f92fa52da34e7e39c11e6e1e16becf635303ce66143f84",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.core.reliability.ReliabilityTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "eca17a87f3b866b3f542f7d0bfae7f6dfdd00c0d616166ee6eae91edf05794d9",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.core.runtime.JarvisUnifiedRuntimeTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "67ac54a66f727144b7f5edd2a72c4bc2389b2d20873414e43e1393046c76b08e",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.core.world.WorldModelTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "0904fb22ba8a7d907c7f6064e428b421281f6adf41c44b4b086faca32631b0d6",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.chat.ConversationTurnMapperTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "01221b9813ca10754b0f71fcb099a3e7dcb81116bfc513230f8d354faaaebfa4",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.chat.LegacyChatMigrationTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "5be63b310994194fb527eea20fc23585f87ddf5e7a957ac658226cbd2495c260",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.chat.MultiChatAndMemoryEngineTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "d9477c62a7493774a545f8c4a8b6830e95e85a7f25aaa3f2d5fc5d9bad223a7a",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.directives.LearningPolicyTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "73300b03b1b1e0935a3df8700c8264e5f4b4ef7f8ec1e519967e0519a102d564",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.memory.DatabaseReadinessTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "f2d0b17f209021188579b2c5dfdb6e0aa9f0f36ac56b1079d0c6c6935f22a064",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.memory.DatabaseSwapRecoveryPolicyTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "14f0e4cc4091f2de92cfa6049775b824e54ff1c0134ddac1e24f9fa5f843c99b",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.memory.EpisodicVectorMemoryTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "ec2cfef184e6c2ba234c8df07a79e22a643a933357c41a1c77d1c5d246f25b6a",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.memory.LocalOnlyEmbeddingTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "ebf9119325f2e71db4436edc6755b70d5c69722f722e6d8401d3ed040f0da25d",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.memory.MemoryBackupPolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "9b2d0e2264d40175fc3c790f7debb0180a198973990baab7d14612b3fe7ae734",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.memory.MultilingualMemoryRetrievalTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "1599faceb5c62c37c9e44c0221b3038bdadbd686eaadf4445a13e9acc5ec54b7",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.memory.PersistentMemoryTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "0b645a050942837f1ae418521f8ec3c705e74a78b6c98c6a5efcbbe253cb4c33",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.mission.MissionPersistenceAndTriggerTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "0d7bf041bfcf5e9d3a871d7fa7b6dda96097e03f5813ae9b163758c24a94f46f",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.model.ConversationStateTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "6e808673955047e3352a5b4f4feccb9cc30a837c504da6683f1b4aaf3349e10f",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.personalization.AdaptivePersonalizationTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "1524f2c7cb86f8b2ea98356a7ce1c0e49fbe31d5a556025bc1cc7ea7f5cc88c3",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.data.personalization.AssistantPersonalityTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "49edf11b66b4511a5feb237cb62e19199be7fa422b21bb443fbce681c6b729fe",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.emergency.FallCandidateDetectorTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "0c94d44ee06fdfdfc18476408a1b964bc7798b33e96a7c8ae01b699ddceeeb21",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.evolution.JarvisEvolutionMasterTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "e7b6f919545a2423684d64ecbe05da25ed8f871082992203fd17e3490e566cff",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.network.GeminiModelCatalogTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "d176027af999ffdca6e113a46f45c46e3e6ffc961f9d2918d00f7f15e8686d8e",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.network.GeminiTransportEpochTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "ad9219ec64d6802ed816df13b223074d77975e81a064390a9a71ff350a3348e3",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.network.LiveSessionResumptionTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "29a47914ce676081c42bad550ab9b6fc944039cac408fc47ddbd67a5bc4cb108",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.network.LiveToolContractsTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "a9b3a202c8435ed11a4b444bf374e5a31189210b5cbbe57ee07830a192a58814",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.security.AppBrandingAndPersonaTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "dcf40ca2d4b31030e993e54a35d65fe0e677690083de9b6828d7a6b26e82eef7",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.security.sandbox.CapabilitySandboxTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "1060027890d3614683ae142e021ee2b486f5be26ffc4a43e53276f55de7adfef",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.ui.agent.OverlayDockingPolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "a24dcff518cfb9b5025d41003cd25b9e68938b81e0345bd2e7ed01f5fc898ba5",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.ui.aura.AutonomyPolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "b56ac8bd3f92f39ce222de364840c3e5a068210078b1b7370dd7168f7754043b",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.ui.orb.OrbVisualStateTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "8b395665c4815ed40784fb1a64ef429bfb92c01737f60c7ab597aefb1e9c8891",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.ui.orb.VoiceCoreAudioTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "2ff148e396c4a2caa65c5601813da1b471dce752d10be4d92a43a690ee4043bd",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.ui.vision.ImageDecodeSizingTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "6dd83b867772d399a87a0b4579a418ee1115796954c528bbc0af27e58f05d3fb",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.util.DirectivePoliciesTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "e8cdc2b6cf7a74bc8ddedb53b36e5432114328ee5c79ef975794c19986dcaff0",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.vision.CameraVisionRequestSecurityTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "2a1af9b5147be2752040e02e50472505e053b8e46d4336eb52430e71076fde1f",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.vision.SensitiveInputPolicyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "39b9e4a341ced07ecb147570fc1b467d81c04f331a5bcb032af3fe963c2eedf0",
+      "skipped_cases": []
+    },
+    {
+      "name": "com.jarvis.assistant.vision.UserConsentPolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "64782d834d31e30fd89a5541ffe83dd2b46a747c6e51da8985ee622c1fdf1e26",
+      "skipped_cases": []
+    }
+  ]
+}
