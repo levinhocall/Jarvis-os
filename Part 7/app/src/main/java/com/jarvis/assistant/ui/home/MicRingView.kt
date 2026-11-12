@@ -37,6 +37,8 @@ class MicRingView @JvmOverloads constructor(
     private var lastTick = 0L
     private var ticker: ValueAnimator? = null
     @Volatile private var level = 0f
+    private var smoothLevel = 0f
+    private var ripplePhase = 0f
 
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -106,7 +108,14 @@ class MicRingView @JvmOverloads constructor(
                 val now = SystemClock.uptimeMillis()
                 val dt = if (lastTick == 0L) 16L else (now - lastTick).coerceIn(1L, 64L)
                 lastTick = now
-                clock += dt / 1000f
+                val sec = dt / 1000f
+                clock += sec
+                // Fast attack, slow release, so ripples follow the voice without flicker.
+                val target = level
+                val tau = if (target > smoothLevel) 0.05f else 0.25f
+                smoothLevel += (target - smoothLevel) * (1f - kotlin.math.exp(-sec / tau))
+                // Phase advances faster with louder audio (no jump when speed changes).
+                ripplePhase = (ripplePhase + sec * (0.45f + smoothLevel * 1.6f)) % 1f
                 invalidate()
             }
             start()
@@ -159,18 +168,20 @@ class MicRingView @JvmOverloads constructor(
         }
 
         // Glow
-        glowPaint.alpha = (255 * dim * (if (active) 0.55f + 0.25f * pulse + 0.2f * level else 0.5f)).toInt().coerceIn(0, 255)
+        glowPaint.alpha = (255 * dim * (if (active) 0.55f + 0.25f * pulse + 0.2f * smoothLevel else 0.5f)).toInt().coerceIn(0, 255)
         canvas.drawCircle(cx, cy, outer, glowPaint)
 
         // Ripples while listening / speaking
         if (mode == Mode.LISTENING || mode == Mode.SPEAKING) {
-            for (i in 0..1) {
-                val p = (clock * 0.7f + i * 0.5f) % 1f
+            val reach = 0.55f + 0.45f * smoothLevel
+            val strength = 0.45f + 0.55f * smoothLevel
+            for (i in 0..2) {
+                val p = (ripplePhase + i / 3f) % 1f
                 rippleOrArcPaint.shader = null
                 rippleOrArcPaint.color = if (mode == Mode.SPEAKING) GOLD else PINK
-                rippleOrArcPaint.alpha = ((1f - p) * 120).toInt().coerceIn(0, 255)
-                rippleOrArcPaint.strokeWidth = strokeW * 0.5f
-                canvas.drawCircle(cx, cy, ringR + (outer - ringR) * p, rippleOrArcPaint)
+                rippleOrArcPaint.alpha = ((1f - p) * 150 * strength).toInt().coerceIn(0, 255)
+                rippleOrArcPaint.strokeWidth = strokeW * (0.4f + 0.5f * smoothLevel)
+                canvas.drawCircle(cx, cy, ringR + (outer - ringR) * p * reach, rippleOrArcPaint)
             }
         }
 
