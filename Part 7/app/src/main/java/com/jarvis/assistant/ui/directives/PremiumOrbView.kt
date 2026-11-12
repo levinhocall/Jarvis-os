@@ -8,6 +8,57 @@ import kotlin.math.*
 /** Native aurora sphere; cached shaders, bounded 30fps and actual microphone amplitude. */
 class PremiumOrbView(context: Context) : View(context) {
     var level = 0f
+    var plasmaMode = false
+    var renderingActive = false
+        set(value) { field = value; if (value) invalidate() }
+    private var presentation = com.jarvis.assistant.data.model.VoicePresentationSnapshot()
+    private val fluidPath = Path()
+    private val directions = FloatArray(192) { index ->
+        val angle = (index / 2) * (Math.PI * 2 / 96)
+        if (index % 2 == 0) cos(angle).toFloat() else sin(angle).toFloat()
+    }
+    private var motionSeconds = 0f
+    private var previousFrame = 0L
+    private var smoothedLevel = 0f
+    fun submit(facts: com.jarvis.assistant.data.model.VoicePresentationSnapshot) {
+        if (facts.sessionId != presentation.sessionId || facts.interruptionGeneration != presentation.interruptionGeneration) smoothedLevel = 0f
+        presentation = facts
+        invalidate()
+    }
+    private fun drawPlasma(canvas: Canvas) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val reduced = com.jarvis.assistant.util.VisualMotionSettings.isReduced(context)
+        val dt = if (previousFrame == 0L) 0f else ((now - previousFrame) / 1000f).coerceIn(0f, .08f)
+        previousFrame = now
+        if (!reduced) motionSeconds += dt
+        val state = com.jarvis.assistant.ui.orb.OrbPresentationMapper.map(presentation, now)
+        val amplitude = if (reduced) 0f else max(state.output, state.mic * if (presentation.confirmedSpeech) .8f else .18f)
+        smoothedLevel += (amplitude - smoothedLevel) * (1f - exp(-dt / .045f))
+        val x = width / 2f; val y = height / 2f
+        val r = min(width, height) * (.32f + smoothedLevel * .018f)
+        paint.style = Paint.Style.FILL; paint.shader = halo; paint.alpha = 130
+        canvas.drawCircle(x, y, r * 1.55f, paint)
+        for (layer in 0..3) {
+            fluidPath.rewind()
+            for (i in 0 until 96) {
+                val a = i * (Math.PI * 2 / 96).toFloat()
+                val modulation = if (reduced) 0f else .025f * sin(a * 3 + motionSeconds * .23f + layer) +
+                    .018f * sin(a * 5 - motionSeconds * .17f)
+                val radius = r * (1f - layer * .14f + modulation)
+                val px = x + directions[i * 2] * radius
+                val py = y + directions[i * 2 + 1] * radius
+                if (i == 0) fluidPath.moveTo(px, py) else fluidPath.lineTo(px, py)
+            }
+            fluidPath.close()
+            paint.shader = core; paint.alpha = if (layer == 0) 215 else 65
+            canvas.drawPath(fluidPath, paint)
+        }
+        if (renderingActive && isShown && windowVisibility == VISIBLE && !reduced) {
+            val saver = context.getSystemService(android.os.PowerManager::class.java).isPowerSaveMode ||
+                com.jarvis.assistant.JarvisApp.instance.preferences.powerProfile == "saver"
+            postInvalidateDelayed(if (saver) 66L else 33L)
+        }
+    }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private var core: Shader? = null
@@ -33,6 +84,7 @@ class PremiumOrbView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (paletteKey != com.jarvis.assistant.JarvisApp.instance.preferences.orbPreset) rebuild()
+        if (plasmaMode) { drawPlasma(canvas); return }
         val t = (android.os.SystemClock.uptimeMillis()-started)/1000f
         val amplitude = if (level.isFinite()) level.coerceIn(0f,1f) else 0f
         val cx=width/2f; val cy=height/2f; val r=min(width,height)*(.285f+amplitude*.035f)
@@ -55,7 +107,7 @@ class PremiumOrbView(context: Context) : View(context) {
             paint.alpha=60+(i*19%150)
             canvas.drawCircle(cx+cos(a)*radius,cy+sin(a)*radius*.83f,resources.displayMetrics.density*(.6f+i%3*.35f),paint)
         }
-        if (isShown && windowVisibility == VISIBLE && !com.jarvis.assistant.util.VisualMotionSettings.isReduced(context)) {
+        if (renderingActive && isShown && windowVisibility == VISIBLE && !com.jarvis.assistant.util.VisualMotionSettings.isReduced(context)) {
             val saver = com.jarvis.assistant.JarvisApp.instance.preferences.powerProfile == "saver"
             postInvalidateDelayed(if (saver) 100L else 33L)
         }

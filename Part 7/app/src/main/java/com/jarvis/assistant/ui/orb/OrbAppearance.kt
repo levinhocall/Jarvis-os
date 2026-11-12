@@ -7,6 +7,10 @@ import com.jarvis.assistant.JarvisApp
 import org.json.JSONObject
 
 object OrbAppearance {
+    /** Missing key preserves the installed legacy renderer and all old appearance options. */
+    fun rendererMode(): String = if (runCatching { JSONObject(JarvisApp.instance.preferences.orbEyeOptions)
+        .optString("renderer") }.getOrNull() == "fluid_plasma") "fluid_plasma" else "legacy"
+
     fun configuration(context: Context): JSONObject {
         val prefs = JarvisApp.instance.preferences
         val stored = runCatching { JSONObject(prefs.orbEyeOptions) }.getOrDefault(JSONObject())
