@@ -36,7 +36,7 @@ import org.vosk.android.SpeechService
 import com.jarvis.assistant.audio.AudioPlayer
 import com.jarvis.assistant.audio.AudioRecorder
 import com.jarvis.assistant.audio.VoiceFlightRecorder
-import com.jarvis.assistant.data.model.ConversationState
+import com.jarvis.assistant.data.model.*
 import com.jarvis.assistant.network.GeminiLiveWebSocket
 import com.jarvis.assistant.ui.home.MainActivity
 import com.jarvis.assistant.util.PermissionHelper
@@ -104,6 +104,9 @@ class JarvisConversationService : Service() {
 
         @Volatile private var activeInstance: JarvisConversationService? = null
 
+        private val presentationStore = VoicePresentationStore()
+        val voicePresentation = presentationStore.snapshots
+
         private val _isSessionOn = MutableStateFlow(false)
         val isSessionOn: StateFlow<Boolean> = _isSessionOn.asStateFlow()
 
@@ -149,6 +152,9 @@ class JarvisConversationService : Service() {
         fun setMicMuted(muted: Boolean) {
             activeInstance?.let { service ->
                 service.audioPipelineManager?.setMuted(muted) ?: service.audioRecorder?.setMuted(muted)
+                presentationStore.update(service.presentationSessionId) {
+                    it.copy(muted = muted, confirmedSpeech = false, microphone = VoiceEnvelope())
+                }
             }
         }
 
@@ -288,7 +294,12 @@ class JarvisConversationService : Service() {
     private val currentTurnUserText = StringBuilder()
     private var lastUserSpeechDetectedTime = 0L
     private var lastPlaybackEndTime = 0L
+    @Volatile private var presentationSessionId = 0L
     private var hasSpeechInCurrentUtterance = false
+        set(value) {
+            field = value
+            presentationStore.update(presentationSessionId) { it.copy(confirmedSpeech = value) }
+        }
     private var hasSignalledUtteranceEnd = false
     private var consecutiveVoicedFrames = 0
     private var totalVoicedFramesInCurrentUtterance = 0
@@ -483,6 +494,21 @@ class JarvisConversationService : Service() {
     }
 
     private fun setConversationState(state: ConversationState) {
+        presentationStore.update(presentationSessionId) {
+            it.copy(
+                pendingResponse = when (state) {
+                    ConversationState.THINKING, ConversationState.EXECUTING -> true
+                    ConversationState.IDLE, ConversationState.LISTENING, ConversationState.ERROR,
+                    ConversationState.FAILED, ConversationState.INTERRUPTED -> false
+                    else -> it.pendingResponse
+                },
+                interrupted = state == ConversationState.INTERRUPTED,
+                errorReason = when (state) {
+                    ConversationState.ERROR, ConversationState.FAILED -> _liveError.value?.message ?: "Voice session error"
+                    else -> null
+                }
+            )
+        }
         if (_conversationState.value != state) {
             _conversationState.value = state
             updateNotification()
@@ -527,6 +553,7 @@ class JarvisConversationService : Service() {
         val interruptionAccepted =
             com.jarvis.assistant.audio.VoiceInterruptionCoordinator.requestBargeIn(source) { newEpoch ->
                 // 1. Advance generation counter and suppress late streaming audio chunks
+                presentationStore.interrupt(presentationSessionId)
                 activePlaybackGeneration.set(newEpoch)
                 suppressAudioUntilTurnComplete = true
 
@@ -976,6 +1003,8 @@ class JarvisConversationService : Service() {
 
         _liveError.value = null
 
+        val presentationToken = presentationStore.begin(preferences.isMicMuted)
+        presentationSessionId = presentationToken
         _isSessionOn.value = true
         _isStandby.value = false
         acquireWifiLock()
@@ -1046,6 +1075,7 @@ class JarvisConversationService : Service() {
             if (apiKey.isBlank()) {
                 withContext(Dispatchers.Main.immediate) {
                     if (_isSessionOn.value) {
+                        presentationStore.update(presentationToken) { it.copy(connection = VoiceConnection.OFFLINE) }
                         _connectionStatus.value = "OFFLINE"
                         setConversationState(ConversationState.LISTENING)
                         updateNotification()
@@ -1068,6 +1098,7 @@ class JarvisConversationService : Service() {
             } catch (error: Exception) {
                 withContext(Dispatchers.Main.immediate) {
                     if (_isSessionOn.value) {
+                        presentationStore.update(presentationToken) { it.copy(connection = VoiceConnection.OFFLINE) }
                         _connectionStatus.value = "OFFLINE"
                         _liveError.value = JarvisLiveError(
                             title = "MODEL DISCOVERY UNAVAILABLE",
@@ -1095,6 +1126,14 @@ class JarvisConversationService : Service() {
                                 voiceSessionManager?.onSessionEstablished()
                             } else if (status == "OFFLINE" && voiceSessionManager?.isLive == true) {
                                 voiceSessionManager?.onConnectionDropped("Gemini Live WebSocket transport disconnected")
+                            }
+                            presentationStore.update(presentationToken) {
+                                it.copy(connection = when {
+                                    status == "LIVE" || status == "CONNECTED" -> VoiceConnection.LIVE
+                                    status.contains("RECONNECT", true) -> VoiceConnection.RECONNECTING
+                                    status.contains("CONNECT", true) || status.contains("CONFIGUR", true) -> VoiceConnection.CONNECTING
+                                    else -> VoiceConnection.OFFLINE
+                                })
                             }
                             _connectionStatus.value = status
                             ConversationState.fromConnectionStatus(status)?.let { lifecycleState ->
@@ -1963,6 +2002,9 @@ class JarvisConversationService : Service() {
         recorder.onCaptureFailure = { failure ->
             serviceScope.launch(Dispatchers.Main.immediate) {
                 if (audioRecorder === recorder && _isSessionOn.value) {
+                    presentationStore.update(presentationToken) {
+                        it.copy(capturing = false, permissionReason = "Microphone stopped: ${failure.name}")
+                    }
                     _events.tryEmit("Voice stopped (${failure.name}). Check microphone permission/audio device and reopen Voice Mode.")
                     fullStop()
                 }
@@ -1987,6 +2029,9 @@ class JarvisConversationService : Service() {
             if (!_isSessionOn.value || audioPipelineManager !== pipeline) {
                 pipeline.stopRecording()
                 return@launch
+            }
+            presentationStore.update(presentationToken) {
+                it.copy(capturing = microphoneStarted, permissionReason = if (microphoneStarted) null else "Microphone unavailable")
             }
             if (!microphoneStarted) {
                 withContext(Dispatchers.Main.immediate) {
@@ -3638,6 +3683,8 @@ class JarvisConversationService : Service() {
         inactivityJob = null
         cancelAllActiveTools()
         com.jarvis.assistant.automation.agent.AgentTaskEngine.resetForSession()
+        presentationStore.stop(presentationSessionId)
+        presentationSessionId = voicePresentation.value.sessionId
         _isSessionOn.value = false
         finalizeTurn()
 
