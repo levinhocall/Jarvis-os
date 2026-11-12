@@ -196,6 +196,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="TAP ORB TO START"
+                android:accessibilityLiveRegion="polite"
                 android:textColor="?attr/themeTextPrimary"
                 android:textSize="12sp"
                 android:letterSpacing="0.10"
@@ -208,9 +209,9 @@
             android:id="@+id/tvHoldHint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Hold button or orb to power off"
+            android:text="Hold the orb to power off"
             android:textColor="?attr/themeTextMuted"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:fontFamily="sans-serif"
             android:layout_marginTop="5dp" />
     </LinearLayout>
@@ -562,6 +563,7 @@
         android:layout_marginEnd="24dp"
         android:elevation="32dp"
         android:translationZ="32dp"
+        android:accessibilityLiveRegion="assertive"
         android:clickable="true"
         android:focusable="true"
         android:visibility="gone"
