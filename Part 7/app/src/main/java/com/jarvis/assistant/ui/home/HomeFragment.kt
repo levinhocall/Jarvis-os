@@ -545,7 +545,7 @@ class HomeFragment : Fragment() {
                             setOrbState("sleeping")
                             binding.tvListeningStatus.text = "JARVIS OFF • TAP TO START"
                             binding.tvListeningStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_subtle))
-                            binding.tvHoldHint.text = "Tap mic or orb to power on"
+                            binding.tvHoldHint.text = "Tap the orb to power on"
                             binding.tvHoldHint.visibility = View.VISIBLE
                             binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
                                 Color.parseColor("#64748B")
@@ -554,7 +554,7 @@ class HomeFragment : Fragment() {
                             setOrbState("idle")
                             binding.tvListeningStatus.text = "MIC MUTED (OFF) • TAP TO TALK"
                             binding.tvListeningStatus.setTextColor(Color.parseColor("#EF4444"))
-                            binding.tvHoldHint.text = "Microphone is muted • Tap mic to unmute"
+                            binding.tvHoldHint.text = "Microphone is muted • Tap the orb to unmute"
                             binding.tvHoldHint.visibility = View.VISIBLE
                             binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
                                 Color.parseColor("#EF4444")
@@ -563,7 +563,7 @@ class HomeFragment : Fragment() {
                             setOrbState("idle")
                             binding.tvListeningStatus.text = "STANDBY • SAY 'HEY JARVIS'"
                             binding.tvListeningStatus.setTextColor(Color.parseColor("#3B82F6"))
-                            binding.tvHoldHint.text = "Listening for wake word • Hold mic to power off"
+                            binding.tvHoldHint.text = "Listening for wake word • Hold the orb to power off"
                             binding.tvHoldHint.visibility = View.VISIBLE
                             binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
                                 Color.parseColor("#3B82F6")
@@ -575,7 +575,7 @@ class HomeFragment : Fragment() {
                                     setOrbState("idle")
                                     binding.tvListeningStatus.text = "STANDBY • SAY 'HEY JARVIS'"
                                     binding.tvListeningStatus.setTextColor(Color.parseColor("#3B82F6"))
-                                    binding.tvHoldHint.text = "Listening for wake word • Hold mic to power off"
+                                    binding.tvHoldHint.text = "Listening for wake word • Hold the orb to power off"
                                     binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#3B82F6"))
                                 }
                                 ConversationState.CONNECTING -> {
@@ -602,19 +602,19 @@ class HomeFragment : Fragment() {
                                 ConversationState.LISTENING, ConversationState.INTERRUPTED -> {
                                     setOrbState(if(status.state == ConversationState.INTERRUPTED) "interrupted" else "listening")
                                     binding.tvListeningStatus.text = "MIC ON • LISTENING..."
-                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#10B981"))
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#22D3EE")) // matches orb listening ring (cyan)
                                     binding.tvHoldHint.text = "Speak now • Tap to mute • Hold to power off"
                                     binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
-                                        Color.parseColor("#10B981")
+                                        Color.parseColor("#22D3EE")
                                     )
                                 }
                                 ConversationState.SPEAKING -> {
                                     setOrbState("speaking")
                                     binding.tvListeningStatus.text = "JARVIS SPEAKING..."
-                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#06B6D4"))
-                                    binding.tvHoldHint.text = "Tap mic to interrupt"
+                                    binding.tvListeningStatus.setTextColor(Color.parseColor("#FF4FA3")) // matches orb speaking ring (pink)
+                                    binding.tvHoldHint.text = "Tap the orb to interrupt"
                                     binding.dotStatusGlow.backgroundTintList = ColorStateList.valueOf(
-                                        Color.parseColor("#06B6D4")
+                                        Color.parseColor("#FF4FA3")
                                     )
                                 }
                                 ConversationState.THINKING -> {
