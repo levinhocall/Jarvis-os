@@ -1006,8 +1006,10 @@ class JarvisConversationService : Service() {
             }
         }
 
-        audioPlayer = AudioPlayer(
-            onPlaybackStateChanged = { isPlaying ->
+        lateinit var sessionPlayer: AudioPlayer
+        sessionPlayer = AudioPlayer(
+            onPlaybackStateChanged = playbackState@{ isPlaying ->
+                if (audioPlayer !== sessionPlayer) return@playbackState
                 if (isPlaying) {
                     setConversationState(ConversationState.SPEAKING)
                 } else {
@@ -1019,7 +1021,7 @@ class JarvisConversationService : Service() {
                 }
             },
             onPlaybackAmplitude = { amp ->
-                if (_conversationState.value == ConversationState.SPEAKING) {
+                if (audioPlayer === sessionPlayer && _conversationState.value == ConversationState.SPEAKING) {
                     _audioLevel.value = amp
                     _audioFrequency.value = com.jarvis.assistant.audio.AudioFrequencyData(
                         amplitude = amp,
@@ -1029,8 +1031,15 @@ class JarvisConversationService : Service() {
                         high = (amp * 0.4f).coerceIn(0f, 1f)
                     )
                 }
+            },
+            onPlaybackFailure = { category ->
+                serviceScope.launch {
+                    if (audioPlayer === sessionPlayer) _events.emit("Voice playback stopped ($category). Stop and reopen Voice Mode if audio remains unavailable.")
+                }
             }
-        ).apply { start() }
+        )
+        audioPlayer = sessionPlayer
+        sessionPlayer.start()
 
         sessionBootstrapJob?.cancel()
         sessionBootstrapJob = serviceScope.launch(Dispatchers.IO) {
@@ -1951,6 +1960,14 @@ class JarvisConversationService : Service() {
             }
         }
         audioRecorder = recorder
+        recorder.onCaptureFailure = { failure ->
+            serviceScope.launch(Dispatchers.Main.immediate) {
+                if (audioRecorder === recorder && _isSessionOn.value) {
+                    _events.tryEmit("Voice stopped (${failure.name}). Check microphone permission/audio device and reopen Voice Mode.")
+                    fullStop()
+                }
+            }
+        }
         // The pipeline manager delegates to the existing AudioRecorder so AEC, AGC,
         // noise suppression, VAD metadata and the service's barge-in callback stay intact.
         // It never opens a second AudioRecord while the delegated recorder is active.
@@ -1960,16 +1977,20 @@ class JarvisConversationService : Service() {
         serviceScope.launch(Dispatchers.IO) {
             val pipeline = audioPipelineManager ?: return@launch
             if (!_isSessionOn.value) return@launch
-            val microphoneStarted = pipeline.startRecording()
+            // stop() retains the old lease until its capture coroutine actually exits.
+            // Cooperatively await that cleanup without opening a competing recorder.
+            val available = pipeline.isActive || com.jarvis.assistant.audio.MicrophoneOwnership.awaitAvailable()
+            if (!_isSessionOn.value || audioPipelineManager !== pipeline) return@launch
+            val microphoneStarted = available && pipeline.startRecording()
             // Stop can race with hardware initialization. Never leave a newly opened
             // microphone alive after the conversation has already been closed.
-            if (!_isSessionOn.value) {
+            if (!_isSessionOn.value || audioPipelineManager !== pipeline) {
                 pipeline.stopRecording()
                 return@launch
             }
             if (!microphoneStarted) {
                 withContext(Dispatchers.Main.immediate) {
-                    if (!_isSessionOn.value) return@withContext
+                    if (!_isSessionOn.value || audioPipelineManager !== pipeline) return@withContext
                     Log.e("JarvisService", "Microphone capture could not be started; ending the incomplete live session.")
                     _liveError.value = JarvisLiveError(
                         title = "MICROPHONE UNAVAILABLE",
@@ -3680,6 +3701,7 @@ class JarvisConversationService : Service() {
     private fun enterStandby(announce: Boolean = false) {
         if (_isStandby.value) return
         wakeFailures = 0
+        wakeOwnershipWaitUsed = false
         if (!microphoneForegroundReady) {
             _liveError.value = JarvisLiveError(
                 title = "MICROPHONE SERVICE UNAVAILABLE",
@@ -3720,6 +3742,8 @@ class JarvisConversationService : Service() {
     private var wakeLockRenewalJob: Job? = null
     private var wakeFailures = 0
     private var wakeModelJob: Job? = null
+    private var wakeOwnershipWaitJob: Job? = null
+    private var wakeOwnershipWaitUsed = false
     private var wakeRecognizer: Recognizer? = null
     private var wakeMicrophoneLease: com.jarvis.assistant.audio.MicrophoneOwnership.Lease? = null
     @Volatile private var wakeStopping = false
@@ -3729,6 +3753,7 @@ class JarvisConversationService : Service() {
         wakeTestMode = false
         wakeRecoveryJob?.cancel(); wakeRecoveryJob = null
         wakeModelJob?.cancel(); wakeModelJob = null
+        wakeOwnershipWaitJob?.cancel(); wakeOwnershipWaitJob = null
         try {
             val closed = closeWakeCapture()
             if (closed) {
@@ -3757,7 +3782,7 @@ class JarvisConversationService : Service() {
 
     private fun startWakeListening() {
         if (!_isStandby.value || wakeStopping) return
-        if (voskSpeechService != null) return
+        if (voskSpeechService != null || wakeOwnershipWaitJob?.isActive == true) return
 
         val model = VoskModelManager.model
         if (model == null || (preferences.isOwnerVoiceEnabled && VoskModelManager.speakerModel == null)) {
@@ -3783,6 +3808,21 @@ class JarvisConversationService : Service() {
         try {
             val lease = com.jarvis.assistant.audio.MicrophoneOwnership.acquire(com.jarvis.assistant.audio.MicrophoneOwner.WAKE_WORD)
             if (lease == null) {
+                if (!wakeOwnershipWaitUsed && !_isSessionOn.value &&
+                    com.jarvis.assistant.audio.MicrophoneOwnership.owner.value == com.jarvis.assistant.audio.MicrophoneOwner.VOICE_SESSION) {
+                    wakeOwnershipWaitUsed = true
+                    com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Waiting for voice microphone cleanup")
+                    wakeOwnershipWaitJob = serviceScope.launch(Dispatchers.Main) {
+                        val available = com.jarvis.assistant.audio.MicrophoneOwnership.awaitAvailable()
+                        wakeOwnershipWaitJob = null
+                        if (!_isStandby.value || wakeStopping) return@launch
+                        if (available) startWakeListening() else {
+                            fullStop()
+                            com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Microphone cleanup timed out. Reopen JARVIS before retrying wake listening.")
+                        }
+                    }
+                    return
+                }
                 fullStop()
                 com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Microphone is owned by another JARVIS feature. Close voice enrollment or stop the active session, then retry.")
                 return

@@ -4,7 +4,10 @@ import android.graphics.Rect
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
-import java.util.ArrayDeque
+import android.os.Build
+import com.jarvis.assistant.automation.accessibility.traverseBoundedTree
+import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
+import com.jarvis.assistant.automation.accessibility.AccessibilityIssue
 import java.util.Locale
 
 /**
@@ -39,7 +42,9 @@ object ScreenGroundingEngine {
      */
     fun getOrCaptureContext(service: JarvisAccessibilityService?, forceRefresh: Boolean = false): ScreenContext {
         val existing = cachedContext
-        if (!forceRefresh && existing != null && existing.isFresh) {
+        if (!forceRefresh && service != null && service === JarvisAccessibilityService.instance && existing != null &&
+            existing.isFresh && existing.connectionToken == service.connectionToken &&
+            existing.windowRevision == JarvisAccessibilityService.uiChanges.value.revision) {
             return existing
         }
         return captureScreen(service)
@@ -62,10 +67,26 @@ object ScreenGroundingEngine {
             return empty
         }
 
-        val root = service.getActiveRootNode() ?: service.getAppRootNode()
-        val context = parseNodeHierarchy(root)
-        cachedContext = context
-        return context
+        val owner = service.connectionToken
+        val revision = JarvisAccessibilityService.uiChanges.value.revision
+        val root = service.getActiveRootNode()
+        try {
+            var context = parseNodeHierarchy(root).copy(connectionToken = owner, windowRevision = revision,
+                capturedElapsedMs = System.nanoTime() / 1_000_000)
+            if (service !== JarvisAccessibilityService.instance || revision != JarvisAccessibilityService.uiChanges.value.revision) {
+                context = context.copy(isInvalidated = true, confidence = ScreenConfidence.STALE)
+            }
+            val readable = context.elements.isNotEmpty() && !context.isInvalidated && !context.isSecureWindow
+            val issue = when {
+                context.isSecureWindow -> AccessibilityIssue.PROTECTED_SCREEN
+                root == null -> AccessibilityIssue.NO_ROOT
+                context.isInvalidated -> AccessibilityIssue.STALE_NODE
+                else -> AccessibilityIssue.EMPTY_TREE
+            }
+            AccessibilityHealthModel.recordSnapshot(readable, issue, owner)
+            if (service === JarvisAccessibilityService.instance) cachedContext = context
+            return context
+        } finally { service.recycleOwnedNode(root) }
     }
 
     /**
@@ -83,80 +104,42 @@ object ScreenGroundingEngine {
             )
         }
 
-        val pkgName = root.packageName?.toString() ?: ""
+        val pkgName = try { root.packageName?.toString().orEmpty() } catch (_: Exception) {
+            return ScreenContext(confidence = ScreenConfidence.STALE, isInvalidated = true)
+        }
         val elements = mutableListOf<GroundedElement>()
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-
-        var inspectedCount = 0
         var detectedTitle: String? = null
         val tempRect = Rect()
-
-        while (queue.isNotEmpty() && inspectedCount < MAX_TRAVERSAL_NODES) {
-            val node = queue.removeFirst()
-            inspectedCount++
-
-            val text = node.text?.toString()?.trim() ?: ""
-            val desc = node.contentDescription?.toString()?.trim() ?: ""
-            val viewId = node.viewIdResourceName?.toString() ?: ""
-            val className = node.className?.toString() ?: ""
-            val isClickable = node.isClickable
-            val isEditable = node.isEditable
-            val isScrollable = node.isScrollable
-            val isVisible = node.isVisibleToUser
-
+        val result = traverseBoundedTree(root, maxNodes = MAX_TRAVERSAL_NODES,
+            childCount = { it.childCount }, child = { n, i -> n.getChild(i) },
+            release = { if (Build.VERSION.SDK_INT < 33) { @Suppress("DEPRECATION") it.recycle() } }) { node ->
+            val password = node.isPassword
+            val text = if (password) "" else node.text?.take(512)?.toString()?.trim().orEmpty()
+            val desc = if (password) "Password Field" else node.contentDescription?.take(512)?.toString()?.trim().orEmpty()
+            val viewId = node.viewIdResourceName.orEmpty()
+            val className = node.className?.toString().orEmpty()
+            val clickable = node.isClickable; val editable = node.isEditable; val visible = node.isVisibleToUser
             node.getBoundsInScreen(tempRect)
-
-            val isPassword = try { node.isPassword } catch (_: Throwable) { false }
-
-            // Capture potential screen title from prominent top-level text
-            if (detectedTitle == null && text.isNotBlank() && tempRect.top < 250 && !isClickable && !isEditable) {
-                detectedTitle = text
-            }
-
-            // Only retain interactive or content-bearing elements
-            if (isVisible && (text.isNotBlank() || desc.isNotBlank() || isClickable || isEditable || isPassword)) {
-                elements.add(
-                    GroundedElement(
-                        id = viewId,
-                        text = if (isPassword) "••••••" else text,
-                        contentDescription = if (isPassword) "Password Field" else desc.ifBlank { null },
-                        bounds = Rect(tempRect),
-                        screenBounds = ScreenBounds(tempRect.left, tempRect.top, tempRect.right, tempRect.bottom),
-                        isClickable = isClickable,
-                        isEditable = isEditable,
-                        isScrollable = isScrollable,
-                        isVisibleToUser = isVisible,
-                        className = className,
-                        packageName = node.packageName?.toString() ?: pkgName,
-                        isPassword = isPassword,
-                        isProtected = isPassword
-                    )
-                )
-            }
-
-            for (i in 0 until node.childCount) {
-                val child = node.getChild(i)
-                if (child != null) {
-                    queue.add(child)
-                }
+            if (!password && detectedTitle == null && text.isNotBlank() && tempRect.top < 250 && !clickable && !editable) detectedTitle = text
+            if (visible && (text.isNotBlank() || desc.isNotBlank() || clickable || editable || password)) {
+                elements += GroundedElement(id = viewId, text = if (password) "••••••" else text,
+                    contentDescription = desc.ifBlank { null }, bounds = Rect(tempRect),
+                    screenBounds = ScreenBounds(tempRect.left, tempRect.top, tempRect.right, tempRect.bottom),
+                    isClickable = clickable, isEditable = editable, isScrollable = node.isScrollable,
+                    isVisibleToUser = visible, className = className,
+                    packageName = node.packageName?.toString() ?: pkgName, isPassword = password, isProtected = password)
             }
         }
-
         val hasPassword = elements.any { it.isPassword }
-        val isSecurePkg = pkgName.contains("keyguard", ignoreCase = true) ||
-            pkgName.contains("credentials", ignoreCase = true)
-
-        return ScreenContext(
-            foregroundPackage = pkgName,
-            screenTitle = detectedTitle,
-            elements = elements,
-            capturedTimestamp = System.currentTimeMillis(),
-            isInvalidated = false,
-            confidence = if (hasPassword || isSecurePkg) ScreenConfidence.APPROXIMATE else ScreenConfidence.HIGH,
-            isSecureWindow = hasPassword || isSecurePkg,
-            securityReason = if (hasPassword) "Password input detected" else if (isSecurePkg) "Secure system screen" else null
-        )
+        val securePkg = pkgName.contains("keyguard", true) || pkgName.contains("credentials", true)
+        return ScreenContext(foregroundPackage = pkgName, screenTitle = detectedTitle, elements = elements,
+            capturedTimestamp = System.currentTimeMillis(), isInvalidated = result.failed,
+            confidence = when { result.failed -> ScreenConfidence.STALE
+                result.truncated || hasPassword || securePkg -> ScreenConfidence.APPROXIMATE
+                else -> ScreenConfidence.HIGH },
+            isSecureWindow = hasPassword || securePkg,
+            securityReason = if (hasPassword) "Password input detected" else if (securePkg) "Secure system screen" else null,
+            capturedElapsedMs = System.nanoTime() / 1_000_000, traversalTruncated = result.truncated)
     }
 
     /**

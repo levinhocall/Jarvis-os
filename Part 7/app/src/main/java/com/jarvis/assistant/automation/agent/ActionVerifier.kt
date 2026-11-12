@@ -24,24 +24,27 @@ object ActionVerifier {
         expectedText: String,
         retries: Int = 2
     ): VerificationResult {
+        val owner = service.connectionToken
+        fun recordOwned(result: VerificationResult) = record(result, owner)
         val cleanExpected = expectedText.trim()
         if (cleanExpected.isEmpty()) {
             return VerificationResult(isVerified = true, reason = "Empty text to type")
         }
 
-        for (attempt in 0..retries) {
+        for (attempt in 0..retries.coerceIn(0, 2)) {
             delay(80)
             val root = service.getActiveRootNode() ?: service.getAppRootNode()
             if (root == null) {
-                if (attempt < retries) continue
+                if (attempt < retries.coerceIn(0, 2)) continue
                 return VerificationResult(
                     isVerified = false,
                     reason = "No active root node found to verify typed text"
                 )
             }
 
-            // 1. Check node at target rect
             var targetNode: AccessibilityNodeInfo? = null
+            try {
+            // 1. Check node at target rect
             if (targetRect != null && targetRect.width() > 0) {
                 targetNode = service.findNodeCoveringRect(root, targetRect)
             }
@@ -56,7 +59,7 @@ object ActionVerifier {
                 }
             }
 
-            if (targetNode != null && targetNode.isVisibleToUser && targetNode.isEditable) {
+            if (targetNode != null && targetNode.refresh() && targetNode.isVisibleToUser && targetNode.isEditable) {
                 val actualText = targetNode.text?.toString() ?: ""
                 // Do not log entered text: it may contain searches, messages, or credentials.
                 Log.d(TAG, "Verify typing: target length=${actualText.length}, expected length=${cleanExpected.length}")
@@ -65,7 +68,7 @@ object ActionVerifier {
                 }
 
                 if (normalize(actualText) == normalize(cleanExpected)) {
-                    return record(VerificationResult(
+                    return recordOwned(VerificationResult(
                         isVerified = true,
                         reason = "Text verified in target field",
                         stateChanged = true,
@@ -73,10 +76,13 @@ object ActionVerifier {
                     ))
                 }
             }
-
+            } finally {
+                if (targetNode !== root) service.recycleOwnedNode(targetNode)
+                service.recycleOwnedNode(root)
+            }
         }
 
-        return record(VerificationResult(
+        return recordOwned(VerificationResult(
             isVerified = false,
             reason = "Text mismatch: the target input value did not match the requested text",
             stateChanged = false,
@@ -92,14 +98,17 @@ object ActionVerifier {
         service: JarvisAccessibilityService,
         waitMs: Long = 300L
     ): VerificationResult {
+        val owner = service.connectionToken
+        fun recordOwned(result: VerificationResult) = record(result, owner)
         delay(waitMs)
-        val postRoot = service.getActiveRootNode() ?: service.getAppRootNode()
-        val postSignature = ScreenSignatureCalculator.computeSignature(postRoot)
+        val postSignature = captureSignature(service)
+        if (!canCompare(preSignature, postSignature)) return recordOwned(VerificationResult(
+            false, "A before/after screen observation is unavailable; click outcome is unverified", isRetryable = false))
 
         // 1. Window or package transition
         if (postSignature.packageName != preSignature.packageName ||
             postSignature.className != preSignature.className) {
-            return record(VerificationResult(
+            return recordOwned(VerificationResult(
                 isVerified = true,
                 reason = "Window transitioned successfully (${postSignature.packageName ?: postSignature.className})",
                 stateChanged = true
@@ -108,7 +117,7 @@ object ActionVerifier {
 
         // 2. Element tree change
         if (!postSignature.isEquivalentTo(preSignature)) {
-            return record(VerificationResult(
+            return recordOwned(VerificationResult(
                 isVerified = true,
                 reason = "UI content updated following click",
                 stateChanged = true
@@ -117,17 +126,16 @@ object ActionVerifier {
 
         // Slight extra delay in case of slow animation
         delay(200L)
-        val secondCheckRoot = service.getActiveRootNode() ?: service.getAppRootNode()
-        val secondSignature = ScreenSignatureCalculator.computeSignature(secondCheckRoot)
-        if (!secondSignature.isEquivalentTo(preSignature)) {
-            return record(VerificationResult(
+        val secondSignature = captureSignature(service)
+        if (canCompare(preSignature, secondSignature) && !secondSignature.isEquivalentTo(preSignature)) {
+            return recordOwned(VerificationResult(
                 isVerified = true,
                 reason = "UI transitioned after layout animation",
                 stateChanged = true
             ))
         }
 
-        return record(VerificationResult(
+        return recordOwned(VerificationResult(
             isVerified = false,
             reason = "No detectable UI change after click (UI state remained identical)",
             stateChanged = false,
@@ -142,6 +150,8 @@ object ActionVerifier {
         preSignature: ScreenSignature,
         postSignature: ScreenSignature
     ): VerificationResult {
+        if (!canCompare(preSignature, postSignature)) return record(VerificationResult(
+            false, "A before/after screen observation is unavailable; scroll outcome is unverified"))
         if (postSignature.isEquivalentTo(preSignature)) {
             return record(VerificationResult(
                 isVerified = false,
@@ -156,8 +166,16 @@ object ActionVerifier {
         ))
     }
 
-    private fun record(result: VerificationResult): VerificationResult {
-        AccessibilityHealthModel.recordActionVerified(result.isVerified, result.reason)
+    internal fun canCompare(before: ScreenSignature, after: ScreenSignature): Boolean =
+        before.elementCount > 0 && after.elementCount > 0 && before.packageName.isNotBlank() && after.packageName.isNotBlank()
+
+    private fun captureSignature(service: JarvisAccessibilityService): ScreenSignature {
+        val root = service.getActiveRootNode()
+        return try { ScreenSignatureCalculator.computeSignature(root) } finally { service.recycleOwnedNode(root) }
+    }
+
+    private fun record(result: VerificationResult, owner: Long = JarvisAccessibilityService.instance?.connectionToken ?: 0L): VerificationResult {
+        AccessibilityHealthModel.recordActionVerified(result.isVerified, owner = owner)
         return result
     }
 }

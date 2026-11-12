@@ -9,366 +9,170 @@ import android.text.TextUtils
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
 import com.jarvis.assistant.util.PermissionHelper
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
-/**
- * Lifecycle-aware health model for the Jarvis Accessibility Service.
- *
- * Tracks the service through granular states beyond the legacy binary
- * `isRunning()` / `isEnabled()` checks, enabling callers to distinguish
- * between "enabled in settings but not yet connected", "connected and
- * fully operational", "connected but degraded", and error/disconnected
- * conditions.
- */
-enum class AccessibilityState {
-    /** Not enabled in Android Settings. */
-    DISABLED,
-    /** Enabled in Settings but service not yet connected (onServiceConnected not called). */
-    ENABLED,
-    /** onServiceConnected() called — fully operational. */
-    CONNECTED,
-    /** Was connected but onUnbind / onDestroy called. */
-    DISCONNECTED,
-    /** Connected but some capabilities are unavailable (e.g., gesture dispatch failing, service interrupted). */
-    DEGRADED,
-    /** Crash or unexpected state. */
-    ERROR
+/** A read-only projection without a background scope, subscription or polling job. */
+@OptIn(InternalCoroutinesApi::class, ExperimentalForInheritanceCoroutinesApi::class)
+private class HealthField<T>(private val source: StateFlow<AccessibilityHealthSnapshot>, private val select: (AccessibilityHealthSnapshot) -> T) : StateFlow<T> {
+    override val value: T get() = select(source.value)
+    override val replayCache: List<T> get() = listOf(value)
+    override suspend fun collect(collector: FlowCollector<T>): Nothing {
+        var initialized = false
+        var previous: T? = null
+        return source.collect(object : FlowCollector<AccessibilityHealthSnapshot> {
+            override suspend fun emit(value: AccessibilityHealthSnapshot) {
+                val next = select(value)
+                if (!initialized || previous != next) {
+                    initialized = true; previous = next; collector.emit(next)
+                }
+            }
+        })
+    }
 }
 
 data class AccessibilityDiagnosticReport(
-    val permissionEnabled: Boolean,
-    val serviceConnected: Boolean,
-    val eventsReceivedCount: Long,
-    val lastEventTimestamp: Long,
-    val isReceivingEvents: Boolean,
-    val lastActionSucceeded: Boolean,
-    val lastSuccessfulActionTimestamp: Long,
-    val lastActionName: String?,
-    val lastError: String?,
-    val lastErrorTimestamp: Long,
-    val state: AccessibilityState,
-    val isOperational: Boolean,
-    val deviceManufacturer: String,
-    val oemAutostartRecommended: Boolean,
-    val diagnosticSummary: String
+    val permissionEnabled: Boolean, val serviceConnected: Boolean, val eventsReceivedCount: Long,
+    val lastEventTimestamp: Long, val isReceivingEvents: Boolean, val lastActionSucceeded: Boolean,
+    val lastSuccessfulActionTimestamp: Long, val lastActionName: String?, val lastError: String?,
+    val lastErrorTimestamp: Long, val state: AccessibilityState, val isOperational: Boolean,
+    val deviceManufacturer: String, val oemAutostartRecommended: Boolean, val diagnosticSummary: String
 )
 
+/** Existing application-wide health facade; only real lifecycle callbacks establish ownership. */
 object AccessibilityHealthModel {
-
     private const val TAG = "A11yHealthModel"
-    private val processStartTime = System.currentTimeMillis()
+    private val health = AccessibilitySessionHealth { android.os.SystemClock.elapsedRealtime() }
+    val snapshots = health.snapshots
+    val state: StateFlow<AccessibilityState> = HealthField(snapshots) { it.state }
+    val lastError: StateFlow<String?> = HealthField(snapshots) { issueText(it.lastIssue) }
+    val lastErrorTimestamp: StateFlow<Long> = HealthField(snapshots) { it.lastIssueAt }
+    val lastStateChange: StateFlow<Long> = HealthField(snapshots) { it.stateChangedAt }
+    val lastEventReceivedTimestamp: StateFlow<Long> = HealthField(snapshots) { it.lastEventAt }
+    val totalEventsReceived: StateFlow<Long> = HealthField(snapshots) { it.events }
+    val lastGestureDispatchedTimestamp: StateFlow<Long> = HealthField(snapshots) { it.lastGestureAt }
+    val lastActionVerifiedTimestamp: StateFlow<Long> = HealthField(snapshots) { it.lastVerifiedAt }
+    val lastActionSucceeded: StateFlow<Boolean> = HealthField(snapshots) { it.lastActionAt > 0 && it.consecutiveFailures == 0 }
+    val lastSuccessfulActionTimestamp: StateFlow<Long> = HealthField(snapshots) { it.lastActionAt }
+    val lastActionName: StateFlow<String?> = HealthField(snapshots) { it.lastAction }
+    // Indicates that an event has been observed, not a liveness promise on an idle screen.
+    val isReceivingEvents: StateFlow<Boolean> = HealthField(snapshots) { it.lastEventAt > 0 }
 
-    private val _state = MutableStateFlow(AccessibilityState.DISABLED)
-    /** Current accessibility service state. */
-    val state: StateFlow<AccessibilityState> = _state.asStateFlow()
+    internal fun serviceConnected(): Long = health.connected()
+    internal fun serviceDisconnected(token: Long) = health.disconnected(token)
+    internal fun serviceConnecting() = health.connecting()
+    internal fun owns(token: Long): Boolean = health.owns(token)
+    private fun token(): Long = JarvisAccessibilityService.instance?.connectionToken ?: 0
+    fun recordEventReceived(owner: Long = token()) = health.event(owner)
+    fun recordSnapshot(readable: Boolean, issue: AccessibilityIssue = AccessibilityIssue.NO_ROOT, owner: Long = token()) = health.snapshot(owner, readable, issue)
+    fun recordIssue(issue: AccessibilityIssue, owner: Long = token(), fatal: Boolean = false) = health.issue(owner, issue, fatal = fatal)
+    fun recordDuration(elapsedMs: Long, owner: Long) = health.duration(owner, elapsedMs)
+    internal fun recordRecovery(owner: Long) = health.recovery(owner)
+    fun recordQueue(pending: Int, running: Boolean, owner: Long = token()) = health.queued(owner, pending, running)
+    fun recordGestureDispatched(success: Boolean, details: String? = null, owner: Long = token()) {
+        // Ignore arbitrary callback detail strings; they may contain UI labels or text.
+        health.gesture(owner, success)
+    }
+    fun recordActionSuccess(actionName: String, owner: Long = token()) = health.action(owner, true, category(actionName))
+    fun recordActionFailure(actionName: String, error: String, owner: Long = token()) = health.action(owner, false, category(actionName))
+    fun recordActionVerified(isVerified: Boolean, details: String? = null, owner: Long = token()) =
+        health.action(owner, isVerified, "verified", verified = isVerified)
 
-    private val _lastError = MutableStateFlow<String?>(null)
-    /** Human-readable description of the last error / degradation cause, if any. */
-    val lastError: StateFlow<String?> = _lastError.asStateFlow()
-
-    private val _lastErrorTimestamp = MutableStateFlow(0L)
-    val lastErrorTimestamp: StateFlow<Long> = _lastErrorTimestamp.asStateFlow()
-
-    private val _lastStateChange = MutableStateFlow(System.currentTimeMillis())
-    /** Epoch millis of the most recent state transition. */
-    val lastStateChange: StateFlow<Long> = _lastStateChange.asStateFlow()
-
-    private val _lastEventReceivedTimestamp = MutableStateFlow(0L)
-    /** Epoch millis of the most recent accessibility event received. */
-    val lastEventReceivedTimestamp: StateFlow<Long> = _lastEventReceivedTimestamp.asStateFlow()
-
-    private val _totalEventsReceived = MutableStateFlow(0L)
-    /** Total accessibility events processed since service started. */
-    val totalEventsReceived: StateFlow<Long> = _totalEventsReceived.asStateFlow()
-
-    private val _lastGestureDispatchedTimestamp = MutableStateFlow(0L)
-    /** Epoch millis of the most recent gesture dispatched. */
-    val lastGestureDispatchedTimestamp: StateFlow<Long> = _lastGestureDispatchedTimestamp.asStateFlow()
-
-    private val _lastActionVerifiedTimestamp = MutableStateFlow(0L)
-    /** Epoch millis of the most recent successful closed-loop action verification. */
-    val lastActionVerifiedTimestamp: StateFlow<Long> = _lastActionVerifiedTimestamp.asStateFlow()
-
-    private val _lastActionSucceeded = MutableStateFlow(false)
-    val lastActionSucceeded: StateFlow<Boolean> = _lastActionSucceeded.asStateFlow()
-
-    private val _lastSuccessfulActionTimestamp = MutableStateFlow(0L)
-    val lastSuccessfulActionTimestamp: StateFlow<Long> = _lastSuccessfulActionTimestamp.asStateFlow()
-
-    private val _lastActionName = MutableStateFlow<String?>(null)
-    val lastActionName: StateFlow<String?> = _lastActionName.asStateFlow()
-
-    private val _isReceivingEvents = MutableStateFlow(false)
-    val isReceivingEvents: StateFlow<Boolean> = _isReceivingEvents.asStateFlow()
-
-    @Volatile
-    private var consecutiveActionFailures = 0
-
-    /**
-     * Records arrival of an active AccessibilityEvent from system_server.
-     */
-    fun recordEventReceived() {
-        val now = System.currentTimeMillis()
-        _lastEventReceivedTimestamp.value = now
-        _totalEventsReceived.value += 1
-        _isReceivingEvents.value = true
-
-        // Self-heal: If service was transiently marked DEGRADED or ERROR, active event flow
-        // confirms the system binder IPC is operational.
-        if (JarvisAccessibilityService.instance != null &&
-            (_state.value == AccessibilityState.DEGRADED || _state.value == AccessibilityState.ERROR) &&
-            consecutiveActionFailures == 0) {
-            updateState(AccessibilityState.CONNECTED)
+    /** Compatibility entry point: callers cannot manufacture a live connection through a state enum. */
+    fun updateState(newState: AccessibilityState, error: String? = null) {
+        when (newState) {
+            AccessibilityState.DISABLED -> health.reconcile(false, null)
+            AccessibilityState.DISCONNECTED -> health.disconnected(token())
+            AccessibilityState.CONNECTING -> health.connecting()
+            AccessibilityState.ENABLED_NOT_CONNECTED -> health.reconcile(true, null)
+            AccessibilityState.DEGRADED -> health.issue(token(), AccessibilityIssue.INTERRUPTED)
+            AccessibilityState.ERROR -> health.issue(token(), AccessibilityIssue.INTERNAL, fatal = true)
+            else -> Unit // Only serviceConnected / successful probes / real operations may promote state.
         }
     }
 
-    /**
-     * Records a gesture dispatch outcome.
-     */
-    fun recordGestureDispatched(success: Boolean, details: String? = null) {
-        val now = System.currentTimeMillis()
-        _lastGestureDispatchedTimestamp.value = now
-        if (success) {
-            recordActionSuccess("GestureDispatch")
-        } else {
-            if (details != null) {
-                Log.w(TAG, "Gesture dispatch failure: $details")
-                recordActionFailure("GestureDispatch", details)
-            }
-        }
+    fun refreshFromSystem(context: Context) {
+        val live = JarvisAccessibilityService.instance?.connectionToken
+        health.reconcile(isServiceEnabledInSettings(context), live)
     }
+    fun isOperational(): Boolean = token().let { live -> health.owns(live) && state.value != AccessibilityState.ERROR }
+    fun isConnecting(): Boolean = state.value in setOf(AccessibilityState.ENABLED_NOT_CONNECTED, AccessibilityState.CONNECTING)
 
-    /**
-     * Records a successful action outcome (e.g. click, scroll, paste, gesture).
-     */
-    fun recordActionSuccess(actionName: String) {
-        val now = System.currentTimeMillis()
-        _lastActionSucceeded.value = true
-        _lastSuccessfulActionTimestamp.value = now
-        _lastActionName.value = actionName
-        consecutiveActionFailures = 0
-
-        if (JarvisAccessibilityService.instance != null &&
-            (_state.value == AccessibilityState.DEGRADED || _state.value == AccessibilityState.ERROR)) {
-            updateState(AccessibilityState.CONNECTED)
-        }
-    }
-
-    /**
-     * Records an action failure with bounded retry counting before marking DEGRADED.
-     */
-    fun recordActionFailure(actionName: String, error: String) {
-        consecutiveActionFailures++
-        _lastError.value = "Action '$actionName' failed: $error"
-        _lastErrorTimestamp.value = System.currentTimeMillis()
-
-        // Only transition to DEGRADED after repeated consecutive failures (e.g. 3) to prevent
-        // temporary display transitions or locked screens from permanently breaking status.
-        if (consecutiveActionFailures >= 3 && _state.value == AccessibilityState.CONNECTED) {
-            updateState(AccessibilityState.DEGRADED, _lastError.value)
-        }
-    }
-
-    /**
-     * Records a closed-loop verification outcome for an automated UI action.
-     */
-    fun recordActionVerified(isVerified: Boolean, details: String? = null) {
-        val now = System.currentTimeMillis()
-        if (isVerified) {
-            _lastActionVerifiedTimestamp.value = now
-            recordActionSuccess(details ?: "VerifiedAction")
-        } else if (details != null) {
-            recordActionFailure("VerifiedAction", details)
-        }
-        Log.d(TAG, "Action verified=$isVerified: ${details ?: "No details"}")
-    }
-
-    data class AccessibilityStatusSummary(
-        val state: AccessibilityState,
-        val isOperational: Boolean,
-        val isReceivingEvents: Boolean,
-        val lastEventReceivedAgeMs: Long,
-        val lastGestureDispatchedAgeMs: Long,
-        val lastActionVerifiedAgeMs: Long,
-        val lastError: String?
-    )
+    data class AccessibilityStatusSummary(val state: AccessibilityState, val isOperational: Boolean,
+        val isReceivingEvents: Boolean, val lastEventReceivedAgeMs: Long, val lastGestureDispatchedAgeMs: Long,
+        val lastActionVerifiedAgeMs: Long, val lastError: String?)
 
     fun getOperationalStatusSummary(): AccessibilityStatusSummary {
-        val now = System.currentTimeMillis()
-        val eventAge = if (_lastEventReceivedTimestamp.value > 0) now - _lastEventReceivedTimestamp.value else -1L
-        val gestureAge = if (_lastGestureDispatchedTimestamp.value > 0) now - _lastGestureDispatchedTimestamp.value else -1L
-        val verifiedAge = if (_lastActionVerifiedTimestamp.value > 0) now - _lastActionVerifiedTimestamp.value else -1L
-        val receiving = _lastEventReceivedTimestamp.value > 0 && eventAge < 15_000L
-
-        return AccessibilityStatusSummary(
-            state = _state.value,
-            isOperational = isOperational(),
-            isReceivingEvents = receiving,
-            lastEventReceivedAgeMs = eventAge,
-            lastGestureDispatchedAgeMs = gestureAge,
-            lastActionVerifiedAgeMs = verifiedAge,
-            lastError = _lastError.value
-        )
+        val s = snapshots.value; val now = android.os.SystemClock.elapsedRealtime()
+        fun age(time: Long) = if (time > 0) (now - time).coerceAtLeast(0) else -1L
+        return AccessibilityStatusSummary(s.state, isOperational(), s.lastEventAt > 0 && age(s.lastEventAt) < 15_000,
+            age(s.lastEventAt), age(s.lastGestureAt), age(s.lastVerifiedAt), issueText(s.lastIssue))
     }
 
-    /**
-     * Builds a comprehensive, truthful diagnostic report for status inspection.
-     */
     fun getDiagnosticReport(context: Context): AccessibilityDiagnosticReport {
-        val isEnabledInSettings = isServiceEnabledInSettings(context)
-        val isConnected = JarvisAccessibilityService.instance != null
-        val now = System.currentTimeMillis()
-        val eventAge = if (_lastEventReceivedTimestamp.value > 0) now - _lastEventReceivedTimestamp.value else -1L
-        val receiving = _lastEventReceivedTimestamp.value > 0 && eventAge < 60_000L
-        val oemRecommended = PermissionHelper.isXiaomiDevice() || PermissionHelper.isVivoDevice()
-
+        val s = snapshots.value; val now = android.os.SystemClock.elapsedRealtime()
+        val enabled = isServiceEnabledInSettings(context); val connected = JarvisAccessibilityService.instance != null
+        val recent = s.lastEventAt > 0 && now - s.lastEventAt < 60_000
         val summary = buildString {
-            append("• Permission in Settings: ").append(if (isEnabledInSettings) "ENABLED" else "DISABLED").append("\n")
-            append("• Service Binder: ").append(if (isConnected) "CONNECTED" else "NOT CONNECTED").append("\n")
-            append("• Events Received: ").append(_totalEventsReceived.value).append(if (receiving) " (Active)" else " (Idle)").append("\n")
-            append("• Last Action: ").append(_lastActionName.value ?: "None")
-            if (_lastSuccessfulActionTimestamp.value > 0) {
-                append(" (Succeeded ${(now - _lastSuccessfulActionTimestamp.value) / 1000}s ago)")
-            }
-            append("\n")
-            append("• Last Error: ").append(_lastError.value ?: "None")
-            if (oemRecommended) {
-                append("\n• OEM Notice: Background optimizer detected. Grant Autostart to prevent idle unbinding.")
-            }
+            append("Settings: ").append(if (enabled) "ENABLED" else "DISABLED")
+            append("\nService callback connection: ").append(if (connected) "CONNECTED" else "NOT CONNECTED")
+            append("\nOperational state: ").append(s.state)
+            append("\nEvents: ").append(s.events).append(if (recent) " (recent)" else " (idle; not proof of failure)")
+            fun age(label: String, time: Long) { append("\n").append(label).append(if (time > 0) "${(now-time).coerceAtLeast(0)} ms ago" else "not observed") }
+            age("Readable snapshot: ", s.lastSnapshotAt); age("Accepted mutation: ", s.lastActionAt)
+            age("Verified app outcome: ", s.lastVerifiedAt)
+            append("\nPending operations (including running): ").append(s.pending)
+            append("\nCurrent operation duration: ").append(if (s.operationStartedAt > 0) (now-s.operationStartedAt).coerceAtLeast(0) else 0).append(" ms")
+            append("\nLast completed operation duration: ").append(s.lastOperationDurationMs).append(" ms")
+            append("\nRecovery attempts: ").append(s.recoveryAttempts)
+            age("Last recovery: ", s.lastRecoveryAt)
+            append("\nConsecutive failures: ").append(s.consecutiveFailures)
+            append("\nLast category: ").append(s.lastIssue)
+            append("\nRecent categories (max 32): ").append(s.recent.takeLast(8).joinToString { it.category.name })
+            append("\n").append(getRecoveryGuidance() ?: "Connection is available. Individual actions still require a fresh supported screen and verification.")
         }
-
-        return AccessibilityDiagnosticReport(
-            permissionEnabled = isEnabledInSettings,
-            serviceConnected = isConnected,
-            eventsReceivedCount = _totalEventsReceived.value,
-            lastEventTimestamp = _lastEventReceivedTimestamp.value,
-            isReceivingEvents = receiving,
-            lastActionSucceeded = _lastActionSucceeded.value,
-            lastSuccessfulActionTimestamp = _lastSuccessfulActionTimestamp.value,
-            lastActionName = _lastActionName.value,
-            lastError = _lastError.value,
-            lastErrorTimestamp = _lastErrorTimestamp.value,
-            state = _state.value,
-            isOperational = isOperational(),
-            deviceManufacturer = Build.MANUFACTURER,
-            oemAutostartRecommended = oemRecommended,
-            diagnosticSummary = summary
-        )
+        return AccessibilityDiagnosticReport(enabled, connected, s.events, s.lastEventAt, recent,
+            s.lastActionAt > 0 && s.consecutiveFailures == 0, s.lastActionAt, s.lastAction, issueText(s.lastIssue),
+            s.lastIssueAt, s.state, isOperational(), Build.MANUFACTURER,
+            PermissionHelper.isXiaomiDevice() || PermissionHelper.isVivoDevice(), summary)
     }
 
-    /**
-     * Transition to [newState], optionally recording an [error] message.
-     *
-     * Duplicate transitions to the same state with the same error are
-     * suppressed to avoid log noise.
-     */
-    fun updateState(newState: AccessibilityState, error: String? = null) {
-        val previous = _state.value
-        if (previous == newState && _lastError.value == error) return // no-op
-        _state.value = newState
-        _lastError.value = error
-        if (error != null) {
-            _lastErrorTimestamp.value = System.currentTimeMillis()
-        }
-        _lastStateChange.value = System.currentTimeMillis()
-        Log.i(TAG, "State transition: $previous → $newState" + (error?.let { " ($it)" } ?: ""))
+    fun getRecoveryGuidance(): String? = when (state.value) {
+        AccessibilityState.DISABLED -> "Jarvis Accessibility Service is disabled. Enable it in Android Settings → Accessibility → Jarvis."
+        AccessibilityState.ENABLED_NOT_CONNECTED, AccessibilityState.CONNECTING -> "Enabled but the service hasn't connected. Recheck Android Accessibility settings. If sideload restrictions apply, allow restricted settings in App info only when you trust this app."
+        AccessibilityState.DISCONNECTED -> "Service disconnected. Android must bind it again; re-enable it manually in Accessibility Settings if needed."
+        AccessibilityState.ERROR -> "Service operation failed. Cancel the task and refresh the screen. If still disconnected, re-enable it manually in Settings."
+        AccessibilityState.DEGRADED -> "Connected with limited screen/action availability. Unlock the device, close obstructing dialogs or use a supported screen, then refresh. Protected/custom-rendered content may remain unreadable."
+        else -> null
     }
-
-    /**
-     * Re-derive the state by inspecting Android system settings and the
-     * live companion [JarvisAccessibilityService.instance].
-     *
-     * Call this from UI code (e.g., onResume) to reconcile the model with
-     * reality after the user may have toggled the setting externally.
-     */
-    fun refreshFromSystem(context: Context) {
-        val instance = JarvisAccessibilityService.instance
-
-        // 1. If the live instance is present, the service is connected.
-        if (instance != null) {
-            if (_state.value != AccessibilityState.DEGRADED || consecutiveActionFailures == 0) {
-                updateState(AccessibilityState.CONNECTED)
-            }
-            return
-        }
-
-        // 2. No live instance — check whether the service is enabled in Settings.
-        val enabledInSettings = isServiceEnabledInSettings(context)
-
-        if (enabledInSettings) {
-            val uptime = System.currentTimeMillis() - processStartTime
-            if (uptime < 3000L) {
-                // Process just started: binder connection is pending in system_server
-                updateState(AccessibilityState.ENABLED, "Service enabled in Settings; connecting background binder...")
-            } else {
-                updateState(AccessibilityState.ENABLED, "Service enabled in Settings but binder instance is not connected. Toggle Off and On to restart.")
-            }
-        } else {
-            updateState(AccessibilityState.DISABLED, "Service is disabled in Android Accessibility Settings.")
-        }
+    private fun category(value: String): String = when {
+        value.startsWith("click", true) || value.startsWith("tap", true) -> "tap"
+        value.startsWith("scroll", true) -> "scroll"
+        value.startsWith("type", true) -> "type"
+        else -> "ui"
     }
-
-    /** Returns `true` when the service is in a state that can execute commands. */
-    fun isOperational(): Boolean {
-        return _state.value == AccessibilityState.CONNECTED ||
-               _state.value == AccessibilityState.DEGRADED
-    }
-
-    fun isConnecting(): Boolean = _state.value == AccessibilityState.ENABLED
-
-    /**
-     * Returns user-facing guidance on how to recover from the current
-     * non-operational state, or `null` if the service is already operational.
-     */
-    fun getRecoveryGuidance(): String? {
-        return when (_state.value) {
-            AccessibilityState.DISABLED ->
-                "Jarvis Accessibility Service is disabled. Please enable it in " +
-                "Settings → Accessibility → Installed services → Jarvis."
-            AccessibilityState.ENABLED -> buildString {
-                append("The service is enabled but hasn't connected yet. Try toggling it off and on, or restart the app.")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    append(" If this app was installed from outside an app store and Android blocks the service, open App info → ⋮ → Allow restricted settings, then enable Accessibility again.")
-                }
-            }
-            AccessibilityState.DISCONNECTED ->
-                "The Accessibility Service was disconnected. " +
-                "Please re-enable it in Settings → Accessibility → Jarvis."
-            AccessibilityState.ERROR -> {
-                val detail = _lastError.value?.let { " Last error: $it" } ?: ""
-                "The Accessibility Service encountered an error.$detail " +
-                "Try toggling the service off and on in Settings."
-            }
-            AccessibilityState.CONNECTED,
-            AccessibilityState.DEGRADED -> null
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Resilient System Settings Verification (Supports Stock AOSP & OEM ROMs)
-    // ------------------------------------------------------------------
+    private fun issueText(issue: AccessibilityIssue): String? = if (issue == AccessibilityIssue.NONE) null else issue.name
 
     fun isServiceEnabledInSettings(context: Context): Boolean {
         // Check 1: Settings.Secure with master switch
         try {
             val cr = context.contentResolver
             val isMasterEnabled = try {
-                Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1
+                Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 0)
             } catch (_: Exception) {
-                true // fallback
+                -1 // unknown; try the supported AccessibilityManager fallback
             }
 
-            if (isMasterEnabled) {
+            if (isMasterEnabled == 0) return false
+            if (isMasterEnabled == 1) {
                 val enabledServices = Settings.Secure.getString(
                     cr,
                     Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
                 )
                 if (!enabledServices.isNullOrBlank()) {
                     val expectedComponent = ComponentName(context, JarvisAccessibilityService::class.java)
-                    val expectedPackage = context.packageName
-                    val expectedSimpleName = JarvisAccessibilityService::class.java.simpleName
 
                     val colonSplitter = TextUtils.SimpleStringSplitter(':')
                     colonSplitter.setString(enabledServices)
@@ -379,23 +183,16 @@ object AccessibilityHealthModel {
                         // Normalized unflattening (handles both full and short formats)
                         val unflattened = ComponentName.unflattenFromString(rawComponent)
                         if (unflattened != null) {
-                            if (unflattened == expectedComponent ||
-                                (unflattened.packageName.equals(expectedPackage, ignoreCase = true) &&
-                                 unflattened.className.endsWith(expectedSimpleName, ignoreCase = true))) {
+                            if (unflattened == expectedComponent) {
                                 return true
                             }
                         }
-
-                        // Fuzzy fallback matching
-                        if (rawComponent.contains(expectedPackage, ignoreCase = true) &&
-                            rawComponent.contains(expectedSimpleName, ignoreCase = true)) {
-                            return true
-                        }
                     }
+                    return false
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error checking accessibility secure settings: ${e.message}")
+            Log.w(TAG, "Error checking accessibility secure settings: ${e.javaClass.simpleName}")
         }
 
         // Check 2: AccessibilityManager IPC fallback (checks both generic and all masks)
@@ -412,16 +209,14 @@ object AccessibilityHealthModel {
                         val matched = services.any { info ->
                             val sInfo = info.resolveInfo?.serviceInfo
                             sInfo?.packageName == context.packageName &&
-                            (sInfo.name == JarvisAccessibilityService::class.java.name ||
-                             info.id.startsWith("${context.packageName}/") ||
-                             info.id.contains("JarvisAccessibilityService"))
+                            sInfo.name == JarvisAccessibilityService::class.java.name
                         }
                         if (matched) return true
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error checking AccessibilityManager service list: ${e.message}")
+            Log.w(TAG, "Error checking AccessibilityManager service list: ${e.javaClass.simpleName}")
         }
 
         return false

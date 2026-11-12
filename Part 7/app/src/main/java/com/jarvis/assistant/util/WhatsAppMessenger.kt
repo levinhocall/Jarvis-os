@@ -119,7 +119,7 @@ object WhatsAppMessenger {
         }.getOrDefault(false)
 
         if (primaryLaunched) {
-            accessibility.scheduleWhatsAppAutoSend()
+            accessibility.scheduleWhatsAppAutoSend(message)
             return SendResult.Success(targetContact.name, phoneDigits, targetAppName)
         }
 
@@ -133,7 +133,7 @@ object WhatsAppMessenger {
             return SendResult.Error("Could not launch WhatsApp. No message was sent.")
         }
 
-        accessibility.scheduleWhatsAppAutoSend()
+        accessibility.scheduleWhatsAppAutoSend(message)
         return SendResult.Success(targetContact.name, phoneDigits, "WhatsApp")
     }
 

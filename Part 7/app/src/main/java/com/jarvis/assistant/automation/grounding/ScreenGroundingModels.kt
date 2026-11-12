@@ -80,10 +80,18 @@ data class ScreenContext(
     val isSecureWindow: Boolean = false,
     val securityReason: String? = null,
     val screenWidth: Int = 1080,
-    val screenHeight: Int = 2400
+    val screenHeight: Int = 2400,
+    val connectionToken: Long = 0L,
+    val windowRevision: Long = 0L,
+    val capturedElapsedMs: Long? = null,
+    val traversalTruncated: Boolean = false
 ) {
     val isFresh: Boolean
-        get() = !isInvalidated && (System.currentTimeMillis() - capturedTimestamp <= ttlMs)
+        get() {
+            val age = capturedElapsedMs?.let { System.nanoTime() / 1_000_000 - it }
+                ?: (System.currentTimeMillis() - capturedTimestamp)
+            return !isInvalidated && age in 0..ttlMs
+        }
 
     fun findElementsMatching(query: String): List<GroundedElement> {
         val q = query.trim().lowercase()

@@ -1,6 +1,8 @@
 package com.jarvis.assistant.vision
 
 import android.graphics.PointF
+import android.os.Build
+import com.jarvis.assistant.automation.accessibility.traverseBoundedTree
 import android.graphics.Rect
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
@@ -107,21 +109,24 @@ class UiGroundingEngine {
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
 
-            var text = node.text?.toString()?.trim() ?: ""
-            var desc = node.contentDescription?.toString()?.trim() ?: ""
+            var text = if (node.isPassword) "" else node.text?.take(512)?.toString()?.trim().orEmpty()
+            var desc = if (node.isPassword) "Password Field" else node.contentDescription?.take(512)?.toString()?.trim().orEmpty()
             val cls = node.className?.toString() ?: ""
             val vid = node.viewIdResourceName ?: ""
             var p = node.parent
             var parentClickable = false
             var depth = 0
-            while (p != null && depth < 3) {
-                if (p.isClickable) {
-                    parentClickable = true
-                    break
+            try {
+                while (p != null && depth < 3) {
+                    val current = p
+                    p = null
+                    try {
+                        if (current.isClickable) { parentClickable = true; break }
+                        p = current.parent
+                    } finally { recycleChild(current) }
+                    depth++
                 }
-                p = p.parent
-                depth++
-            }
+            } finally { p?.let(::recycleChild) }
             val isClickable = node.isClickable || parentClickable
             val isCheckable = node.isCheckable
             val hasSetTextAction = node.actionList.any { 
@@ -165,19 +170,14 @@ class UiGroundingEngine {
                 )
             }
 
-            for (i in 0 until node.childCount) {
-                val child = node.getChild(i) ?: continue
-                traverse(child)
-            }
         }
 
-        try {
-            traverse(root)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error traversing accessibility tree: ${e.message}")
-        }
+        val traversal = traverseBoundedTree(root, maxNodes = 300, depthFirst = true,
+            childCount = { it.childCount }, child = { node, i -> node.getChild(i) },
+            release = ::recycleChild, visit = ::traverse)
+        if (traversal.failed) return emptyList()
 
-        val foregroundPackage = root.packageName?.toString().orEmpty()
+        val foregroundPackage = try { root.packageName?.toString().orEmpty() } catch (_: Exception) { "" }
         if (foregroundPackage.isNotBlank()) {
             if (lastWorldModelPackage.isNotBlank() &&
                 !lastWorldModelPackage.equals(foregroundPackage, ignoreCase = true)
@@ -506,20 +506,21 @@ class UiGroundingEngine {
         return Pair(pkg, titleCandidate)
     }
 
+    private fun recycleChild(node: AccessibilityNodeInfo) {
+        if (Build.VERSION.SDK_INT < 33) { @Suppress("DEPRECATION") node.recycle() }
+    }
+
     private fun collectNodeText(node: AccessibilityNodeInfo, depth: Int = 0): List<String> {
         if (depth > 3) return emptyList()
-        val list = mutableListOf<String>()
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val ct = child.text?.toString()?.trim() ?: child.contentDescription?.toString()?.trim() ?: ""
-            if (ct.isNotBlank() && !list.contains(ct)) {
-                list.add(ct)
-            }
-            if (child.childCount > 0) {
-                list.addAll(collectNodeText(child, depth + 1))
+        val text = linkedSetOf<String>()
+        traverseBoundedTree(node, maxNodes = 32, maxDepth = 4 - depth, maxMillis = 10, depthFirst = true,
+            childCount = { it.childCount }, child = { n, i -> n.getChild(i) }, release = ::recycleChild) { child ->
+            if (child !== node && !child.isPassword && text.size < 16) {
+                val label = (child.text ?: child.contentDescription)?.take(160)?.toString()?.trim().orEmpty()
+                if (label.isNotBlank()) text += label
             }
         }
-        return list
+        return text.toList()
     }
 
     fun getSpatialPosition(bounds: Rect, screenWidth: Int, screenHeight: Int): String {

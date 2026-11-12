@@ -5,13 +5,13 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Build
 import android.util.Log
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class AudioPlayer(
     private val onPlaybackStateChanged: (isPlaying: Boolean) -> Unit,
-    private val onPlaybackAmplitude: (amplitude: Float) -> Unit
+    private val onPlaybackAmplitude: (amplitude: Float) -> Unit,
+    private val onPlaybackFailure: (category: String) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "AudioPlayer"
@@ -22,16 +22,16 @@ class AudioPlayer(
 
     private var audioTrack: AudioTrack? = null
     private val trackLock = Any()
-    private val audioQueue = LinkedBlockingQueue<ByteArray>()
+    private val audioQueue = PcmPlaybackQueue()
+    private val released = AtomicBoolean(false)
+    private val droppingTurn = AtomicBoolean(false)
+    private val hardwareFailures = java.util.concurrent.atomic.AtomicInteger(0)
     private val isRunning = AtomicBoolean(false)
     private val isPlayingState = AtomicBoolean(false)
     private var playbackThread: Thread? = null
 
-    init {
-        initAudioTrack()
-    }
-
     private fun initAudioTrack() {
+        if (released.get()) return
         val minBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         // 19,200 bytes = 400ms of 24kHz 16-bit mono PCM headroom.
         // Provides instant playback start while comfortably absorbing thread and network jitter.
@@ -79,12 +79,13 @@ class AudioPlayer(
     private val isTurnComplete = AtomicBoolean(false)
 
     fun notifyTurnComplete() {
+        droppingTurn.set(false)
         isTurnComplete.set(true)
     }
 
+    @Synchronized
     fun start() {
-        if (isRunning.get()) return
-        isRunning.set(true)
+        if (released.get() || !isRunning.compareAndSet(false, true)) return
 
         playbackThread = Thread {
             try {
@@ -95,12 +96,10 @@ class AudioPlayer(
                 try {
                     // If not currently playing, wait for chunks and start AudioTrack before writing
                     if (!isPlayingState.get()) {
-                        val firstChunk = audioQueue.poll(30, TimeUnit.MILLISECONDS)
-                        if (firstChunk != null && firstChunk.isNotEmpty()) {
-                            isTurnComplete.set(false)
-                            isPlayingState.set(true)
+                        val firstChunk = audioQueue.poll(1, TimeUnit.SECONDS)
+                        if (firstChunk != null && audioQueue.isCurrent(firstChunk) && firstChunk.bytes.isNotEmpty()) {
+                            if (!beginPlayback(firstChunk)) continue
                             silenceCounter = 0
-                            onPlaybackStateChanged(true)
 
                             // Start hardware track immediately so write() streams smoothly without blocking
                             synchronized(trackLock) {
@@ -117,18 +116,18 @@ class AudioPlayer(
 
                             VoiceFlightRecorder.recordFirstAudioFrame()
                             writeToTrack(firstChunk)
-                            val amplitude = AudioUtils.calculateRmsNormalized(firstChunk, firstChunk.size)
-                            onPlaybackAmplitude(amplitude)
+                            val amplitude = AudioUtils.calculateRmsNormalized(firstChunk.bytes, firstChunk.bytes.size)
+                            notifyAmplitude(amplitude)
                         }
                         continue
                     }
 
                     // Currently playing: stream incoming chunks to the hardware AudioTrack
                     val chunk = audioQueue.poll(20, TimeUnit.MILLISECONDS)
-                    if (chunk != null && chunk.isNotEmpty()) {
+                    if (chunk != null && audioQueue.isCurrent(chunk) && chunk.bytes.isNotEmpty()) {
                         silenceCounter = 0
-                        val amplitude = AudioUtils.calculateRmsNormalized(chunk, chunk.size)
-                        onPlaybackAmplitude(amplitude)
+                        val amplitude = AudioUtils.calculateRmsNormalized(chunk.bytes, chunk.bytes.size)
+                        notifyAmplitude(amplitude)
 
                         writeToTrack(chunk)
                     } else {
@@ -143,14 +142,15 @@ class AudioPlayer(
                         if (shouldFinish && isPlayingState.get()) {
                             isPlayingState.set(false)
                             VoiceFlightRecorder.recordPlaybackComplete()
-                            onPlaybackStateChanged(false)
-                            onPlaybackAmplitude(0f)
+                            notifyPlaybackState(false)
+                            notifyAmplitude(0f)
                         }
                     }
                 } catch (e: InterruptedException) {
                     break
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error in playback worker: ${e.message}")
+                    Log.e(TAG, "Playback worker failed (${e.javaClass.simpleName})")
+                    failHardware()
                 }
             }
         }.apply {
@@ -161,24 +161,29 @@ class AudioPlayer(
 
     val activeEpoch = java.util.concurrent.atomic.AtomicLong(0L)
 
+    @Synchronized
     fun enqueueAudio(pcmData: ByteArray, epoch: Long? = null) {
-        if (epoch != null && epoch != activeEpoch.get()) {
-            // Drop late streaming audio chunks from an interrupted turn
-            return
-        }
-        if (pcmData.size >= 16) {
-            val validLen = pcmData.size and 1.inv()
-            val aligned = if (validLen == pcmData.size) pcmData else pcmData.copyOf(validLen)
-            audioQueue.offer(aligned)
+        if (released.get() || droppingTurn.get() || pcmData.size < 16) return
+        when (audioQueue.offer(pcmData, epoch ?: activeEpoch.get())) {
+            PcmPlaybackQueue.Offer.OVERFLOW -> {
+                // Stop the whole turn visibly instead of silently dropping arbitrary speech chunks.
+                flush()
+                droppingTurn.set(true)
+                runCatching { onPlaybackFailure("PLAYBACK_BUFFER_OVERFLOW") }
+                    .onFailure { Log.w(TAG, "Playback failure callback failed (${it.javaClass.simpleName})") }
+            }
+            else -> Unit // Old-epoch/released audio is intentionally rejected.
         }
     }
 
     /**
      * Instantly flushes audio playback upon interruption and advances generation epoch.
      */
+    @Synchronized
     fun flush(newEpoch: Long = activeEpoch.incrementAndGet()) {
-        activeEpoch.set(newEpoch)
-        audioQueue.clear()
+        val nextEpoch = activeEpoch.updateAndGet { maxOf(it, newEpoch) }
+        droppingTurn.set(false)
+        audioQueue.advance(nextEpoch)
         isTurnComplete.set(true)
         synchronized(trackLock) {
             try {
@@ -194,26 +199,27 @@ class AudioPlayer(
             }
         }
         if (isPlayingState.getAndSet(false)) {
-            onPlaybackStateChanged(false)
-            onPlaybackAmplitude(0f)
+            notifyPlaybackState(false)
+            notifyAmplitude(0f)
         }
     }
 
     fun isPlaying(): Boolean = isPlayingState.get() || !audioQueue.isEmpty()
 
+    @Synchronized
     fun release() {
+        if (!released.compareAndSet(false, true)) return
         isRunning.set(false)
         playbackThread?.interrupt()
         playbackThread = null
-        audioQueue.clear()
+        audioQueue.close()
 
         synchronized(trackLock) {
             try {
                 audioTrack?.let {
-                    if (it.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                        it.stop()
-                    }
-                    it.release()
+                    try {
+                        if (it.playState == AudioTrack.PLAYSTATE_PLAYING) it.stop()
+                    } finally { it.release() }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error releasing AudioTrack: ${e.message}")
@@ -221,11 +227,45 @@ class AudioPlayer(
                 audioTrack = null
             }
         }
+        if (isPlayingState.getAndSet(false)) {
+            runCatching { notifyPlaybackState(false); notifyAmplitude(0f) }
+                .onFailure { Log.w(TAG, "Playback stop callback failed (${it.javaClass.simpleName})") }
+        }
     }
 
-    private fun writeToTrack(chunk: ByteArray) {
+    private fun notifyPlaybackState(playing: Boolean) {
+        try { onPlaybackStateChanged(playing) }
+        catch (error: Exception) { Log.w(TAG, "Playback state callback failed (${error.javaClass.simpleName})") }
+    }
+
+    private fun notifyAmplitude(amplitude: Float) {
+        try { onPlaybackAmplitude(amplitude) }
+        catch (error: Exception) { Log.w(TAG, "Playback amplitude callback failed (${error.javaClass.simpleName})") }
+    }
+
+    private fun failHardware(): Boolean {
+        if (released.get()) return true
+        if (hardwareFailures.incrementAndGet() < 3) return false
+        release()
+        runCatching { onPlaybackFailure("PLAYBACK_HARDWARE_UNAVAILABLE") }
+            .onFailure { Log.w(TAG, "Playback failure callback failed (${it.javaClass.simpleName})") }
+        return true
+    }
+
+    @Synchronized private fun beginPlayback(frame: PcmPlaybackQueue.Frame): Boolean {
+        if (released.get() || !isRunning.get() || !audioQueue.isCurrent(frame)) return false
+        isTurnComplete.set(false)
+        isPlayingState.set(true)
+        notifyPlaybackState(true)
+        return true
+    }
+
+    private fun writeToTrack(frame: PcmPlaybackQueue.Frame) {
+        if (!audioQueue.isCurrent(frame)) return
+        val chunk = frame.bytes
         var track: AudioTrack?
         synchronized(trackLock) {
+            if (released.get() || !isRunning.get() || !audioQueue.isCurrent(frame)) return
             track = audioTrack
             if (track != null && track?.state != AudioTrack.STATE_INITIALIZED) {
                 try { track?.release() } catch (_: Exception) {}
@@ -245,17 +285,20 @@ class AudioPlayer(
 
         track?.let { t ->
             if (t.state == AudioTrack.STATE_INITIALIZED) {
-                val epoch = activeEpoch.get()
                 val written = PcmWritePump.write(chunk, {
-                    isRunning.get() && activeEpoch.get() == epoch
+                    isRunning.get() && !released.get() && audioQueue.isCurrent(frame)
                 }) { offset, length ->
                     t.write(chunk, offset, length, AudioTrack.WRITE_BLOCKING)
                 }
-                if (written < 0) {
+                if (written > 0 && audioQueue.isCurrent(frame)) hardwareFailures.set(0)
+                if (written < 0 && audioQueue.isCurrent(frame)) {
+                    if (failHardware()) return
                     Log.w(TAG, "AudioTrack write failed ($written). Reinitializing AudioTrack...")
                     VoiceFlightRecorder.recordUnderrun()
                     synchronized(trackLock) {
+                        if (released.get() || !isRunning.get() || !audioQueue.isCurrent(frame)) return
                         try { t.release() } catch (_: Exception) {}
+                        if (audioTrack === t) audioTrack = null
                         initAudioTrack()
                     }
                 }

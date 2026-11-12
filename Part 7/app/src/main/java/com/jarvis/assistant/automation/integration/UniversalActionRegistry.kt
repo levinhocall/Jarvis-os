@@ -219,6 +219,7 @@ object UniversalActionRegistry {
 
         // 4. Validate Accessibility readiness
         if (contract.requiresAccessibility) {
+            if (context != null) AccessibilityHealthModel.refreshFromSystem(context)
             val isOperational = JarvisAccessibilityService.isRunning() || AccessibilityHealthModel.isOperational()
             if (!isOperational) {
                 val guidance = AccessibilityHealthModel.getRecoveryGuidance()

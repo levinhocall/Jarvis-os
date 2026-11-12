@@ -711,7 +711,7 @@ class HomeFragment : Fragment() {
                                     binding.ivLiveErrorIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
                                     binding.tvLiveErrorTitle.setTextColor(Color.parseColor("#F59E0B"))
 
-                                    if (a11yState == com.jarvis.assistant.automation.accessibility.AccessibilityState.ENABLED) {
+                                    if (a11yState == com.jarvis.assistant.automation.accessibility.AccessibilityState.ENABLED_NOT_CONNECTED) {
                                         binding.tvLiveErrorTitle.text = "ACCESSIBILITY NOT CONNECTED"
                                         binding.tvLiveErrorMessage.text = "Service is enabled in Settings, but the background binder was killed or hasn't connected. Tap FIX to toggle Off and On in Settings."
                                     } else {
