@@ -55,8 +55,17 @@ class HandsFreeActivity : AppCompatActivity() {
     /**
      * Rapid polling to reconcile 50-250ms Binder latency after user returns from Settings.
      */
+    private var accessibilityPollJob: kotlinx.coroutines.Job? = null
+
+    override fun onStop() {
+        accessibilityPollJob?.cancel()
+        accessibilityPollJob = null
+        super.onStop()
+    }
+
     private fun pollAccessibilityState() {
-        lifecycleScope.launch {
+        accessibilityPollJob?.cancel()
+        accessibilityPollJob = lifecycleScope.launch {
             val intervals = listOf(150L, 350L, 600L, 1000L, 1500L, 2000L)
             for (interval in intervals) {
                 delay(interval)
@@ -68,11 +77,11 @@ class HandsFreeActivity : AppCompatActivity() {
 
     private fun updateServiceStatus(state: AccessibilityState) {
         when (state) {
-            AccessibilityState.CONNECTED -> {
+            AccessibilityState.CONNECTED, AccessibilityState.READY, AccessibilityState.BUSY -> {
                 binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
                     ContextCompat.getColor(this, R.color.status_green)
                 )
-                binding.tvAccessibilityStatus.text = "HANDS-FREE SERVICE: ACTIVE"
+                binding.tvAccessibilityStatus.text = getString(R.string.accessibility_operational_status, state.name)
                 binding.tvAccessibilityStatus.setTextColor(
                     ContextCompat.getColor(this, R.color.status_green)
                 )
@@ -80,7 +89,7 @@ class HandsFreeActivity : AppCompatActivity() {
                 binding.btnToggleAccessibility.isEnabled = true
                 binding.btnToggleAccessibility.alpha = 1.0f
             }
-            AccessibilityState.ENABLED -> {
+            AccessibilityState.ENABLED_NOT_CONNECTED, AccessibilityState.CONNECTING -> {
                 binding.dotAccessibilityStatus.backgroundTintList = ColorStateList.valueOf(
                     ContextCompat.getColor(this, R.color.status_amber)
                 )

@@ -39,12 +39,7 @@ class HomeFragment : Fragment() {
     private val viewModel: MainViewModel get() = (requireActivity() as MainActivity).viewModel
     private val preferences by lazy { JarvisApp.instance.preferences }
 
-    private var isPageLoaded = false
-    private var pendingOrbState: String? = null
     private var avatarTaskWasCompleted = false
-    private var pendingThemeKey: String? = null
-    private var pendingCustomHex: String? = null
-    private var lastAudioPushTime = 0L
     private var taskFallbackPanel: android.widget.LinearLayout? = null
     private var taskFallbackText: android.widget.TextView? = null
 
@@ -175,76 +170,24 @@ class HomeFragment : Fragment() {
         checkLocationAndFetchWeather()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    private var orbHost: com.jarvis.assistant.ui.orb.OrbWebHost? = null
+
     private fun setupOrbWebView() {
-        binding.orbWebView.apply {
-            setBackgroundColor(Color.TRANSPARENT)
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = false
-                allowFileAccess = false
-                allowContentAccess = false
-                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                cacheMode = WebSettings.LOAD_DEFAULT
-            }
-
-            val assets = androidx.webkit.WebViewAssetLoader.Builder()
-                .addPathHandler("/assets/", androidx.webkit.WebViewAssetLoader.AssetsPathHandler(context)).build()
-            webViewClient = object : androidx.webkit.WebViewClientCompat() {
-                override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse =
-                    assets.shouldInterceptRequest(request.url) ?: android.webkit.WebResourceResponse(
-                        "text/plain", "UTF-8", java.io.ByteArrayInputStream(ByteArray(0)))
-                override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest) = true
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    super.onPageFinished(view, url)
-                    if (_binding?.orbWebView !== view) return
-                    isPageLoaded = true
-                    syncOrbMotion()
-
-                    // Sync Theme
-                    val currentTheme = pendingThemeKey ?: preferences.appTheme
-                    val customHex = pendingCustomHex ?: preferences.customThemeColor
-                    setOrbTheme(currentTheme, customHex)
-
-                    // Sync State
-                    val state = pendingOrbState ?: when (viewModel.conversationState.value) {
-                        ConversationState.LISTENING, ConversationState.INTERRUPTED, ConversationState.CONNECTED -> "listening"
-                        ConversationState.SPEAKING -> "speaking"
-                        ConversationState.THINKING, ConversationState.EXECUTING, ConversationState.RECOVERING, ConversationState.CONNECTING -> "thinking"
-                        ConversationState.STANDBY, ConversationState.IDLE, ConversationState.WAITING_FOR_APPROVAL, ConversationState.FAILED, ConversationState.ERROR -> "idle"
-                    }
-                    setOrbState(state)
-                }
-            }
-
-            // Single tap detection triggers mic/conversation without interrupting 3D rotation drag
-            val gestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
-                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                    (activity as? MainActivity)?.handleMicOrOrbClick()
-                    return true
-                }
-
-                override fun onLongPress(e: MotionEvent) {
-                    (activity as? MainActivity)?.handleHoldMicOrOrb()
-                }
-            })
-
-            setOnTouchListener { v, event ->
-                gestureDetector.onTouchEvent(event)
-                v.onTouchEvent(event)
-            }
-
-            loadUrl("https://appassets.androidplatform.net/assets/orb.html?embedded=1")
-        }
+        binding.orbContainer.contentDescription = getString(R.string.plasma_start)
+        binding.orbContainer.isFocusable = true
+        binding.orbContainer.setOnClickListener { (activity as? MainActivity)?.handleMicOrOrbClick() }
+        binding.orbContainer.setOnLongClickListener { (activity as? MainActivity)?.handleHoldMicOrOrb(); true }
+        orbHost = com.jarvis.assistant.ui.orb.OrbWebHost(binding.orbContainer, binding.orbWebView)
+        setOrbTheme(preferences.appTheme, preferences.customThemeColor)
     }
 
     private fun syncOrbMotion() {
-        val web = _binding?.orbWebView ?: return
-        if (isPageLoaded) web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.configure("+com.jarvis.assistant.ui.orb.OrbAppearance.configuration(web.context).toString()+");", null)
-        if (isPageLoaded) web.evaluateJavascript(
-            "window.JarvisOrb && window.JarvisOrb.setReducedMotion(${com.jarvis.assistant.util.VisualMotionSettings.isReduced(web.context)});", null)
+        orbHost?.reloadIfChanged()
+        val plasma = orbHost?.isPlasma == true
+        _binding?.orbHaloRing?.visibility = if (plasma) View.GONE else View.VISIBLE
+        _binding?.waveLeft?.visibility = if (plasma) View.INVISIBLE else View.VISIBLE
+        _binding?.waveRight?.visibility = if (plasma) View.INVISIBLE else View.VISIBLE
+        renderPlasmaStatus()
     }
 
     private fun setupRealisticAvatar() {
@@ -299,67 +242,56 @@ class HomeFragment : Fragment() {
         val girl = false // AI girl removed from Home; Orb/Ghost stage always shown
         b.realisticAvatar.hapticsEnabled = preferences.hapticFeedbackEnabled
         b.realisticAvatar.visibility = if (girl) View.VISIBLE else View.GONE
-        b.orbHaloRing.visibility = if (girl) View.GONE else View.VISIBLE
-        if (girl) {
-            b.orbWebView.visibility = View.GONE
-            b.orbWebView.onPause()
-            b.orbWebView.pauseTimers()
-        } else {
-            b.orbWebView.visibility = View.VISIBLE
-            b.orbWebView.onResume()
-            b.orbWebView.resumeTimers()
-        }
+        b.orbHaloRing.visibility = if (girl || orbHost?.isPlasma == true) View.GONE else View.VISIBLE
+        orbHost?.setVisible(!girl && !isHidden && isResumed)
     }
 
     fun setOrbState(state: String) {
-        val visual = com.jarvis.assistant.ui.orb.OrbVisualState.current(state)
-        pendingOrbState = visual
+        // Avatar compatibility only. The orb receives the service's authoritative snapshot.
         activity?.runOnUiThread { _binding?.realisticAvatar?.setStateKey(state) }
-        if (!isPageLoaded) return
-        activity?.runOnUiThread {
-            _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setState('$visual');", null)
-        }
     }
 
     fun setOrbTheme(themeKey: String, customHex: String?) {
-        pendingThemeKey = themeKey
-        pendingCustomHex = customHex
-        if (!isPageLoaded) return
-        activity?.runOnUiThread {
-            if (themeKey == "custom" && !customHex.isNullOrBlank()) {
-                _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setBackground('$customHex');", null)
-            } else {
-                val mapped = if (themeKey in setOf("system", "light", "dark")) com.jarvis.assistant.util.ThemeManager.resolveThemeKey(requireContext(), themeKey) else when (preferences.orbPreset) {
-                    "aura" -> "dark"
-                    "crimson" -> "red"
-                    "midnight" -> "midnight"
-                    else -> "light"
-                }
-                _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setTheme('$mapped');", null)
-            }
-        }
+        val currentContext = context ?: return
+        val mapped = if (themeKey in setOf("system", "light", "dark"))
+            com.jarvis.assistant.util.ThemeManager.resolveThemeKey(currentContext, themeKey)
+        else when (preferences.orbPreset) { "aura" -> "dark"; "crimson" -> "red"; "midnight" -> "midnight"; else -> "light" }
+        orbHost?.setTheme(mapped, if (themeKey == "custom") customHex else null)
     }
 
-    private fun pushExternalAudio(amp: Float, bass: Float, high: Float) {
+    private fun pushExternalAudio(amp: Float) {
         _binding?.realisticAvatar?.setAmplitude(amp)
         _binding?.waveLeft?.setLevel(amp)
         _binding?.waveRight?.setLevel(amp)
         _binding?.micRing?.setLevel(amp)
-        if (!isPageLoaded) return
-        val now = System.currentTimeMillis()
-        if (now - lastAudioPushTime < 33L) return // ~30 calls per second throttle
-        lastAudioPushTime = now
-        activity?.runOnUiThread {
-            _binding?.orbWebView?.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.setExternalAudio($amp, $bass, $high);", null)
-        }
+    }
+
+    private fun renderPlasmaStatus() {
+        val b = _binding ?: return
+        if (orbHost?.isPlasma != true) return
+        val facts = com.jarvis.assistant.background.JarvisConversationService.voicePresentation.value
+        val state = com.jarvis.assistant.ui.orb.OrbPresentationMapper.map(facts, android.os.SystemClock.elapsedRealtime())
+        val label = com.jarvis.assistant.ui.orb.OrbPresentationLabels.status(requireContext(), facts)
+        if (b.tvListeningStatus.text.toString() != label) b.tvListeningStatus.text = label
+        val explanation = state.reason ?: getString(if (facts.active) R.string.plasma_home_active_hint else R.string.plasma_home_idle_hint)
+        if (b.tvHoldHint.text.toString() != explanation) b.tvHoldHint.text = explanation
+        b.tvHoldHint.visibility = View.VISIBLE
+        b.tvListeningStatus.setTextColor(com.google.android.material.color.MaterialColors.getColor(b.tvListeningStatus, R.attr.themeTextPrimary))
+        b.micRing.setMode(when {
+            !facts.active -> MicRingView.Mode.OFF
+            facts.muted -> MicRingView.Mode.MUTED
+            facts.playing -> MicRingView.Mode.SPEAKING
+            facts.pendingResponse -> MicRingView.Mode.THINKING
+            facts.capturing -> MicRingView.Mode.LISTENING
+            else -> MicRingView.Mode.OFF
+        })
     }
 
     override fun onResume() {
         super.onResume()
         syncOrbMotion()
         com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
-        binding.orbWebView.onResume()
-        binding.orbWebView.resumeTimers()
+        orbHost?.setVisible(!isHidden)
         applyAvatarMode()
         renderTaskFallback(com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.value)
 
@@ -399,8 +331,7 @@ class HomeFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
-        binding.orbWebView.onPause()
-        binding.orbWebView.pauseTimers()
+        orbHost?.setVisible(false)
     }
 
     override fun onHiddenChanged(hidden: Boolean) {
@@ -408,17 +339,13 @@ class HomeFragment : Fragment() {
         if (!hidden) syncOrbMotion()
         if (!hidden && _binding != null) {
             binding.root.visibility = View.VISIBLE
-            binding.orbWebView.visibility = View.VISIBLE
-            binding.orbWebView.onResume()
-            binding.orbWebView.resumeTimers()
+            orbHost?.setVisible(isResumed)
             applyAvatarMode()
             com.jarvis.assistant.util.ThemeManager.applyDynamicBackground(binding.root)
             setOrbTheme(preferences.appTheme, preferences.customThemeColor)
             updateHomeHeaderAndVoiceStatus()
         } else if (hidden && _binding != null) {
-            binding.orbWebView.onPause()
-            binding.orbWebView.pauseTimers()
-            binding.orbWebView.visibility = View.GONE
+            orbHost?.setVisible(false)
             binding.root.visibility = View.GONE
         }
     }
@@ -508,6 +435,14 @@ class HomeFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
+                    com.jarvis.assistant.background.JarvisConversationService.voicePresentation.collect { facts ->
+                        orbHost?.submit(facts)
+                        val description = com.jarvis.assistant.ui.orb.OrbPresentationLabels.status(requireContext(), facts)
+                        if (binding.orbContainer.contentDescription != description) binding.orbContainer.contentDescription = description
+                        renderPlasmaStatus()
+                    }
+                }
+                launch {
                     com.jarvis.assistant.automation.agent.AgentTaskEngine.taskState.collect { snapshot ->
                         renderTaskFallback(snapshot)
                         val completed = snapshot?.currentStatus.equals("COMPLETED", ignoreCase = true)
@@ -541,6 +476,7 @@ class HomeFragment : Fragment() {
                         HomeStatusState(isOn, isMuted, state, isStandby)
                     }.collect { status ->
                         updateMicVisuals(status)
+                        if (orbHost?.isPlasma == true) { renderPlasmaStatus(); return@collect }
                         if (!status.isOn) {
                             setOrbState("sleeping")
                             binding.tvListeningStatus.text = "JARVIS OFF • TAP TO START"
@@ -679,9 +615,7 @@ class HomeFragment : Fragment() {
                 launch {
                     viewModel.audioFrequency.collect { freq ->
                         val amp = freq.amplitude
-                        val bass = freq.bass
-                        val high = freq.high
-                        pushExternalAudio(amp, bass, high)
+                        pushExternalAudio(amp)
                     }
                 }
 
@@ -711,7 +645,7 @@ class HomeFragment : Fragment() {
                                     binding.ivLiveErrorIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
                                     binding.tvLiveErrorTitle.setTextColor(Color.parseColor("#F59E0B"))
 
-                                    if (a11yState == com.jarvis.assistant.automation.accessibility.AccessibilityState.ENABLED) {
+                                    if (a11yState == com.jarvis.assistant.automation.accessibility.AccessibilityState.ENABLED_NOT_CONNECTED) {
                                         binding.tvLiveErrorTitle.text = "ACCESSIBILITY NOT CONNECTED"
                                         binding.tvLiveErrorMessage.text = "Service is enabled in Settings, but the background binder was killed or hasn't connected. Tap FIX to toggle Off and On in Settings."
                                     } else {
@@ -871,16 +805,8 @@ class HomeFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        isPageLoaded = false
-        _binding?.orbWebView?.apply {
-            try {
-                stopLoading()
-                loadUrl("about:blank")
-                clearHistory()
-                (parent as? ViewGroup)?.removeView(this)
-                destroy()
-            } catch (_: Exception) {}
-        }
+        orbHost?.dispose()
+        orbHost = null
         taskFallbackPanel = null
         taskFallbackText = null
         _binding = null

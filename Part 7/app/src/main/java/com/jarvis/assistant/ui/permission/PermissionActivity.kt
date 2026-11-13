@@ -98,7 +98,7 @@ class PermissionActivity : AppCompatActivity() {
 
         binding.btnGrantAccessibility.setOnClickListener {
             val a11yState = AccessibilityHealthModel.state.value
-            if (a11yState == AccessibilityState.CONNECTED || a11yState == AccessibilityState.DEGRADED) {
+            if (AccessibilityHealthModel.isOperational()) {
                 showAccessibilityDiagnosticDialog()
             } else {
                 PermissionHelper.requestAccessibilityWithRestrictedGuidance(this)
@@ -138,8 +138,17 @@ class PermissionActivity : AppCompatActivity() {
         }
     }
 
+    private var accessibilityPollJob: kotlinx.coroutines.Job? = null
+
+    override fun onStop() {
+        accessibilityPollJob?.cancel()
+        accessibilityPollJob = null
+        super.onStop()
+    }
+
     private fun pollAccessibilityState() {
-        lifecycleScope.launch {
+        accessibilityPollJob?.cancel()
+        accessibilityPollJob = lifecycleScope.launch {
             val intervals = listOf(150L, 350L, 800L, 1500L)
             for (interval in intervals) {
                 delay(interval)
@@ -169,12 +178,12 @@ class PermissionActivity : AppCompatActivity() {
         updateExtraPermission("battery", PermissionHelper.hasBatteryOptimizationPermission(this))
         updateExtraPermission("brightness", PermissionHelper.hasWriteSettingsPermission(this))
 
-        val isA11ySatisfied = a11yState == AccessibilityState.CONNECTED ||
+        val isA11ySatisfied = a11yState == AccessibilityState.READY || a11yState == AccessibilityState.BUSY || a11yState == AccessibilityState.CONNECTED ||
                               a11yState == AccessibilityState.DEGRADED ||
-                              a11yState == AccessibilityState.ENABLED
+                              a11yState == AccessibilityState.ENABLED_NOT_CONNECTED
 
         if (hasMic && hasLoc && hasNotif && isA11ySatisfied) {
-            if (a11yState == AccessibilityState.ENABLED) {
+            if (AccessibilityHealthModel.isConnecting()) {
                 binding.btnGrantAll.text = "CONNECTING… TAP TO RECHECK / FINISH"
                 binding.btnGrantAll.alpha = 1.0f
                 binding.btnGrantAll.isEnabled = true
@@ -208,14 +217,14 @@ class PermissionActivity : AppCompatActivity() {
         button: Button
     ) {
         when (state) {
-            AccessibilityState.CONNECTED -> {
-                statusTv.text = "Active & Granted ✓"
+            AccessibilityState.CONNECTED, AccessibilityState.READY, AccessibilityState.BUSY -> {
+                statusTv.text = when (state) { AccessibilityState.READY -> "Connected • Screen readable"; AccessibilityState.BUSY -> "Connected • Action running"; else -> "Connected • Checking screen" }
                 statusTv.setTextColor(Color.parseColor("#10B981")) // Emerald Green
                 button.text = "Manage"
                 button.alpha = 1.0f
                 button.isEnabled = true
             }
-            AccessibilityState.ENABLED -> {
+            AccessibilityState.ENABLED_NOT_CONNECTED, AccessibilityState.CONNECTING -> {
                 statusTv.text = "Connecting… (Enabled in Settings)"
                 statusTv.setTextColor(Color.parseColor("#F59E0B")) // Amber
                 button.text = "Recheck / Manage"
@@ -401,10 +410,14 @@ class PermissionActivity : AppCompatActivity() {
         val report = AccessibilityHealthModel.getDiagnosticReport(this)
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle("Accessibility System Diagnostics")
-            .setMessage(report.diagnosticSummary)
-            .setPositiveButton("Recheck") { _, _ ->
-                AccessibilityHealthModel.refreshFromSystem(this)
-                updatePermissionStates()
+            .setMessage(report.diagnosticSummary + "\n\nCancel task & probe clears pending local work; it cannot undo an already dispatched action.")
+            .setPositiveButton("Cancel task & probe") { _, _ ->
+                lifecycleScope.launch {
+                    val service = com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.instance
+                    if (service != null) service.recoverAccessibility()
+                    AccessibilityHealthModel.refreshFromSystem(this@PermissionActivity)
+                    updatePermissionStates()
+                }
             }
             .setNeutralButton("Settings") { _, _ ->
                 PermissionHelper.openAccessibilitySettings(this)

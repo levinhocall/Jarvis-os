@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="orb_hold_to_power_off">Hold the orb to power off</string>
     <string-array name="overlay_edges">
         <item>Right</item>
         <item>Left</item>

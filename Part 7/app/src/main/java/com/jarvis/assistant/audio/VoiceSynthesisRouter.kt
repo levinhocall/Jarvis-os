@@ -32,6 +32,17 @@ object VoiceSynthesisRouter {
     const val CINEMATIC_PITCH = 0.92f
     const val CINEMATIC_RATE = 1.08f
 
+    data class PlaybackSignal(val generation: Long = 0, val playing: Boolean = false, val external: Boolean = false)
+    private val playbackLock = Any()
+    private val playbackMutable = kotlinx.coroutines.flow.MutableStateFlow(PlaybackSignal())
+    val playback: kotlinx.coroutines.flow.StateFlow<PlaybackSignal> = playbackMutable
+    private fun nextPlayback(): Long = synchronized(playbackLock) {
+        (playbackMutable.value.generation + 1).also { playbackMutable.value = PlaybackSignal(it, external = playbackMutable.value.external) }
+    }
+    private fun publishPlayback(generation: Long, playing: Boolean, external: Boolean = false) = synchronized(playbackLock) {
+        if (playbackMutable.value.generation == generation) playbackMutable.value = PlaybackSignal(generation, playing, external)
+    }
+
     private var localTts: TextToSpeech? = null
     @Volatile
     private var isInitialized = false
@@ -159,14 +170,21 @@ object VoiceSynthesisRouter {
     private fun speakLocal(text: String, onDone: (() -> Unit)?) {
         val tts = localTts ?: return
         val normalized = normalizeForSpeech(text)
+        val generation = nextPlayback()
+        val expectedId = "utterance_$generation"
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) { onDone?.invoke() }
+            override fun onStart(utteranceId: String?) { if (utteranceId == expectedId) publishPlayback(generation, true) }
+            override fun onStop(utteranceId: String?, interrupted: Boolean) { if (utteranceId == expectedId) publishPlayback(generation, false) }
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId != expectedId || playback.value.generation != generation) return
+                publishPlayback(generation, false); onDone?.invoke()
+            }
             override fun onError(utteranceId: String?) {
+                if (utteranceId == expectedId) publishPlayback(generation, false)
                 Log.w(TAG, "Local TTS utterance failed; completion callback suppressed.")
             }
         })
-        tts.speak(normalized, TextToSpeech.QUEUE_FLUSH, null, "utterance_${System.currentTimeMillis()}")
+        tts.speak(normalized, TextToSpeech.QUEUE_FLUSH, null, expectedId)
     }
 
     private fun speakWithElevenLabs(text: String, apiKey: String, onDone: (() -> Unit)?) {
@@ -174,6 +192,7 @@ object VoiceSynthesisRouter {
         externalTtsJob?.cancel()
         stopExternalPlayback()
         runCatching { localTts?.stop() }
+        val generation = playback.value.generation
         externalTtsJob = externalScope.launch {
             val audio = withContext(Dispatchers.IO) {
                 runCatching {
@@ -212,6 +231,7 @@ object VoiceSynthesisRouter {
                     }
                 }.getOrNull()
             }
+            if (playback.value.generation != generation) return@launch
             if (audio == null) {
                 speakLocal(text, onDone)
                 return@launch
@@ -228,16 +248,19 @@ object VoiceSynthesisRouter {
                     .build())
                 player.setDataSource(file.absolutePath)
                 player.setOnPreparedListener { prepared ->
-                    runCatching { prepared.start() }.onFailure {
+                    if (externalPlayer !== prepared || playback.value.generation != generation) return@setOnPreparedListener
+                    runCatching { prepared.start(); publishPlayback(generation, true, true) }.onFailure {
                         releaseExternalPlayer()
                         speakLocal(text, onDone)
                     }
                 }
-                player.setOnCompletionListener {
+                player.setOnCompletionListener { completed ->
+                    if (externalPlayer !== completed || playback.value.generation != generation) return@setOnCompletionListener
                     releaseExternalPlayer()
                     onDone?.invoke()
                 }
-                player.setOnErrorListener { _, _, _ ->
+                player.setOnErrorListener { failed, _, _ ->
+                    if (externalPlayer !== failed || playback.value.generation != generation) return@setOnErrorListener true
                     releaseExternalPlayer()
                     speakLocal(text, onDone)
                     true
@@ -252,6 +275,7 @@ object VoiceSynthesisRouter {
     }
 
     private fun stopExternalPlayback() {
+        nextPlayback()
         externalTtsJob?.cancel()
         externalTtsJob = null
         externalCalls.forEach { it.cancel() }
@@ -260,6 +284,7 @@ object VoiceSynthesisRouter {
     }
 
     private fun releaseExternalPlayer() {
+        if (playback.value.external) publishPlayback(playback.value.generation, false, true)
         runCatching { externalPlayer?.stop() }
         runCatching { externalPlayer?.release() }
         externalPlayer = null

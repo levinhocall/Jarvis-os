@@ -12,6 +12,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.sync.Semaphore
+import com.jarvis.assistant.automation.accessibility.AccessibilityHealthModel
+import com.jarvis.assistant.automation.accessibility.AccessibilityIssue
+import com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService
 
 /**
  * Ensures strict sequential execution of all UI mutation actions.
@@ -21,6 +26,11 @@ import java.util.concurrent.atomic.AtomicLong
 object SerializedActionExecutor {
     private const val TAG = "SerializedActionExec"
     private val mutex = Mutex()
+    internal const val MAX_PENDING = 16
+    private val admission = Semaphore(MAX_PENDING)
+    private val pending = AtomicInteger(0)
+    val pendingCount: Int get() = pending.get()
+    private data class Returned<T>(val value: T)
     private val isCancelled = AtomicBoolean(false)
     private val taskGeneration = AtomicLong(0L)
     private val lifecycleLock = Any()
@@ -66,48 +76,59 @@ object SerializedActionExecutor {
         expectedGeneration: Long? = null,
         block: suspend () -> T
     ): T? {
-        // Capture before waiting for the mutex so cancellation followed by a new task
-        // cannot accidentally revive an older queued mutation.
+        if (timeoutMs <= 0) return null
         val submittedGeneration = expectedGeneration ?: taskGeneration.get()
-        return withContext(Dispatchers.IO) {
-            if (isCancelled.get() || submittedGeneration != taskGeneration.get()) {
-                Log.w(TAG, "UI action rejected: task is cancelled or superseded")
-                return@withContext null
-            }
-            // Log only a known category, never a caller-supplied UI label or message.
-            val category = actionName.substringBefore(':').lowercase(java.util.Locale.ROOT)
-                .takeIf { it in setOf("click", "type", "scroll", "key", "tap", "swipe") } ?: "ui"
-            val startTime = System.nanoTime()
-            try {
-                // Queueing is part of the deadline; a blocked mutex must not extend a tool budget.
-                val result = withTimeoutOrNull(timeoutMs) {
+        val owner = JarvisAccessibilityService.instance?.connectionToken ?: 0L
+        if (isCancelled.get() || submittedGeneration != taskGeneration.get()) return null
+        if (!admission.tryAcquire()) {
+            AccessibilityHealthModel.recordIssue(AccessibilityIssue.QUEUE_OVERLOAD, owner)
+            return null
+        }
+        AccessibilityHealthModel.recordQueue(pending.incrementAndGet(), isBusy, owner)
+        val category = actionName.substringBefore(':').lowercase(java.util.Locale.ROOT)
+            .takeIf { it in setOf("click", "type", "scroll", "key", "tap", "swipe") } ?: "ui"
+        try {
+            // Both Main dispatch and mutex wait consume the same caller deadline.
+            val returned = withTimeoutOrNull<Returned<T?>>(timeoutMs) {
+                withContext(Dispatchers.Main.immediate) {
                     mutex.withLock {
-                        val actionJob = currentCoroutineContext()[Job] ?: return@withLock null
+                        val actionJob = currentCoroutineContext()[Job] ?: return@withLock Returned<T?>(null)
                         val registered = synchronized(lifecycleLock) {
-                            if (isCancelled.get() || submittedGeneration != taskGeneration.get()) false
+                            if (isCancelled.get() || submittedGeneration != taskGeneration.get() ||
+                                (owner != 0L && !AccessibilityHealthModel.owns(owner))) false
                             else { activeActionJob = actionJob; true }
                         }
-                        if (!registered) return@withLock null
+                        if (!registered) return@withLock Returned<T?>(null)
+                        AccessibilityHealthModel.recordQueue(pending.get(), true, owner)
+                        val startedAt = System.nanoTime()
                         try {
                             currentCoroutineContext().ensureActive()
-                            block()
-                        } finally {
-                            synchronized(lifecycleLock) {
-                                if (activeActionJob === actionJob) activeActionJob = null
+                            val value = block()
+                            if (owner != 0L && !AccessibilityHealthModel.owns(owner)) return@withLock Returned<T?>(null)
+                            if (value is Boolean) {
+                                if (value) AccessibilityHealthModel.recordActionSuccess(category, owner)
+                                else AccessibilityHealthModel.recordActionFailure(category, "rejected", owner)
                             }
+                            Returned<T?>(value)
+                        } finally {
+                            AccessibilityHealthModel.recordDuration((System.nanoTime() - startedAt) / 1_000_000, owner)
+                            synchronized(lifecycleLock) { if (activeActionJob === actionJob) activeActionJob = null }
                         }
                     }
                 }
-                val elapsed = (System.nanoTime() - startTime) / 1_000_000
-                Log.i(TAG, "UI $category action returned in ${elapsed}ms; resultAvailable=${result != null}")
-                result
-            } catch (e: CancellationException) {
-                Log.w(TAG, "UI action cancelled")
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "UI action failed (${e.javaClass.simpleName})")
-                null
             }
+            if (returned == null) AccessibilityHealthModel.recordIssue(AccessibilityIssue.ACTION_TIMEOUT, owner)
+            return returned?.value
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.e(TAG, "UI action failed (${error.javaClass.simpleName})")
+            AccessibilityHealthModel.recordIssue(AccessibilityIssue.INTERNAL, owner)
+            return null
+        } finally {
+            val remaining = pending.decrementAndGet()
+            admission.release()
+            AccessibilityHealthModel.recordQueue(remaining, isBusy, owner)
         }
     }
 }

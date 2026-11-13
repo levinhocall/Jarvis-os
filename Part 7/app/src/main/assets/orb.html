@@ -65,6 +65,7 @@ html, body {
 
 <script src="three.min.js"></script>
 <script src="eye-behavior.js"></script>
+<script src="plasma-orb.js"></script>
 <script>
 (function(){
 "use strict";
@@ -75,6 +76,13 @@ if (isEmbedded) {
   document.body.style.background = "transparent";
 }
 
+// Select before allocating any legacy eye geometry. Only one scene owns this canvas.
+if (new URLSearchParams(location.search).get('mode') === 'fluid_plasma') {
+  document.querySelector('#shadow').style.display='none';
+  window.JarvisOrb=window.createJarvisPlasma(document.querySelector('#c'));
+  window.addEventListener('pagehide',()=>window.JarvisOrb.dispose(),{once:true});
+  return;
+}
 const FOV=45, VIS=3.1, ORBIT=64, COUNT=96;
 const STATES={
   idle:     {scale:1.00,speed:.35,cyan:.35,purple:.15,bright:1.00,glow:.50,ring:.15,wob:0},
@@ -92,9 +100,10 @@ const LABELS={idle:"READY",listening:"LISTENING",thinking:"THINKING...",speaking
 const $=s=>document.querySelector(s);
 const stage=$("#stage"),canvas=$("#c"),shadowEl=$("#shadow");
 
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();if(window.OrbRendererBridge)window.OrbRendererBridge.onFailure();});
 let renderer;
 try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:"default"});}
-catch(e){stage.textContent="3D eye unavailable · use the voice controls below";stage.style.color="#71dbff";return;}
+catch(e){if(window.OrbRendererBridge)window.OrbRendererBridge.onFailure();stage.textContent="3D eye unavailable · use the voice controls below";stage.style.color="#71dbff";return;}
 renderer.setClearColor(0x000000,0);
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(FOV,1,.1,50);
@@ -479,13 +488,13 @@ function handleResize(){
   shadowEl.style.width=Math.round(pxPerUnit*1.5)+"px";
   shadowEl.style.top=Math.round(h/2+pxPerUnit*1.2)+"px";
 }
-let reducedMotion=false,dirty=true,last=performance.now(),frameHandle=0,disposed=false,slowFrames=0,frameBudget=16;
-function schedule(){if(!disposed&&!document.hidden&&!reducedMotion)frameHandle=requestAnimationFrame(animate);}
-function renderStatic(){if(disposed||document.hidden)return;updateOrb(.1);updateParticles(0);renderer.render(scene,camera);dirty=false;}
+let reducedMotion=false,dirty=true,last=performance.now(),frameHandle=0,disposed=false,hostVisible=true,slowFrames=0,frameBudget=16;
+function schedule(){if(!disposed&&hostVisible&&!document.hidden&&!reducedMotion)frameHandle=requestAnimationFrame(animate);}
+function renderStatic(){if(disposed||!hostVisible||document.hidden)return;updateOrb(.1);updateParticles(0);renderer.render(scene,camera);dirty=false;}
 function visibility(){if(document.hidden){cancelAnimationFrame(frameHandle);}else{last=performance.now();if(reducedMotion)renderStatic();else schedule();}}
 document.addEventListener('visibilitychange',visibility);
 function animate(now){
-  if(disposed||document.hidden)return;
+  if(disposed||!hostVisible||document.hidden)return;
   if(reducedMotion){if(dirty)renderStatic();return;}
   schedule();if(now-last<frameBudget)return;
   const elapsed=now-last,dt=Math.min(elapsed/1000,.1);last=now;
@@ -507,6 +516,7 @@ const resizeObserver=window.ResizeObserver?new ResizeObserver(handleResize):null
 if(resizeObserver)resizeObserver.observe(stage);
 
 window.JarvisOrb={
+  setVisible:value=>{hostVisible=!!value;cancelAnimationFrame(frameHandle);last=performance.now();if(hostVisible){if(reducedMotion)renderStatic();else schedule();}},
   setState:setOrbState,
   setTheme:n=>{applyTheme(n);dirty=true;if(reducedMotion)renderStatic();},
   configure:options=>{behavior.configure(options);for(const key of ['intensity','glow','density','size']){if(Number.isFinite(options[key]))appearance[key]=Math.max(key==='size'?.7:0,Math.min(key==='size'?1.15:1.5,options[key]));}appearance.density=Math.min(appearance.density,1);appearance.quality=options.quality||'balanced';frameBudget=appearance.quality==='saver'?50:16;appearance.density*=appearance.quality==='performance'?1:appearance.quality==='saver'?.5:.65;handleResize();dirty=true;if(reducedMotion)renderStatic();},

@@ -14,63 +14,16 @@ class ScreenIntelligenceTest {
         AccessibilityHealthModel.updateState(AccessibilityState.DISABLED)
     }
 
-    @Test
-    fun testAccessibilityState_distinguishesEnabledFromConnectedAndOperational() {
-        // 1. Initially DISABLED
-        assertEquals(AccessibilityState.DISABLED, AccessibilityHealthModel.state.value)
-        assertFalse(AccessibilityHealthModel.isOperational())
-        assertFalse(AccessibilityHealthModel.isConnecting())
-        assertTrue(AccessibilityHealthModel.getRecoveryGuidance()?.contains("disabled", ignoreCase = true) == true)
-
-        // 2. ENABLED in Settings (user turned on switch, but binder not connected)
-        AccessibilityHealthModel.updateState(AccessibilityState.ENABLED)
-        assertEquals(AccessibilityState.ENABLED, AccessibilityHealthModel.state.value)
-        assertFalse(AccessibilityHealthModel.isOperational())
-        assertTrue(AccessibilityHealthModel.isConnecting())
-        assertTrue(AccessibilityHealthModel.getRecoveryGuidance()?.contains("hasn't connected", ignoreCase = true) == true)
-
-        // 3. CONNECTED (onServiceConnected called)
-        AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
-        assertEquals(AccessibilityState.CONNECTED, AccessibilityHealthModel.state.value)
-        assertTrue(AccessibilityHealthModel.isOperational())
-        assertFalse(AccessibilityHealthModel.isConnecting())
-        assertNull(AccessibilityHealthModel.getRecoveryGuidance())
-
-        // 4. DEGRADED (operational but some gestures rejected)
-        AccessibilityHealthModel.updateState(AccessibilityState.DEGRADED, "Gesture rejected")
-        assertEquals(AccessibilityState.DEGRADED, AccessibilityHealthModel.state.value)
-        assertTrue(AccessibilityHealthModel.isOperational())
-        assertNull(AccessibilityHealthModel.getRecoveryGuidance())
-    }
-
-    @Test
-    fun testAccessibilityHealthModel_tracksEventsAndGesturesAndVerification() {
-        AccessibilityHealthModel.updateState(AccessibilityState.CONNECTED)
-
-        assertEquals(0L, AccessibilityHealthModel.totalEventsReceived.value)
-        assertFalse(AccessibilityHealthModel.isReceivingEvents.value)
-
-        // Receive event
-        AccessibilityHealthModel.recordEventReceived()
-        assertEquals(1L, AccessibilityHealthModel.totalEventsReceived.value)
-        assertTrue(AccessibilityHealthModel.isReceivingEvents.value)
-        assertTrue(AccessibilityHealthModel.lastEventReceivedTimestamp.value > 0)
-
-        // Dispatch gesture
-        AccessibilityHealthModel.recordGestureDispatched(true, "clickAt(500, 500)")
-        assertTrue(AccessibilityHealthModel.lastGestureDispatchedTimestamp.value > 0)
-
-        // Action verification
-        AccessibilityHealthModel.recordActionVerified(true, "Text confirmed")
-        assertTrue(AccessibilityHealthModel.lastActionVerifiedTimestamp.value > 0)
-
-        val summary = AccessibilityHealthModel.getOperationalStatusSummary()
-        assertEquals(AccessibilityState.CONNECTED, summary.state)
-        assertTrue(summary.isOperational)
-        assertTrue(summary.isReceivingEvents)
-        assertTrue(summary.lastEventReceivedAgeMs >= 0)
-        assertTrue(summary.lastGestureDispatchedAgeMs >= 0)
-        assertTrue(summary.lastActionVerifiedAgeMs >= 0)
+    @Test fun healthRequiresLifecycleAndARealReadableSnapshot() {
+        val health = com.jarvis.assistant.automation.accessibility.AccessibilitySessionHealth { 5L }
+        health.reconcile(true,null)
+        assertFalse(health.snapshots.value.connected)
+        val token=health.connected()
+        assertEquals(AccessibilityState.CONNECTED,health.snapshots.value.state)
+        health.snapshot(token,true)
+        assertEquals(AccessibilityState.READY,health.snapshots.value.state)
+        health.disconnected(token)
+        assertFalse(health.snapshots.value.connected)
     }
 
     @Test

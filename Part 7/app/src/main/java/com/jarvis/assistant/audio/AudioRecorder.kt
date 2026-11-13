@@ -8,6 +8,7 @@ import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +30,7 @@ class AudioRecorder(
         const val CHUNK_SIZE_BYTES = 640
     }
 
+    @Volatile var onCaptureFailure: ((AudioCaptureFailure) -> Unit)? = null
     private var audioRecord: AudioRecord? = null
     private var echoCanceler: AcousticEchoCanceler? = null
     private var noiseSuppressor: NoiseSuppressor? = null
@@ -106,6 +108,8 @@ class AudioRecorder(
                 return false
             }
 
+            // Publish before any effect API can throw so the common failure path owns cleanup.
+            audioRecord = record
             val sessionId = record.audioSessionId
             if (AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
                 try {
@@ -140,10 +144,8 @@ class AudioRecorder(
                 }
             }
 
-            // Publish the recorder before starting it so the failure path can
-            // release it if startRecording() throws.
-            audioRecord = record
             record.startRecording()
+            check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start" }
             isRecording.set(true)
             val generation = lifecycleGeneration.incrementAndGet()
 
@@ -153,12 +155,14 @@ class AudioRecorder(
                 } catch (_: Exception) {}
                 val buffer = ByteArray(CHUNK_SIZE_BYTES)
                 var currentRecord: AudioRecord? = record
-                while (isActive && isRecording.get()) {
+                val recoveryBudget = AudioRecoveryBudget()
+                capture@ while (isActive && isRecording.get() && lifecycleGeneration.get() == generation) {
                     var consecutiveErrors = 0
                     while (isActive && isRecording.get() && currentRecord != null) {
                         try {
                             val readBytes = currentRecord.read(buffer, 0, buffer.size)
                             if (readBytes > 0) {
+                                recoveryBudget.successfulFrame()
                                 consecutiveErrors = 0
                                 val freq = AudioUtils.analyzeFrequency(buffer, readBytes, SAMPLE_RATE)
                                 // Consumer code may throw (for example, during voice-engine
@@ -170,8 +174,9 @@ class AudioRecorder(
                                     } else {
                                         onAudioChunk(ByteArray(0), 0f, AudioFrequencyData())
                                     }
-                                } catch (callbackError: Exception) {
-                                    Log.w(TAG, "Audio chunk callback failed; capture will continue: ${callbackError.message}", callbackError)
+                                } catch (cancelled: CancellationException) { throw cancelled }
+                                catch (callbackError: Exception) {
+                                    Log.w(TAG, "Audio chunk callback failed (${callbackError.javaClass.simpleName}); capture continues")
                                 }
                             } else if (readBytes < 0) {
                                 consecutiveErrors++
@@ -181,7 +186,17 @@ class AudioRecorder(
                                     Log.e(TAG, "Consecutive AudioRecord read errors exceeded limit. Attempting auto-recovery...")
                                     break
                                 }
+                            } else {
+                                // Real silence still delivers PCM bytes; repeated zero reads are a stalled recorder.
+                                consecutiveErrors++
+                                delay(10)
+                                if (consecutiveErrors > 50) break
                             }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: SecurityException) {
+                            if (lifecycleGeneration.get() == generation && isRecording.get()) notifyCaptureFailure(AudioCaptureFailure.PERMISSION_REVOKED)
+                            break@capture
                         } catch (e: Exception) {
                             consecutiveErrors++
                             Log.e(
@@ -201,6 +216,10 @@ class AudioRecorder(
                     // Audio effects belong to an AudioRecord session ID, so they must be
                     // rebound when a replacement recorder is created.
                     if (isActive && isRecording.get() && lifecycleGeneration.get() == generation) {
+                        if (!recoveryBudget.nextAttempt()) {
+                            notifyCaptureFailure(AudioCaptureFailure.RECOVERY_EXHAUSTED)
+                            break@capture
+                        }
                         delay(400)
                         // stop() may be requested while recovery is waiting. Re-check
                         // after the suspension so a stopped session does not recreate
@@ -252,6 +271,7 @@ class AudioRecorder(
                             }
 
                             candidate.startRecording()
+                            check(candidate.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Replacement microphone did not start" }
                             val published = synchronized(this@AudioRecorder) {
                                 if (isRecording.get() && lifecycleGeneration.get() == generation) {
                                     currentRecord = candidate
@@ -270,12 +290,19 @@ class AudioRecorder(
                                 break
                             }
                             Log.i(TAG, "AudioRecord recovered with effects rebound to session $newSessionId")
+                        } catch (cancelled: CancellationException) {
+                            try { replacementRecord?.release() } catch (_: Exception) { }
+                            throw cancelled
                         } catch (reInitEx: Exception) {
                             try { replacementRecord?.release() } catch (_: Exception) {}
                             releaseAudioEffects("Failed audio recovery")
                             audioRecord = null
                             currentRecord = null
                             Log.e(TAG, "AudioRecord auto-recovery failed: ${reInitEx.message}", reInitEx)
+                            if (reInitEx is SecurityException) {
+                                notifyCaptureFailure(AudioCaptureFailure.PERMISSION_REVOKED)
+                                break@capture
+                            }
                             delay(1000)
                         }
                     }
@@ -285,10 +312,12 @@ class AudioRecorder(
                     synchronized(this@AudioRecorder) {
                         // An old capture's cancellation cannot tear down a replacement.
                         if (lifecycleGeneration.get() == generation) stop()
+                        lease.close()
+                        if (microphoneLease === lease) microphoneLease = null
                     }
                 }
             }
-            true
+            isRecording.get()
         } catch (e: Exception) {
             // startRecording() can fail after AudioRecord and audio effects have
             // already been created. Release every partially initialized resource
@@ -325,7 +354,8 @@ class AudioRecorder(
     fun stop() {
         lifecycleGeneration.incrementAndGet()
         isRecording.set(false)
-        recordingJob?.cancel()
+        val stoppingJob = recordingJob
+        stoppingJob?.cancel()
         recordingJob = null
 
         releaseAudioEffects("Audio stop")
@@ -349,8 +379,15 @@ class AudioRecorder(
                 }
             }
         }
-        microphoneLease?.close()
-        microphoneLease = null
+        if (stoppingJob == null || stoppingJob.isCompleted) {
+            microphoneLease?.close()
+            microphoneLease = null
+        } // Otherwise invokeOnCompletion releases the exact old lease after recovery cleanup.
+    }
+
+    private fun notifyCaptureFailure(failure: AudioCaptureFailure) {
+        try { onCaptureFailure?.invoke(failure) }
+        catch (error: Exception) { Log.w(TAG, "Capture failure callback failed (${error.javaClass.simpleName})") }
     }
 
     fun setMuted(muted: Boolean) {

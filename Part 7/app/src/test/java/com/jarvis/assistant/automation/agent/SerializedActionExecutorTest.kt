@@ -3,8 +3,14 @@ package com.jarvis.assistant.automation.agent
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Before
+import org.junit.After
+import kotlinx.coroutines.test.*
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SerializedActionExecutorTest {
+    @Before fun mainDispatcher() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
+    @After fun reset() { SerializedActionExecutor.resetCancellation(); Dispatchers.resetMain() }
     @Test fun stopCancelsRunningActionAndPreventsLaterSteps() = runBlocking {
         val generation = SerializedActionExecutor.startNewTask()
         val entered = CompletableDeferred<Unit>()
@@ -65,4 +71,31 @@ class SerializedActionExecutorTest {
             assertTrue(held.isActive)
         } finally { release.complete(Unit); held.cancelAndJoin(); SerializedActionExecutor.resetCancellation() }
     }
+    @Test fun overloadRejectsWithoutExecutingAndReleasesAllAdmission() = runTest {
+        val generation=SerializedActionExecutor.startNewTask()
+        val hold=CompletableDeferred<Unit>()
+        val jobs=(0 until SerializedActionExecutor.MAX_PENDING).map {
+            async { SerializedActionExecutor.execute("tap",expectedGeneration=generation) { hold.await();true } }
+        }
+        runCurrent()
+        var executed=false
+        assertNull(SerializedActionExecutor.execute("tap",expectedGeneration=generation) { executed=true;true })
+        assertFalse(executed)
+        assertEquals(SerializedActionExecutor.MAX_PENDING,SerializedActionExecutor.pendingCount)
+        hold.complete(Unit); jobs.forEach { it.await() };runCurrent()
+        assertEquals(0,SerializedActionExecutor.pendingCount)
+    }
+    @Test fun queuedDeadlineDoesNotExecuteItsMutation() = runTest {
+        val generation=SerializedActionExecutor.startNewTask()
+        val hold=CompletableDeferred<Unit>()
+        val first=async { SerializedActionExecutor.execute("tap",expectedGeneration=generation) { hold.await();true } }
+        runCurrent()
+        var executed=false
+        val queued=async { SerializedActionExecutor.execute("tap",timeoutMs=50,expectedGeneration=generation) { executed=true;true } }
+        runCurrent();advanceTimeBy(51);runCurrent()
+        assertNull(queued.await());assertFalse(executed)
+        hold.complete(Unit);first.await();runCurrent()
+        assertEquals(0,SerializedActionExecutor.pendingCount)
+    }
+
 }

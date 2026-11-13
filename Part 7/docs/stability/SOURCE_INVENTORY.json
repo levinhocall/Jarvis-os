@@ -1,0 +1,5926 @@
+{
+  "source_commit": "3795d9a08583ecd1d684155dc133d73875f8460f",
+  "method": "Every committed Part 7 .kt/.kts blob read and mechanically indexed. Signals are lexical candidates, not AST facts or a claim of full manual semantic review. Deep review/evidence and remaining limitations are in STABILITY_AUDIT.md.",
+  "counts": {
+    "production": 289,
+    "test": 93,
+    "androidTest": 13,
+    "build": 3
+  },
+  "files": [
+    {
+      "path": "app/build.gradle.kts",
+      "scope": "build",
+      "lines": 176,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/automation/mission/PersistentMissionCheckpointStorageInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 55,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/chat/ConversationRepositoryInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 162,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/memory/ChatSchemaV9InstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 256,
+      "signals": {
+        "blocking": [
+          49,
+          70,
+          86,
+          120
+        ],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/memory/ColdRoomDispatchInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 47,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/memory/DatabaseKeyStoreInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 50,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/memory/HistoricalMemorySchemas.kt",
+      "scope": "androidTest",
+      "lines": 126,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/memory/MemoryRepositoryTransactionInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 189,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          123,
+          162
+        ]
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/memory/RoomMigrationInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 186,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/memory/SqlCipherRuntimeInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 81,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/data/preferences/AppPreferencesSecurityInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 120,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/ui/ControlsNavigationInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 62,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/ui/LaunchSmokeInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 200,
+      "signals": {
+        "blocking": [
+          31
+        ],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          197
+        ]
+      }
+    },
+    {
+      "path": "app/src/androidTest/java/com/jarvis/assistant/ui/OrbAppearanceInstrumentedTest.kt",
+      "scope": "androidTest",
+      "lines": 29,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/JarvisApp.kt",
+      "scope": "production",
+      "lines": 246,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          155,
+          233
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/AdaptiveVadEngine.kt",
+      "scope": "production",
+      "lines": 140,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/AudioPlayer.kt",
+      "scope": "production",
+      "lines": 265,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [
+          25
+        ],
+        "resource_create": [
+          52
+        ],
+        "lifecycle": [],
+        "catch": [
+          73,
+          92,
+          111,
+          150,
+          152,
+          187,
+          188,
+          189,
+          192,
+          218,
+          231,
+          241,
+          258
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/AudioRecorder.kt",
+      "scope": "production",
+      "lines": 359,
+      "signals": {
+        "blocking": [
+          95
+        ],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [
+          79,
+          219
+        ],
+        "lifecycle": [],
+        "catch": [
+          96,
+          116,
+          127,
+          138,
+          153,
+          173,
+          185,
+          213,
+          235,
+          242,
+          249,
+          273,
+          274,
+          292,
+          307,
+          312,
+          342,
+          347
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/AudioUtils.kt",
+      "scope": "production",
+      "lines": 111,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/BoundedAudioResponse.kt",
+      "scope": "production",
+      "lines": 13,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/HeadsetAudioRouter.kt",
+      "scope": "production",
+      "lines": 219,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          94,
+          169,
+          178,
+          188,
+          193,
+          207,
+          215
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/HeadsetWhisperManager.kt",
+      "scope": "production",
+      "lines": 169,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          55
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/JarvisSoundEffects.kt",
+      "scope": "production",
+      "lines": 168,
+      "signals": {
+        "blocking": [
+          62
+        ],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [
+          50
+        ],
+        "lifecycle": [],
+        "catch": [
+          66,
+          67
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/MicrophoneOwnership.kt",
+      "scope": "production",
+      "lines": 29,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/OwnerVoiceManager.kt",
+      "scope": "production",
+      "lines": 232,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          143,
+          149
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/PcmWritePump.kt",
+      "scope": "production",
+      "lines": 16,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/PocketDetectionManager.kt",
+      "scope": "production",
+      "lines": 122,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          64,
+          79
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/VoiceFlightRecorder.kt",
+      "scope": "production",
+      "lines": 187,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/VoiceInterruptionCoordinator.kt",
+      "scope": "production",
+      "lines": 193,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          151,
+          188
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/VoiceSynthesisRouter.kt",
+      "scope": "production",
+      "lines": 297,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          246,
+          273,
+          284,
+          292
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/VoskModelDownloader.kt",
+      "scope": "production",
+      "lines": 121,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/VoskModelManager.kt",
+      "scope": "production",
+      "lines": 92,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          41,
+          54,
+          62,
+          63,
+          64,
+          65
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/WakePhraseMatcher.kt",
+      "scope": "production",
+      "lines": 98,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/wake/ModelArchive.kt",
+      "scope": "production",
+      "lines": 43,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/wake/ModelDownloadWorker.kt",
+      "scope": "production",
+      "lines": 93,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          66,
+          73,
+          74,
+          76,
+          78
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/wake/WakeMatcher.kt",
+      "scope": "production",
+      "lines": 46,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/audio/wake/WakeSettings.kt",
+      "scope": "production",
+      "lines": 37,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/accessibility/AccessibilityHealthModel.kt",
+      "scope": "production",
+      "lines": 429,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          359,
+          397,
+          423
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/accessibility/JarvisAccessibilityService.kt",
+      "scope": "production",
+      "lines": 2381,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [
+          109
+        ],
+        "lifecycle": [
+          269,
+          438,
+          457,
+          473
+        ],
+        "catch": [
+          128,
+          163,
+          167,
+          169,
+          195,
+          198,
+          201,
+          211,
+          218,
+          221,
+          232,
+          282,
+          286,
+          309,
+          333,
+          343,
+          366,
+          378,
+          390,
+          402,
+          414,
+          426,
+          431,
+          442,
+          466,
+          482,
+          498,
+          502,
+          1253,
+          1301,
+          1315,
+          1349,
+          1436,
+          1464,
+          1481,
+          1677,
+          1685,
+          1737,
+          1749,
+          1825,
+          1902,
+          1922,
+          2020,
+          2040,
+          2068,
+          2099,
+          2133,
+          2181,
+          2219,
+          2256
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/ActionVerifier.kt",
+      "scope": "production",
+      "lines": 163,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/AgentModels.kt",
+      "scope": "production",
+      "lines": 161,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/AgentTaskEngine.kt",
+      "scope": "production",
+      "lines": 590,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          354,
+          357
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/AutonomousGoalAgent.kt",
+      "scope": "production",
+      "lines": 177,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          78,
+          80,
+          114,
+          116,
+          130
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/CancellableCouncilRequest.kt",
+      "scope": "production",
+      "lines": 41,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          36
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/LlmPlanner.kt",
+      "scope": "production",
+      "lines": 728,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          207,
+          209,
+          336,
+          338,
+          448,
+          469,
+          660,
+          669,
+          686
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/ScreenSignatureCalculator.kt",
+      "scope": "production",
+      "lines": 89,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/SelfHealingAgentLoop.kt",
+      "scope": "production",
+      "lines": 258,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/agent/SerializedActionExecutor.kt",
+      "scope": "production",
+      "lines": 113,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          104,
+          107
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/bridge/CrossDeviceBridge.kt",
+      "scope": "production",
+      "lines": 85,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          47,
+          63
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/briefing/ProactiveBriefingManager.kt",
+      "scope": "production",
+      "lines": 76,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          56,
+          72
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/command/CommandExecutor.kt",
+      "scope": "production",
+      "lines": 220,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          118,
+          141,
+          153
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/command/CommandParser.kt",
+      "scope": "production",
+      "lines": 681,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/command/JarvisCommand.kt",
+      "scope": "production",
+      "lines": 51,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/contacts/ContactChoiceResolver.kt",
+      "scope": "production",
+      "lines": 32,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/contacts/ContactModel.kt",
+      "scope": "production",
+      "lines": 19,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/contacts/ContactResolver.kt",
+      "scope": "production",
+      "lines": 230,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          195
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/council/BoundedAgentRunner.kt",
+      "scope": "production",
+      "lines": 58,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          46,
+          48
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/council/CouncilModels.kt",
+      "scope": "production",
+      "lines": 46,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/council/MultiAgentCouncil.kt",
+      "scope": "production",
+      "lines": 504,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/dev/AutonomousDevLoop.kt",
+      "scope": "production",
+      "lines": 385,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          322
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/dev/DevExecutionModels.kt",
+      "scope": "production",
+      "lines": 212,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          194
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/dev/DevProjectWorkspaceRegistry.kt",
+      "scope": "production",
+      "lines": 19,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/dev/DevToolRegistry.kt",
+      "scope": "production",
+      "lines": 568,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          43,
+          47,
+          111,
+          289,
+          310,
+          397
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/dev/SoftwareEngineerWorkspaceState.kt",
+      "scope": "production",
+      "lines": 136,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/dev/SoftwareEngineeringAgent.kt",
+      "scope": "production",
+      "lines": 185,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          143
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/dev/SoftwareEngineeringModels.kt",
+      "scope": "production",
+      "lines": 66,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/dev/TermuxBridge.kt",
+      "scope": "production",
+      "lines": 283,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          69,
+          260
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/grounding/ScreenGroundingEngine.kt",
+      "scope": "production",
+      "lines": 486,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          110
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/grounding/ScreenGroundingModels.kt",
+      "scope": "production",
+      "lines": 120,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/integration/UniversalActionDispatcher.kt",
+      "scope": "production",
+      "lines": 124,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          77
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/integration/UniversalActionModels.kt",
+      "scope": "production",
+      "lines": 74,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/integration/UniversalActionRegistry.kt",
+      "scope": "production",
+      "lines": 249,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/intelligence/PromptInjectionSanitizer.kt",
+      "scope": "production",
+      "lines": 64,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/intelligence/UniversalInformationEngine.kt",
+      "scope": "production",
+      "lines": 234,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          56,
+          100
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/intelligence/UniversalInformationModels.kt",
+      "scope": "production",
+      "lines": 43,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/ledger/ExpenseLedgerTracker.kt",
+      "scope": "production",
+      "lines": 197,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/ExplicitMessageAuthorization.kt",
+      "scope": "production",
+      "lines": 33,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/LongHorizonMissionCoordinator.kt",
+      "scope": "production",
+      "lines": 378,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/LongHorizonMissionModels.kt",
+      "scope": "production",
+      "lines": 134,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/MissionActionIdentity.kt",
+      "scope": "production",
+      "lines": 41,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/MissionApprovalCommandParser.kt",
+      "scope": "production",
+      "lines": 32,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/MissionApprovalNotifier.kt",
+      "scope": "production",
+      "lines": 84,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/MissionApprovalReceiver.kt",
+      "scope": "production",
+      "lines": 42,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          35
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/MissionEngine.kt",
+      "scope": "production",
+      "lines": 2163,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          115,
+          193,
+          196,
+          227,
+          1312,
+          1719,
+          1721,
+          1777,
+          2093,
+          2098
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/MissionExecutionRoute.kt",
+      "scope": "production",
+      "lines": 20,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/MissionModels.kt",
+      "scope": "production",
+      "lines": 141,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/PersistentMissionCheckpointStorage.kt",
+      "scope": "production",
+      "lines": 86,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/ToolArgumentValidator.kt",
+      "scope": "production",
+      "lines": 27,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/mission/ToolRegistry.kt",
+      "scope": "production",
+      "lines": 413,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/notification/JarvisNotificationListenerService.kt",
+      "scope": "production",
+      "lines": 237,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          226
+        ],
+        "catch": [
+          89
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/notification/NotificationArchivePolicy.kt",
+      "scope": "production",
+      "lines": 7,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/notification/NotificationPrivacyFilter.kt",
+      "scope": "production",
+      "lines": 30,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/offline/OfflineIntelligenceCoordinator.kt",
+      "scope": "production",
+      "lines": 233,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          198
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/offline/OfflineIntelligenceModels.kt",
+      "scope": "production",
+      "lines": 47,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/offline/OfflineIntelligenceRouter.kt",
+      "scope": "production",
+      "lines": 174,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          65,
+          148
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/phone/CallScreeningReceiver.kt",
+      "scope": "production",
+      "lines": 217,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          51,
+          105,
+          140
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/phone/DomainNormalizer.kt",
+      "scope": "production",
+      "lines": 242,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/phone/MobileUtilityActions.kt",
+      "scope": "production",
+      "lines": 67,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/phone/PhoneControlManager.kt",
+      "scope": "production",
+      "lines": 847,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          196,
+          219,
+          239,
+          253,
+          271,
+          277,
+          280,
+          309,
+          316,
+          337,
+          409,
+          425,
+          456,
+          651,
+          671,
+          695,
+          706,
+          730,
+          759,
+          816
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/proactive/InterruptionGovernor.kt",
+      "scope": "production",
+      "lines": 161,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/proactive/ProactiveAssistantCoordinator.kt",
+      "scope": "production",
+      "lines": 216,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/proactive/ProactiveEngineModels.kt",
+      "scope": "production",
+      "lines": 63,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/proactive/TriggerReminderNotifier.kt",
+      "scope": "production",
+      "lines": 70,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/proactive/TriggerRepository.kt",
+      "scope": "production",
+      "lines": 272,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          116,
+          130,
+          142,
+          216,
+          254
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/proactive/TriggerWorker.kt",
+      "scope": "production",
+      "lines": 116,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          111
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/protocol/ProtocolManager.kt",
+      "scope": "production",
+      "lines": 144,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          63
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/provenance/EvidenceProvenanceModels.kt",
+      "scope": "production",
+      "lines": 53,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/provenance/KnowledgeProvenanceCoordinator.kt",
+      "scope": "production",
+      "lines": 160,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/reflex/OfflineReflexExecutor.kt",
+      "scope": "production",
+      "lines": 215,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          193,
+          210
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/routing/ApiKeyRotator.kt",
+      "scope": "production",
+      "lines": 78,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/routing/CognitiveRouter.kt",
+      "scope": "production",
+      "lines": 197,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/routing/CognitiveRoutingModels.kt",
+      "scope": "production",
+      "lines": 50,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/routing/LlmProvider.kt",
+      "scope": "production",
+      "lines": 272,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/skills/SkillForgeManager.kt",
+      "scope": "production",
+      "lines": 336,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          331
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/skills/SkillModels.kt",
+      "scope": "production",
+      "lines": 54,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/whatsapp/WhatsAppAssistant.kt",
+      "scope": "production",
+      "lines": 388,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          180,
+          190,
+          282,
+          318,
+          359,
+          384
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/youtube/YouTubeApiClient.kt",
+      "scope": "production",
+      "lines": 192,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          48,
+          99,
+          117,
+          187
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/youtube/YouTubeAutomationManager.kt",
+      "scope": "production",
+      "lines": 168,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          103,
+          164
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/automation/youtube/YouTubeController.kt",
+      "scope": "production",
+      "lines": 229,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          56,
+          62,
+          76,
+          108,
+          140,
+          172,
+          180,
+          205,
+          224
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/background/AudioPipelineManager.kt",
+      "scope": "production",
+      "lines": 255,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [
+          92
+        ],
+        "lifecycle": [],
+        "catch": [
+          115,
+          127,
+          144,
+          225
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/background/DeviceActionDispatcher.kt",
+      "scope": "production",
+      "lines": 155,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          42,
+          60,
+          76,
+          105,
+          128,
+          133,
+          151
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/background/JarvisConversationService.kt",
+      "scope": "production",
+      "lines": 4181,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          1272,
+          4045
+        ],
+        "catch": [
+          179,
+          537,
+          538,
+          598,
+          601,
+          746,
+          782,
+          789,
+          800,
+          819,
+          836,
+          858,
+          1004,
+          1057,
+          1059,
+          2086,
+          2090,
+          2301,
+          2990,
+          2997,
+          3000,
+          3556,
+          3588,
+          3657,
+          3807,
+          3882,
+          3908,
+          3927,
+          3984,
+          4055,
+          4059,
+          4115
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/background/OverlayBootReceiver.kt",
+      "scope": "production",
+      "lines": 38,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/background/ScreenCaptureBridge.kt",
+      "scope": "production",
+      "lines": 93,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          40,
+          54,
+          81
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/background/VoiceSessionManager.kt",
+      "scope": "production",
+      "lines": 271,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          119,
+          121,
+          145,
+          233,
+          235
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/ambient/AmbientExperienceCoordinator.kt",
+      "scope": "production",
+      "lines": 196,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/ambient/AmbientExperienceModels.kt",
+      "scope": "production",
+      "lines": 21,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/diagnostics/StorageHealth.kt",
+      "scope": "production",
+      "lines": 19,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/eval/BenchmarkEvaluator.kt",
+      "scope": "production",
+      "lines": 136,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          43
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/eval/EvaluationModels.kt",
+      "scope": "production",
+      "lines": 64,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/reliability/ReliabilityCoordinator.kt",
+      "scope": "production",
+      "lines": 173,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          116
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/reliability/ReliabilityModels.kt",
+      "scope": "production",
+      "lines": 48,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/runtime/JarvisUnifiedRuntime.kt",
+      "scope": "production",
+      "lines": 416,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          56,
+          62,
+          287,
+          393,
+          396
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/runtime/UnifiedRuntimeModels.kt",
+      "scope": "production",
+      "lines": 48,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/world/WorldModelCoordinator.kt",
+      "scope": "production",
+      "lines": 155,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/core/world/WorldModelModels.kt",
+      "scope": "production",
+      "lines": 32,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/chat/ChatDao.kt",
+      "scope": "production",
+      "lines": 121,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/chat/ChatMessageEntity.kt",
+      "scope": "production",
+      "lines": 28,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/chat/ChatMigrationReceiptEntity.kt",
+      "scope": "production",
+      "lines": 25,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/chat/ChatSessionEntity.kt",
+      "scope": "production",
+      "lines": 17,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/chat/ConversationRepository.kt",
+      "scope": "production",
+      "lines": 217,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/chat/ConversationTurnMapper.kt",
+      "scope": "production",
+      "lines": 47,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/chat/LegacyChatImport.kt",
+      "scope": "production",
+      "lines": 65,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/directives/DirectiveAiClient.kt",
+      "scope": "production",
+      "lines": 124,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/directives/DirectiveData.kt",
+      "scope": "production",
+      "lines": 90,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/directives/IdeaReviewWorker.kt",
+      "scope": "production",
+      "lines": 41,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          26,
+          27
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/directives/LearningPolicy.kt",
+      "scope": "production",
+      "lines": 34,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/files/FileIntelligenceEngine.kt",
+      "scope": "production",
+      "lines": 286,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          114,
+          138,
+          185,
+          203,
+          226,
+          242
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/ConversationContextMemory.kt",
+      "scope": "production",
+      "lines": 135,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/DatabaseEncryption.kt",
+      "scope": "production",
+      "lines": 349,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          104,
+          144,
+          176
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/DatabaseKeyStore.kt",
+      "scope": "production",
+      "lines": 108,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          89
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/DatabaseReadiness.kt",
+      "scope": "production",
+      "lines": 55,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          32
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/DatabaseSwapRecoveryPolicy.kt",
+      "scope": "production",
+      "lines": 27,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/DeferredSqlCipherOpenHelperFactory.kt",
+      "scope": "production",
+      "lines": 48,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/EpisodicVectorMemory.kt",
+      "scope": "production",
+      "lines": 265,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/MemoryAwareContextBuilder.kt",
+      "scope": "production",
+      "lines": 66,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/MemoryBackupPolicy.kt",
+      "scope": "production",
+      "lines": 25,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/MemoryDao.kt",
+      "scope": "production",
+      "lines": 126,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/MemoryDatabase.kt",
+      "scope": "production",
+      "lines": 300,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/MemoryEntity.kt",
+      "scope": "production",
+      "lines": 88,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/MemoryManager.kt",
+      "scope": "production",
+      "lines": 423,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/MemoryRepository.kt",
+      "scope": "production",
+      "lines": 329,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          276
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/MemoryTextTokens.kt",
+      "scope": "production",
+      "lines": 17,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/PersonalMemoryGraph.kt",
+      "scope": "production",
+      "lines": 205,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          115,
+          187
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/RecallCoreManager.kt",
+      "scope": "production",
+      "lines": 85,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/sync/MemorySyncScheduler.kt",
+      "scope": "production",
+      "lines": 18,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/sync/MemorySyncStateEntity.kt",
+      "scope": "production",
+      "lines": 13,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/sync/MemorySyncWorker.kt",
+      "scope": "production",
+      "lines": 10,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/vector/EmbeddingModels.kt",
+      "scope": "production",
+      "lines": 43,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/vector/EmbeddingProvider.kt",
+      "scope": "production",
+      "lines": 109,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/memory/vector/VectorSearchEngine.kt",
+      "scope": "production",
+      "lines": 158,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          126,
+          132
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/mission/MissionEntities.kt",
+      "scope": "production",
+      "lines": 41,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/model/ChatTurn.kt",
+      "scope": "production",
+      "lines": 19,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/model/ConversationState.kt",
+      "scope": "production",
+      "lines": 48,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/model/GeminiLiveModels.kt",
+      "scope": "production",
+      "lines": 161,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/notification/NotificationHistoryDao.kt",
+      "scope": "production",
+      "lines": 37,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/notification/NotificationHistoryEntity.kt",
+      "scope": "production",
+      "lines": 19,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/personalization/AdaptivePersonalizationEngine.kt",
+      "scope": "production",
+      "lines": 169,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/personalization/AssistantPersonality.kt",
+      "scope": "production",
+      "lines": 40,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/personalization/PersonalizationModels.kt",
+      "scope": "production",
+      "lines": 39,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/preferences/AppPreferences.kt",
+      "scope": "production",
+      "lines": 831,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          29,
+          154,
+          171,
+          293,
+          336,
+          386,
+          623,
+          681
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/preferences/YouTubePreferences.kt",
+      "scope": "production",
+      "lines": 81,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          31,
+          76
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/data/repository/ChatRepository.kt",
+      "scope": "production",
+      "lines": 10,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/emergency/EmergencyContactActivity.kt",
+      "scope": "production",
+      "lines": 37,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          24,
+          31,
+          33,
+          36
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/emergency/EmergencyMonitorService.kt",
+      "scope": "production",
+      "lines": 99,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          88
+        ],
+        "catch": [
+          44,
+          73,
+          74
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/emergency/EmergencySettings.kt",
+      "scope": "production",
+      "lines": 20,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/emergency/FallCandidateDetector.kt",
+      "scope": "production",
+      "lines": 23,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/network/GeminiLiveWebSocket.kt",
+      "scope": "production",
+      "lines": 1173,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [
+          165
+        ],
+        "lifecycle": [],
+        "catch": [
+          247,
+          306,
+          978,
+          1002,
+          1014,
+          1043,
+          1075,
+          1166
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/network/GeminiModelCatalog.kt",
+      "scope": "production",
+      "lines": 98,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/network/LiveSessionResumption.kt",
+      "scope": "production",
+      "lines": 17,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/network/LiveToolContracts.kt",
+      "scope": "production",
+      "lines": 35,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/AppIdentityVerifier.kt",
+      "scope": "production",
+      "lines": 55,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/DeveloperInfo.kt",
+      "scope": "production",
+      "lines": 16,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/SecurityGuardManager.kt",
+      "scope": "production",
+      "lines": 266,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          57,
+          66,
+          84,
+          101,
+          111,
+          196,
+          226,
+          237,
+          261
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/SecurityManager.kt",
+      "scope": "production",
+      "lines": 96,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          79,
+          92
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/sandbox/AuditEntities.kt",
+      "scope": "production",
+      "lines": 56,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/sandbox/CapabilitySandbox.kt",
+      "scope": "production",
+      "lines": 441,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          140,
+          163,
+          199,
+          272,
+          369
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/sandbox/RiskPolicy.kt",
+      "scope": "production",
+      "lines": 87,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/sandbox/SandboxModels.kt",
+      "scope": "production",
+      "lines": 33,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/security/sandbox/UntrustedContentSanitizer.kt",
+      "scope": "production",
+      "lines": 32,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/agent/OverlayDockingPolicy.kt",
+      "scope": "production",
+      "lines": 45,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/agent/TaskProgressOverlay.kt",
+      "scope": "production",
+      "lines": 557,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          204,
+          266,
+          277,
+          314,
+          323,
+          349,
+          423,
+          434,
+          449,
+          508
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/AppIconSwitcher.kt",
+      "scope": "production",
+      "lines": 22,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/AuraCloudClient.kt",
+      "scope": "production",
+      "lines": 86,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          76
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/AuraControls.kt",
+      "scope": "production",
+      "lines": 56,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/AuraOptions.kt",
+      "scope": "production",
+      "lines": 17,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/AutonomyPolicy.kt",
+      "scope": "production",
+      "lines": 6,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/AutonomyWorker.kt",
+      "scope": "production",
+      "lines": 63,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          20,
+          22,
+          49,
+          50
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/AvatarStudioActivity.kt",
+      "scope": "production",
+      "lines": 48,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          23,
+          45
+        ],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/DecisionLogsActivity.kt",
+      "scope": "production",
+      "lines": 24,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/MediaStudioActivity.kt",
+      "scope": "production",
+      "lines": 43,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          21,
+          22
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/aura/TapIndicator.kt",
+      "scope": "production",
+      "lines": 26,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/avatar/RealisticAvatarView.kt",
+      "scope": "production",
+      "lines": 450,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/chat/ChatAdapter.kt",
+      "scope": "production",
+      "lines": 41,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/chat/ChatFragment.kt",
+      "scope": "production",
+      "lines": 196,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          192
+        ],
+        "catch": [
+          124
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/chat/ChatHistoryBottomSheet.kt",
+      "scope": "production",
+      "lines": 102,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          93
+        ],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/chat/JarvisChatAdapter.kt",
+      "scope": "production",
+      "lines": 85,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/chat/NairaChatAdapter.kt",
+      "scope": "production",
+      "lines": 6,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/controls/ControlsFragment.kt",
+      "scope": "production",
+      "lines": 119,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          118
+        ],
+        "catch": [
+          115
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/dev/CodingDevFragment.kt",
+      "scope": "production",
+      "lines": 721,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          717
+        ],
+        "catch": [
+          596,
+          698,
+          712
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/DirectiveActivity.kt",
+      "scope": "production",
+      "lines": 58,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/DirectiveGrid.kt",
+      "scope": "production",
+      "lines": 88,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/EnglishTeacherActivity.kt",
+      "scope": "production",
+      "lines": 182,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          180,
+          181
+        ],
+        "catch": [
+          84,
+          85,
+          99,
+          100,
+          125,
+          126,
+          157,
+          167
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/IdeasActivity.kt",
+      "scope": "production",
+      "lines": 120,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          95
+        ],
+        "catch": [
+          49,
+          50,
+          90,
+          91
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/LocalDictation.kt",
+      "scope": "production",
+      "lines": 63,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          54
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/MissionDeskActivity.kt",
+      "scope": "production",
+      "lines": 112,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          50,
+          51,
+          109,
+          110
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/PremiumOrbView.kt",
+      "scope": "production",
+      "lines": 64,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/VoiceModeActivity.kt",
+      "scope": "production",
+      "lines": 122,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          99
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/VortexOrbView.kt",
+      "scope": "production",
+      "lines": 55,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          54
+        ],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/WakeGlow.kt",
+      "scope": "production",
+      "lines": 39,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/directives/WakeWordActivity.kt",
+      "scope": "production",
+      "lines": 250,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          70
+        ],
+        "catch": [
+          242
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/extras/AirGesturesActivity.kt",
+      "scope": "production",
+      "lines": 113,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          111,
+          112
+        ],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/extras/AirspaceRadarActivity.kt",
+      "scope": "production",
+      "lines": 107,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          65,
+          66
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/extras/BrainDumpActivity.kt",
+      "scope": "production",
+      "lines": 143,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          43,
+          44,
+          70,
+          72
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/extras/DeviceActs.kt",
+      "scope": "production",
+      "lines": 28,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/extras/HermesContextActivity.kt",
+      "scope": "production",
+      "lines": 105,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          63,
+          99,
+          100
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/extras/NetworkAuditActivity.kt",
+      "scope": "production",
+      "lines": 104,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          47,
+          48
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/extras/PolyglotActivity.kt",
+      "scope": "production",
+      "lines": 51,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          45,
+          46
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/home/FeatureHubActivity.kt",
+      "scope": "production",
+      "lines": 237,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          135
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/home/HomeFragment.kt",
+      "scope": "production",
+      "lines": 895,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          872
+        ],
+        "catch": [
+          839,
+          882
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/home/MainActivity.kt",
+      "scope": "production",
+      "lines": 567,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          298
+        ],
+        "catch": [
+          123
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/home/MainViewModel.kt",
+      "scope": "production",
+      "lines": 209,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/home/MicRingView.kt",
+      "scope": "production",
+      "lines": 224,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/home/UpdatesFragment.kt",
+      "scope": "production",
+      "lines": 113,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          109
+        ],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/home/WaveformView.kt",
+      "scope": "production",
+      "lines": 147,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/map/AmoledMapActivity.kt",
+      "scope": "production",
+      "lines": 444,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          436
+        ],
+        "catch": [
+          160,
+          169,
+          216,
+          220,
+          231,
+          314,
+          316,
+          366,
+          368,
+          400,
+          403
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/map/TacticalVectorView.kt",
+      "scope": "production",
+      "lines": 78,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/memory/MemoryActivity.kt",
+      "scope": "production",
+      "lines": 331,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          72,
+          74,
+          320
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/memory/MemoryAdapter.kt",
+      "scope": "production",
+      "lines": 59,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/memory/RecallCoreBottomSheet.kt",
+      "scope": "production",
+      "lines": 282,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/notification/NotificationHistoryActivity.kt",
+      "scope": "production",
+      "lines": 206,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/AudioLevelTracker.kt",
+      "scope": "production",
+      "lines": 137,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [
+          55
+        ],
+        "lifecycle": [
+          38,
+          39
+        ],
+        "catch": [
+          68
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/JarvisOrbAdapter.kt",
+      "scope": "production",
+      "lines": 42,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbAppearance.kt",
+      "scope": "production",
+      "lines": 25,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbHelper.kt",
+      "scope": "production",
+      "lines": 268,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          238
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbMotion.kt",
+      "scope": "production",
+      "lines": 58,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbParticles.kt",
+      "scope": "production",
+      "lines": 20,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbRenderer.kt",
+      "scope": "production",
+      "lines": 92,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbSettings.kt",
+      "scope": "production",
+      "lines": 14,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbShader.kt",
+      "scope": "production",
+      "lines": 79,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbState.kt",
+      "scope": "production",
+      "lines": 28,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/OrbVisualState.kt",
+      "scope": "production",
+      "lines": 23,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/VoiceOrb.kt",
+      "scope": "production",
+      "lines": 84,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/orb/VoiceOrbPreview.kt",
+      "scope": "production",
+      "lines": 43,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/permission/PermissionActivity.kt",
+      "scope": "production",
+      "lines": 423,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/ApiConnectionActivity.kt",
+      "scope": "production",
+      "lines": 346,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          295,
+          334
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/AuraControlActivity.kt",
+      "scope": "production",
+      "lines": 197,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          70
+        ],
+        "catch": [
+          173
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/HandsFreeActivity.kt",
+      "scope": "production",
+      "lines": 203,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          199
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/OverlayAvatarActivity.kt",
+      "scope": "production",
+      "lines": 209,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          201
+        ],
+        "catch": [
+          84
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/PersonaActivity.kt",
+      "scope": "production",
+      "lines": 172,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/PrivacyShieldActivity.kt",
+      "scope": "production",
+      "lines": 58,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          50
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/SettingsActivity.kt",
+      "scope": "production",
+      "lines": 17,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/SettingsFragment.kt",
+      "scope": "production",
+      "lines": 375,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          371
+        ],
+        "catch": [
+          366
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/settings/ThemeSelectionBottomSheet.kt",
+      "scope": "production",
+      "lines": 119,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          110
+        ],
+        "catch": [
+          39,
+          64
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/vision/ImageDecodeSizing.kt",
+      "scope": "production",
+      "lines": 14,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/vision/NeuralLensActivity.kt",
+      "scope": "production",
+      "lines": 434,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [
+          43
+        ],
+        "lifecycle": [
+          410,
+          420
+        ],
+        "catch": [
+          206,
+          235,
+          279,
+          281,
+          335,
+          347,
+          349,
+          367,
+          369
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/voice/VoiceEnrollmentActivity.kt",
+      "scope": "production",
+      "lines": 408,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [
+          358
+        ],
+        "lifecycle": [
+          404
+        ],
+        "catch": [
+          373,
+          375
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/wallpaper/InAppWallpaper.kt",
+      "scope": "production",
+      "lines": 31,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          30
+        ],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/wallpaper/VideoWallpaperActivity.kt",
+      "scope": "production",
+      "lines": 179,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          169
+        ],
+        "catch": [
+          34,
+          41,
+          139
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/wallpaper/VideoWallpaperService.kt",
+      "scope": "production",
+      "lines": 121,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          57
+        ],
+        "catch": [
+          34,
+          86,
+          87,
+          97,
+          110,
+          113,
+          114
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/wallpaper/WallpaperCatalog.kt",
+      "scope": "production",
+      "lines": 14,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/whiteboard/WhiteboardActivity.kt",
+      "scope": "production",
+      "lines": 247,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          115,
+          118,
+          156
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/ui/widget/CurvedDockLineView.kt",
+      "scope": "production",
+      "lines": 135,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/ActivityLauncherHelper.kt",
+      "scope": "production",
+      "lines": 132,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          38,
+          50,
+          71,
+          113,
+          118,
+          127
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/AppLauncher.kt",
+      "scope": "production",
+      "lines": 297,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          69,
+          81,
+          213,
+          288
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/BuiltInChromeEngine.kt",
+      "scope": "production",
+      "lines": 123,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          67,
+          87,
+          107
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/ContactCaller.kt",
+      "scope": "production",
+      "lines": 446,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          282,
+          441
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/DirectivePowerPolicy.kt",
+      "scope": "production",
+      "lines": 7,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/HomeThemePolicy.kt",
+      "scope": "production",
+      "lines": 5,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/LocationWeatherHelper.kt",
+      "scope": "production",
+      "lines": 215,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          84,
+          126,
+          151,
+          191
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/PermissionHelper.kt",
+      "scope": "production",
+      "lines": 392,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          76,
+          110,
+          121,
+          133,
+          139,
+          166,
+          182,
+          198,
+          216,
+          260,
+          345,
+          371,
+          377,
+          389
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/PromptGenerator.kt",
+      "scope": "production",
+      "lines": 520,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/ThemeManager.kt",
+      "scope": "production",
+      "lines": 107,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          53,
+          59,
+          68,
+          88,
+          92,
+          97
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/VisualMotionSettings.kt",
+      "scope": "production",
+      "lines": 14,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/util/WhatsAppMessenger.kt",
+      "scope": "production",
+      "lines": 269,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          265
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/vision/CameraVisionAnalyzer.kt",
+      "scope": "production",
+      "lines": 176,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          149,
+          151
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/vision/ScreenCaptureManager.kt",
+      "scope": "production",
+      "lines": 313,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          109,
+          144
+        ],
+        "catch": [
+          155,
+          168,
+          233,
+          238,
+          277,
+          284,
+          291,
+          298
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/vision/ScreenIntelligenceEngine.kt",
+      "scope": "production",
+      "lines": 204,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/vision/SensitiveInputPolicy.kt",
+      "scope": "production",
+      "lines": 21,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/vision/TacticalScannerManager.kt",
+      "scope": "production",
+      "lines": 149,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/vision/UiGroundingEngine.kt",
+      "scope": "production",
+      "lines": 637,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          176
+        ]
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/vision/UserConsentPolicy.kt",
+      "scope": "production",
+      "lines": 77,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/main/java/com/jarvis/assistant/vision/VisualTaskOrchestrator.kt",
+      "scope": "production",
+      "lines": 1548,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": [
+          458,
+          1150
+        ]
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/AdaptiveVadEngineTest.kt",
+      "scope": "test",
+      "lines": 105,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/AudioFrequencyOverflowTest.kt",
+      "scope": "test",
+      "lines": 16,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/AudioRoutingAndStabilityTest.kt",
+      "scope": "test",
+      "lines": 101,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/BoundedAudioResponseTest.kt",
+      "scope": "test",
+      "lines": 29,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/LoudspeakerBargeInRegressionTest.kt",
+      "scope": "test",
+      "lines": 133,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/LoudspeakerBargeInTest.kt",
+      "scope": "test",
+      "lines": 156,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/MicrophoneOwnershipTest.kt",
+      "scope": "test",
+      "lines": 51,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/OwnerVoiceSecurityTest.kt",
+      "scope": "test",
+      "lines": 36,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/PcmWritePumpTest.kt",
+      "scope": "test",
+      "lines": 26,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/VoiceInterruptionCoordinatorEnhancedTest.kt",
+      "scope": "test",
+      "lines": 73,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/WakePhraseMatcherTest.kt",
+      "scope": "test",
+      "lines": 41,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/wake/ModelArchiveTest.kt",
+      "scope": "test",
+      "lines": 29,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/audio/wake/WakeMatcherTest.kt",
+      "scope": "test",
+      "lines": 31,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/accessibility/AccessibilityHealthModelTest.kt",
+      "scope": "test",
+      "lines": 140,
+      "signals": {
+        "blocking": [
+          65,
+          74
+        ],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/AgentTaskEngineTest.kt",
+      "scope": "test",
+      "lines": 77,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/BargeInAndNavigationTest.kt",
+      "scope": "test",
+      "lines": 118,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/CancellableCouncilRequestTest.kt",
+      "scope": "test",
+      "lines": 71,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/GeminiFunctionArgumentsTest.kt",
+      "scope": "test",
+      "lines": 24,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/LlmPlannerTest.kt",
+      "scope": "test",
+      "lines": 335,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/Phase6To10UpgradeTest.kt",
+      "scope": "test",
+      "lines": 139,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/SelfHealingAgentLoopTest.kt",
+      "scope": "test",
+      "lines": 207,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/SerializedActionExecutorTest.kt",
+      "scope": "test",
+      "lines": 68,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/agent/TonyStarkProtocolsAndReflexTest.kt",
+      "scope": "test",
+      "lines": 107,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/command/MobileUtilityCommandParserTest.kt",
+      "scope": "test",
+      "lines": 39,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/contacts/ContactChoiceResolverTest.kt",
+      "scope": "test",
+      "lines": 29,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/contacts/ContactDisambiguationTest.kt",
+      "scope": "test",
+      "lines": 100,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/contacts/WhatsAppContactSelectionTest.kt",
+      "scope": "test",
+      "lines": 19,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/contacts/WhatsAppDraftContextTest.kt",
+      "scope": "test",
+      "lines": 64,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/council/BoundedAgentRunnerTest.kt",
+      "scope": "test",
+      "lines": 84,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/council/MultiAgentCouncilTest.kt",
+      "scope": "test",
+      "lines": 266,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/dev/AutonomousSoftwareEngineeringAgentTest.kt",
+      "scope": "test",
+      "lines": 420,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/dev/DevEnvironmentAndTermuxBridgeTest.kt",
+      "scope": "test",
+      "lines": 178,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/dev/SoftwareEngineeringAgentTest.kt",
+      "scope": "test",
+      "lines": 157,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/grounding/ScreenGroundingEngineTest.kt",
+      "scope": "test",
+      "lines": 129,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/grounding/ScreenIntelligenceTest.kt",
+      "scope": "test",
+      "lines": 238,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/integration/UniversalActionTest.kt",
+      "scope": "test",
+      "lines": 207,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/intelligence/UniversalInformationTest.kt",
+      "scope": "test",
+      "lines": 144,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/mission/ExplicitMessageAuthorizationTest.kt",
+      "scope": "test",
+      "lines": 36,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/mission/LongHorizonMissionTest.kt",
+      "scope": "test",
+      "lines": 226,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/mission/MissionActionIdentityTest.kt",
+      "scope": "test",
+      "lines": 45,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/mission/MissionApprovalCommandParserTest.kt",
+      "scope": "test",
+      "lines": 23,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/mission/MissionEngineTest.kt",
+      "scope": "test",
+      "lines": 282,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/mission/MissionRoutePolicyTest.kt",
+      "scope": "test",
+      "lines": 47,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/mission/MissionStartupLoadingTest.kt",
+      "scope": "test",
+      "lines": 24,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/mission/ToolArgumentValidatorTest.kt",
+      "scope": "test",
+      "lines": 47,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/notification/NotificationArchivePolicyTest.kt",
+      "scope": "test",
+      "lines": 14,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/notification/NotificationPrivacyFilterTest.kt",
+      "scope": "test",
+      "lines": 33,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/offline/OfflineIntelligenceRouterTest.kt",
+      "scope": "test",
+      "lines": 33,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/offline/OfflineIntelligenceTest.kt",
+      "scope": "test",
+      "lines": 100,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/proactive/ProactiveIntelligenceTest.kt",
+      "scope": "test",
+      "lines": 145,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/provenance/KnowledgeProvenanceTest.kt",
+      "scope": "test",
+      "lines": 119,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/reflex/OfflineReflexExecutorTest.kt",
+      "scope": "test",
+      "lines": 16,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/routing/CognitiveRouterAndKeyPoolTest.kt",
+      "scope": "test",
+      "lines": 206,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/routing/CognitiveRouterTest.kt",
+      "scope": "test",
+      "lines": 89,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/automation/skills/SkillForgeTest.kt",
+      "scope": "test",
+      "lines": 242,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/background/ConversationServiceCollaboratorsTest.kt",
+      "scope": "test",
+      "lines": 272,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/core/ambient/AmbientExperienceTest.kt",
+      "scope": "test",
+      "lines": 141,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/core/eval/BenchmarkEvaluatorTest.kt",
+      "scope": "test",
+      "lines": 104,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/core/reliability/ReliabilityTest.kt",
+      "scope": "test",
+      "lines": 174,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/core/runtime/JarvisUnifiedRuntimeTest.kt",
+      "scope": "test",
+      "lines": 172,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/core/world/WorldModelTest.kt",
+      "scope": "test",
+      "lines": 165,
+      "signals": {
+        "blocking": [
+          66
+        ],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/chat/ConversationTurnMapperTest.kt",
+      "scope": "test",
+      "lines": 63,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/chat/LegacyChatMigrationTest.kt",
+      "scope": "test",
+      "lines": 91,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/chat/MultiChatAndMemoryEngineTest.kt",
+      "scope": "test",
+      "lines": 567,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/directives/LearningPolicyTest.kt",
+      "scope": "test",
+      "lines": 57,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/memory/DatabaseReadinessTest.kt",
+      "scope": "test",
+      "lines": 165,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/memory/DatabaseSwapRecoveryPolicyTest.kt",
+      "scope": "test",
+      "lines": 68,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/memory/EpisodicVectorMemoryTest.kt",
+      "scope": "test",
+      "lines": 120,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/memory/LocalOnlyEmbeddingTest.kt",
+      "scope": "test",
+      "lines": 35,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/memory/MemoryBackupPolicyTest.kt",
+      "scope": "test",
+      "lines": 22,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/memory/MultilingualMemoryRetrievalTest.kt",
+      "scope": "test",
+      "lines": 56,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/memory/PersistentMemoryTest.kt",
+      "scope": "test",
+      "lines": 150,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/mission/MissionPersistenceAndTriggerTest.kt",
+      "scope": "test",
+      "lines": 216,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/model/ConversationStateTest.kt",
+      "scope": "test",
+      "lines": 34,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/personalization/AdaptivePersonalizationTest.kt",
+      "scope": "test",
+      "lines": 174,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/data/personalization/AssistantPersonalityTest.kt",
+      "scope": "test",
+      "lines": 27,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/emergency/FallCandidateDetectorTest.kt",
+      "scope": "test",
+      "lines": 24,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/evolution/JarvisEvolutionMasterTest.kt",
+      "scope": "test",
+      "lines": 257,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/network/GeminiModelCatalogTest.kt",
+      "scope": "test",
+      "lines": 77,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/network/GeminiTransportEpochTest.kt",
+      "scope": "test",
+      "lines": 105,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [
+          39
+        ],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/network/LiveSessionResumptionTest.kt",
+      "scope": "test",
+      "lines": 24,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/network/LiveToolContractsTest.kt",
+      "scope": "test",
+      "lines": 23,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/security/AppBrandingAndPersonaTest.kt",
+      "scope": "test",
+      "lines": 54,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/security/sandbox/CapabilitySandboxTest.kt",
+      "scope": "test",
+      "lines": 197,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/ui/agent/OverlayDockingPolicyTest.kt",
+      "scope": "test",
+      "lines": 39,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/ui/aura/AutonomyPolicyTest.kt",
+      "scope": "test",
+      "lines": 19,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/ui/orb/OrbVisualStateTest.kt",
+      "scope": "test",
+      "lines": 12,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/ui/orb/VoiceCoreAudioTest.kt",
+      "scope": "test",
+      "lines": 22,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/ui/vision/ImageDecodeSizingTest.kt",
+      "scope": "test",
+      "lines": 32,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/util/DirectivePoliciesTest.kt",
+      "scope": "test",
+      "lines": 21,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/vision/CameraVisionRequestSecurityTest.kt",
+      "scope": "test",
+      "lines": 26,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/vision/SensitiveInputPolicyTest.kt",
+      "scope": "test",
+      "lines": 30,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "app/src/test/java/com/jarvis/assistant/vision/UserConsentPolicyTest.kt",
+      "scope": "test",
+      "lines": 33,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "build.gradle.kts",
+      "scope": "build",
+      "lines": 6,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    },
+    {
+      "path": "settings.gradle.kts",
+      "scope": "build",
+      "lines": 23,
+      "signals": {
+        "blocking": [],
+        "global_scope": [],
+        "unbounded_queue": [],
+        "resource_create": [],
+        "lifecycle": [],
+        "catch": []
+      }
+    }
+  ]
+}

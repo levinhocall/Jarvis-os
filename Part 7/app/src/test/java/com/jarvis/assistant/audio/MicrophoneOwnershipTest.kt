@@ -1,10 +1,17 @@
 package com.jarvis.assistant.audio
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MicrophoneOwnershipTest {
     @Test fun wakeLiveAndEnrollmentCannotCaptureTogether() {
         for (owner in MicrophoneOwner.entries) {
@@ -48,4 +55,39 @@ class MicrophoneOwnershipTest {
             pool.shutdownNow()
         }
     }
+    @Test fun waiterContinuesOnlyAfterRetiringCaptureReleasesItsLease() = runTest {
+        val lease = MicrophoneOwnership.acquire(MicrophoneOwner.VOICE_SESSION)!!
+        try {
+            val waiter = async { MicrophoneOwnership.awaitAvailable(1_500) }
+            runCurrent(); advanceTimeBy(1_000)
+            assertFalse(waiter.isCompleted)
+            lease.close(); runCurrent()
+            assertTrue(waiter.await())
+            val next = MicrophoneOwnership.acquire(MicrophoneOwner.WAKE_WORD)!!
+            try { lease.close(); assertEquals(MicrophoneOwner.WAKE_WORD, MicrophoneOwnership.owner.value) }
+            finally { next.close() }
+        } finally { lease.close() }
+    }
+
+    @Test fun waitTimeoutDoesNotReleaseAnotherOwnersHardware() = runTest {
+        val lease = MicrophoneOwnership.acquire(MicrophoneOwner.VOICE_SESSION)!!
+        try {
+            val waiter = async { MicrophoneOwnership.awaitAvailable(1_500) }
+            runCurrent(); advanceTimeBy(1_501); runCurrent()
+            assertFalse(waiter.await())
+            assertEquals(MicrophoneOwner.VOICE_SESSION, MicrophoneOwnership.owner.value)
+        } finally { lease.close() }
+    }
+
+    @Test fun cancellationDoesNotReleaseAnotherOwnersHardware() = runTest {
+        val lease = MicrophoneOwnership.acquire(MicrophoneOwner.VOICE_SESSION)!!
+        try {
+            val waiter = async { MicrophoneOwnership.awaitAvailable() }
+            runCurrent(); waiter.cancelAndJoin()
+            assertTrue(waiter.isCancelled)
+            assertEquals(MicrophoneOwner.VOICE_SESSION, MicrophoneOwnership.owner.value)
+        } finally { lease.close() }
+        assertTrue(MicrophoneOwnership.awaitAvailable())
+    }
+
 }

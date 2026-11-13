@@ -106,13 +106,13 @@ class LlmPlannerTest {
 
         val provider = FakeScriptedProvider { stepNum, history ->
             when (stepNum) {
-                1 -> LlmStepDecision.InvokeTool("click_ui_element", mapOf("target_text" to "Submit"))
+                1 -> LlmStepDecision.InvokeTool("open_app", mapOf("app_name" to "Form app"))
                 2 -> {
                     // Check that the provider can observe the failure of step 1
                     val lastObs = history.lastOrNull()?.observation ?: ""
                     historyObservations.add(lastObs)
-                    // Replanning: try scrolling first
-                    LlmStepDecision.InvokeTool("scroll_screen", mapOf("direction" to "down"))
+                    // Replanning uses intent-only tools: this JVM fixture has no real Accessibility binding.
+                    LlmStepDecision.InvokeTool("search_web", mapOf("query" to "Form app submit"))
                 }
                 else -> LlmStepDecision.Finish("Found Submit after scrolling and completed.")
             }
@@ -122,7 +122,7 @@ class LlmPlannerTest {
         var clickAttempted = false
 
         val result = planner.planAndExecute("Submit form") { toolName, _ ->
-            if (toolName == "click_ui_element" && !clickAttempted) {
+            if (toolName == "open_app" && !clickAttempted) {
                 clickAttempted = true
                 Pair(false, "Button 'Submit' not visible on current screen")
             } else {

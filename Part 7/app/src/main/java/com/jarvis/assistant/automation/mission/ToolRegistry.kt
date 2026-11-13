@@ -400,6 +400,7 @@ object ToolRegistry {
 
         // 3. Validate Accessibility operational state (if tool requires it)
         if (tool.requiresAccessibility) {
+            if (context != null) AccessibilityHealthModel.refreshFromSystem(context)
             val isOperational = JarvisAccessibilityService.isRunning() || AccessibilityHealthModel.isOperational()
             if (!isOperational) {
                 val guidance = AccessibilityHealthModel.getRecoveryGuidance()

@@ -1,6 +1,8 @@
 package com.jarvis.assistant.automation.agent
 
 import android.graphics.Rect
+import android.os.Build
+import com.jarvis.assistant.automation.accessibility.traverseBoundedTree
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
@@ -20,51 +22,31 @@ object ScreenSignatureCalculator {
             )
         }
 
-        val pkg = root.packageName?.toString() ?: ""
-        val cls = root.className?.toString() ?: ""
+        val pkg = try { root.packageName?.toString().orEmpty() } catch (_: Exception) { "" }
+        val cls = try { root.className?.toString().orEmpty() } catch (_: Exception) { "" }
         val texts = mutableListOf<String>()
         var count = 0
-        var hash = 1125899906842597L // FNV-like seed
-
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-
+        var hash = 1125899906842597L
         val tempRect = Rect()
-
-        while (queue.isNotEmpty() && count < 300) {
-            val node = queue.removeFirst()
+        val result = traverseBoundedTree(root, maxNodes = 300,
+            childCount = { it.childCount }, child = { n, i -> n.getChild(i) },
+            release = { if (Build.VERSION.SDK_INT < 33) { @Suppress("DEPRECATION") it.recycle() } }) { node ->
             count++
-
-            val text = node.text?.toString()?.trim() ?: ""
-            val desc = node.contentDescription?.toString()?.trim() ?: ""
-            val viewId = node.viewIdResourceName?.toString() ?: ""
-            val isClickable = node.isClickable
-            val isEditable = node.isEditable
-
+            val password = node.isPassword
+            val text = if (password) "" else node.text?.take(512)?.toString()?.trim().orEmpty()
+            val desc = if (password) "" else node.contentDescription?.take(512)?.toString()?.trim().orEmpty()
+            val viewId = node.viewIdResourceName.orEmpty()
+            val clickable = node.isClickable; val editable = node.isEditable
             node.getBoundsInScreen(tempRect)
-
-            if (text.isNotEmpty() && texts.size < 15) {
-                texts.add(text)
-            } else if (desc.isNotEmpty() && texts.size < 15) {
-                texts.add(desc)
-            }
-
-            // Mix into hash
-            hash = 31 * hash + text.hashCode()
-            hash = 31 * hash + desc.hashCode()
+            if (text.isNotEmpty() && texts.size < 15) texts += text
+            else if (desc.isNotEmpty() && texts.size < 15) texts += desc
+            hash = 31 * hash + text.hashCode(); hash = 31 * hash + desc.hashCode()
             hash = 31 * hash + viewId.hashCode()
-            hash = 31 * hash + (if (isClickable) 1 else 0)
-            hash = 31 * hash + (if (isEditable) 2 else 0)
-            hash = 31 * hash + tempRect.centerX()
-            hash = 31 * hash + tempRect.centerY()
-
-            for (i in 0 until node.childCount) {
-                val child = node.getChild(i)
-                if (child != null) {
-                    queue.add(child)
-                }
-            }
+            hash = 31 * hash + if (clickable) 1 else 0
+            hash = 31 * hash + if (editable) 2 else 0
+            hash = 31 * hash + tempRect.centerX(); hash = 31 * hash + tempRect.centerY()
         }
+        if (result.failed) return ScreenSignature("", "", 0, 0, emptyList())
 
         return ScreenSignature(
             packageName = pkg,
