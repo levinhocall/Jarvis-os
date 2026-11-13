@@ -294,6 +294,8 @@ class JarvisConversationService : Service() {
     private val currentTurnUserText = StringBuilder()
     private var lastUserSpeechDetectedTime = 0L
     private var lastPlaybackEndTime = 0L
+    private var routerPresentationJob: Job? = null
+    @Volatile private var routerPresentationFloor = 0L
     @Volatile private var presentationSessionId = 0L
     private var hasSpeechInCurrentUtterance = false
         set(value) {
@@ -496,10 +498,12 @@ class JarvisConversationService : Service() {
     private fun setConversationState(state: ConversationState) {
         presentationStore.update(presentationSessionId) {
             it.copy(
+                confirmedSpeech = if (state in setOf(ConversationState.THINKING, ConversationState.EXECUTING,
+                    ConversationState.IDLE, ConversationState.ERROR, ConversationState.FAILED, ConversationState.WAITING_FOR_APPROVAL)) false else it.confirmedSpeech,
                 pendingResponse = when (state) {
                     ConversationState.THINKING, ConversationState.EXECUTING -> true
                     ConversationState.IDLE, ConversationState.LISTENING, ConversationState.ERROR,
-                    ConversationState.FAILED, ConversationState.INTERRUPTED -> false
+                    ConversationState.FAILED, ConversationState.WAITING_FOR_APPROVAL, ConversationState.INTERRUPTED -> false
                     else -> it.pendingResponse
                 },
                 interrupted = state == ConversationState.INTERRUPTED,
@@ -563,6 +567,7 @@ class JarvisConversationService : Service() {
                 lastPlaybackEndTime = 0L
                 try { tts?.stop() } catch (_: Exception) {}
                 try { com.jarvis.assistant.audio.VoiceSynthesisRouter.stop() } catch (_: Exception) {}
+                routerPresentationFloor = com.jarvis.assistant.audio.VoiceSynthesisRouter.playback.value.generation
 
                 // 3. Set INTERRUPTED state
                 setConversationState(ConversationState.INTERRUPTED)
@@ -749,9 +754,10 @@ class JarvisConversationService : Service() {
                     }
                     tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {
-                            Log.d("JarvisService", "TTS onStart: $utteranceId")
+                            presentServiceTts(utteranceId, true)
                         }
 
+                        override fun onStop(utteranceId: String?, interrupted: Boolean) { presentServiceTts(utteranceId, false) }
                         override fun onDone(utteranceId: String?) {
                             Log.d("JarvisService", "TTS onDone: $utteranceId")
                             handleTtsDone(utteranceId)
@@ -775,7 +781,26 @@ class JarvisConversationService : Service() {
         }
     }
 
+    private fun speakServiceSummary(text: String?) {
+        if (text.isNullOrBlank()) return
+        val facts = voicePresentation.value
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "${facts.sessionId}:${facts.interruptionGeneration}:task_done")
+    }
+
+    private fun presentServiceTts(utteranceId: String?, playing: Boolean) {
+        val parts = utteranceId?.split(':') ?: return
+        val session = parts.getOrNull(0)?.toLongOrNull() ?: return
+        val generation = parts.getOrNull(1)?.toLongOrNull() ?: return
+        presentationStore.update(session) {
+            if (!it.active || it.interruptionGeneration != generation) it else it.copy(
+                playing = playing, playbackSource = if (playing) PlaybackSource.ANDROID_TTS else PlaybackSource.NONE,
+                timing = AudioTimingConfidence.STATE_ONLY, pendingResponse = false,
+                output = VoiceEnvelope(0f, SystemClock.elapsedRealtime(), generation))
+        }
+    }
+
     private fun handleTtsDone(utteranceId: String?) {
+        presentServiceTts(utteranceId, false)
         if (_conversationState.value == ConversationState.SPEAKING && (audioPlayer == null || !audioPlayer!!.isPlaying())) {
             setConversationState(ConversationState.IDLE)
         }
@@ -1005,6 +1030,20 @@ class JarvisConversationService : Service() {
 
         val presentationToken = presentationStore.begin(preferences.isMicMuted)
         presentationSessionId = presentationToken
+        routerPresentationFloor = com.jarvis.assistant.audio.VoiceSynthesisRouter.playback.value.generation
+        routerPresentationJob?.cancel()
+        routerPresentationJob = serviceScope.launch {
+            com.jarvis.assistant.audio.VoiceSynthesisRouter.playback.collect { signal ->
+                presentationStore.update(presentationToken) {
+                    val source = if (signal.external) PlaybackSource.EXTERNAL_TTS else PlaybackSource.ANDROID_TTS
+                    if (signal.generation <= routerPresentationFloor ||
+                        (!signal.playing && it.playbackSource != source)) it else it.copy(
+                        playing = signal.playing, playbackSource = if (signal.playing) source else PlaybackSource.NONE,
+                        timing = AudioTimingConfidence.STATE_ONLY, pendingResponse = false,
+                        output = VoiceEnvelope(0f, SystemClock.elapsedRealtime(), it.interruptionGeneration))
+                }
+            }
+        }
         _isSessionOn.value = true
         _isStandby.value = false
         acquireWifiLock()
@@ -1053,21 +1092,31 @@ class JarvisConversationService : Service() {
                 if (audioPlayer === sessionPlayer && _conversationState.value == ConversationState.SPEAKING) {
                     _audioLevel.value = amp
                     _audioFrequency.value = com.jarvis.assistant.audio.AudioFrequencyData(
-                        amplitude = amp,
-                        pitchHz = 180f,
-                        bass = (amp * 0.7f).coerceIn(0f, 1f),
-                        mid = (amp * 0.9f).coerceIn(0f, 1f),
-                        high = (amp * 0.4f).coerceIn(0f, 1f)
+                        amplitude = amp // PCM envelope only; no fabricated frequency bands.
+                    )
+                }
+            },
+            onPlaybackObservation = { observation ->
+                if (audioPlayer === sessionPlayer) presentationStore.update(presentationToken) {
+                    if (!sessionPlayer.isObservationCurrent(observation) ||
+                        (!observation.playing && it.playbackSource !in setOf(PlaybackSource.GEMINI_PCM, PlaybackSource.NONE))) it else it.copy(
+                        playing = observation.playing,
+                        playbackSource = if (observation.playing) PlaybackSource.GEMINI_PCM else PlaybackSource.NONE,
+                        timing = observation.timing,
+                        pendingResponse = if (observation.playing || it.playing) false else it.pendingResponse,
+                        output = VoiceEnvelope(observation.level, SystemClock.elapsedRealtime(), it.interruptionGeneration)
                     )
                 }
             },
             onPlaybackFailure = { category ->
+                presentationStore.update(presentationToken) { it.copy(playing = false, output = VoiceEnvelope(), errorReason = "Playback stopped: $category") }
                 serviceScope.launch {
                     if (audioPlayer === sessionPlayer) _events.emit("Voice playback stopped ($category). Stop and reopen Voice Mode if audio remains unavailable.")
                 }
             }
         )
         audioPlayer = sessionPlayer
+        sessionPlayer.flush(activePlaybackGeneration.get())
         sessionPlayer.start()
 
         sessionBootstrapJob?.cancel()
@@ -1122,6 +1171,7 @@ class JarvisConversationService : Service() {
                     systemPrompt = systemPrompt,
                     listener = object : GeminiLiveWebSocket.Listener {
                         override fun onConnectionStateChanged(status: String) {
+                            if (presentationToken != presentationSessionId) return
                             if (status == "LIVE") {
                                 voiceSessionManager?.onSessionEstablished()
                             } else if (status == "OFFLINE" && voiceSessionManager?.isLive == true) {
@@ -1179,6 +1229,7 @@ class JarvisConversationService : Service() {
                         private var hasRecordedFirstTokenInTurn = false
 
                         override fun onAudioDataReceived(pcmData: ByteArray) {
+                            if (presentationToken != presentationSessionId) return
                             thinkingTimeoutJob?.cancel()
                             thinkingTimeoutJob = null
                             lastResponseTimedOut = false
@@ -1358,6 +1409,8 @@ class JarvisConversationService : Service() {
                         }
 
                         override fun onTurnCompleted() {
+                            if (presentationToken != presentationSessionId) return
+                            presentationStore.update(presentationToken) { it.copy(pendingResponse = false) }
                             autoResumeAwaitingResponse = false
                             thinkingTimeoutJob?.cancel()
                             thinkingTimeoutJob = null
@@ -1446,7 +1499,7 @@ class JarvisConversationService : Service() {
                                 val isLive = liveWebSocket?.isSessionReady() == true
                                 if (!preferences.isSilentExecutionMode && !isLive) {
                                     Log.i("JarvisService", "Offline fallback: Speaking confirmation via TTS: '$summaryToSpeak'")
-                                    tts?.speak(summaryToSpeak, TextToSpeech.QUEUE_FLUSH, null, "task_done")
+                                    speakServiceSummary(summaryToSpeak)
                                 }
                             }
 
@@ -1713,6 +1766,7 @@ class JarvisConversationService : Service() {
 
         val microphoneEnvelope = com.jarvis.assistant.audio.PcmEnvelopeFollower()
         val recorder = AudioRecorder { chunk, amplitude, frequencyData ->
+            if (presentationToken != presentationSessionId) return@AudioRecorder
             val displayTime = SystemClock.elapsedRealtime()
             val envelope = microphoneEnvelope.accept(chunk, displayTime, chunk.isNotEmpty())
             presentationStore.update(presentationToken) {
@@ -2974,7 +3028,7 @@ class JarvisConversationService : Service() {
                                 if (!alreadySpoke && liveWebSocket?.isSessionReady() != true) {
                                     // Offline fallback: speak via TTS only when Gemini Live is offline
                                     lastCompletedTaskSummary = null
-                                    tts?.speak(summary, TextToSpeech.QUEUE_FLUSH, null, "task_done")
+                                    speakServiceSummary(summary)
                                 }
                             }
                         }
@@ -3683,6 +3737,7 @@ class JarvisConversationService : Service() {
     }
 
     private fun stopActiveConversation() {
+        routerPresentationJob?.cancel(); routerPresentationJob = null
         sessionBootstrapJob?.cancel()
         sessionBootstrapJob = null
         inactivityJob?.cancel()
@@ -3980,6 +4035,7 @@ class JarvisConversationService : Service() {
     private var currentFocusRequest: Any? = null
 
     private fun requestAudioDuckFocus() {
+        val focusSession = presentationSessionId
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
             val res = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -3990,12 +4046,24 @@ class JarvisConversationService : Service() {
                             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                             .build()
                     )
+                    .setOnAudioFocusChangeListener { change ->
+                        presentationStore.update(focusSession) {
+                            it.copy(focus = when (change) {
+                                AudioManager.AUDIOFOCUS_GAIN -> VoiceAudioFocus.GRANTED
+                                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> VoiceAudioFocus.DUCKED
+                                else -> VoiceAudioFocus.LOST
+                            })
+                        }
+                    }
                     .build()
                 currentFocusRequest = focusReq
                 audioManager.requestAudioFocus(focusReq)
             } else {
                 @Suppress("DEPRECATION")
                 audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            }
+            presentationStore.update(focusSession) {
+                it.copy(focus = if (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) VoiceAudioFocus.GRANTED else VoiceAudioFocus.LOST)
             }
             VoiceFlightRecorder.recordFocusEvent("REQUEST_DUCK", if (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) "GRANTED" else "FAILED($res)")
         } catch (e: Exception) {

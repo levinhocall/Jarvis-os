@@ -3,6 +3,8 @@ package com.jarvis.assistant.audio
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.media.AudioTimestamp
+import com.jarvis.assistant.data.model.AudioTimingConfidence
 import android.os.Build
 import android.util.Log
 import java.util.concurrent.TimeUnit
@@ -11,13 +13,78 @@ import java.util.concurrent.atomic.AtomicBoolean
 class AudioPlayer(
     private val onPlaybackStateChanged: (isPlaying: Boolean) -> Unit,
     private val onPlaybackAmplitude: (amplitude: Float) -> Unit,
-    private val onPlaybackFailure: (category: String) -> Unit = {}
+    private val onPlaybackFailure: (category: String) -> Unit = {},
+    private val onPlaybackObservation: (PlaybackObservation) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "AudioPlayer"
         const val SAMPLE_RATE = 24000
         const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_MONO
         const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+    }
+
+    data class PlaybackObservation(val epoch: Long, val revision: Long, val playing: Boolean,
+        val level: Float, val timing: AudioTimingConfidence)
+    private val meterLock = Any()
+    private val timeline = PcmEnvelopeTimeline()
+    private val playbackClock = PlaybackFrameClock()
+    private val timestamp = AudioTimestamp()
+    private val meterRevision = java.util.concurrent.atomic.AtomicLong(0)
+    private var meterExecutor: java.util.concurrent.ScheduledExecutorService? = null
+    private var meterTask: java.util.concurrent.ScheduledFuture<*>? = null
+    private var routeSettlesAt = 0L
+    private var lastHead = -1L
+    private var lastHeadChangedAt = 0L
+    private val routeListener = android.media.AudioRouting.OnRoutingChangedListener {
+        synchronized(meterLock) {
+            meterRevision.incrementAndGet(); timeline.discardEnvelopes()
+            routeSettlesAt = android.os.SystemClock.elapsedRealtime() + 300
+            lastHead = -1
+        }
+        publishQuiet()
+    }
+    fun isObservationCurrent(observation: PlaybackObservation): Boolean =
+        (!released.get() || !observation.playing) && observation.epoch == activeEpoch.get() && observation.revision == meterRevision.get()
+
+    @Synchronized private fun startMeter() {
+        if (released.get() || meterTask?.isDone == false) return
+        val executor = meterExecutor ?: java.util.concurrent.Executors.newSingleThreadScheduledExecutor { task ->
+            Thread(task, "JarvisPlaybackEnvelope").apply { isDaemon = true }
+        }.also { meterExecutor = it }
+        meterTask = executor.scheduleWithFixedDelay({ observePlayback() }, 0, 20, TimeUnit.MILLISECONDS)
+    }
+    @Synchronized private fun stopMeter() { meterTask?.cancel(false); meterTask = null; publishQuiet() }
+    private fun publishQuiet() = publishObservation(PlaybackObservation(activeEpoch.get(), meterRevision.get(), false, 0f, AudioTimingConfidence.UNAVAILABLE))
+    private fun publishObservation(observation: PlaybackObservation) {
+        if (!isObservationCurrent(observation)) return
+        runCatching { onPlaybackObservation(observation); notifyAmplitude(observation.level) }
+    }
+    private fun resetMeter() = synchronized(meterLock) {
+        meterRevision.incrementAndGet(); timeline.reset(activeEpoch.get()); playbackClock.reset(); lastHead = -1
+    }
+    private fun observePlayback() {
+        if (released.get()) return
+        val observation = runCatching {
+            synchronized(trackLock) {
+                val track = audioTrack ?: return
+                synchronized(meterLock) {
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    var timing = AudioTimingConfidence.PLAYBACK_HEAD
+                    val rawHead = playbackClock.head(track.playbackHeadPosition)
+                    val hardware = if (now >= routeSettlesAt && track.getTimestamp(timestamp))
+                        playbackClock.timestamp(timestamp.framePosition, timestamp.nanoTime, System.nanoTime(), timeline.writtenFrames, SAMPLE_RATE) else null
+                    val head = hardware ?: rawHead
+                    if (hardware != null) timing = AudioTimingConfidence.HARDWARE_TIMESTAMP
+                    if (head != lastHead) { lastHeadChangedAt = now; lastHead = head }
+                    val level = if (track.playState == AudioTrack.PLAYSTATE_PLAYING && now >= routeSettlesAt && now - lastHeadChangedAt < 150)
+                        timeline.levelAt(head, activeEpoch.get()) else null
+                    PlaybackObservation(activeEpoch.get(), meterRevision.get(), level != null, level ?: 0f,
+                        if (level == null) AudioTimingConfidence.UNAVAILABLE else timing)
+                }
+            }
+        }.getOrNull() ?: run { publishQuiet(); return }
+        publishObservation(observation)
+        if (!observation.playing && !isPlayingState.get()) stopMeter()
     }
 
     private var audioTrack: AudioTrack? = null
@@ -56,6 +123,8 @@ class AudioPlayer(
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
 
+        resetMeter()
+        track.addOnRoutingChangedListener(routeListener, android.os.Handler(android.os.Looper.getMainLooper()))
         audioTrack = track
     }
 
@@ -63,6 +132,8 @@ class AudioPlayer(
         get() = audioTrack?.audioSessionId ?: 0
 
     fun pause() {
+        synchronized(meterLock) { meterRevision.incrementAndGet() }
+        stopMeter()
         synchronized(trackLock) {
             try {
                 audioTrack?.let {
@@ -116,8 +187,7 @@ class AudioPlayer(
 
                             VoiceFlightRecorder.recordFirstAudioFrame()
                             writeToTrack(firstChunk)
-                            val amplitude = AudioUtils.calculateRmsNormalized(firstChunk.bytes, firstChunk.bytes.size)
-                            notifyAmplitude(amplitude)
+
                         }
                         continue
                     }
@@ -126,8 +196,6 @@ class AudioPlayer(
                     val chunk = audioQueue.poll(20, TimeUnit.MILLISECONDS)
                     if (chunk != null && audioQueue.isCurrent(chunk) && chunk.bytes.isNotEmpty()) {
                         silenceCounter = 0
-                        val amplitude = AudioUtils.calculateRmsNormalized(chunk.bytes, chunk.bytes.size)
-                        notifyAmplitude(amplitude)
 
                         writeToTrack(chunk)
                     } else {
@@ -142,6 +210,7 @@ class AudioPlayer(
                         if (shouldFinish && isPlayingState.get()) {
                             isPlayingState.set(false)
                             VoiceFlightRecorder.recordPlaybackComplete()
+                            // The presentation clock drains remaining hardware frames independently.
                             notifyPlaybackState(false)
                             notifyAmplitude(0f)
                         }
@@ -184,6 +253,8 @@ class AudioPlayer(
         val nextEpoch = activeEpoch.updateAndGet { maxOf(it, newEpoch) }
         droppingTurn.set(false)
         audioQueue.advance(nextEpoch)
+        resetMeter()
+        stopMeter()
         isTurnComplete.set(true)
         synchronized(trackLock) {
             try {
@@ -213,13 +284,16 @@ class AudioPlayer(
         playbackThread?.interrupt()
         playbackThread = null
         audioQueue.close()
+        resetMeter()
+        stopMeter()
+        meterExecutor?.shutdownNow(); meterExecutor = null
 
         synchronized(trackLock) {
             try {
                 audioTrack?.let {
                     try {
                         if (it.playState == AudioTrack.PLAYSTATE_PLAYING) it.stop()
-                    } finally { it.release() }
+                    } finally { it.removeOnRoutingChangedListener(routeListener); it.release() }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error releasing AudioTrack: ${e.message}")
@@ -283,12 +357,19 @@ class AudioPlayer(
             }
         }
 
+        startMeter()
         track?.let { t ->
             if (t.state == AudioTrack.STATE_INITIALIZED) {
                 val written = PcmWritePump.write(chunk, {
                     isRunning.get() && !released.get() && audioQueue.isCurrent(frame)
                 }) { offset, length ->
-                    t.write(chunk, offset, length, AudioTrack.WRITE_BLOCKING)
+                    // 10 ms writes expose accepted frame positions without waiting for a whole network packet.
+                    val count = t.write(chunk, offset, minOf(length, 480), AudioTrack.WRITE_BLOCKING)
+                    if (count > 0) synchronized(meterLock) {
+                        if (audioTrack === t && audioQueue.isCurrent(frame))
+                            timeline.accepted(chunk, offset, count, activeEpoch.get())
+                    }
+                    count
                 }
                 if (written > 0 && audioQueue.isCurrent(frame)) hardwareFailures.set(0)
                 if (written < 0 && audioQueue.isCurrent(frame)) {
@@ -297,7 +378,7 @@ class AudioPlayer(
                     VoiceFlightRecorder.recordUnderrun()
                     synchronized(trackLock) {
                         if (released.get() || !isRunning.get() || !audioQueue.isCurrent(frame)) return
-                        try { t.release() } catch (_: Exception) {}
+                        try { t.removeOnRoutingChangedListener(routeListener); t.release() } catch (_: Exception) {}
                         if (audioTrack === t) audioTrack = null
                         initAudioTrack()
                     }

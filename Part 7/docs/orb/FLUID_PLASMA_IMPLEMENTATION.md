@@ -72,3 +72,36 @@ Rerun `:app:testDebugUnitTest --tests '*PlasmaPresentationTest' --tests
 Display-only follower consumes existing PCM, full-scale RMS, -55 dB gate/soft knee,
 35 ms attack and 200 ms release. Existing VAD thresholds are unchanged. No second recorder.
 Phone microphone/noise/route measurements remain NOT TESTED.
+
+## M4 playback clock design and limits
+
+AudioPlayer remains the only PCM playback owner. Accepted writes are divided into
+10 ms metadata blocks in a fixed 256-slot timeline. Queued data is never sampled as
+output. A player-owned 20 ms observer uses a recent AudioTimestamp projected onto the
+monotonic clock, otherwise the unsigned/wrap-aware playback head. The observer stops
+when inactive/released; it is not a second audio engine. Partial writes advance only
+accepted frame counts. Flush/new tracks reset the timeline; route changes discard
+old envelopes and temporarily lower timing availability without resetting written
+frame positions. Session/revision guards reject late observations, including pause.
+
+Hardware timestamp/head confidence is explicit. Neither proves acoustic arrival at a
+Bluetooth speaker. Android/local and external TTS callbacks supply STATE_ONLY output,
+with zero synthetic audio amplitude/bands. TTS generation guards reject obsolete callbacks.
+Permission/VAD and accessibility ownership are unchanged. Existing public flows survive.
+
+Initial M4 compile failed on an existing nullable summary being passed to the new TTS
+presentation wrapper; wrapper now accepts/ignores blank or null summaries. Deterministic
+clock/timeline and existing voice tests are run before the M4 commit. Native AudioTrack,
+Bluetooth timing, focus changes and route switching remain device verification requirements.
+
+M4 main gate: `:app:testDebugUnitTest --tests '*Pcm*Test' --tests
+'*PlasmaPresentationTest' --tests '*LoudspeakerBargeIn*' --tests
+'*MicrophoneOwnershipTest' --tests '*Voice*Test' --no-daemon --offline`
+PASS in 3m 27s: 54 tests, zero failures/errors/skips. Hardware synchronization is still
+NOT TESTED. Additional no-hardware AudioPlayer pause/flush/release ownership tests
+are tracked separately; they do not simulate a successful AudioTrack playback.
+
+M4 additional gate: `:app:testDebugUnitTest --tests '*PlaybackObservationLifecycleTest'
+--tests '*PcmEnvelopeTimelineTest' --no-daemon --offline` PASS in 1m 48s.
+Seven tests executed: frame mapping, partial writes, bounded metadata, timestamp/head
+validation, route discard, pause/same-epoch flush rejection and terminal release.
