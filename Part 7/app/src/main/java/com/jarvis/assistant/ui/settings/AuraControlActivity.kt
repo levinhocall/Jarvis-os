@@ -74,6 +74,17 @@ class AuraControlActivity : AppCompatActivity() {
             MaterialAlertDialogBuilder(this).setTitle("Living holographic eye")
                 .setView(android.widget.ScrollView(this).apply { addView(panel) }).setPositiveButton("Done", null).show()
         })
+        root.addView(action(getString(R.string.plasma_renderer_title)) {
+            val options = runCatching { org.json.JSONObject(preferences.orbEyeOptions) }.getOrDefault(org.json.JSONObject())
+            val labels = arrayOf(getString(R.string.plasma_renderer_legacy), getString(R.string.plasma_renderer_fluid))
+            MaterialAlertDialogBuilder(this).setTitle(R.string.plasma_renderer_title)
+                .setSingleChoiceItems(labels, if (options.optString("renderer") == "fluid_plasma") 1 else 0) { dialog, choice ->
+                    options.put("renderer", if (choice == 1) "fluid_plasma" else "legacy")
+                    preferences.orbEyeOptions = options.toString()
+                    renderSelection()
+                    dialog.dismiss()
+                }.setNegativeButton(android.R.string.cancel, null).show()
+        })
         root.addView(action("Background power policy") {
             val profiles = arrayOf("Battery Saver", "Balanced", "Performance")
             val values = arrayOf("saver", "balanced", "performance")
@@ -110,6 +121,8 @@ class AuraControlActivity : AppCompatActivity() {
         ).forEach { (key, label) ->
             root.addView(action(label) {
                 preferences.orbPreset = key
+                val options = runCatching { org.json.JSONObject(preferences.orbEyeOptions) }.getOrDefault(org.json.JSONObject())
+                preferences.orbEyeOptions = options.put("renderer", "legacy").toString()
                 preferences.appTheme = when (key) {
                     "crimson" -> "red"
                     "aura", "midnight" -> "dark"
@@ -136,13 +149,23 @@ class AuraControlActivity : AppCompatActivity() {
         selected.setPadding(dp(16),dp(18),dp(16),dp(18))
         selected.contentDescription = "Active orb style. Tap to switch."
         selected.setOnClickListener {
-            val values = arrayOf("classic", "aura", "midnight", "crimson")
-            MaterialAlertDialogBuilder(this).setTitle("Quick orb switch").setItems(values) { _, index -> preferences.orbPreset = values[index]; renderSelection() }.show()
+            val values = arrayOf("fluid_plasma", "classic", "aura", "midnight", "crimson")
+            val labels = arrayOf(getString(R.string.plasma_renderer_fluid), "Classic", "Aura", "Midnight", "Crimson")
+            MaterialAlertDialogBuilder(this).setTitle(R.string.plasma_renderer_title).setItems(labels) { _, index ->
+                val options = runCatching { org.json.JSONObject(preferences.orbEyeOptions) }.getOrDefault(org.json.JSONObject())
+                preferences.orbEyeOptions = options.put("renderer", if (index == 0) "fluid_plasma" else "legacy").toString()
+                if (index > 0) preferences.orbPreset = values[index]
+                renderSelection()
+            }.show()
         }
         renderSelection()
     }
 
     private fun renderSelection() {
+        if (com.jarvis.assistant.ui.orb.OrbAppearance.rendererMode() == "fluid_plasma") {
+            selected.setText(R.string.plasma_renderer_fluid)
+            return
+        }
         selected.text = "Active Orb: " + when (preferences.orbPreset) {
             "aura" -> "Aura Orb"
             "crimson" -> "Crimson Orb"

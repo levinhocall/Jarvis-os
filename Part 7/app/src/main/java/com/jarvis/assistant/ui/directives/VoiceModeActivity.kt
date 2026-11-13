@@ -2,121 +2,155 @@ package com.jarvis.assistant.ui.directives
 
 import android.Manifest
 import android.content.Intent
-import android.graphics.*
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
-import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.jarvis.assistant.JarvisApp
+import com.jarvis.assistant.R
 import com.jarvis.assistant.background.JarvisConversationService
+import com.jarvis.assistant.data.model.AudioTimingConfidence
+import com.jarvis.assistant.databinding.ActivityVoiceModeBinding
+import com.jarvis.assistant.ui.orb.OrbPresentationLabels
+import com.jarvis.assistant.ui.orb.OrbPresentationMapper
 import kotlinx.coroutines.launch
 
-/** Native audio-reactive presentation over the existing service, never a second microphone pipeline. */
+/** XML/ViewBinding presentation; the existing service alone owns microphone and session lifetime. */
 class VoiceModeActivity : AppCompatActivity() {
-    private lateinit var orb: VortexOrbView
-    private lateinit var status: TextView
+    private lateinit var binding: ActivityVoiceModeBinding
     private var attemptedStart = false
-    private val permissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.all { it }) startVoice()
-        else status.text = "Microphone and notification access are needed. Grant access in Settings, then tap Start."
+    private var transcriptExpanded = false
+    private var localExplanation = 0
+    private fun explain(resource: Int) {
+        localExplanation = resource
+        binding.voiceReason.setText(resource)
+        binding.permissionSettings.visibility = if (resource == R.string.plasma_permission) View.VISIBLE else View.GONE
     }
+    private val permissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        if (com.jarvis.assistant.util.PermissionHelper.hasAllRequiredPermissions(this)) startVoice() else explain(R.string.plasma_permission)
+    }
+
     override fun onCreate(saved: Bundle?) {
+        setTheme(R.style.Theme_JarvisAssistant_Voice)
         super.onCreate(saved)
         attemptedStart = saved?.getBoolean("attempted") ?: false
-        window.statusBarColor = Color.BLACK; window.navigationBarColor = Color.BLACK
-        if (com.jarvis.assistant.util.DirectivePowerPolicy.backgroundAllowed((application as JarvisApp).preferences.powerProfile, (getSystemService(POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24); setBackgroundColor(Color.BLACK) }
-        fun text(size: Float) = TextView(this).apply { textSize = size; setTextColor(Color.WHITE); root.addView(this) }
-        text(22f).text = "JARVIS · LIVE VOICE"
-        status = text(14f)
-        orb = VortexOrbView(this)
-        lifecycle.addObserver(orb)
-        root.addView(orb, LinearLayout.LayoutParams(-1, 0, 1f))
-        val user = text(16f).apply { maxLines = 3 }
-        val assistant = text(18f).apply { maxLines = 5 }
-        val controls = GridLayout(this).apply { columnCount = 3 }
-        var controlIndex = 0
-        fun button(title: String, action: () -> Unit) {
-            val index = controlIndex++
-            controls.addView(Button(this).apply { this.text = title; textSize = 11f; isAllCaps = false; setOnClickListener { action() } },
-                GridLayout.LayoutParams().apply { width = 0; height = -2; columnSpec = GridLayout.spec(index % 3, 1f); rowSpec = GridLayout.spec(index / 3) })
+        transcriptExpanded = saved?.getBoolean("transcript") ?: false
+        localExplanation = saved?.getInt("explanation") ?: 0
+        binding = ActivityVoiceModeBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        if (!com.jarvis.assistant.util.VisualMotionSettings.isReduced(this)) {
+            binding.root.alpha = 0f
+            binding.root.animate().alpha(1f).setDuration(240).start()
         }
-        button("Start / resume conversation") { startVoice() }
-        button("Interrupt response") { JarvisConversationService.interruptPlayback() }
-        button("Mute / unmute microphone") {
-            val prefs = (application as JarvisApp).preferences
-            prefs.isMicMuted = !prefs.isMicMuted
-            JarvisConversationService.setMicMuted(prefs.isMicMuted)
-            status.text = if (prefs.isMicMuted) "Microphone muted" else "Microphone active"
+        binding.permissionSettings.setOnClickListener {
+            startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                "package:$packageName".toUri()))
         }
-        button("End conversation") {
-            if (JarvisConversationService.isSessionOn.value) send(JarvisConversationService.ACTION_STOP_ALL)
-        }
-        button("‹ Main deck") { finish() }
-        button("Voice settings") { startActivity(Intent(this, com.jarvis.assistant.ui.settings.ApiConnectionActivity::class.java)) }
-        root.addView(controls, LinearLayout.LayoutParams(-1, -2))
-        setContentView(root)
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
-            val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout())
-            view.setPadding(24 + bars.left, 24 + bars.top, 24 + bars.right, 24 + bars.bottom)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val prefs = (application as JarvisApp).preferences
+        if (com.jarvis.assistant.util.DirectivePowerPolicy.backgroundAllowed(prefs.powerProfile,
+                getSystemService(android.os.PowerManager::class.java).isPowerSaveMode))
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
-        androidx.core.view.WindowInsetsControllerCompat(window, root).apply {
-            systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        WindowInsetsControllerCompat(window, binding.root).apply {
+            isAppearanceLightStatusBars = false; isAppearanceLightNavigationBars = false
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
         }
-        lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) {
-            launch { JarvisConversationService.audioLevel.collect { orb.level = it } }
-            launch { JarvisConversationService.conversationState.collect { status.text = it.name.replace('_', ' ');orb.updateState(it.name) } }
-            launch { JarvisConversationService.liveUserTranscript.collect { user.text = it } }
-            launch { JarvisConversationService.liveAssistantResponse.collect { assistant.text = it } }
-            launch { JarvisConversationService.liveError.collect { if (it != null) status.text = "Live voice could not connect. Check AI Provider Connections." } }
-        } }
+        lifecycle.addObserver(binding.voiceOrb)
+        // Scrollable content preserves access with landscape, small windows and large font scales.
+        binding.voiceScroll.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            val density = resources.displayMetrics.density
+            val height = minOf(binding.voiceScroll.width * .82f, 380f * density,
+                binding.voiceScroll.height * .65f).toInt().coerceAtLeast(1)
+            if (binding.voiceOrb.layoutParams.height != height) {
+                binding.voiceOrb.layoutParams = binding.voiceOrb.layoutParams.apply { this.height = height }
+            }
+        }
+        binding.voiceOrb.setOnClickListener {
+            if (JarvisConversationService.isSessionOn.value) JarvisConversationService.interruptPlayback() else startVoice()
+        }
+        binding.voiceOrb.setOnLongClickListener { openAppearance(); true }
+        binding.startVoice.setOnClickListener { startVoice() }
+        binding.interruptVoice.setOnClickListener { JarvisConversationService.interruptPlayback() }
+        binding.muteVoice.setOnClickListener {
+            prefs.isMicMuted = !prefs.isMicMuted
+            JarvisConversationService.setMicMuted(prefs.isMicMuted)
+            binding.muteVoice.setText(if (prefs.isMicMuted) R.string.plasma_unmute else R.string.plasma_mute)
+        }
+        binding.endVoice.setOnClickListener {
+            if (JarvisConversationService.isSessionOn.value) send(JarvisConversationService.ACTION_STOP_ALL)
+        }
+        binding.backVoice.setOnClickListener { finish() }
+        binding.voiceSettings.setOnClickListener {
+            startActivity(Intent(this, com.jarvis.assistant.ui.settings.ApiConnectionActivity::class.java))
+        }
+        binding.orbAppearance.setOnClickListener { openAppearance() }
+        binding.toggleTranscript.setOnClickListener { transcriptExpanded = !transcriptExpanded; renderTranscriptVisibility() }
+        renderTranscriptVisibility()
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { JarvisConversationService.voicePresentation.collect { facts ->
+                    binding.voiceOrb.submit(facts)
+                    val label = OrbPresentationLabels.status(this@VoiceModeActivity, facts)
+                    if (binding.voiceStatus.text.toString() != label) binding.voiceStatus.text = label
+                    val presentation = OrbPresentationMapper.map(facts, android.os.SystemClock.elapsedRealtime())
+                    if (facts.active) localExplanation = 0
+                    val reason = presentation.reason ?: if (facts.playing && facts.timing == AudioTimingConfidence.STATE_ONLY)
+                        getString(R.string.plasma_timing_state_only) else if (localExplanation != 0) getString(localExplanation) else ""
+                    binding.permissionSettings.visibility = if (localExplanation == R.string.plasma_permission) View.VISIBLE else View.GONE
+                    if (binding.voiceReason.text.toString() != reason) binding.voiceReason.text = reason
+                    binding.startVoice.visibility = if (facts.active) View.GONE else View.VISIBLE
+                    binding.endVoice.isEnabled = facts.active
+                    binding.interruptVoice.isEnabled = facts.active
+                    val muteLabel = getString(if (prefs.isMicMuted) R.string.plasma_unmute else R.string.plasma_mute)
+                    if (binding.muteVoice.text.toString() != muteLabel) binding.muteVoice.text = muteLabel
+                } }
+                launch { JarvisConversationService.liveUserTranscript.collect { binding.userTranscript.text = it.ifBlank { getString(R.string.plasma_transcript_empty) } } }
+                launch { JarvisConversationService.liveAssistantResponse.collect { binding.assistantTranscript.text = it } }
+                launch { JarvisConversationService.liveError.collect { if (it != null) binding.voiceReason.text = it.message } }
+            }
+        }
     }
+    private fun renderTranscriptVisibility() {
+        binding.transcriptPanel.visibility = if (transcriptExpanded) View.VISIBLE else View.GONE
+        binding.toggleTranscript.setText(if (transcriptExpanded) R.string.plasma_hide_transcript else R.string.plasma_show_transcript)
+    }
+    private fun openAppearance() = startActivity(Intent(this, com.jarvis.assistant.ui.settings.AuraControlActivity::class.java))
     override fun onResume() { super.onResume(); if (!attemptedStart) { attemptedStart = true; startVoice() } }
-    override fun onSaveInstanceState(outState: Bundle) { outState.putBoolean("attempted", attemptedStart); super.onSaveInstanceState(outState) }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("explanation", localExplanation)
+        outState.putBoolean("attempted", attemptedStart); outState.putBoolean("transcript", transcriptExpanded)
+        super.onSaveInstanceState(outState)
+    }
+    override fun onDestroy() { binding.root.animate().cancel(); super.onDestroy() }
     private fun startVoice() {
         if (JarvisConversationService.isSessionOn.value) return
         val missing = buildList {
             add(Manifest.permission.RECORD_AUDIO)
             if (android.os.Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
         }.filter { ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
-        if (missing.isNotEmpty()) {
-            permissions.launch(missing.toTypedArray()); return
-        }
+        if (missing.isNotEmpty()) { permissions.launch(missing.toTypedArray()); return }
         val prefs = (application as JarvisApp).preferences
-        if ((prefs.getNextActiveKey("gemini") ?: prefs.apiKey).isBlank()) {
-            status.text = "Configure Gemini in AI Provider Connections to start live voice."
-            return
-        }
+        if ((prefs.getNextActiveKey("gemini") ?: prefs.apiKey).isBlank()) { explain(R.string.plasma_key_required); return }
         try { send(JarvisConversationService.ACTION_START_CONVERSATION) }
-        catch (_: Exception) { status.text = "Android could not start the microphone service. Check permissions and try again." }
+        catch (_: Exception) { explain(R.string.plasma_start_failed) }
     }
     private fun send(action: String) {
         ContextCompat.startForegroundService(this, Intent(this, JarvisConversationService::class.java).setAction(action))
-    }
-    private class AudioOrb(context: android.content.Context) : View(context) {
-        var level = 0f
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val cx = width / 2f; val cy = height / 2f
-            val normalized = if (level.isFinite()) level.coerceIn(0f, 1f) else 0f
-            val radius = minOf(width, height) * (0.23f + normalized * 0.09f)
-            paint.style = Paint.Style.FILL; paint.color = Color.rgb(10, 60, 85); paint.alpha = 90
-            canvas.drawCircle(cx, cy, radius * 1.35f, paint)
-            paint.style = Paint.Style.STROKE; paint.strokeWidth = 3f; paint.color = Color.CYAN; paint.alpha = 220
-            canvas.drawCircle(cx, cy, radius, paint)
-            paint.alpha = 100
-            canvas.drawOval(cx - radius * 1.3f, cy - radius * 0.45f, cx + radius * 1.3f, cy + radius * 0.45f, paint)
-            paint.style = Paint.Style.FILL; paint.alpha = 230
-            canvas.drawCircle(cx, cy, radius * (0.3f + normalized * 0.3f), paint)
-        }
     }
 }

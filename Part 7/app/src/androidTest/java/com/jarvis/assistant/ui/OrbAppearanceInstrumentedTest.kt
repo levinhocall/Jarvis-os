@@ -11,6 +11,21 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class OrbAppearanceInstrumentedTest {
+    @Test fun rendererSelectionPersistsWithoutReplacingLegacyOptions() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs = (context.applicationContext as JarvisApp).preferences
+        val previous = prefs.orbEyeOptions
+        try {
+            prefs.orbEyeOptions = """{"blink":false,"size":0.8}"""
+            assertEquals("legacy", OrbAppearance.rendererMode())
+            val options = org.json.JSONObject(prefs.orbEyeOptions).put("renderer", "fluid_plasma")
+            prefs.orbEyeOptions = options.toString()
+            assertEquals("fluid_plasma", OrbAppearance.rendererMode())
+            assertFalse(org.json.JSONObject(AppPreferences(context).orbEyeOptions).getBoolean("blink"))
+            assertEquals(0.8, org.json.JSONObject(AppPreferences(context).orbEyeOptions).getDouble("size"), .001)
+        } finally { prefs.orbEyeOptions = previous }
+    }
+
     @Test fun appearanceSurvivesRepositoryRecreationAndInvalidNumbersAreBounded() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val prefs = (context.applicationContext as JarvisApp).preferences

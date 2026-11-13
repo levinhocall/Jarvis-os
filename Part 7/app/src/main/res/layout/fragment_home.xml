@@ -146,7 +146,7 @@
             android:layout_gravity="center"
             android:background="@drawable/bg_jarvis_orb_halo" />
 
-        <WebView
+        <com.jarvis.assistant.ui.orb.OrbTouchWebView
             android:id="@+id/orbWebView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"

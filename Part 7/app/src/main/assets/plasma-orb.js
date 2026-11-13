@@ -2,6 +2,7 @@
 (function (root) {
   'use strict';
   const STATES = ['IDLE','LISTENING','USER_SPEAKING','PROCESSING','AI_SPEAKING','INTERRUPTED','ERROR','DISCONNECTED'];
+  const ENERGY = {IDLE:.35,LISTENING:.53,USER_SPEAKING:.73,PROCESSING:.63,AI_SPEAKING:.82,INTERRUPTED:.5,ERROR:.22,DISCONNECTED:.2};
   const clamp = x => Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0;
   class PlasmaMotion {
     constructor() {
@@ -27,12 +28,13 @@
       const blend = 1 - Math.exp(-dt / .15), stale = now - this.received > 300;
       this.mic += ((stale ? 0 : this.targetMic) - this.mic) * (1 - Math.exp(-dt/.035));
       this.output += ((stale ? 0 : this.targetOutput) - this.output) * (1 - Math.exp(-dt/.035));
-      const target = {IDLE:.35,LISTENING:.53,USER_SPEAKING:.73,PROCESSING:.63,AI_SPEAKING:.82,INTERRUPTED:.5,ERROR:.22,DISCONNECTED:.2}[this.state];
+      const target = ENERGY[this.state];
       this.energy += (target - this.energy) * blend;
       this.process += ((this.state === 'PROCESSING' ? 1 : 0) - this.process) * blend;
       this.error += ((this.state === 'ERROR' ? 1 : 0) - this.error) * blend;
       this.disconnected += ((this.state === 'DISCONNECTED' ? 1 : 0) - this.disconnected) * blend;
       if (!this.reduced) this.time += dt;
+      else { this.energy=target;this.process=this.state==='PROCESSING'?1:0;this.error=this.state==='ERROR'?1:0;this.disconnected=this.state==='DISCONNECTED'?1:0; }
     }
   }
   const vertex = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}';
@@ -116,7 +118,7 @@
     }
     function draw(now) {
       if(disposed || failed || !visible || document.hidden)return;
-      const elapsed=last ? now-last : 16.67;
+      const elapsed=last ? now-last : budget;
       if(!reduced && elapsed < budget-.8){schedule();return;}
       // Sustained late frame delivery selects a cheaper shader and 30 Hz, never a FPS claim.
       if(!reduced && budget<20){slow=elapsed>24?slow+1:Math.max(0,slow-1);if(slow>=30)lowerQuality();}
@@ -139,13 +141,23 @@
     window.addEventListener('resize',resize);document.addEventListener('visibilitychange',visibility);
     const observer=root.ResizeObserver?new ResizeObserver(resize):null;if(observer)observer.observe(canvas);
     const api = {
-      setPresentation(p){if(motion.accept(p,performance.now())){if(reduced){motion.tick(.08,performance.now());motion.tick(.08,performance.now());}dirty();}},
+      setPresentation(p){
+        const previousState=motion.state, previousSession=motion.session, previousGeneration=motion.generation;
+        if(motion.accept(p,performance.now())){
+          // Reduced motion draws state changes only, not a static image for every PCM packet.
+          if(reduced){
+            if(previousState===motion.state && previousSession===motion.session && previousGeneration===motion.generation)return;
+            motion.tick(.08,performance.now());
+          }
+          dirty();
+        }
+      },
       setVisible,
       setReducedMotion(value){reduced=!!value;motion.reduced=reduced;cancelAnimationFrame(frame);frame=0;last=0;dirty();},
       configure(o){for(const [key,name,min,max] of [['intensity','intensity',.3,1.5],['glow','glow',0,1.5],['size','orbSize',.7,1.15]])if(Number.isFinite(o[key]))uniforms[name].value=Math.max(min,Math.min(max,o[key]));if(Number.isFinite(o.speed))speed=Math.max(.4,Math.min(1.6,o.speed));if(o.quality==='saver')lowerQuality();resize();},
       // Legacy host calls cannot replace the authoritative presentation in this mode.
       setState(){},setExternalAudio(){},setTheme(){},setBackground(){},
-      inspect:()=>({mode:'fluid_plasma',state:motion.state,mic:motion.mic,output:motion.output,frames,visible,reduced,failed,disposed,degraded,programs:renderer.info.programs.length}),
+      inspect:()=>({mode:'fluid_plasma',state:motion.state,mic:motion.mic,output:motion.output,frames,visible,reduced,failed,disposed,degraded,programs:renderer.info.programs.length,geometries:renderer.info.memory.geometries,targetHz:Math.round(1000/budget)}),
       dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);if(observer)observer.disconnect();window.removeEventListener('resize',resize);document.removeEventListener('visibilitychange',visibility);canvas.removeEventListener('webglcontextlost',lost);geometry.dispose();material.dispose();renderer.dispose();renderer.forceContextLoss();}
     };
     resize();

@@ -24,7 +24,7 @@ class PlasmaPresentationTest {
         assertEquals(PlasmaVisualState.LISTENING, state(live.copy(microphone = VoiceEnvelope(1f, 1000))))
         assertEquals(PlasmaVisualState.PROCESSING, state(live.copy(pendingResponse = true, output = VoiceEnvelope(1f, 1000))))
         assertEquals(PlasmaVisualState.IDLE, state(live.copy(muted = true, confirmedSpeech = true)))
-        assertEquals(PlasmaVisualState.IDLE, state(live.copy(permissionReason = "Denied", confirmedSpeech = true)))
+        assertEquals(PlasmaVisualState.ERROR, state(live.copy(permissionReason = "Denied", confirmedSpeech = true)))
     }
 
     @Test fun staleAudioAndUnknownTtsTimingCannotAnimateSpeech() {

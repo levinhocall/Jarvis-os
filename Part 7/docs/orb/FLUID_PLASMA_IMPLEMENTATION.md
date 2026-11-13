@@ -105,3 +105,79 @@ M4 additional gate: `:app:testDebugUnitTest --tests '*PlaybackObservationLifecyc
 --tests '*PcmEnvelopeTimelineTest' --no-daemon --offline` PASS in 1m 48s.
 Seven tests executed: frame mapping, partial writes, bounded metadata, timestamp/head
 validation, route discard, pause/same-epoch flush rejection and terminal release.
+
+## M5/M6 screens, lifecycle and regression gates
+
+VoiceModeActivity now inflates activity_voice_mode.xml with ViewBinding. Home and Voice
+Mode consume the same service snapshot; neither opens a recorder/session. Back keeps
+service ownership, End uses existing ACTION_STOP_ALL. Controls retain start, mute,
+interrupt, settings and collapsible transcript. Insets, scrollable constrained content,
+large-text controls and meaningful status text accompany the orb. Existing legacy
+renderer/appearance selections are retained. Choose Fluid Plasma in Aura Control >
+Orb rendering (or its quick-switch banner); selecting an old preset restores legacy.
+
+Per-host visibility replaces all production WebView pauseTimers/resumeTimers calls.
+The host coalesces IPC, sends epoch invalidation immediately, reacts to power-save and
+system motion settings only while visible, and removes observers/bridge/views on disposal.
+Renderer failure displays PremiumOrbView without touching voice/accessibility ownership.
+The native fallback is deliberately simpler, with cached gradients/paths and no plasma
+rings. It responds to the same facts and settings, decays old levels and limits animation.
+
+M5 compile + selected tests PASS (2m 54s). M6 full test suite + Android-test compilation
+PASS (4m 5s): 576 tests, 575 passed, one skipped, zero failures/errors; accessibility
+namespace 36 tests, audio namespace 75, network namespace 15. Instrumentation sources
+compiled only; Android instrumentation execution is NOT RUN. Final rerun below includes
+subsequent permission-label, theme-contrast and cleanup corrections.
+
+The two-host browser regression exposed a real 30 Hz resume freeze: first-frame elapsed
+time was fixed at 16.67 ms, below the saver budget, so the frame never committed. Fixed
+by initializing elapsed to the current budget, and added explicit saver hide/resume
+coverage. Desktop WebGL regression then PASS, including geometry/program disposal and
+one host continuing while another is hidden. A prior timeout was not counted as a pass.
+
+Accessibility production source/config/manifest diff against 5f285af is empty. No
+claim of OEM service reconnection, gesture success or screen access on Android is made.
+
+## M7 final check attempts
+
+First combined final command (`testDebugUnitTest lintDebug compileDebugAndroidTestKotlin
+assembleDebug`) executed unit tests successfully but failed lint on seven new issues:
+root background overdraw, three button-bar style findings, URI KTX use, and two touch
+accessibility findings. No lint-baseline edits or suppressions were added for these seven
+findings. The host explicitly enables JavaScript for trusted packaged assets; its existing
+SetJavaScriptEnabled annotation documents that deliberate renderer capability.
+The screen now uses a dedicated dark window theme with no duplicate root paint, proper
+button-bar styles and toUri. OrbTouchWebView implements performClick/performLongClick
+while preserving legacy WebGL drag events; the host no longer uses an unlabelled touch
+listener. Native controls remain accessible alternatives. Landscape orb height is bounded
+by the actual scroll viewport so the hero is not sized from landscape width alone.
+
+Browser checks passed again after source changes: motion (14 checks), legacy eye behavior,
+and WebGL compilation/states/hide-resume/saver/reduced-motion/interruption/context loss/
+initialization failure/resource disposal. No phone FPS/latency/battery numbers are available.
+
+The corrected combined check then passed in 7m 3s, including APK assembly and zero new
+lint issues. A subsequent source/bytecode comparison caught a final landscape sizing edit
+that had been made during that running build: the compiled class still used the older
+width-only calculation. That APK is not the final delivery. All 605 source/test/asset text
+files were fingerprinted, production edits were stopped, and the combined check was run
+again against the frozen tree. Final artifact hash and verification appear in VERIFICATION.md.
+
+`plasma-desktop-preview.png` is an actual local Three.js render in desktop Chromium/
+SwiftShader. It is not a phone screenshot, generated illustration or performance benchmark.
+
+The first frozen-source rerun passed in 5m 22s; bytecode inspection confirmed the
+landscape sizing calculation uses 65% of the actual scroll viewport. A final
+reduced-motion inspection found audio-only packets still requested static redraws.
+WebGL and Canvas now redraw that mode on visual-state/session/generation changes,
+not each audio packet. The browser test sends ten continuous audio updates while
+reduced motion is enabled and verifies the frame count remains unchanged (PASS).
+
+Final delivery gate: the same four-task Gradle command passed in **5m 34s** with
+20 tasks executed and 51 up-to-date. The unit test task executed: **576 tests,
+575 passed, one skipped, zero failures/errors**. All 605 fingerprinted source,
+asset and test files were unchanged during this final build. Lint reports no new
+errors/warnings under the unchanged existing baseline (1389 errors and two hints
+filtered); this is not a clean-baseline claim. Debug APK v2 signature verification
+passed. Android tests compiled but were not executed. See VERIFICATION.md for the
+exact artifact checksum, signing certificate, source revision and remaining gates.

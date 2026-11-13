@@ -21,7 +21,7 @@ object OrbPresentationMapper {
         val currentOutput = facts.output.generation == facts.interruptionGeneration
         val playing = facts.active && facts.playing && currentOutput && !facts.interrupted
         val state = when {
-            facts.errorReason != null -> PlasmaVisualState.ERROR
+            facts.errorReason != null || facts.permissionReason != null -> PlasmaVisualState.ERROR
             !facts.active -> PlasmaVisualState.IDLE
             facts.interrupted -> PlasmaVisualState.INTERRUPTED
             playing -> PlasmaVisualState.AI_SPEAKING
@@ -42,7 +42,8 @@ object OrbPresentationMapper {
                 facts.focus == VoiceAudioFocus.LOST -> "Audio focus lost"
                 facts.connection == VoiceConnection.RECONNECTING -> "Reconnecting"
                 facts.connection == VoiceConnection.CONNECTING -> "Connecting"
-                facts.active && facts.connection == VoiceConnection.OFFLINE -> "Cloud disconnected · local commands available"
+                facts.active && facts.connection == VoiceConnection.OFFLINE -> "Cloud connection unavailable"
+                facts.active && !facts.capturing -> "Microphone starting"
                 else -> null
             }
         )

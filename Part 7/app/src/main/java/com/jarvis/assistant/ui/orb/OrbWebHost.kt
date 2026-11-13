@@ -25,7 +25,30 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
     private var failed = false
     private var visible = false
     private var scheduled = false
+    private var observingPolicy = false
+    private val policyObserver = object : android.database.ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean) { configure(); fallback?.invalidate() }
+    }
+    private val powerReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: android.content.Intent) { configure(); fallback?.invalidate() }
+    }
+    private fun observePolicy(enabled: Boolean) {
+        if (observingPolicy == enabled) return
+        observingPolicy = enabled
+        if (enabled) {
+            androidx.core.content.ContextCompat.registerReceiver(web.context, powerReceiver,
+                android.content.IntentFilter(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+            web.context.contentResolver.registerContentObserver(android.provider.Settings.Global.getUriFor(
+                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE), false, policyObserver)
+        } else {
+            runCatching { web.context.unregisterReceiver(powerReceiver) }
+            web.context.contentResolver.unregisterContentObserver(policyObserver)
+        }
+    }
     private var loadedMode = ""
+    private var theme = "dark"
+    private var customBackground: String? = null
     private var snapshot = VoicePresentationSnapshot()
     private var fallback: PremiumOrbView? = null
     val isPlasma get() = loadedMode == "fluid_plasma"
@@ -81,15 +104,30 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
     }
 
     private fun configure() {
+        fallback?.configure(OrbAppearance.configuration(container.context))
         if (!ready || failed || destroyed) return
         val config = OrbAppearance.configuration(web.context)
         web.evaluateJavascript("JarvisOrb.configure($config);JarvisOrb.setReducedMotion(${VisualMotionSettings.isReduced(web.context)});", null)
+        setTheme(theme, customBackground)
+    }
+
+    fun setTheme(value: String, background: String? = null) {
+        theme = value.takeIf { it in setOf("light", "dark", "red", "midnight") } ?: "dark"
+        customBackground = background?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) }
+        if (ready && !failed && !destroyed && !isPlasma) {
+            val script = customBackground?.let { "JarvisOrb.setBackground(${JSONObject.quote(it)});" }
+                ?: "JarvisOrb.setTheme(${JSONObject.quote(theme)});"
+            web.evaluateJavascript(script, null)
+        }
     }
 
     fun submit(facts: VoicePresentationSnapshot) {
+        val invalidatesOutput = facts.sessionId != snapshot.sessionId || facts.interruptionGeneration != snapshot.interruptionGeneration
         snapshot = facts
-        fallback?.submit(facts)
-        if (!visible || scheduled || destroyed || failed) return
+        if (visible) fallback?.submit(facts)
+        if (!visible || destroyed || failed) return
+        if (invalidatesOutput) { handler.removeCallbacks(push); scheduled = false; sendLatest(); return }
+        if (scheduled) return
         scheduled = true
         handler.postDelayed(push, 33)
     }
@@ -114,10 +152,16 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
     }
 
     fun setVisible(value: Boolean) {
+        if (destroyed) return
         visible = value
-        fallback?.renderingActive = value
+        observePolicy(value)
+        fallback?.let {
+            it.renderingActive = value; it.visibility = if (value) View.VISIBLE else View.INVISIBLE
+            if (value) it.submit(snapshot)
+        }
         if (!value) { handler.removeCallbacks(push); scheduled = false }
         if (destroyed || failed) return
+        web.visibility = if (value) View.VISIBLE else View.INVISIBLE
         if (value) web.onResume()
         if (ready) web.evaluateJavascript("JarvisOrb.setVisible($value);", null)
         if (!value) web.onPause() else { reloadIfChanged(); sendLatest() }
@@ -130,7 +174,10 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
         web.visibility = View.INVISIBLE
         // Initialization/context failure affects visuals only. Controls and voice owner survive.
         fallback = PremiumOrbView(container.context).also {
-            it.plasmaMode = isPlasma; it.renderingActive = visible; it.submit(snapshot)
+            it.plasmaMode = isPlasma; it.renderingActive = visible; it.configure(OrbAppearance.configuration(container.context)); it.submit(snapshot)
+            it.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+            it.setOnClickListener { container.performClick() }
+            it.setOnLongClickListener { container.performLongClick() }
             container.addView(it, FrameLayout.LayoutParams(-1, -1))
         }
         runCatching { web.evaluateJavascript("window.JarvisOrb && window.JarvisOrb.dispose();", null); web.onPause() }
@@ -141,12 +188,13 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
         if (webDestroyed) return
         webDestroyed = true
         container.removeView(web)
-        web.removeJavascriptInterface("OrbRendererBridge")
-        web.stopLoading(); web.destroy()
+        runCatching { web.removeJavascriptInterface("OrbRendererBridge"); web.stopLoading() }
+        web.destroy()
     }
 
     fun dispose() {
         if (destroyed) return
+        observePolicy(false)
         destroyed = true; ready = false
         handler.removeCallbacksAndMessages(null)
         fallback?.let { it.renderingActive = false; container.removeView(it) }; fallback = null

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.JarvisAssistant.Voice" parent="Theme.JarvisAssistant.Dark">
+        <item name="android:windowBackground">@color/plasma_background</item>
+        <item name="android:statusBarColor">@color/plasma_background</item>
+        <item name="android:navigationBarColor">@color/plasma_background</item>
+    </style>
+    <color name="plasma_background">#030711</color>
+    <color name="plasma_surface">#0D1829</color>
+    <color name="plasma_cyan">#00E5FF</color>
+    <color name="plasma_blue">#008CFF</color>
+    <color name="plasma_ice">#A5F3FF</color>
+    <color name="plasma_white">#E8FCFF</color>
+    <color name="plasma_muted_text">#ACBDD2</color>
+    <color name="plasma_warning">#FFC48B</color>
+    <string name="plasma_title">JARVIS</string>
+    <string name="plasma_subtitle">LIVE VOICE</string>
+    <string name="plasma_back">Back</string>
+    <string name="plasma_settings">Voice settings</string>
+    <string name="plasma_permissions_settings">Open app permissions</string>
+    <string name="plasma_start">Start conversation</string>
+    <string name="plasma_mute">Mute mic</string>
+    <string name="plasma_unmute">Unmute mic</string>
+    <string name="plasma_interrupt">Interrupt</string>
+    <string name="plasma_end">End</string>
+    <string name="plasma_show_transcript">Show transcript</string>
+    <string name="plasma_hide_transcript">Hide transcript</string>
+    <string name="plasma_transcript_empty">Your conversation will appear here.</string>
+    <string name="plasma_style">Orb appearance</string>
+    <string name="plasma_renderer_title">Orb rendering</string>
+    <string name="plasma_renderer_fluid">Fluid Plasma · cyan and blue</string>
+    <string name="plasma_renderer_legacy">Living holographic eye · existing style</string>
+    <string name="plasma_idle">Ready when you are</string>
+    <string name="plasma_listening">Listening</string>
+    <string name="plasma_user_speaking">I’m listening</string>
+    <string name="plasma_processing">Working on your request</string>
+    <string name="plasma_ai_speaking">JARVIS is speaking</string>
+    <string name="plasma_interrupted">Listening again</string>
+    <string name="plasma_error">Voice needs attention</string>
+    <string name="plasma_disconnected">Connection unavailable</string>
+    <string name="plasma_permission">JARVIS needs microphone and notification permission. Allow them in Android Settings, then tap Start.</string>
+    <string name="plasma_key_required">Add a Gemini key in Voice settings to use live conversation.</string>
+    <string name="plasma_start_failed">Android could not start voice. Check permissions and try Start again.</string>
+    <string name="plasma_background_hint">Back keeps your conversation running. End stops it.</string>
+    <string name="plasma_timing_state_only">This voice uses a gentle ambient animation.</string>
+    <string name="plasma_mic_muted">Microphone muted</string>
+    <string name="plasma_stopped">Conversation stopped</string>
+    <string name="plasma_home_active_hint">Tap Voice for full-screen controls</string>
+    <string name="plasma_home_idle_hint">Tap mic or orb to start</string>
+    <string name="plasma_you">You</string>
+</resources>
