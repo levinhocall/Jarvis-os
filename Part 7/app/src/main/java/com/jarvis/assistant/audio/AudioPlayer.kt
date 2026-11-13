@@ -124,8 +124,13 @@ class AudioPlayer(
             .build()
 
         resetMeter()
-        track.addOnRoutingChangedListener(routeListener, android.os.Handler(android.os.Looper.getMainLooper()))
+        runCatching { track.addOnRoutingChangedListener(routeListener, android.os.Handler(android.os.Looper.getMainLooper())) }
         audioTrack = track
+    }
+
+    private fun releaseTrack(track: AudioTrack) {
+        try { track.removeOnRoutingChangedListener(routeListener) }
+        finally { track.release() }
     }
 
     val audioSessionId: Int
@@ -293,7 +298,7 @@ class AudioPlayer(
                 audioTrack?.let {
                     try {
                         if (it.playState == AudioTrack.PLAYSTATE_PLAYING) it.stop()
-                    } finally { it.removeOnRoutingChangedListener(routeListener); it.release() }
+                    } finally { releaseTrack(it) }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error releasing AudioTrack: ${e.message}")
@@ -342,7 +347,7 @@ class AudioPlayer(
             if (released.get() || !isRunning.get() || !audioQueue.isCurrent(frame)) return
             track = audioTrack
             if (track != null && track?.state != AudioTrack.STATE_INITIALIZED) {
-                try { track?.release() } catch (_: Exception) {}
+                try { track?.let(::releaseTrack) } catch (_: Exception) {}
                 audioTrack = null
                 track = null
             }
@@ -378,7 +383,7 @@ class AudioPlayer(
                     VoiceFlightRecorder.recordUnderrun()
                     synchronized(trackLock) {
                         if (released.get() || !isRunning.get() || !audioQueue.isCurrent(frame)) return
-                        try { t.removeOnRoutingChangedListener(routeListener); t.release() } catch (_: Exception) {}
+                        try { releaseTrack(t) } catch (_: Exception) {}
                         if (audioTrack === t) audioTrack = null
                         initAudioTrack()
                     }
