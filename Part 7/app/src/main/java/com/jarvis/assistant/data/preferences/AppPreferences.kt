@@ -1,5 +1,6 @@
 package com.jarvis.assistant.data.preferences
 
+import androidx.core.content.edit
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -96,6 +97,29 @@ class AppPreferences internal constructor(
     }
 
     /** Extra cloud review calls are opt-in; no stored memories enter their prompts. */
+    var softwareAecEnabled: Boolean
+        get() = prefs.getBoolean("software_aec3_enabled",false)
+        set(value) { prefs.edit().putBoolean("software_aec3_enabled",value).apply() }
+    var neuralTurnEnabled: Boolean
+        get() = prefs.getBoolean("smart_turn_enabled",false)
+        set(value) { prefs.edit { putBoolean("smart_turn_enabled",value) } }
+    var neuralSpeechEnabled: Boolean
+        get() = prefs.getBoolean("silero_speech_enabled",false)
+        set(value) { prefs.edit().putBoolean("silero_speech_enabled",value).apply() }
+    var localTtsEngine: String
+        get() = prefs.getString("local_tts_engine", "").orEmpty()
+        set(value) { prefs.edit { putString("local_tts_engine",value) } }
+    var plannerProvider: String
+        get() = prefs.getString("planner_provider", "gemini")?.takeIf { it in setOf("gemini","openai_compatible","openrouter","deepseek","custom") } ?: "gemini"
+        set(value) { require(value in setOf("gemini","openai_compatible","openrouter","deepseek","custom")); prefs.edit().putString("planner_provider",value).apply() }
+    var plannerCustomEndpoint: String
+        get() = prefs.getString("planner_custom_endpoint", "").orEmpty()
+        set(value) { prefs.edit().putString("planner_custom_endpoint",
+            com.jarvis.assistant.automation.routing.PlannerEndpoint.normalize(value)).apply() }
+    var plannerModel: String
+        get() = prefs.getString("planner_model_$plannerProvider", "").orEmpty()
+        set(value) { require(value.length <= 160 && !value.contains('\n')); prefs.edit().putString("planner_model_$plannerProvider",value.trim()).apply() }
+
     var ideasCloudReviewEnabled: Boolean
         get() = prefs.getBoolean("ideas_cloud_review_enabled", false)
         set(value) { check(prefs.edit().putBoolean("ideas_cloud_review_enabled", value).commit()) }
@@ -734,9 +758,7 @@ class AppPreferences internal constructor(
                     } else {
                         fallbackRecord.state = ApiKeyState.ACTIVE
                         fallbackRecord.cooldownUntilTimestamp = 0L
-                        secureApiPrefs?.edit()
-                            ?.putString("key_pool_$providerId", gson.toJson(list))
-                            ?.apply()
+                        secureApiPrefs?.edit { putString("key_pool_$providerId", gson.toJson(list)) }
                         fallbackKey
                     }
                 }
@@ -760,7 +782,7 @@ class AppPreferences internal constructor(
         record.cooldownUntilTimestamp = System.currentTimeMillis() + baseMs + jitterMs
 
         val storage = secureApiPrefs ?: return
-        storage.edit().putString("key_pool_$providerId", gson.toJson(list)).apply()
+        storage.edit { putString("key_pool_$providerId", gson.toJson(list)) }
     }
 
     @Synchronized
@@ -771,7 +793,7 @@ class AppPreferences internal constructor(
         record.failureCount = 0
         record.cooldownUntilTimestamp = 0L
         val storage = secureApiPrefs ?: return
-        storage.edit().putString("key_pool_$providerId", gson.toJson(list)).apply()
+        storage.edit { putString("key_pool_$providerId", gson.toJson(list)) }
     }
 
     @Synchronized
@@ -781,7 +803,7 @@ class AppPreferences internal constructor(
         record.state = ApiKeyState.INVALID
 
         val storage = secureApiPrefs ?: return
-        storage.edit().putString("key_pool_$providerId", gson.toJson(list)).apply()
+        storage.edit { putString("key_pool_$providerId", gson.toJson(list)) }
     }
 
     // --- Usage & Cost Tracking ---
@@ -792,11 +814,11 @@ class AppPreferences internal constructor(
         val currentCostBits = prefs.getLong("usage_cost_$providerId", java.lang.Double.doubleToRawLongBits(0.0))
         val newCost = java.lang.Double.longBitsToDouble(currentCostBits) + costUsd
 
-        prefs.edit()
-            .putLong("usage_prompt_tokens_$providerId", pTokens)
-            .putLong("usage_comp_tokens_$providerId", cTokens)
-            .putLong("usage_cost_$providerId", java.lang.Double.doubleToRawLongBits(newCost))
-            .apply()
+        prefs.edit {
+            putLong("usage_prompt_tokens_$providerId", pTokens)
+            putLong("usage_comp_tokens_$providerId", cTokens)
+            putLong("usage_cost_$providerId", java.lang.Double.doubleToRawLongBits(newCost))
+        }
     }
 
     fun getUsageStats(providerId: String): ProviderUsageStats {

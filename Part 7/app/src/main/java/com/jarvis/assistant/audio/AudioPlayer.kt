@@ -14,7 +14,9 @@ class AudioPlayer(
     private val onPlaybackStateChanged: (isPlaying: Boolean) -> Unit,
     private val onPlaybackAmplitude: (amplitude: Float) -> Unit,
     private val onPlaybackFailure: (category: String) -> Unit = {},
-    private val onPlaybackObservation: (PlaybackObservation) -> Unit = {}
+    private val onPlaybackObservation: (PlaybackObservation) -> Unit = {},
+    private val onAcceptedRender: (ByteArray, Int, Int, Int, Long) -> Unit = { _,_,_,_,_ -> },
+    private val onRenderReset: (Long) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "AudioPlayer"
@@ -61,6 +63,7 @@ class AudioPlayer(
     }
     private fun resetMeter() = synchronized(meterLock) {
         meterRevision.incrementAndGet(); timeline.reset(activeEpoch.get()); playbackClock.reset(); lastHead = -1
+        onRenderReset(activeEpoch.get())
     }
     private fun observePlayback() {
         if (released.get()) return
@@ -138,6 +141,7 @@ class AudioPlayer(
 
     fun pause() {
         synchronized(meterLock) { meterRevision.incrementAndGet() }
+        onRenderReset(activeEpoch.get())
         stopMeter()
         synchronized(trackLock) {
             try {
@@ -370,10 +374,18 @@ class AudioPlayer(
                 }) { offset, length ->
                     // 10 ms writes expose accepted frame positions without waiting for a whole network packet.
                     val count = t.write(chunk, offset, minOf(length, 480), AudioTrack.WRITE_BLOCKING)
+                    var referenceDelayMs=0
+                    var referenceAccepted=false
                     if (count > 0) synchronized(meterLock) {
-                        if (audioTrack === t && audioQueue.isCurrent(frame))
+                        if (audioTrack === t && audioQueue.isCurrent(frame)) {
                             timeline.accepted(chunk, offset, count, activeEpoch.get())
+                            referenceDelayMs=((timeline.writtenFrames-playbackClock.head(t.playbackHeadPosition))
+                                .coerceIn(0,12000)*1000/SAMPLE_RATE).toInt()
+                            referenceAccepted=true
+                        }
                     }
+                    if(referenceAccepted && audioQueue.isCurrent(frame))
+                        onAcceptedRender(chunk,offset,count,referenceDelayMs,frame.epoch)
                     count
                 }
                 if (written > 0 && audioQueue.isCurrent(frame)) hardwareFailures.set(0)

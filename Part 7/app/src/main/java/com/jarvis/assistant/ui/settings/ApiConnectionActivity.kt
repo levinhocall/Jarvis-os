@@ -2,6 +2,7 @@ package com.jarvis.assistant.ui.settings
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import androidx.core.net.toUri
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -192,6 +193,92 @@ class ApiConnectionActivity : AppCompatActivity() {
             }
         }
         binding.layoutKeyPoolContainer.addView(row)
+        loadPlannerProviderRow()
+    }
+
+    private fun loadSystemVoiceEngineRow() {
+        binding.layoutKeyPoolContainer.addView(TextView(this).apply {
+            text=getString(R.string.local_engine_requested,preferences.localTtsEngine.ifBlank { "Android default" })
+            minHeight=(48*resources.displayMetrics.density).toInt()
+            setOnClickListener {
+                if(com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value) {
+                    Toast.makeText(this@ApiConnectionActivity,R.string.local_engine_end_session,Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                lifecycleScope.launch {
+                    val engines=withContext(Dispatchers.IO) {
+                        com.jarvis.assistant.audio.SystemTtsEngineSelection.installed(this@ApiConnectionActivity)
+                    }
+                    if(isFinishing) return@launch
+                    val labels=arrayOf(getString(R.string.local_engine_default)) + engines.map { it.label+" ("+it.packageName+")" }
+                    MaterialAlertDialogBuilder(this@ApiConnectionActivity).setTitle(R.string.local_engine_title)
+                        .setItems(labels) { _, index ->
+                            if(com.jarvis.assistant.background.JarvisConversationService.isSessionOn.value) return@setItems
+                            com.jarvis.assistant.audio.SystemTtsEngineSelection.save(if(index == 0) "" else engines[index-1].packageName)
+                            com.jarvis.assistant.audio.VoiceSynthesisRouter.release()
+                            com.jarvis.assistant.audio.VoiceSynthesisRouter.init(applicationContext)
+                            com.jarvis.assistant.background.JarvisConversationService.refreshLocalTtsEngine()
+                            Toast.makeText(this@ApiConnectionActivity,R.string.local_engine_requested_note,Toast.LENGTH_LONG).show()
+                            loadKeyPool()
+                        }.setNeutralButton(R.string.local_engine_pocket_source) { _, _ ->
+                            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                                com.jarvis.assistant.audio.SystemTtsEngineSelection.POCKET_SOURCE.toUri()))
+                        }.setNegativeButton("Cancel",null).show()
+                }
+            }
+        })
+    }
+
+    private fun loadPlannerProviderRow() {
+        loadSystemVoiceEngineRow()
+        binding.layoutKeyPoolContainer.addView(TextView(this).apply {
+            text = getString(R.string.planner_provider_status, preferences.plannerProvider, preferences.plannerModel.ifBlank { "model not selected" })
+            minHeight = (48 * resources.displayMetrics.density).toInt()
+            textSize = 13f; setPadding(0,16,0,16)
+            setOnClickListener {
+                MaterialAlertDialogBuilder(this@ApiConnectionActivity).setTitle("Mission planner provider")
+                    .setItems(arrayOf("Choose provider", "Set provider model identifier", "Add provider API key", "Remove provider keys", "Set custom HTTPS endpoint")) { _, action ->
+                        when(action) {
+                            0 -> {
+                                val ids = arrayOf("gemini","openai_compatible","openrouter","deepseek","custom")
+                                MaterialAlertDialogBuilder(this@ApiConnectionActivity).setTitle("Choose planner provider")
+                                    .setSingleChoiceItems(arrayOf("Gemini (default)","OpenAI","OpenRouter","DeepSeek","Custom HTTPS API"),ids.indexOf(preferences.plannerProvider)) { dialog, selected ->
+                                        preferences.plannerProvider=ids[selected]; dialog.dismiss(); loadKeyPool()
+                                    }.setNegativeButton("Cancel",null).show()
+                            }
+                            1 -> {
+                                if(preferences.plannerProvider == "gemini") { Toast.makeText(this@ApiConnectionActivity,"Gemini uses the existing model catalog.",Toast.LENGTH_SHORT).show(); return@setItems }
+                                val model = EditText(this@ApiConnectionActivity).apply { setSingleLine(true); setText(preferences.plannerModel); hint="Exact model identifier from your provider" }
+                                MaterialAlertDialogBuilder(this@ApiConnectionActivity).setTitle("Planner model")
+                                    .setView(model).setNegativeButton("Cancel",null).setPositiveButton("Save") { _, _ ->
+                                        val value=model.text.toString().trim()
+                                        if(value.length in 1..160) { preferences.plannerModel=value; loadKeyPool() }
+                                    }.show()
+                            }
+                            2 -> showAddPoolKeyDialog(preferences.plannerProvider)
+                            4 -> {
+                                val endpoint=EditText(this@ApiConnectionActivity).apply {
+                                    setSingleLine(true);setText(preferences.plannerCustomEndpoint)
+                                    hint="https://your-provider.example/v1";isSaveEnabled=false
+                                }
+                                MaterialAlertDialogBuilder(this@ApiConnectionActivity).setTitle("Custom HTTPS API root")
+                                    .setView(endpoint).setNegativeButton("Cancel",null).setPositiveButton("Save") { _, _ ->
+                                        runCatching { preferences.plannerCustomEndpoint=endpoint.text.toString() }
+                                            .onFailure { Toast.makeText(this@ApiConnectionActivity,"Use HTTPS without credentials or query parameters.",Toast.LENGTH_LONG).show() }
+                                        loadKeyPool()
+                                    }.show()
+                            }
+                            3 -> {
+                                val id = preferences.plannerProvider
+                                MaterialAlertDialogBuilder(this@ApiConnectionActivity).setTitle("Remove configured planner keys?")
+                                    .setNegativeButton("Cancel",null).setPositiveButton("Remove") { _, _ ->
+                                        preferences.getApiKeyPool(id).forEach { preferences.removeApiKeyFromPool(id,it.key) }; loadKeyPool()
+                                    }.show()
+                            }
+                        }
+                    }.setNegativeButton("Close",null).show()
+            }
+        })
     }
 
     private fun loadUsageStats() {
@@ -209,14 +296,17 @@ class ApiConnectionActivity : AppCompatActivity() {
 
     private fun showAddPoolKeyDialog(providerId: String = "gemini") {
         val isElevenLabs = providerId == "elevenlabs"
+        val providerLabel = when(providerId) { "elevenlabs" -> "ElevenLabs"; "openai_compatible" -> "OpenAI"; "openrouter" -> "OpenRouter"; "deepseek" -> "DeepSeek"; else -> "Gemini" }
         val input = EditText(this).apply {
-            hint = if (isElevenLabs) "Enter ElevenLabs API key" else "Enter Gemini API key (AIzaSy...)"
+            hint = getString(R.string.provider_key_hint,providerLabel)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            isSaveEnabled = false
             setSingleLine(true)
         }
 
         MaterialAlertDialogBuilder(this)
-            .setTitle(if (isElevenLabs) "Add ElevenLabs Voice Key" else "Add Gemini Key to Rotation Pool")
-            .setMessage(if (isElevenLabs) "The external voice router will use ElevenLabs when a key is available and fall back to Android TextToSpeech otherwise." else "Add an additional Gemini API key. Calls will rotate round-robin across active keys.")
+            .setTitle(getString(R.string.provider_key_title,providerLabel))
+            .setMessage(if (isElevenLabs) "The external voice router will use ElevenLabs when a key is available and fall back to Android TextToSpeech otherwise." else "Only the selected provider receives this key. It stays in the existing encrypted key pool.")
             .setView(input)
             .setPositiveButton("Add") { _, _ ->
                 val newKey = input.text.toString().trim()
@@ -227,7 +317,7 @@ class ApiConnectionActivity : AppCompatActivity() {
                     }
                     preferences.addApiKeyToPool(providerId, newKey)
                     loadKeyPool()
-                    Toast.makeText(this, if (isElevenLabs) "ElevenLabs voice key saved" else "Key added to Gemini rotation pool", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.provider_key_saved,providerLabel), Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)

@@ -25,7 +25,8 @@ class GeminiLiveWebSocket(
     private val onApiKeySuccess: (String) -> Unit = {},
     /** When true, VoiceSessionManager is the sole reconnect authority. */
     private val externalReconnectOwner: Boolean = false,
-    private val socketFactory: WebSocket.Factory = sharedClient
+    private val socketFactory: WebSocket.Factory = sharedClient,
+    private val clientTurnHints: Boolean = false
 ) {
     @Volatile private var activeApiKey: String = apiKey
     @Volatile private var pendingApiKey: String? = null
@@ -65,6 +66,7 @@ class GeminiLiveWebSocket(
     @Volatile private var toolContracts = LiveToolContracts(emptyList())
 
     private var webSocket: WebSocket? = null
+    private val audioInput=ClientAudioStream(clientTurnHints) { webSocket?.send(it) ?: false }
     private val isConnected = AtomicBoolean(false)
     private val isSetupComplete = AtomicBoolean(false)
     private val isManuallyStopped = AtomicBoolean(false)
@@ -116,6 +118,7 @@ class GeminiLiveWebSocket(
         stopTimers()
         isConnected.set(false)
         isSetupComplete.set(false)
+        audioInput.reset()
         val previous = webSocket; webSocket = null
         runCatching { previous?.cancel() }
         val key = pendingApiKey?.takeIf { it.isNotBlank() } ?: activeApiKey.trim().ifBlank { apiKey.trim() }
@@ -169,6 +172,7 @@ class GeminiLiveWebSocket(
                     // Retain bounded tool IDs across a resumed connection; replay must not repeat side effects.
                     isConnected.set(true)
                     isSetupComplete.set(false)
+                    audioInput.reset()
                     listener.onConnectionStateChanged("CONFIGURING...")
                     // Send setup message FIRST before enabling audio streaming
                     sendSetupMessage(webSocket)
@@ -194,6 +198,7 @@ class GeminiLiveWebSocket(
                     Log.d(TAG, "WebSocket closed: code=$code")
                     isConnected.set(false)
                     isSetupComplete.set(false)
+                    audioInput.reset()
                     stopTimers()
 
                     if (reason.contains("API_ACCESS_DENIED", ignoreCase = true) ||
@@ -250,6 +255,7 @@ class GeminiLiveWebSocket(
                     Log.e(TAG, "WebSocket failure: httpStatus=$code, errorType=${t.javaClass.simpleName}")
                     isConnected.set(false)
                     isSetupComplete.set(false)
+                    audioInput.reset()
                     stopTimers()
 
                     val bodyExplicitlyRejectsKey =
@@ -1008,9 +1014,7 @@ class GeminiLiveWebSocket(
         if (!isConnected.get() || !isSetupComplete.get() || pcm16k.isEmpty()) return
 
         try {
-            val base64Audio = Base64.encodeToString(pcm16k, Base64.NO_WRAP)
-            val json = "{\"realtimeInput\":{\"audio\":{\"mimeType\":\"audio/pcm;rate=16000\",\"data\":\"$base64Audio\"}}}"
-            webSocket?.send(json)
+            audioInput.audio(pcm16k)
         } catch (e: Exception) {
             Log.e(TAG, "Error sending audio chunk: ${e.message}")
         }
@@ -1045,13 +1049,13 @@ class GeminiLiveWebSocket(
         }
     }
 
-    /**
-     * In Gemini Live BidiGenerateContent, streaming audio via realtimeInput handles turn-taking
-     * natively via server-side neural VAD. Sending empty client_content cancels active generation.
-     */
+    /** Optional client-side endpoint hint while preserving Gemini's automatic VAD. */
     fun sendAudioStreamEnd() {
-        // No-op: server-side VAD handles turn completion smoothly
+        if(isConnected.get() && isSetupComplete.get()) audioInput.end()
     }
+
+    /** Call only on the existing accepted speech-onset decision. No synthetic activityStart. */
+    fun resumeInputAudio() { audioInput.resume() }
 
     /**
      * Sends a text prompt to Gemini Live using the client_content turn protocol.
@@ -1160,6 +1164,7 @@ class GeminiLiveWebSocket(
         pendingApiKey = null
         isConnected.set(false)
         isSetupComplete.set(false)
+        audioInput.reset()
 
         try {
             webSocket?.close(1000, "Client stopped session")

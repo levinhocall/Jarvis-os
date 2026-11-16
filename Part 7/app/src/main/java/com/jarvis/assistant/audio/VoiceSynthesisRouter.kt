@@ -28,6 +28,7 @@ import java.util.Locale
 
 object VoiceSynthesisRouter {
     private const val TAG = "VoiceSynthesisRouter"
+    val isLocalReady: Boolean get() = isInitialized && localTts != null
 
     const val CINEMATIC_PITCH = 0.92f
     const val CINEMATIC_RATE = 1.08f
@@ -44,6 +45,7 @@ object VoiceSynthesisRouter {
     }
 
     private var localTts: TextToSpeech? = null
+    private val localEngineEpoch=java.util.concurrent.atomic.AtomicLong(0L)
     @Volatile
     private var isInitialized = false
     private var pendingSpeech: Pair<String, (() -> Unit)?>? = null
@@ -63,7 +65,9 @@ object VoiceSynthesisRouter {
     fun init(context: Context) {
         appContext = context.applicationContext
         if (localTts != null) return
-        localTts = TextToSpeech(context.applicationContext) { status ->
+        val epoch=localEngineEpoch.incrementAndGet()
+        localTts = TextToSpeech(context.applicationContext, { status ->
+            if(epoch != localEngineEpoch.get()) return@TextToSpeech
             if (status == TextToSpeech.SUCCESS) {
                 isInitialized = true
                 configureVoiceProfile()
@@ -79,7 +83,7 @@ object VoiceSynthesisRouter {
                 pendingSpeech = null
                 Log.e(TAG, "Android TextToSpeech initialization failed (status=$status).")
             }
-        }
+        }, SystemTtsEngineSelection.requested())
     }
 
     private fun configureVoiceProfile() {
@@ -310,6 +314,7 @@ object VoiceSynthesisRouter {
     }
 
     fun release() {
+        localEngineEpoch.incrementAndGet()
         stopExternalPlayback()
         try {
             localTts?.stop()

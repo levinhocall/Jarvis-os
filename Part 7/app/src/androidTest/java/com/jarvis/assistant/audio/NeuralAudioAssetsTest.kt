@@ -24,6 +24,9 @@ class NeuralAudioAssetsTest {
                 repeat(5) { assertTrue(speech.accept(ByteArray(960)) in 0f..1f) }
                 assertFalse(speech.speechRecent)
             }
+            com.jarvis.assistant.audio.turn.SmartTurnDetector(assets).use { turn ->
+                assertTrue(turn.probability(ByteArray(3200)) in 0f..1f)
+            }
             assertNull(MicrophoneOwnership.owner.value)
         }
     }

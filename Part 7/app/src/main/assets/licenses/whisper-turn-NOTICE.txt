@@ -1,0 +1,14 @@
+Smart Turn v3.2: Daily/Pipecat, BSD 2-Clause. Full license: smart-turn-BSD-2.txt.
+Model source: official pipecat-ai 1.16.0 PyPI distribution (wheel SHA-256
+613604ec4c6bb4301a26004e80011765c1a18d92394994097a65df07fbf1916d).
+Model SHA-256: 2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f.
+https://github.com/pipecat-ai/smart-turn
+https://pypi.org/project/pipecat-ai/1.16.0/
+
+JARVIS WhisperTurnFeatures is an original Kotlin implementation of the published
+mathematical preprocessing contract. Reference validation uses Pipecat's
+_whisper_features.py, Copyright 2024-2026 Daily, with portions derived from
+Hugging Face Transformers: Copyright 2022 HuggingFace Inc.; Copyright 2023
+HuggingFace Inc. and librosa/torchaudio authors, Apache License 2.0.
+Apache 2.0 license text is bundled as openwakeword-APACHE-2.0.txt.
+No source or model is copied from MAYA.

@@ -141,6 +141,16 @@ class WakeWordActivity : DirectiveActivity() {
             fun toggle(title:String, checked:Boolean, save:(Boolean)->Unit) {
                 page.addView(SwitchCompat(this).apply { text=title; isChecked=checked; minHeight=dp(48); setTextColor(themeColor(R.attr.themeTextPrimary)); setOnCheckedChangeListener {_,value->save(value)} })
             }
+            toggle("OpenWakeWord neural engine · Hey Jarvis",settings.neuralEngine) {
+                settings.neuralEngine=it
+                notice("Engine saved. Stop and restart wake listening to apply.")
+            }
+            val voicePrefs=(application as com.jarvis.assistant.JarvisApp).preferences
+            toggle("WebRTC AEC3 · experimental speaker echo control",voicePrefs.softwareAecEnabled) { voicePrefs.softwareAecEnabled=it }
+            toggle("Smart Turn neural end-of-turn · experimental",voicePrefs.neuralTurnEnabled) { voicePrefs.neuralTurnEnabled=it }
+            toggle("Silero neural speech detection in Voice Mode",voicePrefs.neuralSpeechEnabled) { voicePrefs.neuralSpeechEnabled=it }
+            label("Restart Voice Mode to apply. AEC3 uses the actual accepted Gemini PCM reference plus Silero speech confirmation. Device/Bluetooth quality is unmeasured. TTS routes without PCM use guarded listening. Both options are off by default.")
+            label("Neural mode recognizes the trained phrase ‘Hey Jarvis’. Custom names and owner-voice mode use Vosk. Models run on the phone; included weights are licensed for noncommercial use.")
             toggle("Allow wake while in pocket",settings.allowPocket) {settings.allowPocket=it}
             toggle("Silent wake transitions · no app chime",settings.silentWake) {settings.silentWake=it}
             label("A colored border acknowledges wake. Android microphone indicators remain visible. Pocket fabric and battery restrictions can affect detection.")
@@ -151,7 +161,8 @@ class WakeWordActivity : DirectiveActivity() {
             launch { combine(JarvisConversationService.isStandby,WakeDiagnostics.testing,WakeDiagnostics.listening) { standby,test,capture -> Triple(standby,test,capture) }.collect { (standby,test,capture) ->
                 if (standby || capture) starting=false
                 renderSwitch()
-                engine.text=when { capture && test -> "● Microphone test · Local only"; capture -> "● Listening · Vosk offline"; standby -> "Preparing microphone…"; else -> "○ Wake microphone off" }
+                val selectedEngine = if(settings.neuralEngine && settings.name == "jarvis" && !(application as com.jarvis.assistant.JarvisApp).preferences.isOwnerVoiceEnabled) "OpenWakeWord" else "Vosk"
+                engine.text=when { capture && test -> "● Microphone test · $selectedEngine · Local only"; capture -> "● Listening · $selectedEngine offline"; standby -> "Preparing microphone…"; else -> "○ Wake microphone off" }
                 statusDot.setTextColor(if(capture) 0xff56b85a.toInt() else 0xffb6b6bb.toInt())
                 testButton.text=if(standby && test) "Stop Microphone Test" else "Test Microphone"
             } }

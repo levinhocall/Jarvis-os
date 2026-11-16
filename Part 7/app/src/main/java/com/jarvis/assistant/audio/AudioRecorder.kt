@@ -19,6 +19,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 class AudioRecorder(
+    private val microphoneOwner: MicrophoneOwner = MicrophoneOwner.VOICE_SESSION,
+    private val softwareEcho: Boolean = false,
+    private val captureProcessor: ((ByteArray) -> ByteArray)? = null,
     private val onAudioChunk: (chunk: ByteArray, amplitude: Float, frequencyData: AudioFrequencyData) -> Unit
 ) {
     companion object {
@@ -71,7 +74,7 @@ class AudioRecorder(
             return false
         }
 
-        val lease = MicrophoneOwnership.acquire(MicrophoneOwner.VOICE_SESSION) ?: return false
+        val lease = MicrophoneOwnership.acquire(microphoneOwner) ?: return false
         microphoneLease = lease
         return try {
             var record: AudioRecord? = null
@@ -111,7 +114,7 @@ class AudioRecorder(
             // Publish before any effect API can throw so the common failure path owns cleanup.
             audioRecord = record
             val sessionId = record.audioSessionId
-            if (AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
+            if (!softwareEcho && AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
                 try {
                     echoCanceler = AcousticEchoCanceler.create(sessionId)?.apply {
                         enabled = true
@@ -164,13 +167,18 @@ class AudioRecorder(
                             if (readBytes > 0) {
                                 recoveryBudget.successfulFrame()
                                 consecutiveErrors = 0
-                                val freq = AudioUtils.analyzeFrequency(buffer, readBytes, SAMPLE_RATE)
                                 // Consumer code may throw (for example, during voice-engine
                                 // teardown). Keep that failure from terminating the capture job.
                                 try {
                                     if (!isMuted.get()) {
-                                        val chunkCopy = buffer.copyOf(readBytes)
-                                        onAudioChunk(chunkCopy, freq.amplitude, freq)
+                                        val captured=buffer.copyOf(readBytes)
+                                        val chunkCopy = try { captureProcessor?.invoke(captured) ?: captured }
+                                        catch (cancelled: CancellationException) { throw cancelled }
+                                        catch (_: Exception) { notifyCaptureFailure(AudioCaptureFailure.PROCESSING_FAILED);break@capture }
+                                        if(chunkCopy.isNotEmpty()) {
+                                            val freq=AudioUtils.analyzeFrequency(chunkCopy,chunkCopy.size,SAMPLE_RATE)
+                                            onAudioChunk(chunkCopy,freq.amplitude,freq)
+                                        }
                                     } else {
                                         onAudioChunk(ByteArray(0), 0f, AudioFrequencyData())
                                     }
@@ -248,7 +256,7 @@ class AudioRecorder(
                             }
 
                             val newSessionId = candidate.audioSessionId
-                            if (AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
+                            if (!softwareEcho && AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
                                 try {
                                     echoCanceler = AcousticEchoCanceler.create(newSessionId)?.apply { enabled = true }
                                 } catch (e: Exception) {

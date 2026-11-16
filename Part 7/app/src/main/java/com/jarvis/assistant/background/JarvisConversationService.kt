@@ -255,6 +255,15 @@ class JarvisConversationService : Service() {
             activeInstance?.demoteFromMediaProjection()
         }
 
+        fun refreshLocalTtsEngine() {
+            if (_isSessionOn.value) return
+            activeInstance?.apply {
+                localTtsEpoch.incrementAndGet()
+                runCatching { tts?.stop();tts?.shutdown() }
+                tts=null;initTts()
+            }
+        }
+
         /** True while a foreground instance of this service exists in any mode. */
         fun isServiceRunning(): Boolean = activeInstance != null
 
@@ -287,6 +296,8 @@ class JarvisConversationService : Service() {
     @Volatile private var voiceSessionManager: VoiceSessionManager? = null
     @Volatile private var microphoneForegroundReady = false
     private var audioPlayer: AudioPlayer? = null
+    private var currentTurnAnalysis: com.jarvis.assistant.audio.turn.NeuralTurnSession? = null
+    private var currentEchoSession: com.jarvis.assistant.audio.DuplexEchoSession? = null
     @Volatile private var liveWebSocket: GeminiLiveWebSocket? = null
     private var hotwordRecognizer: Recognizer? = null
     private var inactivityJob: Job? = null
@@ -651,6 +662,7 @@ class JarvisConversationService : Service() {
     // --- Standby / wake-word components (Pure Vosk) ---
     private var voskSpeechService: SpeechService? = null
     private var tts: TextToSpeech? = null
+    private val localTtsEpoch=java.util.concurrent.atomic.AtomicLong(0L)
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
     private var standbyActivatedTime = 0L
@@ -725,7 +737,9 @@ class JarvisConversationService : Service() {
 
     private fun initTts() {
         try {
-            tts = TextToSpeech(applicationContext) { status ->
+            val epoch=localTtsEpoch.incrementAndGet()
+            tts = TextToSpeech(applicationContext, { status ->
+                if(epoch != localTtsEpoch.get()) return@TextToSpeech
                 if (status == TextToSpeech.SUCCESS) {
                     val attributes = AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -775,7 +789,7 @@ class JarvisConversationService : Service() {
                         }
                     })
                 }
-            }
+            }, com.jarvis.assistant.audio.SystemTtsEngineSelection.requested())
         } catch (e: Exception) {
             Log.e("JarvisService", "Failed to init TTS: ${e.message}")
         }
@@ -1074,6 +1088,15 @@ class JarvisConversationService : Service() {
             }
         }
 
+        val speechFactory: (() -> com.jarvis.assistant.audio.PcmSpeechDetector)? =
+            if(preferences.softwareAecEnabled || preferences.neuralSpeechEnabled || preferences.neuralTurnEnabled) ({ com.jarvis.assistant.audio.wake.SileroSpeechGate(assets) }) else null
+        val sessionEcho = com.jarvis.assistant.audio.DuplexEchoSession(preferences.softwareAecEnabled,speechFactory=speechFactory)
+        currentEchoSession=sessionEcho
+        val turnAnalysis=if(preferences.neuralTurnEnabled) com.jarvis.assistant.audio.turn.NeuralTurnSession(serviceScope) {
+            com.jarvis.assistant.audio.turn.SmartTurnDetector(assets)
+        } else null
+        currentTurnAnalysis=turnAnalysis
+        val echoReady=kotlinx.coroutines.CompletableDeferred<Unit>()
         lateinit var sessionPlayer: AudioPlayer
         sessionPlayer = AudioPlayer(
             onPlaybackStateChanged = playbackState@{ isPlaying ->
@@ -1108,6 +1131,8 @@ class JarvisConversationService : Service() {
                     )
                 }
             },
+            onAcceptedRender = { bytes,offset,count,delayMs,epoch -> sessionEcho.render(bytes,offset,count,delayMs,epoch) },
+            onRenderReset = { epoch -> sessionEcho.reset(epoch) },
             onPlaybackFailure = { category ->
                 presentationStore.update(presentationToken) { it.copy(playing = false, output = VoiceEnvelope(), errorReason = "Playback stopped: $category") }
                 serviceScope.launch {
@@ -1121,6 +1146,20 @@ class JarvisConversationService : Service() {
 
         sessionBootstrapJob?.cancel()
         sessionBootstrapJob = serviceScope.launch(Dispatchers.IO) {
+            try { echoReady.await() }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Throwable) {
+                withContext(Dispatchers.Main.immediate) {
+                    if(presentationToken == presentationSessionId && currentEchoSession === sessionEcho) {
+                        stopActiveConversation()
+                        _liveError.value=JarvisLiveError("AUDIO PROCESSOR UNAVAILABLE",
+                            "Selected AEC3/Silero processing could not initialize. Disable the optional processor in Wake Word settings and retry.",
+                            "AUDIO_PROCESSOR_INIT_FAILED","OPEN SETTINGS")
+                        setConversationState(ConversationState.ERROR)
+                    }
+                }
+                return@launch
+            }
             if (apiKey.isBlank()) {
                 withContext(Dispatchers.Main.immediate) {
                     if (_isSessionOn.value) {
@@ -1198,6 +1237,7 @@ class JarvisConversationService : Service() {
                                 _liveError.value = null
                                 // Flush any speech chunks captured during the connection handshake
                                 serviceScope.launch(Dispatchers.Default) {
+                                    if(turnAnalysis != null && hasSignalledUtteranceEnd) { preConnectAudioQueue.clear();return@launch }
                                     while (!preConnectAudioQueue.isEmpty()) {
                                         val chunk = preConnectAudioQueue.poll() ?: break
                                         liveWebSocket?.sendAudioChunk(chunk)
@@ -1743,7 +1783,8 @@ class JarvisConversationService : Service() {
                     onApiKeyRateLimited = { key -> preferences.reportKeyRateLimit("gemini", key) },
                     onApiKeyInvalid = { key -> preferences.reportKeyInvalid("gemini", key) },
                     onApiKeySuccess = { key -> preferences.reportKeySuccess("gemini", key) },
-                    externalReconnectOwner = true
+                    externalReconnectOwner = true,
+                    clientTurnHints = turnAnalysis != null
                 )
                 val socket = liveWebSocket ?: return@withContext
                 // VoiceSessionManager is the sole reconnect authority. The WebSocket remains
@@ -1765,7 +1806,10 @@ class JarvisConversationService : Service() {
         }
 
         val microphoneEnvelope = com.jarvis.assistant.audio.PcmEnvelopeFollower()
-        val recorder = AudioRecorder { chunk, amplitude, frequencyData ->
+        var softwareSpeechFrames=0
+        var guardedTtsUntil=0L
+        val onsetAudio=java.util.ArrayDeque<ByteArray>()
+        val recorder = AudioRecorder(softwareEcho=sessionEcho.enabled,captureProcessor=sessionEcho::capture) { chunk, amplitude, frequencyData ->
             if (presentationToken != presentationSessionId) return@AudioRecorder
             val displayTime = SystemClock.elapsedRealtime()
             val envelope = microphoneEnvelope.accept(chunk, displayTime, chunk.isNotEmpty())
@@ -1774,6 +1818,32 @@ class JarvisConversationService : Service() {
             }
             if (_isSessionOn.value) {
                 val now = System.currentTimeMillis()
+                if(chunk.isEmpty() || preferences.isMicMuted) {
+                    if(preferences.isMicMuted) {
+                        turnAnalysis?.discard()
+                        if(turnAnalysis != null) {
+                            liveWebSocket?.sendAudioStreamEnd()
+                            hasSignalledUtteranceEnd=true
+                            hasSpeechInCurrentUtterance=false
+                            consecutiveVoicedFrames=0
+                            totalVoicedFramesInCurrentUtterance=0
+                            synchronized(preSpeechRingBuffer) { preSpeechRingBuffer.clear() }
+                            preConnectAudioQueue.clear()
+                        }
+                    }
+                    softwareSpeechFrames=0;onsetAudio.clear();return@AudioRecorder
+                }
+                val facts=voicePresentation.value
+                if(sessionEcho.enabled && facts.playing && facts.playbackSource in setOf(PlaybackSource.ANDROID_TTS,PlaybackSource.EXTERNAL_TTS)) {
+                    // These routes expose no PCM reference. Keep guarded listening, not fake full duplex.
+                    turnAnalysis?.discard()
+                    guardedTtsUntil=now+450;softwareSpeechFrames=0;return@AudioRecorder
+                }
+                if(now < guardedTtsUntil) return@AudioRecorder
+                if(sessionEcho.enabled) {
+                    if(onsetAudio.size >= 10) onsetAudio.removeFirst()
+                    onsetAudio.addLast(chunk.copyOf())
+                }
 
                 // Acoustic Echo Decay Protection (AEDP):
                 // For 150ms after speaker audio stops, discard mic chunks so room reverberation
@@ -1789,6 +1859,24 @@ class JarvisConversationService : Service() {
                         (_conversationState.value == ConversationState.SPEAKING)
 
                 if (isSpeakerActive) {
+                    turnAnalysis?.discard()
+                    if(sessionEcho.enabled && facts.playing && facts.playbackSource == PlaybackSource.GEMINI_PCM) {
+                        softwareSpeechFrames=if(sessionEcho.speechProbability >= .7f) softwareSpeechFrames+1 else 0
+                        if(softwareSpeechFrames >= 3) {
+                            triggerHardBargeIn("aec3_silero_speech")
+                            softwareSpeechFrames=0
+                            val accepted=onsetAudio.toList();onsetAudio.clear()
+                            synchronized(currentUtteranceAudioStream) {
+                                currentUtteranceAudioStream.reset();accepted.forEach { currentUtteranceAudioStream.write(it) }
+                            }
+                            hasSpeechInCurrentUtterance=true
+                            lastUserSpeechDetectedTime=now
+                            isCurrentTurnOwnerVoiceVerified=!preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
+                            liveWebSocket?.resumeInputAudio()
+                            accepted.forEach { liveWebSocket?.sendAudioChunk(it) }
+                            return@AudioRecorder
+                        }
+                    } else softwareSpeechFrames=0
                     val hasHeadset = headsetAudioRouter?.isHeadsetConnected() == true
 
                     // 1. Vosk Speech & Hotword Recognition Gate:
@@ -1809,6 +1897,7 @@ class JarvisConversationService : Service() {
                             }
                             isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
                             consecutiveVoicedFrames = 0
+                            liveWebSocket?.resumeInputAudio()
                             liveWebSocket?.sendAudioChunk(chunk)
                             return@AudioRecorder
                         }
@@ -1828,6 +1917,7 @@ class JarvisConversationService : Service() {
                                 }
                                 isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
                                 consecutiveVoicedFrames = 0
+                                liveWebSocket?.resumeInputAudio()
                                 liveWebSocket?.sendAudioChunk(chunk)
                                 return@AudioRecorder
                             }
@@ -1847,17 +1937,22 @@ class JarvisConversationService : Service() {
                     return@AudioRecorder
                 }
 
-                // Stream user speech to Gemini Live
-                if (liveWebSocket?.isSessionReady() == true) {
-                    while (!preConnectAudioQueue.isEmpty()) {
-                        val queued = preConnectAudioQueue.poll() ?: break
-                        liveWebSocket?.sendAudioChunk(queued)
-                    }
-                    liveWebSocket?.sendAudioChunk(chunk)
-                } else {
-                    // Connection still warming up: buffer up to 250 chunks (~5.0s of audio) so early speech is never lost
-                    if (preConnectAudioQueue.size < 250) {
-                        preConnectAudioQueue.offer(chunk.copyOf())
+                turnAnalysis?.accept(chunk)
+
+                // A neural endpoint closes Live input until accepted new speech; silence cannot reopen it.
+                if(turnAnalysis == null || !hasSignalledUtteranceEnd) {
+                    // Stream user speech to Gemini Live
+                    if (liveWebSocket?.isSessionReady() == true) {
+                        while (!preConnectAudioQueue.isEmpty()) {
+                            val queued = preConnectAudioQueue.poll() ?: break
+                            liveWebSocket?.sendAudioChunk(queued)
+                        }
+                        liveWebSocket?.sendAudioChunk(chunk)
+                    } else {
+                        // Connection still warming up: buffer up to 250 chunks (~5.0s of audio) so early speech is never lost
+                        if (preConnectAudioQueue.size < 250) {
+                            preConnectAudioQueue.offer(chunk.copyOf())
+                        }
                     }
                 }
 
@@ -1877,7 +1972,9 @@ class JarvisConversationService : Service() {
                 // Dynamic voice threshold: responsive to normal conversational volume (0.035f)
                 val voiceThreshold = maxOf(VAD_MIN_THRESHOLD, ambientNoiseFloor * VAD_NOISE_MULTIPLIER)
 
-                if (amplitude > voiceThreshold) {
+                val speechAccepted=if(sessionEcho.hasSpeechDetector) sessionEcho.speechProbability >= .5f else amplitude > voiceThreshold
+                if (speechAccepted) {
+                    turnAnalysis?.speech()
                     consecutiveVoicedFrames++
                     lastUserSpeechDetectedTime = now
                     _audioLevel.value = amplitude
@@ -1885,7 +1982,8 @@ class JarvisConversationService : Service() {
 
                     // Declare speech start only after several consecutive voiced frames (not a short noise blip)
                     if (consecutiveVoicedFrames >= VAD_START_FRAMES) {
-                        if (!hasSpeechInCurrentUtterance) {
+                        val reopeningInput=turnAnalysis != null && hasSignalledUtteranceEnd
+                        if (!hasSpeechInCurrentUtterance || reopeningInput) {
                             currentTurnUserText.clear()
                             currentTurnAssistantText.clear()
                             _liveUserTranscript.value = ""
@@ -1895,6 +1993,14 @@ class JarvisConversationService : Service() {
                             synchronized(currentUtteranceAudioStream) {
                                 currentUtteranceAudioStream.reset()
                                 synchronized(preSpeechRingBuffer) {
+                                    turnAnalysis?.beginUtterance(preSpeechRingBuffer)
+                                    if(reopeningInput) {
+                                        liveWebSocket?.resumeInputAudio()
+                                        for(preChunk in preSpeechRingBuffer) {
+                                            if(liveWebSocket?.isSessionReady() == true) liveWebSocket?.sendAudioChunk(preChunk)
+                                            else if(preConnectAudioQueue.size < 250) preConnectAudioQueue.offer(preChunk.copyOf())
+                                        }
+                                    }
                                     for (preChunk in preSpeechRingBuffer) {
                                         currentUtteranceAudioStream.write(preChunk)
                                     }
@@ -1937,7 +2043,12 @@ class JarvisConversationService : Service() {
                     // Gradual decrement instead of instant reset: one quiet 20ms frame won't kill voiced speech tracking
                     if (consecutiveVoicedFrames > 0) consecutiveVoicedFrames--
                     val silentDuration = now - lastUserSpeechDetectedTime
-                    val adaptiveSilenceTimeout = adaptiveVad.computeAdaptiveSilenceTimeout()
+                    val baseSilenceTimeout = adaptiveVad.computeAdaptiveSilenceTimeout(totalVoicedFramesInCurrentUtterance)
+                    if(hasSpeechInCurrentUtterance && !hasSignalledUtteranceEnd && silentDuration >= 100L &&
+                        totalVoicedFramesInCurrentUtterance >= VAD_MIN_UTTERANCE_FRAMES) {
+                        turnAnalysis?.request()
+                    }
+                    val adaptiveSilenceTimeout = turnAnalysis?.silenceTimeout(baseSilenceTimeout) ?: baseSilenceTimeout
 
                     if (hasSpeechInCurrentUtterance && silentDuration < adaptiveSilenceTimeout) {
                         // Keep buffering inter-word pauses so Vosk receives natural continuous audio
@@ -2008,6 +2119,7 @@ class JarvisConversationService : Service() {
                                 } else {
                                     if (!hasSignalledUtteranceEnd) {
                                         hasSignalledUtteranceEnd = true
+                                        if(turnAnalysis != null) liveWebSocket?.sendAudioStreamEnd()
                                         // When Gemini Live is unavailable, transcribe the complete buffered utterance
                                         // locally and route it through the same security/runtime pipeline.
                                         if (liveWebSocket?.isSessionReady() != true ||
@@ -2079,6 +2191,17 @@ class JarvisConversationService : Service() {
         serviceScope.launch(Dispatchers.IO) {
             val pipeline = audioPipelineManager ?: return@launch
             if (!_isSessionOn.value) return@launch
+            try {
+                if(!sessionEcho.initialize()) { echoReady.cancel();return@launch }
+                turnAnalysis?.initialize()
+                if(presentationToken != presentationSessionId || currentEchoSession !== sessionEcho) {
+                    sessionEcho.close();turnAnalysis?.close();echoReady.cancel();return@launch
+                }
+                echoReady.complete(Unit)
+            } catch (error: Throwable) {
+                if(error is VirtualMachineError || error is ThreadDeath) throw error
+                echoReady.completeExceptionally(error);return@launch
+            }
             // stop() retains the old lease until its capture coroutine actually exits.
             // Cooperatively await that cleanup without opening a competing recorder.
             val available = pipeline.isActive || com.jarvis.assistant.audio.MicrophoneOwnership.awaitAvailable()
@@ -3765,6 +3888,12 @@ class JarvisConversationService : Service() {
         audioPlayer?.flush()
         audioPlayer?.release()
         audioPlayer = null
+        val retiringEcho=currentEchoSession.also { currentEchoSession=null }
+        val retiringTurn=currentTurnAnalysis.also { currentTurnAnalysis=null }
+        if(retiringEcho != null || retiringTurn != null) serviceScope.launch(kotlinx.coroutines.NonCancellable + Dispatchers.Default) {
+            try { retiringEcho?.close() } catch(error: Exception) { Log.w("JarvisService","Echo cleanup: ${error.javaClass.simpleName}") }
+            try { retiringTurn?.close() } catch(error: Exception) { Log.w("JarvisService","Turn cleanup: ${error.javaClass.simpleName}") }
+        }
 
         // Keep the socket reference until the manager's asynchronous teardown completes.
         // A subsequent start awaits that teardown before replacing the transport.
@@ -3853,6 +3982,9 @@ class JarvisConversationService : Service() {
     private var wakeOwnershipWaitJob: Job? = null
     private var wakeOwnershipWaitUsed = false
     private var wakeRecognizer: Recognizer? = null
+    private var neuralWakeRecorder: AudioRecorder? = null
+    private var neuralWakePipeline: com.jarvis.assistant.audio.wake.OpenWakeWordPipeline? = null
+    @Volatile private var neuralWakeGeneration = 0L
     private var wakeMicrophoneLease: com.jarvis.assistant.audio.MicrophoneOwnership.Lease? = null
     @Volatile private var wakeStopping = false
 
@@ -3874,6 +4006,12 @@ class JarvisConversationService : Service() {
     }
 
     private fun closeWakeCapture(): Boolean {
+        neuralWakeGeneration++
+        neuralWakeRecorder?.stop(); neuralWakeRecorder = null
+        val retiringPipeline = neuralWakePipeline.also { neuralWakePipeline = null }
+        if (retiringPipeline != null) serviceScope.launch(kotlinx.coroutines.NonCancellable + Dispatchers.Default) {
+            runCatching { retiringPipeline.close() }
+        }
         val capture = voskSpeechService
         runCatching { capture?.cancel() }
         runCatching { capture?.stop() }
@@ -3890,7 +4028,12 @@ class JarvisConversationService : Service() {
 
     private fun startWakeListening() {
         if (!_isStandby.value || wakeStopping) return
-        if (voskSpeechService != null || wakeOwnershipWaitJob?.isActive == true) return
+        if (voskSpeechService != null || neuralWakeRecorder != null || wakeOwnershipWaitJob?.isActive == true) return
+        val wakeSettings = com.jarvis.assistant.audio.wake.WakeSettings(this)
+        if (wakeSettings.neuralEngine && wakeSettings.name == "jarvis" && !preferences.isOwnerVoiceEnabled) {
+            startNeuralWakeListening()
+            return
+        }
 
         val model = VoskModelManager.model
         if (model == null || (preferences.isOwnerVoiceEnabled && VoskModelManager.speakerModel == null)) {
@@ -3974,6 +4117,78 @@ class JarvisConversationService : Service() {
             delay(1000L shl (wakeFailures - 1))
             wakeRecoveryJob = null
             if (_isStandby.value) startWakeListening()
+        }
+    }
+
+    /** Optional classifier, using the same AudioRecorder implementation and global mic lease. */
+    private fun startNeuralWakeListening() {
+        if (wakeModelJob?.isActive == true) return
+        val generation = ++neuralWakeGeneration
+        com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Loading verified OpenWakeWord models locally")
+        wakeModelJob = serviceScope.launch(Dispatchers.Default) {
+            var pipeline: com.jarvis.assistant.audio.wake.OpenWakeWordPipeline? = null
+            var adopted = false
+            try {
+                val loaded = com.jarvis.assistant.audio.wake.OpenWakeWordPipeline(assets)
+                pipeline = loaded
+                val gate = com.jarvis.assistant.audio.wake.NeuralWakeGate()
+                var frames = 0
+                val recorder = AudioRecorder(com.jarvis.assistant.audio.MicrophoneOwner.WAKE_WORD) { pcm, _, _ ->
+                    if (generation == neuralWakeGeneration && _isStandby.value && !wakeStopping) {
+                        try {
+                            val score = loaded.accept(pcm)
+                            if (score != null) {
+                                val settings = com.jarvis.assistant.audio.wake.WakeSettings(this@JarvisConversationService)
+                                val detected = gate.accept(score, settings.sensitivity, android.os.SystemClock.elapsedRealtime(), loaded.hasRecentSpeech)
+                                if (wakeTestMode && ++frames % 8 == 0) com.jarvis.assistant.audio.wake.WakeDiagnostics.update(
+                                    "OpenWakeWord local test · classifier ${(score * 100).toInt()}% (not a transcript)")
+                                if (detected) serviceScope.launch(Dispatchers.Main) {
+                                    if (generation != neuralWakeGeneration || !_isStandby.value || wakeStopping || isPhoneCallActive()) return@launch
+                                    if (!settings.allowPocket && com.jarvis.assistant.audio.PocketDetectionManager.isDeviceInPocket()) return@launch
+                                    if (wakeTestMode) {
+                                        com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Hey Jarvis detected locally. No cloud session started.")
+                                        com.jarvis.assistant.ui.directives.WakeGlow.show(this@JarvisConversationService)
+                                    } else onWakeWordDetected()
+                                }
+                            }
+                        } catch (error: Exception) {
+                            serviceScope.launch(Dispatchers.Main) {
+                                if (generation == neuralWakeGeneration) recoverWakeListener(error)
+                            }
+                        }
+                    }
+                }
+                recorder.onCaptureFailure = { serviceScope.launch(Dispatchers.Main) {
+                    if (generation == neuralWakeGeneration) recoverWakeListener(null)
+                } }
+                withContext(Dispatchers.Main) {
+                    if (generation == neuralWakeGeneration && _isStandby.value && !wakeStopping) {
+                        neuralWakePipeline = loaded; neuralWakeRecorder = recorder; adopted = true
+                    }
+                }
+                if (adopted) {
+                    val started = recorder.start(serviceScope)
+                    withContext(Dispatchers.Main) {
+                        if (generation != neuralWakeGeneration || !_isStandby.value) recorder.stop()
+                        else if (!started) recoverWakeListener(null)
+                        else {
+                            com.jarvis.assistant.audio.wake.WakeDiagnostics.captureChanged(true)
+                            com.jarvis.assistant.audio.wake.WakeDiagnostics.update("OpenWakeWord active · say Hey Jarvis · offline")
+                        }
+                    }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Throwable) {
+                if (error is VirtualMachineError || error is ThreadDeath) throw error
+                withContext(Dispatchers.Main) {
+                    if (generation == neuralWakeGeneration) {
+                        fullStop()
+                        com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Neural wake initialization failed. Select Vosk and retry; no microphone session was substituted.")
+                    }
+                }
+            } finally {
+                if (!adopted) pipeline?.close()
+            }
         }
     }
 
@@ -4215,6 +4430,7 @@ class JarvisConversationService : Service() {
             tts?.shutdown()
         } catch (_: Exception) {}
         tts = null
+        localTtsEpoch.incrementAndGet()
         try {
             voskSpeechService?.stop()
         } catch (_: Exception) {}

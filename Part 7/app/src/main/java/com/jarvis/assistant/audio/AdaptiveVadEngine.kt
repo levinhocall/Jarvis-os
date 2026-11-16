@@ -122,14 +122,14 @@ class AdaptiveVadEngine(
      * Short commands with clear endings trigger fast completion (~200-240ms),
      * while longer or trailing sentences allow more breathing room (~280-380ms).
      */
-    fun computeAdaptiveSilenceTimeout(): Long {
+    fun computeAdaptiveSilenceTimeout(voicedFrames: Int = totalVoicedFrames): Long {
         return when {
             // Very short command or reflex (e.g. "Stop", "Turn on flashlight", "Play song")
-            totalVoicedFrames in VAD_MIN_UTTERANCE_FRAMES..18 -> minSilenceTimeoutMs + 30L // ~230ms
+            voicedFrames in VAD_MIN_UTTERANCE_FRAMES..18 -> minSilenceTimeoutMs + 30L // ~230ms
             // Standard conversational sentence with good volume
-            totalVoicedFrames in 19..50 -> normalSilenceTimeoutMs // ~280ms
+            voicedFrames in 19..50 -> normalSilenceTimeoutMs // ~280ms
             // Long narrative or complex sentence with possible hesitation pauses
-            totalVoicedFrames > 50 -> (normalSilenceTimeoutMs + 70L).coerceAtMost(maxSilenceTimeoutMs) // ~350ms
+            voicedFrames > 50 -> (normalSilenceTimeoutMs + 70L).coerceAtMost(maxSilenceTimeoutMs) // ~350ms
             else -> normalSilenceTimeoutMs
         }
     }

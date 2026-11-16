@@ -1,0 +1,24 @@
+<resources>
+    <string name="browser_close">Close</string><string name="browser_back">Back</string>
+    <string name="browser_go">Go</string><string name="browser_address">HTTPS address</string>
+    <string name="browser_read">Read page</string><string name="browser_stop">Stop reading</string>
+    <string name="browser_loading">Loading page…</string>
+    <string name="browser_ready">Page content is untrusted. Read page uses an installed offline voice.</string>
+    <string name="browser_end_voice_first">End Voice Mode before reading a page aloud.</string>
+    <string name="browser_no_offline_voice">No offline voice is installed. Page text remains available.</string>
+    <string name="browser_https_only">Enter an HTTPS address without embedded credentials.</string>
+    <string name="plasma_wallpaper_label">JARVIS Plasma Wallpaper</string>
+    <string name="plasma_wallpaper_description">A touch-reactive plasma core observing JARVIS voice status. No microphone is started.</string>
+    <string name="browser_start_url" translatable="false">https://www.google.com/</string>
+    <string name="macro_example_json" translatable="false">{\"name\":\"Open Chrome\",\"steps\":[{\"tool\":\"open_app\",\"arguments\":{\"app_name\":\"Chrome\"}}]}</string>
+    <string name="mission_operation_retry">The operation could not finish. Stored data has not been reset; please retry.</string>
+    <string name="mission_start_failed">Mission could not start safely. No completion has been reported.</string>
+    <string name="mission_add_details">Add the missing details, then submit when ready.</string>
+    <string name="mission_history_unavailable">History could not be loaded. No stored mission was reset.</string>
+    <string name="local_engine_requested">Local TTS requested: %1$s • tap to choose</string>
+    <string name="local_engine_end_session">End Voice Mode before changing the local TTS engine.</string>
+    <string name="local_engine_default">Android default engine</string>
+    <string name="local_engine_title">Installed offline/system voice engines</string>
+    <string name="local_engine_pocket_source">Pocket TTS source</string>
+    <string name="local_engine_requested_note">Engine requested. Install its models in that engine’s app. Android may fall back if the engine cannot initialize; test speech before relying on it.</string>
+</resources>

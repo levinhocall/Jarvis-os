@@ -1,11 +1,15 @@
 package com.jarvis.assistant.audio.wake
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class WakeSettings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("offline_wake",Context.MODE_PRIVATE)
+    var neuralEngine: Boolean
+        get() = prefs.getBoolean("openwakeword",false)
+        set(value) { prefs.edit().putBoolean("openwakeword",value).apply() }
     var name: String
         get() = prefs.getString("name","jarvis") ?: "jarvis"
         set(value) { require(WakeMatcher.validName(value)); prefs.edit().putString("name",WakeMatcher.normalize(value)).apply() }
@@ -20,7 +24,7 @@ class WakeSettings(context: Context) {
         set(value) { prefs.edit().putBoolean("silent_wake",value).apply() }
     var allowPocket: Boolean
         get() = prefs.getBoolean("allow_pocket",false)
-        set(value) { prefs.edit().putBoolean("allow_pocket",value).apply() }
+        set(value) { prefs.edit { putBoolean("allow_pocket",value) } }
 }
 
 /** Ephemeral diagnostic text: never written to disk or sent to a provider. */

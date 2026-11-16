@@ -9,4 +9,4 @@ internal class AudioRecoveryBudget(private val maximumAttempts: Int = 3, private
     fun successfulFrame() { if (++healthy >= stableFrames) { attempts = 0; healthy = stableFrames } }
 }
 
-enum class AudioCaptureFailure { PERMISSION_REVOKED, RECOVERY_EXHAUSTED }
+enum class AudioCaptureFailure { PERMISSION_REVOKED, RECOVERY_EXHAUSTED, PROCESSING_FAILED }

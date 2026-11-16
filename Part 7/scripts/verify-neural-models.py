@@ -55,6 +55,12 @@ for _ in range(30):
     p,h,c=speech.run(None,{'input':np.zeros((1,480),np.float32),'h':h,'c':c,'sr':np.array(16000,np.int64)})
     probability=float(p.item());assert np.isfinite(probability) and 0 <= probability < .5
     vad.append(probability)
+turn_path=root.parent/'turn/smart-turn-v3.2-cpu.onnx'
+assert hashlib.sha256(turn_path.read_bytes()).hexdigest() == '2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f'
+turn=ort.InferenceSession(str(turn_path),opts,providers=['CPUExecutionProvider'])
+turn_probability=float(turn.run(None,{'input_features':np.full((1,80,800),-1.5,np.float32)})[0].item())
+assert np.isfinite(turn_probability) and 0<=turn_probability<=1
 print(json.dumps({'digests':'PASS','openwakeword_frames':30,'silero_frames':30,
     'silent_wake_score_max':max(probabilities),'silent_vad_score_max':max(vad),
-    'scope':'host silence smoke only; no Android runtime/positive recognition benchmark'},indent=2))
+    'smart_turn_silent_input_probability':turn_probability,
+    'scope':'host tensor/silence smoke only; no Android runtime/positive recognition/linguistic accuracy benchmark'},indent=2))
