@@ -339,6 +339,7 @@ class CodingDevFragment : Fragment() {
                     val result = TermuxBridge.executeCommand(
                         context = requireContext(),
                         command = "./gradlew assembleDebug",
+                        reviewedCommand = "./gradlew assembleDebug",
                         workDir = null
                     )
                     val elapsedSec = (System.currentTimeMillis() - startTime) / 1000
@@ -392,6 +393,7 @@ class CodingDevFragment : Fragment() {
                     val result = TermuxBridge.executeCommand(
                         context = requireContext(),
                         command = "git status --short 2>&1 || git status 2>&1",
+                        reviewedCommand = "git status --short 2>&1 || git status 2>&1",
                         workDir = null
                     )
                     when (result) {
@@ -467,6 +469,7 @@ class CodingDevFragment : Fragment() {
                     val result = TermuxBridge.executeCommand(
                         context = requireContext(),
                         command = "git push origin main",
+                        reviewedCommand = "git push origin main",
                         workDir = null
                     )
                     when (result) {
@@ -518,6 +521,7 @@ class CodingDevFragment : Fragment() {
                     val result = TermuxBridge.executeCommand(
                         context = requireContext(),
                         command = "./gradlew testDebugUnitTest",
+                        reviewedCommand = "./gradlew testDebugUnitTest",
                         workDir = null
                     )
                     when (result) {
@@ -565,7 +569,7 @@ class CodingDevFragment : Fragment() {
                 }
 
                 ExecutionTarget.TERMUX_BRIDGE -> {
-                    val result = TermuxBridge.executeCommand(requireContext(), "git init", workDir = null)
+                    val result = TermuxBridge.executeCommand(requireContext(), "git init", workDir = null, reviewedCommand = "git init")
                     when (result) {
                         is DevToolResult.Success -> {
                             appendLog("[REPO] Termux git init succeeded:\n${result.output}")

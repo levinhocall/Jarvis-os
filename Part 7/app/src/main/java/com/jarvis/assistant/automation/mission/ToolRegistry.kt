@@ -42,6 +42,13 @@ object ToolRegistry {
     }
 
     private fun registerBuiltInTools() {
+        register(ToolDefinition(name = "wait_for_screen_text",
+            description = "Waits for a visible non-sensitive label to appear/disappear in a specific app. Unreadable/protected screens never establish success.",
+            parameters = listOf(ToolParameter("package_name", "String", "Exact target app package"),
+                ToolParameter("text", "String", "Control label to observe, max 160 characters"),
+                ToolParameter("present", "Boolean", "True for appearance, false for disappearance", false),
+                ToolParameter("timeout_ms", "Int", "200–10000 milliseconds", false)),
+            requiresAccessibility = true, riskLevel = MissionRisk.LOW, isIdempotent = true))
         register(ToolDefinition(name = "inspect_screen", description = "Reads non-editable visible controls from the current non-private screen for UI navigation. Never reads Jarvis private screens or password windows.", parameters = emptyList(), requiresAccessibility = true, riskLevel = MissionRisk.LOW, isIdempotent = true))
         register(
             ToolDefinition(

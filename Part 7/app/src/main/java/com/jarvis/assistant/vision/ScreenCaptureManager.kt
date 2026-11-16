@@ -77,6 +77,7 @@ class ScreenCaptureManager private constructor() {
         metrics: DisplayMetrics,
         frameListener: ((ByteArray) -> Unit)? = null
     ): Boolean {
+        if (com.jarvis.assistant.automation.accessibility.FinancialScreenPolicy.projectionBlocked) return false
         if (_isSharing.value) {
             Log.w(TAG, "Screen capture is already active")
             return false
@@ -162,7 +163,7 @@ class ScreenCaptureManager private constructor() {
     private fun handleImageAvailable(reader: ImageReader, width: Int, height: Int) {
         // ImageReader may have queued a callback when projection is stopped.
         // Drain it without publishing stale frames or reviving the sharing state.
-        if (!_isSharing.value) {
+        if (!_isSharing.value || com.jarvis.assistant.automation.accessibility.FinancialScreenPolicy.projectionBlocked) {
             try {
                 reader.acquireLatestImage()?.close()
             } catch (_: Exception) {
@@ -227,7 +228,7 @@ class ScreenCaptureManager private constructor() {
                 if (framesSent % 10 == 1) {
                     Log.i(TAG, "Streamed frame #$framesSent to Gemini (${jpegBytes.size / 1024} KB, ${cleanBitmap.width}x${cleanBitmap.height})")
                 }
-                if (_isSharing.value) {
+                if (_isSharing.value && !com.jarvis.assistant.automation.accessibility.FinancialScreenPolicy.projectionBlocked) {
                 try {
                     onFrameCallback?.invoke(jpegBytes)
                 } catch (callbackError: Exception) {
@@ -247,6 +248,7 @@ class ScreenCaptureManager private constructor() {
      * Ideal for immediate verification after an action was executed.
      */
     fun captureSnapshotJpeg(quality: Int = 70): ByteArray? {
+        if (com.jarvis.assistant.automation.accessibility.FinancialScreenPolicy.projectionBlocked) return null
         synchronized(bitmapLock) {
             val bmp = latestBitmap ?: return null
             if (bmp.isRecycled) return null

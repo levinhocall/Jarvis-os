@@ -189,6 +189,7 @@ class JarvisAccessibilityService : AccessibilityService() {
      * Takes a hardware buffer screenshot with ZERO user prompts or system dialogs.
      */
     fun takeScreenCapture(callback: (Bitmap?) -> Unit) {
+        if (isFinancialForeground()) { callback(null); return }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 takeScreenshot(
@@ -387,6 +388,19 @@ class JarvisAccessibilityService : AccessibilityService() {
             AccessibilityHealthModel.recordEventReceived(connectionToken)
             val eventType = event.eventType
             val pkg = try { event.packageName?.toString().orEmpty() } catch (_: Throwable) { "" }
+            if (FinancialScreenPolicy.isProtected(pkg)) {
+                FinancialScreenPolicy.observeWindow(pkg)
+                if (com.jarvis.assistant.vision.ScreenCaptureManager.getInstance().isSharing.value) {
+                    com.jarvis.assistant.background.JarvisConversationService.stopScreenCapture()
+                }
+                com.jarvis.assistant.automation.grounding.ScreenGroundingEngine.invalidate("protected_window")
+                AccessibilityHealthModel.recordIssue(AccessibilityIssue.PROTECTED_SCREEN, connectionToken)
+                return
+            }
+
+            if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg.isNotBlank()) {
+                FinancialScreenPolicy.observeWindow(pkg)
+            }
 
             // UI Change Tracking (Zero-allocation lookup)
             var matchesMonitored = false
@@ -588,6 +602,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             // Prevent delayed lifecycle work and armed actions retaining this service after teardown.
             handler.removeCallbacksAndMessages(null)
             clearPendingAutomation()
+            com.jarvis.assistant.ui.aura.TapIndicator.clear(this)
             disconnectLifetime()
         } catch (t: Throwable) {
             Log.w(TAG, "onDestroy suppressed error: ${t.javaClass.simpleName}")
@@ -601,6 +616,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             // A service may later rebind; onRebind schedules only the work it still needs.
             handler.removeCallbacksAndMessages(null)
             clearPendingAutomation()
+            com.jarvis.assistant.ui.aura.TapIndicator.clear(this)
             disconnectLifetime()
         } catch (t: Throwable) {
             Log.w(TAG, "onUnbind suppressed error: ${t.javaClass.simpleName}")
@@ -1387,6 +1403,7 @@ class JarvisAccessibilityService : AccessibilityService() {
     // -------------------------------------------------------------
     private fun dispatchGestureSafely(gesture: GestureDescription): Boolean {
         if (instance !== this) return false
+        if (isFinancialForeground()) return false
         val owner = connectionToken
         val ticket = gestureGate.begin() ?: run {
             AccessibilityHealthModel.recordIssue(AccessibilityIssue.QUEUE_OVERLOAD, owner)
@@ -1890,8 +1907,33 @@ class JarvisAccessibilityService : AccessibilityService() {
         return false
     }
 
+    private fun isFinancialForeground(): Boolean {
+        val root = runCatching { rootInActiveWindow }.getOrNull()
+        try { if (FinancialScreenPolicy.isProtected(root?.packageName?.toString())) return true }
+        finally { recycleOwnedNode(root) }
+        val visibleWindows = safeWindows
+        try {
+            for (window in visibleWindows.take(32)) {
+                if (!window.isActive && !window.isFocused) continue
+                val windowRoot = runCatching { window.root }.getOrNull()
+                try { if (FinancialScreenPolicy.isProtected(windowRoot?.packageName?.toString())) return true }
+                finally { recycleOwnedNode(windowRoot) }
+            }
+            return false
+        } finally {
+            if (Build.VERSION.SDK_INT < 33) visibleWindows.forEach {
+                @Suppress("DEPRECATION")
+                it.recycle()
+            }
+        }
+    }
+
     fun getActiveRootNode(excludeJarvisOverlay: Boolean = true): AccessibilityNodeInfo? {
         if (instance !== this) return null
+        if (isFinancialForeground()) {
+            AccessibilityHealthModel.recordIssue(AccessibilityIssue.PROTECTED_SCREEN, connectionToken)
+            return null
+        }
         val roots = linkedMapOf<Int, AccessibilityNodeInfo>()
         val windowList = safeWindows
         var selected: AccessibilityNodeInfo? = null
@@ -2023,6 +2065,8 @@ class JarvisAccessibilityService : AccessibilityService() {
         val words = cleanQuery.split(" ").filter { it.isNotBlank() }
         val root = getActiveRootNode() ?: return false
         var target: AccessibilityNodeInfo? = null
+        var fuzzyTarget: AccessibilityNodeInfo? = null
+        var fuzzyCount = 0
         try {
             val result = traverseBoundedTree(root, depthFirst = true,
                 childCount = { it.childCount }, child = { n, i -> n.getChild(i) },
@@ -2030,23 +2074,35 @@ class JarvisAccessibilityService : AccessibilityService() {
                 if (target == null && node.isVisibleToUser && !node.isPassword) {
                     val text = node.text?.take(512)?.toString()?.lowercase(Locale.ROOT).orEmpty()
                     val desc = node.contentDescription?.take(512)?.toString()?.lowercase(Locale.ROOT).orEmpty()
-                    if (text.contains(cleanQuery) || desc.contains(cleanQuery) ||
-                        words.all { it.length > 2 && (text.contains(it) || desc.contains(it)) }) {
+                    val numericQuery=cleanQuery.any(Char::isDigit)
+                    val directMatch=if(numericQuery) FuzzyLabelMatcher.matches(cleanQuery,text) || FuzzyLabelMatcher.matches(cleanQuery,desc)
+                        else text.contains(cleanQuery) || desc.contains(cleanQuery) ||
+                            words.all { it.length > 2 && (text.contains(it) || desc.contains(it)) }
+                    if (directMatch) {
                         // The walker owns its nodes; keep an independent handle until the action finishes.
                         @Suppress("DEPRECATION")
                         val copy = AccessibilityNodeInfo.obtain(node)
                         target = copy
+                    } else if (!numericQuery && (FuzzyLabelMatcher.matches(cleanQuery, text) || FuzzyLabelMatcher.matches(cleanQuery, desc))) {
+                        fuzzyCount++
+                        if (fuzzyCount == 1) {
+                            @Suppress("DEPRECATION")
+                            val copy = AccessibilityNodeInfo.obtain(node)
+                            fuzzyTarget = copy
+                        }
                     }
                 }
             }
             if (result.failed) return false
-            return target?.let(::tapNodeOrParent) ?: false
+            // Existing semantic matches take priority; ambiguous approximate labels are never clicked.
+            return (target ?: fuzzyTarget?.takeIf { fuzzyCount == 1 })?.let(::tapNodeOrParent) ?: false
         } catch (error: Exception) {
             AccessibilityHealthModel.recordIssue(accessibilityCallbackFailure(error), connectionToken,
                 fatal = error is SecurityException)
             return false
         } finally {
             recycleOwnedNode(target)
+            recycleOwnedNode(fuzzyTarget)
             recycleOwnedNode(root)
         }
     }

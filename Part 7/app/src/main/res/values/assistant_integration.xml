@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="planner_provider_status">MISSION PLANNER • %1$s • %2$s • Tap to configure</string>
+    <string name="provider_key_hint">Enter %1$s API key</string>
+    <string name="provider_key_title">Add %1$s key</string>
+    <string name="provider_key_saved">%1$s key saved securely</string>
+    <string name="system_assistant_unlock">Unlock your phone to open JARVIS Voice Mode.</string>
+    <string name="system_assistant_open">Open JARVIS Voice Mode</string>
+</resources>

@@ -15,8 +15,38 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MissionDeskActivity : DirectiveActivity() {
+    private fun showWorkflowEditor() {
+        val editor = EditText(this).apply {
+            minLines = 6; maxLines = 12; isSaveEnabled = false
+            hint = "Workflow JSON: name, variables and steps (tool + arguments). Nothing runs before review."
+            contentDescription = "JSON workflow editor"
+            setText(com.jarvis.assistant.R.string.macro_example_json)
+        }
+        MaterialAlertDialogBuilder(this).setTitle("Local JSON workflow")
+            .setView(editor).setNegativeButton("Cancel", null)
+            .setPositiveButton("Review") { _, _ ->
+                val json = editor.text.toString()
+                lifecycleScope.launch(failures) {
+                    val plan = try {
+                        withContext(Dispatchers.Default) { com.jarvis.assistant.automation.macro.MacroCompiler.compile(json) }
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { notice("Invalid workflow. Check its tool names, fields, variables and 24-step limit."); return@launch }
+                    val preview = plan.steps.joinToString("\n\n") {
+                        it.title + "\n" + it.parameters.entries.joinToString { entry -> "${entry.key}: ${entry.value.toString().take(180)}" }
+                    }
+                    MaterialAlertDialogBuilder(this@MissionDeskActivity).setTitle(plan.name)
+                        .setMessage("Review every step. Existing permission, approval and verification checks still apply.\n\n$preview")
+                        .setNegativeButton("Cancel", null).setPositiveButton("Start workflow") { _, _ ->
+                            lifecycleScope.launch(failures) {
+                                MissionEngine.startPreparedMission(applicationContext, plan.name, steps = plan.steps,
+                                    userConstraints = listOf("Execute the reviewed JSON steps only; never invent missing steps."))
+                            }
+                        }.show()
+                }
+            }.show()
+    }
     private val failures = kotlinx.coroutines.CoroutineExceptionHandler { _, _ ->
-        if (::state.isInitialized) state.text = "The operation could not finish. Stored data has not been reset; please retry."
+        if (::state.isInitialized) state.text = getString(com.jarvis.assistant.R.string.mission_operation_retry)
     }
     private var route = MissionExecutionRoute.UI_AGENT
     private lateinit var goal: EditText
@@ -48,10 +78,11 @@ class MissionDeskActivity : DirectiveActivity() {
                     if (started.status == MissionOverallStatus.FAILED) state.text = started.outcomeSummary ?: "Mission could not start."
                 }
                 catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { state.text = "Mission could not start safely. No completion has been reported." }
+                catch (_: Exception) { state.text = getString(com.jarvis.assistant.R.string.mission_start_failed) }
                 finally { button.isEnabled = true }
             }
         }
+        action("Review a JSON workflow") { showWorkflowEditor() }
         state = label("No active mission.")
         action("Approve pending action") {
             val mission = MissionEngine.activeMission.value
@@ -77,7 +108,7 @@ class MissionDeskActivity : DirectiveActivity() {
                     MissionEngine.cancelMission(mission.missionId, "User chose to clarify and revise the goal")
                     goal.setText(mission.goal)
                     goal.requestFocus()
-                    state.text = "Add the missing details, then submit when ready."
+                    state.text = getString(com.jarvis.assistant.R.string.mission_add_details)
                 } }.show()
         }
         action("Cancel mission") { MissionEngine.activeMission.value?.let { m -> lifecycleScope.launch(failures) { MissionEngine.cancelMission(m.missionId) } } }
@@ -107,6 +138,6 @@ class MissionDeskActivity : DirectiveActivity() {
             val rows = withContext(Dispatchers.IO) { (application as JarvisApp).memoryDatabase.missionDao().getAllMissions() }
             history.text = rows.take(20).joinToString("\n\n") { "${it.status.replace('_', ' ')}\n${it.goal.take(160)}\n${it.outcomeSummary.orEmpty().take(240)}" }.ifBlank { "No saved missions yet." }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { history.text = "History could not be loaded. No stored mission was reset." }
+        catch (_: Exception) { history.text = getString(com.jarvis.assistant.R.string.mission_history_unavailable) }
     } }
 }

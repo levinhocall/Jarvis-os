@@ -135,7 +135,7 @@ class JarvisApp : Application() {
         )
         MissionEngine.missionDao = memoryDatabase.missionDao()
         MissionEngine.llmPlanner = LlmPlanner(
-            GeminiFunctionCallProvider(
+            com.jarvis.assistant.automation.routing.ConfiguredPlannerProvider(preferences, GeminiFunctionCallProvider(
                 apiKeyProvider = {
                     preferences.getNextActiveKey("gemini") ?: preferences.apiKey
                 },
@@ -143,7 +143,7 @@ class JarvisApp : Application() {
                 onApiKeyRateLimited = { key -> preferences.reportKeyRateLimit("gemini", key) },
                 onApiKeyInvalid = { key -> preferences.reportKeyInvalid("gemini", key) },
                 onApiKeySuccess = { key -> preferences.reportKeySuccess("gemini", key) }
-            )
+            ))
         )
         appScope.launch(Dispatchers.IO) {
             memoryDatabase.awaitReady(120_000L)

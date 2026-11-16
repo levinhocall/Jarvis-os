@@ -1801,6 +1801,25 @@ object MissionEngine {
                         "Visible controls in ${screen.foregroundPackage}: " + labels.joinToString(" | ")))
                 }
             }
+            "wait_for_screen_text" -> {
+                val packageName = step.parameters["package_name"] as? String ?: ""
+                val text = step.parameters["text"] as? String ?: ""
+                val present = step.parameters["present"] as? Boolean ?: true
+                val timeout = (step.parameters["timeout_ms"] as? Number)?.toLong() ?: 5000L
+                val ready = com.jarvis.assistant.automation.macro.ScreenTextWaiter.await(packageName, text, present, timeout) {
+                    withContext(Dispatchers.Main.immediate) {
+                        val screen = com.jarvis.assistant.automation.grounding.ScreenGroundingEngine.captureScreen(JarvisAccessibilityService.instance)
+                        val readable = screen.foregroundPackage != context.packageName && !screen.isSecureWindow &&
+                            !com.jarvis.assistant.automation.accessibility.FinancialScreenPolicy.isProtected(screen.foregroundPackage) &&
+                            screen.elements.none { it.isPassword || it.isProtected }
+                        val labels = if (readable) screen.elements.filter { it.isVisibleToUser && !it.isEditable }
+                            .map { it.displayLabel.take(160) }.filter { it.isNotBlank() }.take(80) else emptyList()
+                        com.jarvis.assistant.automation.macro.WaitScreen(screen.foregroundPackage, labels, readable)
+                    }
+                }
+                Pair(ready, MissionVerificationEvidence(EvidenceType.TEXT_MATCH, ready,
+                    if (ready) "Screen text condition verified twice in the target app." else "Text wait timed out; no action was repeated."))
+            }
             "device_control" -> {
                 val command = step.parameters["command"] as? String ?: ""
                 val reflex = com.jarvis.assistant.automation.reflex.OfflineReflexExecutor.tryExecuteReflex(command, context, null)
@@ -2048,7 +2067,7 @@ object MissionEngine {
                 val command = step.parameters["command"] as? String ?: ""
                 if (command.isBlank()) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Shell command is empty."))
                 if (sandbox.validateInputText(command) is SandboxCheckResult.Blocked) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Shell command was blocked by the capability sandbox."))
-                when (val result = TermuxBridge.executeCommand(context, command, workDir = null, timeoutSeconds = 60L)) {
+                when (val result = TermuxBridge.executeCommand(context, command, workDir = null, timeoutSeconds = 60L, reviewedCommand = command)) {
                     is DevToolResult.Success -> Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, TermuxBridge.maskSecrets(result.output).take(2_000)))
                     is DevToolResult.Failure -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Termux command failed (exit ${result.exitCode}): ${TermuxBridge.maskSecrets(result.error).take(1_000)}"))
                     is DevToolResult.EnvironmentUnsupported -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, result.reason))
@@ -2115,7 +2134,7 @@ object MissionEngine {
                 if (!(root.startsWith("/sdcard/") || root.startsWith("/storage/emulated/0/"))) return Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Termux cannot access this app-private workspace. Move the selected project to shared storage before Git operations."))
                 val quotedRoot = "'" + root.replace("'", "'\\''") + "'"
                 val command = "git -C $quotedRoot $safeSubcommand"
-                when (val result = TermuxBridge.executeCommand(context, command, workDir = root, timeoutSeconds = 90L)) {
+                when (val result = TermuxBridge.executeCommand(context, command, workDir = root, timeoutSeconds = 90L, reviewedCommand = command)) {
                     is DevToolResult.Success -> Pair(true, MissionVerificationEvidence(EvidenceType.EXTERNAL_API_ACKNOWLEDGED, true, TermuxBridge.maskSecrets(result.output).take(2_000)))
                     is DevToolResult.Failure -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, "Git command failed (exit ${result.exitCode}): ${TermuxBridge.maskSecrets(result.error).take(1_000)}"))
                     is DevToolResult.EnvironmentUnsupported -> Pair(false, MissionVerificationEvidence(EvidenceType.UNVERIFIED, false, result.reason))

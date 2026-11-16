@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.net.toUri
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
@@ -18,19 +19,19 @@ class TermuxCommandResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
         intent ?: return
         val executionId = intent.getStringExtra(TermuxBridge.EXTRA_EXECUTION_ID) ?: return
-        val exitCode = intent.getIntExtra("exitCode", 0)
-        val errCode = intent.getIntExtra("errCode", 0)
-        val errmsg = intent.getStringExtra("errmsg").orEmpty()
-        val stdout = intent.getStringExtra("stdout").orEmpty()
-        val stderr = intent.getStringExtra("stderr").orEmpty()
-        TermuxBridge.notifyResult(
-            executionId = executionId,
-            exitCode = exitCode,
-            stdout = stdout,
-            stderr = stderr,
-            errCode = errCode,
-            errmsg = errmsg
-        )
+        if(intent.action != TermuxBridge.ACTION_RESULT) return
+        val bundle = intent.getBundleExtra("result")
+        val source = bundle ?: intent.extras
+        @Suppress("DEPRECATION")
+        val exit = source?.get("exitCode") as? Int
+        @Suppress("DEPRECATION")
+        val error = source?.get(if(bundle == null) "errCode" else "err") as? Int
+        val decoded = TermuxResultDecoder.decode(exit,error,source?.getString("errmsg").orEmpty(),legacyFlat=bundle == null)
+        TermuxBridge.notifyResult(executionId,decoded.exit,
+            stdout=source?.getString("stdout").orEmpty().take(65_536),
+            stderr=source?.getString("stderr").orEmpty().take(65_536),
+            errCode=decoded.error,errmsg=decoded.message)
+
     }
 }
 
@@ -193,8 +194,15 @@ object TermuxBridge {
         context: Context,
         command: String,
         workDir: String? = null,
-        timeoutSeconds: Long = 60L
+        timeoutSeconds: Long = 60L,
+        reviewedCommand: String? = null
     ): DevToolResult {
+        when(ShellPolicy.evaluate(command,reviewedCommand)) {
+            ShellPolicy.Decision.REJECT -> return DevToolResult.Failure("termux_execute","Invalid or oversized command.",isRecoverable=false)
+            ShellPolicy.Decision.REQUIRE_REVIEW -> return DevToolResult.AwaitingApproval("termux_execute",
+                "This exact command requires review through the existing approval UI.",command)
+            ShellPolicy.Decision.ALLOW -> Unit
+        }
         if (!isTermuxInstalled(context)) {
             return DevToolResult.EnvironmentUnsupported(
                 toolName = "termux_execute",
@@ -213,17 +221,21 @@ object TermuxBridge {
 
         val executionId = UUID.randomUUID().toString()
         val deferred = CompletableDeferred<DevToolResult>()
-        pendingExecutions[executionId] = deferred
+        synchronized(pendingExecutions) {
+            if(pendingExecutions.size >= 16) return DevToolResult.Failure("termux_execute","Termux command queue is full.")
+            pendingExecutions[executionId] = deferred
+        }
 
         val resultIntent = Intent(context, TermuxCommandResultReceiver::class.java).apply {
             action = ACTION_RESULT
+            data = ("jarvis-termux://result/"+executionId).toUri()
             putExtra(EXTRA_EXECUTION_ID, executionId)
         }
 
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_MUTABLE
         } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_ONE_SHOT
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -253,10 +265,11 @@ object TermuxBridge {
         }
 
         try {
+        try {
             // Note: Termux RunCommandService is a standard started service.
             // When JARVIS Dev Studio is in the foreground, startService is fully permitted.
             context.startService(runIntent)
-            Log.i(TAG, "Dispatched command '${maskSecrets(command)}' to Termux service (id=$executionId)")
+            Log.i(TAG, "Dispatched reviewed Termux execution (id=$executionId)")
         } catch (e: Exception) {
             pendingExecutions.remove(executionId)
             return DevToolResult.Failure(
@@ -265,7 +278,7 @@ object TermuxBridge {
             )
         }
 
-        val result = withTimeoutOrNull(timeoutSeconds * 1000L) {
+        val result = withTimeoutOrNull(timeoutSeconds.coerceIn(1,300) * 1000L) {
             deferred.await()
         }
 
@@ -273,11 +286,16 @@ object TermuxBridge {
             pendingExecutions.remove(executionId)
             return DevToolResult.Failure(
                 toolName = "termux_execute",
-                error = "Termux execution timed out after $timeoutSeconds seconds. Verify Termux background execution is not restricted by battery saver.",
+                error = "Termux result timed out; command execution outcome is unknown. Do not retry a consequential command without checking its result.",
                 exitCode = -1
             )
         }
 
         return result
+        } finally {
+            // Caller cancellation cannot retain the deferred/PendingIntent or accept a late result.
+            pendingExecutions.remove(executionId)
+            pendingIntent.cancel()
+        }
     }
 }

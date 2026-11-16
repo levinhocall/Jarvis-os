@@ -170,6 +170,16 @@ class FeatureHubActivity : AppCompatActivity() {
         entry(root, "AMOLED Map", "Native OpenStreetMap view, current location, destination search and route", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.map.AmoledMapActivity::class.java))
         }
+        entry(root, "JARVIS Browser", "Browse HTTPS pages and read selected page text with an offline voice", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.browser.JarvisBrowserActivity::class.java))
+        }
+        entry(root, "Plasma Live Wallpaper", "Preview the touch-reactive core in Android’s wallpaper picker; no microphone starts", true) {
+            runCatching {
+                startActivity(Intent(android.app.WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).putExtra(
+                    android.app.WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                    android.content.ComponentName(this, com.jarvis.assistant.wallpaper.JarvisWallpaperService::class.java)))
+            }.onFailure { android.widget.Toast.makeText(this,"Live wallpaper selection is unavailable on this device.",android.widget.Toast.LENGTH_LONG).show() }
+        }
         entry(root, "Video Wallpapers", "Import your own video, preview it, and request Android wallpaper activation", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.wallpaper.VideoWallpaperActivity::class.java))
         }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp" android:fitsSystemWindows="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+        <Button android:id="@+id/closeBrowser" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="48dp" android:text="@string/browser_close" />
+        <EditText android:id="@+id/address" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="48dp" android:inputType="textUri" android:imeOptions="actionGo" android:singleLine="true" android:hint="@string/browser_address" android:importantForAutofill="noExcludeDescendants" />
+        <Button android:id="@+id/go" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="48dp" android:text="@string/browser_go" />
+    </LinearLayout>
+    <TextView android:id="@+id/pageStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="?attr/themeTextPrimary" android:accessibilityLiveRegion="polite" />
+    <WebView android:id="@+id/browser" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+        <Button style="?android:attr/buttonBarButtonStyle" android:id="@+id/browserBack" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="48dp" android:text="@string/browser_back" />
+        <Button style="?android:attr/buttonBarButtonStyle" android:id="@+id/readPage" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="48dp" android:text="@string/browser_read" />
+        <Button style="?android:attr/buttonBarButtonStyle" android:id="@+id/stopReading" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="48dp" android:text="@string/browser_stop" />
+    </LinearLayout>
+</LinearLayout>

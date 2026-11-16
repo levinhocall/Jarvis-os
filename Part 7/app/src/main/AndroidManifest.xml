@@ -31,6 +31,7 @@
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 
     <queries>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
         <package android:name="com.termux" />
     </queries>
 
@@ -182,6 +183,25 @@
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize" />
 
+        <service android:name=".assistant.JarvisVoiceInteractionService"
+            android:label="@string/app_name" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/jarvis_voice_interaction" />
+        </service>
+        <service android:name=".assistant.JarvisVoiceInteractionSessionService"
+            android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service android:name=".assistant.JarvisRecognitionService" android:label="@string/app_name"
+            android:exported="true" android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+        </service>
+
+        <activity android:name=".ui.browser.JarvisBrowserActivity" android:exported="false" />
+        <service android:name=".wallpaper.JarvisWallpaperService" android:exported="true"
+            android:label="@string/plasma_wallpaper_label" android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/plasma_wallpaper" />
+        </service>
         <service
             android:name=".ui.wallpaper.VideoWallpaperService"
             android:label="JARVIS Video Wallpaper"

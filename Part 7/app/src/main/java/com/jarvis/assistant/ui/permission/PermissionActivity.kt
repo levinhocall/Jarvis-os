@@ -177,6 +177,8 @@ class PermissionActivity : AppCompatActivity() {
         updateExtraPermission("bluetooth", Build.VERSION.SDK_INT < Build.VERSION_CODES.S || hasPermission(Manifest.permission.BLUETOOTH_CONNECT))
         updateExtraPermission("battery", PermissionHelper.hasBatteryOptimizationPermission(this))
         updateExtraPermission("brightness", PermissionHelper.hasWriteSettingsPermission(this))
+        updateExtraPermission("assistant", android.service.voice.VoiceInteractionService.isActiveService(this,
+            android.content.ComponentName(this, com.jarvis.assistant.assistant.JarvisVoiceInteractionService::class.java)))
 
         val isA11ySatisfied = a11yState == AccessibilityState.READY || a11yState == AccessibilityState.BUSY || a11yState == AccessibilityState.CONNECTED ||
                               a11yState == AccessibilityState.DEGRADED ||
@@ -390,6 +392,12 @@ class PermissionActivity : AppCompatActivity() {
         }
         card("brightness", "Modify system settings", "Optional: lets JARVIS adjust screen brightness when you ask.", com.jarvis.assistant.R.drawable.ic_settings_palette) {
             PermissionHelper.requestWriteSettings(this)
+        }
+        card("assistant", "Default digital assistant", "Optional: use Android’s assistant gesture to open the existing JARVIS Voice Mode. Unlock and microphone consent are still required.", com.jarvis.assistant.R.drawable.ic_settings_voice) {
+            val roles = if (Build.VERSION.SDK_INT >= 29) getSystemService(android.app.role.RoleManager::class.java) else null
+            if (Build.VERSION.SDK_INT >= 29 && roles?.isRoleAvailable(android.app.role.RoleManager.ROLE_ASSISTANT) == true) {
+                startActivity(roles.createRequestRoleIntent(android.app.role.RoleManager.ROLE_ASSISTANT))
+            } else startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS))
         }
         val note = TextView(this).apply {
             text = "Screen sharing uses Android’s one-time screen-capture confirmation when you start sharing. Internet, network, notifications, and foreground-service access are managed by Android."

@@ -224,6 +224,11 @@ class OpenAiCompatibleProvider(
             "temperature" to request.temperature,
             "max_tokens" to request.maxTokens
         )
+        require(modelName.isNotBlank()) { "Choose a model identifier in Planner Provider settings." }
+        if (request.tools.isNotEmpty()) {
+            payload["tools"] = request.tools.map(OpenAiToolCodec::declaration)
+            payload["tool_choice"] = "auto"
+        }
 
         val reqBody = gson.toJson(payload).toRequestBody("application/json".toMediaType())
         val httpRequest = Request.Builder()
@@ -232,9 +237,9 @@ class OpenAiCompatibleProvider(
             .post(reqBody)
             .build()
 
-        val httpResponse = client.newCall(httpRequest).execute()
+        val httpResponse = client.newCall(httpRequest).awaitCouncilResponse()
         val latency = System.currentTimeMillis() - startTime
-        val respBody = httpResponse.body?.string() ?: ""
+        val respBody = httpResponse.body
 
         if (httpResponse.code == 429) {
             preferences.reportKeyRateLimit(id, currentKey)
@@ -245,23 +250,27 @@ class OpenAiCompatibleProvider(
             throw IllegalStateException("Authentication failed (${httpResponse.code}) for provider '$id'.")
         }
         if (!httpResponse.isSuccessful) {
-            throw IllegalStateException("OpenAI compatible provider error ${httpResponse.code}: $respBody")
+            throw IllegalStateException("Configured planner provider returned HTTP ${httpResponse.code}.")
         }
 
         val json = gson.fromJson(respBody, JsonObject::class.java)
         val choices = json.getAsJsonArray("choices")
-        val content = if (choices != null && choices.size() > 0) {
-            choices.get(0).asJsonObject.getAsJsonObject("message")?.get("content")?.asString ?: ""
-        } else ""
+        val message = choices?.firstOrNull()?.asJsonObject?.getAsJsonObject("message")
+            ?: error("Planner provider returned no message.")
+        val content = message.get("content")?.takeUnless { it.isJsonNull }?.asString.orEmpty()
+        val calls = OpenAiToolCodec.calls(message)
+        check(content.isNotBlank() || calls.isNotEmpty()) { "Planner provider returned an empty/blocked response." }
 
         val usage = json.getAsJsonObject("usage")
         val pTokens = usage?.get("prompt_tokens")?.asInt ?: (request.prompt.length / 4)
         val cTokens = usage?.get("completion_tokens")?.asInt ?: (content.length / 4)
 
-        preferences.recordUsage(id, pTokens, cTokens, (pTokens * 0.00000015) + (cTokens * 0.0000006))
+        preferences.recordUsage(id, pTokens, cTokens, 0.0) // Provider-specific prices are unknown, never fabricate a cost.
+        preferences.reportKeySuccess(id, currentKey)
 
         LlmResponse(
             content = content,
+            toolCalls = calls,
             promptTokens = pTokens,
             completionTokens = cTokens,
             latencyMs = latency,

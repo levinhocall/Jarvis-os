@@ -293,11 +293,11 @@ class GitStatusAndDiffDevTool(private val contextProvider: () -> android.content
 
         // On Android: check Termux
         if (context != null && TermuxBridge.isTermuxInstalled(context)) {
-            return@withContext TermuxBridge.executeCommand(
-                context = context,
-                command = "git -C '${project.workspaceRoot}' status --short && git -C '${project.workspaceRoot}' diff --stat",
-                workDir = project.workspaceRoot
-            )
+            val quotedRoot = ShellPolicy.quoteArgument(project.workspaceRoot)
+            val inspection = "git -C $quotedRoot status --short && git -C $quotedRoot diff --stat"
+            return@withContext TermuxBridge.executeCommand(context,inspection,project.workspaceRoot,
+                reviewedCommand=inspection) // Built-in read-only query; the workspace is a quoted argument.
+
         }
 
         // Safe in-process inspection of .git metadata without execve
@@ -402,7 +402,7 @@ class ExecuteApprovedCommandDevTool(private val contextProvider: () -> android.c
         // On Android: check Termux
         val context = contextProvider()
         if (context != null && TermuxBridge.isTermuxInstalled(context)) {
-            return@withContext TermuxBridge.executeCommand(context, command, project.workspaceRoot, timeoutSec)
+            return@withContext TermuxBridge.executeCommand(context, command, project.workspaceRoot, timeoutSec, reviewedCommand = command)
         }
 
         DevToolResult.EnvironmentUnsupported(
@@ -456,7 +456,7 @@ class TermuxBridgeDevTool(private val contextProvider: () -> android.content.Con
         }
 
         val timeoutSec = (params["timeoutSeconds"] as? Number)?.toLong() ?: 120L
-        return TermuxBridge.executeCommand(context, command, project.workspaceRoot, timeoutSec)
+        return TermuxBridge.executeCommand(context, command, project.workspaceRoot, timeoutSec, reviewedCommand = command)
     }
 }
 
