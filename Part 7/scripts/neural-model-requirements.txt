@@ -1,0 +1,4 @@
+# Host-only verification. These packages are not bundled in the APK.
+ai-edge-litert==1.4.0
+onnxruntime==1.23.2
+numpy==2.5.5

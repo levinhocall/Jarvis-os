@@ -1,0 +1,19 @@
+OpenWakeWord model integration for JARVIS OS (personal/noncommercial use).
+Upstream: https://github.com/dscripka/openWakeWord
+Author: David Scripka and openWakeWord contributors.
+Version: v0.5.1 release assets (mel, embedding, hey_jarvis_v0.1).
+Model source: https://github.com/dscripka/openWakeWord/releases/tag/v0.5.1
+Upstream code: Apache License 2.0 (bundled separately).
+Pretrained weights: Creative Commons Attribution-NonCommercial-ShareAlike 4.0.
+License: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en
+Weights are redistributed unmodified. No commercial-use permission is implied.
+The upstream feature extractor uses Google speech embeddings; this is not a copy of MAYA.
+This APK does not include MAYA assets, custom JNI libraries or Maya wake classifiers.
+
+Silero VAD (silero_vad.onnx) is the official OpenWakeWord v0.5.1 release model.
+Upstream Silero VAD: https://github.com/snakers4/silero-vad
+Silero VAD license: MIT; copyright Silero Team.
+License text: https://github.com/snakers4/silero-vad/blob/master/LICENSE
+The neural wake path uses ONNX Runtime for this speech gate, not MAYA's custom TFLite conversion.
+ONNX Runtime: Microsoft, MIT license: https://github.com/microsoft/onnxruntime/blob/main/LICENSE
+LiteRT: Google, Apache 2.0: https://github.com/google-ai-edge/LiteRT/blob/main/LICENSE

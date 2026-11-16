@@ -26,6 +26,10 @@ val releaseSigningReady = listOf(releaseStorePath, releaseStorePassword, release
 android {
     namespace = "com.jarvis.assistant"
     compileSdk = 36
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild {
+        cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
+    }
 
     defaultConfig {
         applicationId = "com.jarvis.assistant"
@@ -33,6 +37,12 @@ android {
         targetSdk = 36
         versionCode = 149
         versionName = "1.11.0"
+        externalNativeBuild {
+            cmake {
+                arguments += "-DANDROID_STL=c++_static"
+                abiFilters += listOf("arm64-v8a","armeabi-v7a","x86","x86_64")
+            }
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "DEVELOPER_NAME", buildConfigString(developerName.ifBlank { "Unverified developer" }))
@@ -151,6 +161,9 @@ dependencies {
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("com.alphacephei:vosk-android:0.3.75@aar")
+    // Optional, on-device OpenWakeWord inference; existing Vosk mode stays the default.
+    implementation("com.google.ai.edge.litert:litert:1.4.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.23.2")
 
     // Room Database
     implementation("androidx.room:room-runtime:2.8.4")

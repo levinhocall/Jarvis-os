@@ -40,3 +40,5 @@
     public static int v(...);
     public static int i(...);
 }
+# Stable exported JNI names used by the original AEC3 wrapper.
+-keep class com.jarvis.assistant.audio.Aec3Native { *; }
