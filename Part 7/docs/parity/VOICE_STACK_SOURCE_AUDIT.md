@@ -50,6 +50,7 @@ model gating/licensing must be handled through the model owner's authorized rout
   arm64-v8a, armeabi-v7a, x86 and x86_64. JNI source and model/runtime licenses bundled.
 - LiteRT2.3.2 and ONNX Runtime Android1.23.2; no extracted MAYA library is loaded.
 - LiteRT retained Java Interpreter API is isolated in the Java-only `neural-runtime` module. Its optional Kotlin2.4 APIs are not exported to the application compiler; Kotlin2.2.20 and Room remain unchanged. No metadata checks are disabled. SDK min24 is compatible with app min26. Host smoke uses Python LiteRT2.3.0, not Android JNI2.3.2.
+- Lifecycle2.10.0 is explicitly constrained as a family: Compose Lifecycle2.11.0 requires SDK37/AGP9.1, outside the retained SDK36/AGP8.10.1 contract. See verification evidence.
 - Existing JarvisConversationService / AudioRecorder / AudioPlayer / microphone
   lease remain authoritative. Neural DSP/wake/turn components consume existing PCM.
 - Existing Vosk owner enrollment and encrypted local records are preserved.

@@ -1,7 +1,7 @@
 {
-  "captured_at_utc": "2026-11-16T12:27:06.188658+00:00",
+  "captured_at_utc": "2026-11-16T12:40:31.777330+00:00",
   "baseline_commit": "3cd65a939aa21b4b192f9091fb1652f5adb8f93e",
-  "verified_app_source_digest_sha256": "a396164c889ad99708864be143ddabbdc6cbdcfa19974291e2706f2eaee41cdc",
+  "verified_app_source_digest_sha256": "acdcfa9baeedb7183d94cd621109b41b06cefbd88a7bba5a2d65c2f3cdf816bf",
   "digest_input_files": 732,
   "jvm": {
     "tests": 615,
@@ -44,9 +44,18 @@
   "android_litert_version": "2.3.2",
   "host_litert_version": "2.3.0",
   "preceding_main_ci": {
-    "run": 43856428097,
+    "run": 43866719104,
     "unit": "PASS",
-    "lint": "FAIL obsolete LiteRT 1.4.0 dependency advisory; fixed in this follow-up"
+    "lint": "FAIL four Lifecycle2.11 upgrade notices; explicit2.10 supported-version constraints now retain SDK36/AGP8.10.1 compatibility"
   },
-  "source_digest_method": "Sorted relative path + NUL + SHA256 bytes for app/src, neural-runtime/src, scripts excluding __pycache__, and app/root/module Gradle/settings/proguard files"
+  "source_digest_method": "Sorted relative path + NUL + SHA256 bytes for app/src, neural-runtime/src, scripts excluding __pycache__, and app/root/module Gradle/settings/proguard files",
+  "last_local_gate": {
+    "result": "PASS",
+    "duration": "3m5s",
+    "executed_tasks": 17,
+    "up_to_date_tasks": 100,
+    "jvm_task": "UP-TO-DATE, existing615-test result reused"
+  },
+  "lifecycle_constraint": "2.10.0 strictly; official Compose Lifecycle2.11 AAR requires SDK37/AGP9.1",
+  "packaged_models_and_abis": "PASS; actual APK digests, AEC3 four ABIs, LiteRT ARM32/ARM64/x86_64 checked"
 }

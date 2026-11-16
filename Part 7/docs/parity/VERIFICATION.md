@@ -8,7 +8,8 @@ The final local source tree passed the following command with JDK17 / SDK36:
 ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug :neural-runtime:lintDebug :app:compileDebugAndroidTestKotlin :app:assembleDebug --no-daemon
 ```
 
-- Final local run: BUILD SUCCESSFUL,4m30s,120 actionable tasks (42 executed,78 up-to-date).
+- SDK-boundary run: BUILD SUCCESSFUL,4m30s,120 actionable tasks (42 executed,78 up-to-date).
+- Final compatible-version constraint run: BUILD SUCCESSFUL,3m5s,117 actionable tasks (17 executed,100 up-to-date). The unchanged JVM test task was UP-TO-DATE; its recorded615-test result was reused. Fresh main CI43866719104 also passed its JVM/migration/test-source/schema job.
 - JVM:615 tests,0 failures,0 errors,1 skipped. The skipped existing host-environment test requires a different host-dev fixture.
 - Lint: no new issues; existing baseline was not expanded.1380 historical issues and2 hints remain filtered.
 - Android instrumentation sources compiled; instrumentation/device tests NOT RUN.
@@ -36,6 +37,14 @@ Both app and module lint tasks completed successfully. The library lint analyzer
 SDK2.3.2 omits plain x86; that ABI explicitly retains existing Vosk wake recognition. ARM32/ARM64/x86_64 neural wake selection remains opt-in. Unused SDK AiPack services/receiver and its dataSync permission were removed through manifest merging; their absence was checked in the compiled APK. No existing foreground service was removed. The final local APK signature, identity and16KB ZIP alignment were reverified; all ARM64 ELF libraries remain≥16KB aligned.
 
 Local follow-up log: `work/maya-litert-boundary-verification.log`; host model check: `work/litert-upgrade/host-model-smoke.log`. These generated workspace logs are not committed; the machine-readable evidence records the checked source digest, counts and APK hash. A newly published CI APK will have separate CI signing/hash evidence.
+
+## Supported Lifecycle version constraint
+
+[Main CI43866719104](https://github.com/levinhocall/Jarvis-os/actions/runs/43866719104) passed the JVM/migration/test-source/schema job. Lint failed only four newer-version notices: Lifecycle2.11.0 versus2.10.0. Local lint had cached older repository metadata. Upgrading the whole family is incompatible with this application's frozen build contract: the official `lifecycle-runtime-compose-android:2.11.0` AAR declares `minCompileSdk=37` and `minAndroidGradlePluginVersion=9.1.0` in `META-INF/com/android/build/gradle/aar-metadata.properties`; this project uses SDK36/AGP8.10.1.
+
+Source inspected: [official Google Maven AAR](https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-runtime-compose-android/2.11.0/lifecycle-runtime-compose-android-2.11.0.aar) and [POM](https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-runtime-compose-android/2.11.0/lifecycle-runtime-compose-android-2.11.0.pom). The Compose artifact also depends on Compose Runtime1.11.0. A whole-toolchain migration is outside this voice integration.
+
+The four direct Lifecycle declarations now use Gradle's explicit `strictly("2.10.0")` rich-version constraints, with a `because` compatibility reason. They retain the already compiled/tested dependency graph and reject incompatible transitive upgrades. This is a deliberate supported-version pin, not a claim that2.10.0 is newest. No lint issue is disabled and the lint baseline is unchanged. Move this boundary only with a separately verified SDK/AGP/Compose upgrade. The final compatible-version gate passed with the same APK bytes/hash; packaged-model digests, four AEC3 ABIs, three LiteRT-supported ABIs, manifest cleanup, signature and ZIP alignment were checked again.
 
 ## Device and service limitations
 
