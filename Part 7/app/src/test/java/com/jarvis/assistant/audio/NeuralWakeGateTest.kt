@@ -21,4 +21,11 @@ class NeuralWakeGateTest {
         val gate = NeuralWakeGate()
         repeat(100) { assertFalse(gate.accept(1f,100,it*80L,speechRecent=false)) }
     }
+    @Test fun missingNeuralAbiUsesSupportedFallbackInsteadOfLoadingAnUnavailableLibrary() {
+        assertFalse(NeuralWakeGate.supportsRuntime(listOf("x86")))
+        assertFalse(NeuralWakeGate.supportsRuntime(emptyList()))
+        assertTrue(NeuralWakeGate.supportsRuntime(listOf("x86_64","x86")))
+        assertTrue(NeuralWakeGate.supportsRuntime(listOf("arm64-v8a","armeabi-v7a")))
+    }
+
 }

@@ -161,7 +161,8 @@ class WakeWordActivity : DirectiveActivity() {
             launch { combine(JarvisConversationService.isStandby,WakeDiagnostics.testing,WakeDiagnostics.listening) { standby,test,capture -> Triple(standby,test,capture) }.collect { (standby,test,capture) ->
                 if (standby || capture) starting=false
                 renderSwitch()
-                val selectedEngine = if(settings.neuralEngine && settings.name == "jarvis" && !(application as com.jarvis.assistant.JarvisApp).preferences.isOwnerVoiceEnabled) "OpenWakeWord" else "Vosk"
+                val selectedEngine = if(settings.neuralEngine && settings.name == "jarvis" && !(application as com.jarvis.assistant.JarvisApp).preferences.isOwnerVoiceEnabled &&
+                    com.jarvis.assistant.audio.wake.NeuralWakeGate.supportsRuntime(android.os.Build.SUPPORTED_ABIS.toList())) "OpenWakeWord" else "Vosk"
                 engine.text=when { capture && test -> "● Microphone test · $selectedEngine · Local only"; capture -> "● Listening · $selectedEngine offline"; standby -> "Preparing microphone…"; else -> "○ Wake microphone off" }
                 statusDot.setTextColor(if(capture) 0xff56b85a.toInt() else 0xffb6b6bb.toInt())
                 testButton.text=if(standby && test) "Stop Microphone Test" else "Test Microphone"

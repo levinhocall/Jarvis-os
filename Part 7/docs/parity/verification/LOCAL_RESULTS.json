@@ -1,21 +1,21 @@
 {
-  "captured_at_utc": "2026-11-16T11:16:04.341028+00:00",
+  "captured_at_utc": "2026-11-16T12:27:06.188658+00:00",
   "baseline_commit": "3cd65a939aa21b4b192f9091fb1652f5adb8f93e",
-  "verified_app_source_digest_sha256": "cb1b6f2714696b4277fe9104194bfccf9ec113e778f7fef13a9255bdc0bac8b6",
-  "digest_input_files": 722,
+  "verified_app_source_digest_sha256": "a396164c889ad99708864be143ddabbdc6cbdcfa19974291e2706f2eaee41cdc",
+  "digest_input_files": 732,
   "jvm": {
-    "tests": 614,
+    "tests": 615,
     "failures": 0,
     "errors": 0,
     "skipped": 1
   },
-  "lint": "PASS against existing baseline, no new issues; 1383 existing issues and 2 hints filtered",
+  "lint": "PASS app and neural-runtime tasks; app existing baseline unchanged, 1380 errors and 2 hints filtered. Library analyzer logs unsupported optional SDK Kotlin 2.4 metadata; see VERIFICATION.md.",
   "debug_compile": "PASS",
   "android_test_source_compile": "PASS",
   "android_instrumentation": "NOT RUN - no connected device/emulator",
   "debug_apk": {
-    "bytes": 295708946,
-    "sha256": "a3e5a87810a61b9e127603441eefcfe56628aa6b80c53497a76a67f7ca3b3114"
+    "bytes": 294506563,
+    "sha256": "6d9ff3c5d88c079817ede3e9abff37ff9fe8ef184212a8ad352bd17426c312a7"
   },
   "zipalign_16k": "PASS",
   "elf64_below_16k": [
@@ -38,7 +38,15 @@
     "webgl_renderer_suite": "PASS",
     "ci_helper_tests": 8
   },
-  "host_model_smoke": "PASS: model digests, OpenWakeWord/Silero silence, SmartTurn tensor/silence inference",
+  "host_model_smoke": "PASS with host LiteRT 2.3.0 and ONNX Runtime 1.23.2; NOT Android JNI execution",
   "device_accuracy_latency_battery_soak": "NOT TESTED",
-  "r8_release_build": "NOT RUN - debug distribution requested; release signing not configured here"
+  "r8_release_build": "NOT RUN - debug distribution requested; release signing not configured here",
+  "android_litert_version": "2.3.2",
+  "host_litert_version": "2.3.0",
+  "preceding_main_ci": {
+    "run": 43856428097,
+    "unit": "PASS",
+    "lint": "FAIL obsolete LiteRT 1.4.0 dependency advisory; fixed in this follow-up"
+  },
+  "source_digest_method": "Sorted relative path + NUL + SHA256 bytes for app/src, neural-runtime/src, scripts excluding __pycache__, and app/root/module Gradle/settings/proguard files"
 }

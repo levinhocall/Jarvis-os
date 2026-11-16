@@ -14,12 +14,19 @@ import org.junit.runner.RunWith
 /** Real shipped model/ABI smoke tests. Require an Android runtime; JVM fakes do not count. */
 @RunWith(AndroidJUnit4::class)
 class NeuralAudioAssetsTest {
-    @Test fun packagedWakeAndSpeechModelsAcceptSilenceWithoutMicrophone() = runBlocking {
+    @Test fun packagedWakeModelsAcceptSilenceOnSupportedAbiWithoutMicrophone() = runBlocking {
+        org.junit.Assume.assumeTrue(com.jarvis.assistant.audio.wake.NeuralWakeGate.supportsRuntime(android.os.Build.SUPPORTED_ABIS.toList()))
         withContext(Dispatchers.Default) {
             val assets=InstrumentationRegistry.getInstrumentation().targetContext.assets
             OpenWakeWordPipeline(assets).use { pipeline ->
                 repeat(30) { pipeline.accept(ByteArray(2560))?.let { assertTrue(it.isFinite() && it in 0f..1f) } }
             }
+            assertNull(MicrophoneOwnership.owner.value)
+        }
+    }
+    @Test fun packagedSpeechAndTurnModelsAcceptSilenceWithoutMicrophone() = runBlocking {
+        withContext(Dispatchers.Default) {
+            val assets=InstrumentationRegistry.getInstrumentation().targetContext.assets
             SileroSpeechGate(assets).use { speech ->
                 repeat(5) { assertTrue(speech.accept(ByteArray(960)) in 0f..1f) }
                 assertFalse(speech.speechRecent)

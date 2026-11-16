@@ -5,12 +5,12 @@ Baseline: `3cd65a939aa21b4b192f9091fb1652f5adb8f93e`. All changes are confined t
 The final local source tree passed the following command with JDK17 / SDK36:
 
 ```sh
-./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug :app:compileDebugAndroidTestKotlin :app:assembleDebug --no-daemon --offline
+./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug :neural-runtime:lintDebug :app:compileDebugAndroidTestKotlin :app:assembleDebug --no-daemon
 ```
 
-- Final local run: BUILD SUCCESSFUL,7m8s,79 actionable tasks (30 executed,49 up-to-date).
-- JVM:614 tests,0 failures,0 errors,1 skipped. The skipped existing host-environment test requires a different host-dev fixture.
-- Lint: no new issues; existing baseline was not expanded.1383 historical issues and2 hints remain filtered.
+- Final local run: BUILD SUCCESSFUL,4m30s,120 actionable tasks (42 executed,78 up-to-date).
+- JVM:615 tests,0 failures,0 errors,1 skipped. The skipped existing host-environment test requires a different host-dev fixture.
+- Lint: no new issues; existing baseline was not expanded.1380 historical issues and2 hints remain filtered.
 - Android instrumentation sources compiled; instrumentation/device tests NOT RUN.
 - Native Android AEC3 four-ABI build passed in the preceding frozen source gate; native C++ sources did not change afterward.
 - Native host CTest1/1 passed. This does not measure phone echo suppression.
@@ -26,6 +26,16 @@ The final local source tree passed the following command with JDK17 / SDK36:
 Detailed machine-readable evidence: [LOCAL_RESULTS.json](verification/LOCAL_RESULTS.json).
 
 The first full lint run failed with25 findings; static context references became weak references and actual resource/layout/KTX findings were fixed, without adding baseline suppressions. A subsequent TTS-picker KTX finding was fixed. One new protocol test initially used Android’s stub JSONObject; it was corrected to use the real Gson parser and the full suite rerun. An initial native build lacked NDK cpufeatures include/source; the CMake integration was corrected before passing all four ABI builds.
+
+## LiteRT CI compatibility follow-up
+
+The first main CI run [43856428097](https://github.com/levinhocall/Jarvis-os/actions/runs/43856428097) passed unit/migration/schema/test-source checks; lint failed the online dependency advisory for LiteRT1.4.0. Android LiteRT is now2.3.2, via the small Java-only `neural-runtime` module. The retained Interpreter API compiled successfully without exporting optional SDK Kotlin2.4 metadata to the application's Kotlin2.2.20/Room toolchain. No metadata checks were disabled and the lint baseline was not expanded. Four lifecycle declarations were aligned to2.10.0 already selected transitively by this SDK.
+
+Both app and module lint tasks completed successfully. The library lint analyzer nevertheless prints incompatible optional Kotlin2.4 metadata diagnostics (its embedded analyzer expects2.1); these are an unresolved tooling limitation, not a claim of warning-free analysis. App compilation and all615 JVM tests completed. Android runtime smoke test sources compiled but were NOT EXECUTED; host Python LiteRT2.3.0 successfully opened the pinned model contracts and is not a substitute for Android2.3.2 JNI testing.
+
+SDK2.3.2 omits plain x86; that ABI explicitly retains existing Vosk wake recognition. ARM32/ARM64/x86_64 neural wake selection remains opt-in. Unused SDK AiPack services/receiver and its dataSync permission were removed through manifest merging; their absence was checked in the compiled APK. No existing foreground service was removed. The final local APK signature, identity and16KB ZIP alignment were reverified; all ARM64 ELF libraries remain≥16KB aligned.
+
+Local follow-up log: `work/maya-litert-boundary-verification.log`; host model check: `work/litert-upgrade/host-model-smoke.log`. These generated workspace logs are not committed; the machine-readable evidence records the checked source digest, counts and APK hash. A newly published CI APK will have separate CI signing/hash evidence.
 
 ## Device and service limitations
 
@@ -131,3 +141,8 @@ The actual MAYA APK/extracted tree is missing. See [primary-source audit](VOICE_
 - [docs/parity/verification/LOCAL_RESULTS.json](../../docs/parity/verification/LOCAL_RESULTS.json)
 - [scripts/neural-model-requirements.txt](../../scripts/neural-model-requirements.txt)
 - [scripts/verify-neural-models.py](../../scripts/verify-neural-models.py)
+
+- [settings.gradle.kts](../../settings.gradle.kts)
+- [neural-runtime/build.gradle.kts](../../neural-runtime/build.gradle.kts)
+- [neural-runtime/src/main/AndroidManifest.xml](../../neural-runtime/src/main/AndroidManifest.xml)
+- [neural-runtime/src/main/java/com/jarvis/assistant/neural/WakeInterpreter.java](../../neural-runtime/src/main/java/com/jarvis/assistant/neural/WakeInterpreter.java)

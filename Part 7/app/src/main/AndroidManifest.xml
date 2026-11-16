@@ -30,6 +30,9 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 
+    <!-- Only bundled CPU inference is used; LiteRT AiPack downloading is not enabled. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" tools:node="remove" />
+
     <queries>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
         <package android:name="com.termux" />
@@ -40,6 +43,7 @@
 
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
+    <!-- AiPack is unused: bundled CPU models never register Play asset-extraction components. -->
     <application
         android:name=".JarvisApp"
         android:allowBackup="false"
@@ -50,6 +54,7 @@
         android:theme="@style/Theme.JarvisAssistant"
         android:hardwareAccelerated="true"
         android:networkSecurityConfig="@xml/network_security_config">
+
 
         <activity android:name=".ui.directives.WakeWordActivity" android:exported="false" />
         <activity android:name=".emergency.EmergencyContactActivity" android:exported="false" />

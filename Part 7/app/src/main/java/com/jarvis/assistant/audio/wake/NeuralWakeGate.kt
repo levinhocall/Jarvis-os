@@ -2,6 +2,10 @@ package com.jarvis.assistant.audio.wake
 
 /** Pure decision policy; probabilities come only from the trained classifier. */
 class NeuralWakeGate {
+    companion object {
+        /** LiteRT 2.3.2 ships these Android ABIs; plain x86 keeps the existing Vosk path. */
+        fun supportsRuntime(abis: List<String>): Boolean = abis.any { it in setOf("arm64-v8a","armeabi-v7a","x86_64") }
+    }
     private var warmup = 0
     private var positives = 0
     private var lastDetection = Long.MIN_VALUE

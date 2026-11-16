@@ -20,4 +20,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "JARVIS-Part-7"
-include(":app")
+include(":app", ":neural-runtime")

@@ -1,7 +1,7 @@
 package com.jarvis.assistant.audio.wake
 
 import android.content.res.AssetManager
-import org.tensorflow.lite.Interpreter
+import com.jarvis.assistant.neural.WakeInterpreter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
@@ -11,10 +11,10 @@ import java.security.MessageDigest
  * Model provenance and noncommercial weight license: assets/licenses/openwakeword-NOTICE.txt.
  */
 class OpenWakeWordPipeline(assets: AssetManager) : AutoCloseable {
-    private val interpreters = mutableListOf<Interpreter>()
-    private val mel: Interpreter
-    private val embedding: Interpreter
-    private val classifier: Interpreter
+    private val interpreters = mutableListOf<WakeInterpreter>()
+    private val mel: WakeInterpreter
+    private val embedding: WakeInterpreter
+    private val classifier: WakeInterpreter
     private var speech: SileroSpeechGate? = null
     val hasRecentSpeech: Boolean get() = speech?.speechRecent == true
     private fun buffer(floats: Int) = ByteBuffer.allocateDirect(floats * 4).order(ByteOrder.nativeOrder())
@@ -33,22 +33,22 @@ class OpenWakeWordPipeline(assets: AssetManager) : AutoCloseable {
     init {
         check(android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) { "Load wake models off-main." }
         try {
-            fun load(name: String, sha: String): Interpreter {
+            fun load(name: String, sha: String): WakeInterpreter {
                 val bytes = assets.open("openwakeword/$name").use { it.readBytes() }
                 val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
                     .joinToString("") { "%02x".format(it) }
                 check(digest == sha) { "Wake model integrity failed: $name" }
                 val data = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); rewind() }
-                return Interpreter(data, Interpreter.Options().setNumThreads(1)).also(interpreters::add)
+                return WakeInterpreter(data).also(interpreters::add)
             }
             mel = load("melspectrogram.tflite", "96fa0adccb6e8cf95cb14465409a1a2898ee4a96a85bb9ed3c7eb0e68bf163e8")
             mel.resizeInput(0, intArrayOf(1,1760)); mel.allocateTensors()
             embedding = load("embedding_model.tflite", "c0aea21eb84a4ce90a08c870da41b7a7173b45269e6a3207c71d67c40f3a59d8")
             classifier = load("hey_jarvis_v0.1.tflite", "14bff778604985e1b5c19f0f7bbe477a69cf281d8db34b232b3b972411f710e2")
-            check(mel.getOutputTensor(0).numElements() == 256)
-            check(embedding.getInputTensor(0).shape().contentEquals(intArrayOf(1,76,32,1)))
-            check(embedding.getOutputTensor(0).numElements() == 96)
-            check(classifier.getInputTensor(0).shape().contentEquals(intArrayOf(1,16,96)))
+            check(mel.outputElements(0) == 256)
+            check(embedding.inputShape(0).contentEquals(intArrayOf(1,76,32,1)))
+            check(embedding.outputElements(0) == 96)
+            check(classifier.inputShape(0).contentEquals(intArrayOf(1,16,96)))
             speech = SileroSpeechGate(assets)
         } catch (error: Throwable) {
             interpreters.forEach { runCatching { it.close() } }

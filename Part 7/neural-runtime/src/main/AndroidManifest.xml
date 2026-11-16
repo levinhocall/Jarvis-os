@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- SDK-only cleanup belongs at this boundary; no AiPack/download component is exposed. -->
+    <application>
+        <service android:name="com.google.android.play.core.assetpacks.AssetPackExtractionService" tools:node="remove" />
+        <service android:name="com.google.android.play.core.assetpacks.ExtractionForegroundService" tools:node="remove" />
+        <receiver android:name="com.google.android.play.core.assetpacks.SessionStateBroadcastReceiver" tools:node="remove" />
+    </application>
+</manifest>

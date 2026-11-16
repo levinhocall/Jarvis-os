@@ -1,4 +1,6 @@
 # Host-only verification. These packages are not bundled in the APK.
-ai-edge-litert==1.4.0
+# Android uses 2.3.2; the latest published Python distribution is 2.3.0.
+# Host smoke verifies this version family, not Android JNI runtime execution.
+ai-edge-litert==2.3.0
 onnxruntime==1.23.2
 numpy==2.5.5

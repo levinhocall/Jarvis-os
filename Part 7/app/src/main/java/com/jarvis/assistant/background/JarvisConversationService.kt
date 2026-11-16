@@ -4030,7 +4030,8 @@ class JarvisConversationService : Service() {
         if (!_isStandby.value || wakeStopping) return
         if (voskSpeechService != null || neuralWakeRecorder != null || wakeOwnershipWaitJob?.isActive == true) return
         val wakeSettings = com.jarvis.assistant.audio.wake.WakeSettings(this)
-        if (wakeSettings.neuralEngine && wakeSettings.name == "jarvis" && !preferences.isOwnerVoiceEnabled) {
+        if (wakeSettings.neuralEngine && wakeSettings.name == "jarvis" && !preferences.isOwnerVoiceEnabled &&
+            com.jarvis.assistant.audio.wake.NeuralWakeGate.supportsRuntime(android.os.Build.SUPPORTED_ABIS.toList())) {
             startNeuralWakeListening()
             return
         }
