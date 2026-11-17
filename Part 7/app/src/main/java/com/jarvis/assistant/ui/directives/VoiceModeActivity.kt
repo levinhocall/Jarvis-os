@@ -85,6 +85,20 @@ class VoiceModeActivity : AppCompatActivity() {
             if (JarvisConversationService.isSessionOn.value) JarvisConversationService.interruptPlayback() else startVoice()
         }
         binding.voiceOrb.setOnLongClickListener { openAppearance(); true }
+        binding.keyboardVoice.setOnClickListener {
+            val input = android.widget.EditText(this).apply {
+                hint = getString(R.string.neural_keyboard)
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                maxLines = 5
+            }
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.neural_keyboard).setView(input)
+                .setPositiveButton(R.string.neural_send) { _, _ ->
+                    val text = input.text.toString().trim()
+                    if (text.isNotEmpty() && JarvisConversationService.voicePresentation.value.connection == com.jarvis.assistant.data.model.VoiceConnection.LIVE)
+                        JarvisConversationService.sendTextMessage(text)
+                }.setNegativeButton(android.R.string.cancel, null).show()
+        }
         binding.startVoice.setOnClickListener { startVoice() }
         binding.interruptVoice.setOnClickListener { JarvisConversationService.interruptPlayback() }
         binding.muteVoice.setOnClickListener {
@@ -115,10 +129,14 @@ class VoiceModeActivity : AppCompatActivity() {
                     binding.permissionSettings.visibility = if (localExplanation == R.string.plasma_permission) View.VISIBLE else View.GONE
                     if (binding.voiceReason.text.toString() != reason) binding.voiceReason.text = reason
                     binding.startVoice.visibility = if (facts.active) View.GONE else View.VISIBLE
+                    binding.keyboardVoice.isEnabled = facts.active && facts.connection == com.jarvis.assistant.data.model.VoiceConnection.LIVE
                     binding.endVoice.isEnabled = facts.active
                     binding.interruptVoice.isEnabled = facts.active
                     val muteLabel = getString(if (prefs.isMicMuted) R.string.plasma_unmute else R.string.plasma_mute)
                     if (binding.muteVoice.text.toString() != muteLabel) binding.muteVoice.text = muteLabel
+                } }
+                launch { com.jarvis.assistant.automation.mission.MissionEngine.activeMission.collect { mission ->
+                    binding.missionStatus.visibility = if (mission?.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING) View.VISIBLE else View.GONE
                 } }
                 launch { JarvisConversationService.liveUserTranscript.collect { binding.userTranscript.text = it.ifBlank { getString(R.string.plasma_transcript_empty) } } }
                 launch { JarvisConversationService.liveAssistantResponse.collect { binding.assistantTranscript.text = it } }

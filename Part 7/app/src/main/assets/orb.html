@@ -65,6 +65,7 @@ html, body {
 
 <script src="three.min.js"></script>
 <script src="eye-behavior.js"></script>
+<script src="neural-wave.js"></script>
 <script src="plasma-orb.js"></script>
 <script>
 (function(){
@@ -77,9 +78,9 @@ if (isEmbedded) {
 }
 
 // Select before allocating any legacy eye geometry. Only one scene owns this canvas.
-if (new URLSearchParams(location.search).get('mode') === 'fluid_plasma') {
+if (['fluid_plasma','neural_wave'].includes(new URLSearchParams(location.search).get('mode'))) {
   document.querySelector('#shadow').style.display='none';
-  window.JarvisOrb=window.createJarvisPlasma(document.querySelector('#c'));
+  window.JarvisOrb=window.createJarvisPlasma(document.querySelector('#c'),new URLSearchParams(location.search).get('mode')==='neural_wave');
   window.addEventListener('pagehide',()=>window.JarvisOrb.dispose(),{once:true});
   return;
 }

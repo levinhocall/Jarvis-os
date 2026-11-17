@@ -17,6 +17,7 @@
       if (p.sessionId !== this.session || p.generation !== this.generation || p.state === 'INTERRUPTED') {
         this.output = 0; this.mic = 0; this.targetOutput = 0;
       }
+      if(p.state !== 'AI_SPEAKING'){this.output=0;this.targetOutput=0;}
       this.session = p.sessionId; this.generation = p.generation; this.state = p.state;
       this.targetMic = ['LISTENING','USER_SPEAKING'].includes(p.state) ? clamp(p.mic) : 0;
       this.targetOutput = p.state === 'AI_SPEAKING' ? clamp(p.output) : 0;
@@ -87,12 +88,12 @@
       c=vec3(1.)-exp(-c*1.25);
       gl_FragColor=vec4(pow(max(c,vec3(0.)),vec3(1./2.2)),alpha);
     }`;
-  function create(canvas) {
+  function create(canvas, neural = false) {
     const THREE = root.THREE;
     const motion = new PlasmaMotion();
     let renderer, disposed = false, failed = false, visible = true, reduced = false;
     let frame = 0, last = 0, budget = 1000/60, slow = 0, frames = 0, degraded = false;
-    let speed = 1;
+    let speed = 1, responsiveness=1, density=1, compact=false, executionTarget=0;
     const fail = () => {
       if (disposed || failed) return;
       failed = true; cancelAnimationFrame(frame);
@@ -104,13 +105,24 @@
     const uniforms = {
       resolution:{value:new THREE.Vector2(1,1)}, time:{value:0}, energy:{value:.35}, audio:{value:0},
       processing:{value:0}, concern:{value:0}, offline:{value:0}, quality:{value:1},
-      intensity:{value:1}, glow:{value:1}, orbSize:{value:1},
+      executing:{value:0}, intensity:{value:1}, glow:{value:1}, orbSize:{value:1},
       cyan:{value:linear('#00E5FF')}, blue:{value:linear('#008CFF')}, ice:{value:linear('#A5F3FF')}, whiteLight:{value:linear('#E8FCFF')}
     };
     const scene = new THREE.Scene(), camera = new THREE.Camera();
     const geometry = new THREE.PlaneGeometry(2,2);
-    const material = new THREE.ShaderMaterial({uniforms,vertexShader:vertex,fragmentShader:fragment,transparent:true,depthTest:false,depthWrite:false});
+    const material = new THREE.ShaderMaterial({uniforms,vertexShader:vertex,fragmentShader:neural?root.JarvisNeuralWave.fragment:fragment,transparent:true,depthTest:false,depthWrite:false});
     scene.add(new THREE.Mesh(geometry,material));
+    let particleGeometry, particleMaterial;
+    if(neural){
+      const count=2800,positions=new Float32Array(count*3),seeds=new Float32Array(count);
+      for(let i=0;i<count;i++){const index=(i*1597)%count,z=1-2*(index+.5)/count,a=index*2.3999632297,r=Math.sqrt(1-z*z);
+        positions[i*3]=r*Math.cos(a);positions[i*3+1]=r*Math.sin(a);positions[i*3+2]=z;seeds[i]=i+1;}
+      particleGeometry=new THREE.BufferGeometry();particleGeometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+      particleGeometry.setAttribute('seed',new THREE.BufferAttribute(seeds,1));
+      particleMaterial=new THREE.ShaderMaterial({uniforms,vertexShader:root.JarvisNeuralWave.particleVertex,fragmentShader:root.JarvisNeuralWave.particleFragment,transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending});
+      const particles=new THREE.Points(particleGeometry,particleMaterial);particles.frustumCulled=false;scene.add(particles);
+    }
+    function particleBudget(){if(particleGeometry)particleGeometry.setDrawRange(0,Math.round((degraded?480:compact?1200:2800)*density));}
     function resize() {
       if (disposed || failed) return;
       const w=Math.max(1,canvas.clientWidth), h=Math.max(1,canvas.clientHeight);
@@ -124,15 +136,16 @@
       if(!reduced && budget<20){slow=elapsed>24?slow+1:Math.max(0,slow-1);if(slow>=30)lowerQuality();}
       last=now;motion.tick(Math.min(elapsed/1000,.08),now);
       uniforms.time.value=motion.time*speed;
+      uniforms.executing.value=reduced?executionTarget:uniforms.executing.value+(executionTarget-uniforms.executing.value)*(1-Math.exp(-elapsed/250));
       uniforms.energy.value=motion.energy;uniforms.processing.value=motion.process;
       uniforms.concern.value=motion.error;uniforms.offline.value=motion.disconnected;
-      uniforms.audio.value=reduced?0:Math.max(motion.mic*(motion.state==='USER_SPEAKING'?.8:.18),motion.output);
+      uniforms.audio.value=reduced?0:Math.max(motion.mic*(motion.state==='USER_SPEAKING'?.8:.18),motion.output)*responsiveness;
       try { renderer.render(scene,camera);frames++; } catch(_){fail();}
       if(!reduced)schedule();
     }
     function schedule(){if(!frame && !disposed && !failed && visible && !document.hidden)frame=requestAnimationFrame(n=>{frame=0;draw(n);});}
     function dirty(){schedule();}
-    function lowerQuality(){degraded=true;uniforms.quality.value=0;budget=1000/30;renderer.setPixelRatio(Math.min(devicePixelRatio||1,1));}
+    function lowerQuality(){degraded=true;particleBudget();uniforms.quality.value=0;budget=1000/30;renderer.setPixelRatio(Math.min(devicePixelRatio||1,1));}
     function setVisible(value){visible=!!value;cancelAnimationFrame(frame);frame=0;last=0;if(visible)dirty();}
     function visibility(){setVisible(visible);}
     function lost(event){event.preventDefault();fail();}
@@ -154,11 +167,14 @@
       },
       setVisible,
       setReducedMotion(value){reduced=!!value;motion.reduced=reduced;cancelAnimationFrame(frame);frame=0;last=0;dirty();},
-      configure(o){for(const [key,name,min,max] of [['intensity','intensity',.3,1.5],['glow','glow',0,1.5],['size','orbSize',.7,1.15]])if(Number.isFinite(o[key]))uniforms[name].value=Math.max(min,Math.min(max,o[key]));if(Number.isFinite(o.speed))speed=Math.max(.4,Math.min(1.6,o.speed));if(o.quality==='saver')lowerQuality();resize();},
+      configure(o){compact=o.presentation==='compact';if(Number.isFinite(o.density))density=clamp(o.density);if(Number.isFinite(o.responsiveness))responsiveness=clamp(o.responsiveness);
+        const palettes={cyan:['#00E5FF','#008CFF'],violet:['#A580FF','#5937FF'],amber:['#FFC15A','#FF7800'],red:['#FF6A83','#CE244B']};
+        const palette=palettes[o.palette]||palettes.cyan;uniforms.cyan.value.copy(linear(palette[0]));uniforms.blue.value.copy(linear(palette[1]));particleBudget();
+        for(const [key,name,min,max] of [['intensity','intensity',.3,1.5],['glow','glow',0,1.5],['size','orbSize',.7,1.15]])if(Number.isFinite(o[key]))uniforms[name].value=Math.max(min,Math.min(max,o[key]));if(Number.isFinite(o.speed))speed=Math.max(.4,Math.min(1.6,o.speed));if(o.quality==='saver')lowerQuality();resize();},
       // Legacy host calls cannot replace the authoritative presentation in this mode.
-      setState(){},setExternalAudio(){},setTheme(){},setBackground(){},
-      inspect:()=>({mode:'fluid_plasma',state:motion.state,mic:motion.mic,output:motion.output,frames,visible,reduced,failed,disposed,degraded,programs:renderer.info.programs.length,geometries:renderer.info.memory.geometries,targetHz:Math.round(1000/budget)}),
-      dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);if(observer)observer.disconnect();window.removeEventListener('resize',resize);document.removeEventListener('visibilitychange',visibility);canvas.removeEventListener('webglcontextlost',lost);geometry.dispose();material.dispose();renderer.dispose();renderer.forceContextLoss();}
+      setExecuting(value){const next=value?1:0;if(next===executionTarget)return;executionTarget=next;dirty();},setState(){},setExternalAudio(){},setTheme(){},setBackground(){},
+      inspect:()=>({mode:neural?'neural_wave':'fluid_plasma',particles:particleGeometry?particleGeometry.drawRange.count:0,audio:uniforms.audio.value,executing:executionTarget,state:motion.state,mic:motion.mic,output:motion.output,frames,visible,reduced,failed,disposed,degraded,programs:renderer.info.programs.length,geometries:renderer.info.memory.geometries,targetHz:Math.round(1000/budget)}),
+      dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);if(observer)observer.disconnect();window.removeEventListener('resize',resize);document.removeEventListener('visibilitychange',visibility);canvas.removeEventListener('webglcontextlost',lost);geometry.dispose();material.dispose();if(particleGeometry)particleGeometry.dispose();if(particleMaterial)particleMaterial.dispose();renderer.dispose();renderer.forceContextLoss();}
     };
     resize();
     try { renderer.compile(scene,camera); renderer.render(scene,camera);

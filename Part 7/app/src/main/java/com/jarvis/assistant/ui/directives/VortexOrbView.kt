@@ -17,7 +17,7 @@ class VortexOrbView @JvmOverloads constructor(context: Context, attrs: Attribute
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         addView(web, LayoutParams(-1, -1))
-        host = OrbWebHost(this, web)
+        host = OrbWebHost(this, web, compact = false)
     }
     fun submit(facts: VoicePresentationSnapshot) = host.submit(facts)
     override fun onStart(owner: LifecycleOwner) { host.setVisible(true) }

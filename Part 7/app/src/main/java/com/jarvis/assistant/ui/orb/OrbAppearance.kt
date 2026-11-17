@@ -7,9 +7,10 @@ import com.jarvis.assistant.JarvisApp
 import org.json.JSONObject
 
 object OrbAppearance {
-    /** Missing key preserves the installed legacy renderer and all old appearance options. */
-    fun rendererMode(): String = if (runCatching { JSONObject(JarvisApp.instance.preferences.orbEyeOptions)
-        .optString("renderer") }.getOrNull() == "fluid_plasma") "fluid_plasma" else "legacy"
+    /** Neural Wave replaces the old default; explicit saved renderer choices remain selectable. */
+    fun rendererMode(): String = runCatching { JSONObject(JarvisApp.instance.preferences.orbEyeOptions)
+        .optString("renderer", "neural_wave") }.getOrDefault("neural_wave")
+        .takeIf { it in setOf("legacy", "fluid_plasma", "neural_wave") } ?: "neural_wave"
 
     fun configuration(context: Context): JSONObject {
         val prefs = JarvisApp.instance.preferences
@@ -17,10 +18,11 @@ object OrbAppearance {
         val low = context.getSystemService(ActivityManager::class.java).isLowRamDevice
         val saver = context.getSystemService(PowerManager::class.java).isPowerSaveMode || prefs.powerProfile == "saver"
         val result = JSONObject()
-        for ((key, range) in mapOf("intensity" to (0.3..1.5), "glow" to (0.0..1.5), "density" to (0.0..1.0), "movement" to (0.0..1.0), "speed" to (0.4..1.6), "size" to (0.7..1.15))) {
+        for ((key, range) in mapOf("intensity" to (0.3..1.5), "glow" to (0.0..1.5), "density" to (0.0..1.0), "responsiveness" to (0.0..1.0), "movement" to (0.0..1.0), "speed" to (0.4..1.6), "size" to (0.7..1.15))) {
             val value = stored.optDouble(key, 1.0)
             result.put(key, if(value.isFinite()) value.coerceIn(range.start, range.endInclusive) else 1.0)
         }
+        result.put("palette", stored.optString("neuralPalette", "cyan"))
         result.put("blink", stored.optBoolean("blink", true))
         result.put("quality", if(saver || low) "saver" else prefs.powerProfile)
         if (saver || low) result.put("density", minOf(result.getDouble("density"), 0.3))

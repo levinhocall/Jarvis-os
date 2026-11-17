@@ -57,7 +57,7 @@ class AuraControlActivity : AppCompatActivity() {
             for ((key, title, min, max) in listOf(
                 listOf("intensity", "Visual intensity", "0.3", "1.5"), listOf("glow", "Glow", "0", "1.5"),
                 listOf("density", "Particle density", "0", "1"), listOf("movement", "Eye movement", "0", "1"),
-                listOf("speed", "Animation speed", "0.4", "1.6"), listOf("size", "Orb size", "0.7", "1.15")
+                listOf("responsiveness", "Audio responsiveness", "0.0", "1.0"), listOf("speed", "Animation speed", "0.4", "1.6"), listOf("size", "Orb size", "0.7", "1.15")
             )) {
                 val low = min.toDouble(); val high = max.toDouble()
                 panel.addView(TextView(this).apply { text = title; setTextColor(color(R.attr.themeTextPrimary)) })
@@ -71,18 +71,27 @@ class AuraControlActivity : AppCompatActivity() {
                     })
                 })
             }
-            MaterialAlertDialogBuilder(this).setTitle("Living holographic eye")
+            MaterialAlertDialogBuilder(this).setTitle("Orb motion and lighting")
                 .setView(android.widget.ScrollView(this).apply { addView(panel) }).setPositiveButton("Done", null).show()
         })
         root.addView(action(getString(R.string.plasma_renderer_title)) {
             val options = runCatching { org.json.JSONObject(preferences.orbEyeOptions) }.getOrDefault(org.json.JSONObject())
-            val labels = arrayOf(getString(R.string.plasma_renderer_legacy), getString(R.string.plasma_renderer_fluid))
+            val labels = arrayOf(getString(R.string.plasma_renderer_legacy), getString(R.string.plasma_renderer_fluid), getString(R.string.neural_renderer))
             MaterialAlertDialogBuilder(this).setTitle(R.string.plasma_renderer_title)
-                .setSingleChoiceItems(labels, if (options.optString("renderer") == "fluid_plasma") 1 else 0) { dialog, choice ->
-                    options.put("renderer", if (choice == 1) "fluid_plasma" else "legacy")
+                .setSingleChoiceItems(labels, arrayOf("legacy", "fluid_plasma", "neural_wave").indexOf(com.jarvis.assistant.ui.orb.OrbAppearance.rendererMode())) { dialog, choice ->
+                    options.put("renderer", arrayOf("legacy", "fluid_plasma", "neural_wave")[choice])
                     preferences.orbEyeOptions = options.toString()
                     renderSelection()
                     dialog.dismiss()
+                }.setNegativeButton(android.R.string.cancel, null).show()
+        })
+        root.addView(action(getString(R.string.neural_palette)) {
+            val options = runCatching { org.json.JSONObject(preferences.orbEyeOptions) }.getOrDefault(org.json.JSONObject())
+            val values = arrayOf("cyan", "violet", "amber", "red")
+            MaterialAlertDialogBuilder(this).setTitle(R.string.neural_palette)
+                .setSingleChoiceItems(arrayOf("JARVIS Cyan", "Violet Quantum", "Amber HUD", "Red Arc Reactor"), values.indexOf(options.optString("neuralPalette", "cyan"))) { dialog, index ->
+                    preferences.orbEyeOptions = options.put("neuralPalette", values[index]).put("renderer", "neural_wave").toString()
+                    renderSelection(); dialog.dismiss()
                 }.setNegativeButton(android.R.string.cancel, null).show()
         })
         root.addView(action("Background power policy") {
@@ -162,6 +171,10 @@ class AuraControlActivity : AppCompatActivity() {
     }
 
     private fun renderSelection() {
+        if (com.jarvis.assistant.ui.orb.OrbAppearance.rendererMode() == "neural_wave") {
+            selected.setText(R.string.neural_renderer)
+            return
+        }
         if (com.jarvis.assistant.ui.orb.OrbAppearance.rendererMode() == "fluid_plasma") {
             selected.setText(R.string.plasma_renderer_fluid)
             return

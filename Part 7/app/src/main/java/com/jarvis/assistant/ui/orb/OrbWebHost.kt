@@ -14,11 +14,13 @@ import com.jarvis.assistant.data.model.VoicePresentationSnapshot
 import com.jarvis.assistant.ui.directives.PremiumOrbView
 import com.jarvis.assistant.util.VisualMotionSettings
 import org.json.JSONObject
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 import java.io.ByteArrayInputStream
 
 /** One local-only host per screen. No audio, service, navigation or accessibility bridge. */
 @SuppressLint("SetJavaScriptEnabled")
-class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
+class OrbWebHost(private val container: FrameLayout, private val web: WebView, private val compact: Boolean = true) {
     private val handler = Handler(Looper.getMainLooper())
     private var ready = false
     private var destroyed = false
@@ -46,12 +48,15 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
             web.context.contentResolver.unregisterContentObserver(policyObserver)
         }
     }
+    private val visualScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+    private var missionJob: kotlinx.coroutines.Job? = null
+    private var executing = false
     private var loadedMode = ""
     private var theme = "dark"
     private var customBackground: String? = null
     private var snapshot = VoicePresentationSnapshot()
     private var fallback: PremiumOrbView? = null
-    val isPlasma get() = loadedMode == "fluid_plasma"
+    val isPlasma get() = loadedMode in setOf("fluid_plasma", "neural_wave")
     private val push = Runnable { scheduled = false; sendLatest() }
     private val timeout = Runnable { fail() }
     private val loader = WebViewAssetLoader.Builder()
@@ -106,7 +111,7 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
     private fun configure() {
         fallback?.configure(OrbAppearance.configuration(container.context))
         if (!ready || failed || destroyed) return
-        val config = OrbAppearance.configuration(web.context)
+        val config = OrbAppearance.configuration(web.context).put("presentation", if (compact) "compact" else "full")
         web.evaluateJavascript("JarvisOrb.configure($config);JarvisOrb.setReducedMotion(${VisualMotionSettings.isReduced(web.context)});", null)
         setTheme(theme, customBackground)
     }
@@ -138,7 +143,7 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
         if (isPlasma) {
             val json = JSONObject().put("state", p.state.name).put("mic", p.mic).put("output", p.output)
                 .put("sessionId", p.sessionId).put("generation", p.interruptionGeneration)
-            web.evaluateJavascript("JarvisOrb.setPresentation($json);", null)
+            web.evaluateJavascript("JarvisOrb.setPresentation($json);JarvisOrb.setExecuting($executing);", null)
         } else {
             val state = when (p.state) {
                 PlasmaVisualState.LISTENING, PlasmaVisualState.USER_SPEAKING, PlasmaVisualState.INTERRUPTED -> "listening"
@@ -154,6 +159,14 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
     fun setVisible(value: Boolean) {
         if (destroyed) return
         visible = value
+        if (value && missionJob == null) missionJob = visualScope.launch {
+            com.jarvis.assistant.automation.mission.MissionEngine.activeMission.collect { mission ->
+                executing = mission?.status == com.jarvis.assistant.automation.mission.MissionOverallStatus.EXECUTING
+                fallback?.executing = executing
+                sendLatest()
+            }
+        }
+        if (!value) { missionJob?.cancel(); missionJob = null }
         observePolicy(value)
         fallback?.let {
             it.renderingActive = value; it.visibility = if (value) View.VISIBLE else View.INVISIBLE
@@ -174,7 +187,7 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
         web.visibility = View.INVISIBLE
         // Initialization/context failure affects visuals only. Controls and voice owner survive.
         fallback = PremiumOrbView(container.context).also {
-            it.plasmaMode = isPlasma; it.renderingActive = visible; it.configure(OrbAppearance.configuration(container.context)); it.submit(snapshot)
+            it.neuralMode = loadedMode == "neural_wave"; it.plasmaMode = isPlasma; it.renderingActive = visible; it.configure(OrbAppearance.configuration(container.context)); it.submit(snapshot)
             it.visibility = if (visible) View.VISIBLE else View.INVISIBLE
             it.setOnClickListener { container.performClick() }
             it.setOnLongClickListener { container.performLongClick() }
@@ -195,6 +208,7 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView) {
     fun dispose() {
         if (destroyed) return
         observePolicy(false)
+        visualScope.cancel()
         destroyed = true; ready = false
         handler.removeCallbacksAndMessages(null)
         fallback?.let { it.renderingActive = false; container.removeView(it) }; fallback = null

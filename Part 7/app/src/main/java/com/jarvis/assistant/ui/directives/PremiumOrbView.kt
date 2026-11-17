@@ -9,6 +9,12 @@ import kotlin.math.*
 class PremiumOrbView(context: Context) : View(context) {
     var level = 0f
     var plasmaMode = false
+    var neuralMode = false
+    var executing = false
+        set(value) { field = value; invalidate() }
+    private var particleDensity = 1f
+    private var responsiveness = 1f
+    private var neuralColor = Color.CYAN
     var renderingActive = false
         set(value) { field = value; if (value) invalidate() }
     private var presentation = com.jarvis.assistant.data.model.VoicePresentationSnapshot()
@@ -31,6 +37,9 @@ class PremiumOrbView(context: Context) : View(context) {
     private val tint = floatArrayOf(0f, .7f, 1f)
     private val targetTint = floatArrayOf(0f, .7f, 1f)
     fun configure(options: org.json.JSONObject) {
+        particleDensity = options.optDouble("density", 1.0).toFloat().coerceIn(0f, 1f)
+        responsiveness = options.optDouble("responsiveness", 1.0).toFloat().coerceIn(0f, 1f)
+        neuralColor = when (options.optString("palette", "cyan")) { "violet" -> 0xffa580ff.toInt(); "amber" -> 0xffffc15a.toInt(); "red" -> 0xffff6a83.toInt(); else -> 0xff00e5ff.toInt() }
         intensity = options.optDouble("intensity", 1.0).toFloat().coerceIn(.3f, 1.5f)
         glow = options.optDouble("glow", 1.0).toFloat().coerceIn(0f, 1.5f)
         sizeScale = options.optDouble("size", 1.0).toFloat().coerceIn(.7f, 1.15f)
@@ -74,7 +83,7 @@ class PremiumOrbView(context: Context) : View(context) {
         val r = min(width, height) * (.32f + smoothedLevel * .018f) * sizeScale
         paint.style = Paint.Style.FILL; paint.shader = halo; paint.alpha = (130 * glow * brightness).toInt().coerceIn(0, 255)
         canvas.drawCircle(x, y, r * 1.55f, paint)
-        for (layer in 0..3) {
+        if (neuralMode) drawNeural(canvas, x, y, r, reduced, brightness) else for (layer in 0..3) {
             fluidPath.rewind()
             for (i in 0 until 96) {
                 val a = i * (Math.PI * 2 / 96).toFloat()
@@ -96,6 +105,45 @@ class PremiumOrbView(context: Context) : View(context) {
                 com.jarvis.assistant.JarvisApp.instance.preferences.powerProfile == "saver"
             postInvalidateDelayed(if (saver) 66L else 33L)
         }
+    }
+    /** Allocation-free reduced-detail geometry when WebGL is unavailable. */
+    private fun drawNeural(canvas: Canvas, x: Float, y: Float, r: Float, reduced: Boolean, brightness: Float) {
+        val t = if (reduced) 0f else motionSeconds * .2f
+        paint.shader = null
+        for (ring in 0..4) {
+            fluidPath.rewind()
+            val tilt = ring * .65f + t * (ring + 1) * .12f
+            for (i in 0..96) {
+                val a = i * (Math.PI * 2 / 96).toFloat()
+                val rad = r * (1f + .045f * sin(a * 3 + t + ring))
+                val px = cos(a) * rad; val py = sin(a) * rad * (.45f + ring * .1f)
+                val sx = x + px * cos(tilt) - py * sin(tilt)
+                val sy = y + px * sin(tilt) + py * cos(tilt)
+                if (i == 0) fluidPath.moveTo(sx, sy) else fluidPath.lineTo(sx, sy)
+            }
+            paint.style = Paint.Style.STROKE
+            paint.color = if (executing && ring == 0) 0xffffb75c.toInt() else if (ring % 2 == 0) neuralColor else 0xff956aff.toInt()
+            paint.strokeWidth = r * .035f; paint.alpha = (24 * glow * brightness).toInt().coerceIn(0,255); canvas.drawPath(fluidPath, paint)
+            paint.strokeWidth = r * .006f; paint.alpha = (180 * brightness).toInt().coerceIn(0,255); canvas.drawPath(fluidPath, paint)
+        }
+        paint.style = Paint.Style.FILL
+        val count = ((if (saverQuality) 90 else 320) * particleDensity).toInt()
+        for (i in 0 until count) {
+            val z = 1f - 2f * (i + .5f) / count
+            val rr = sqrt(1f-z*z); val a = i * 2.3999632f + t
+            paint.color = if (i % 3 == 0) 0xff956aff.toInt() else neuralColor
+            paint.alpha = ((60 + 120 * rr) * brightness).toInt().coerceIn(0,255)
+            canvas.drawCircle(x + cos(a)*rr*r, y + sin(a)*rr*r, r*.005f*(1+rr), paint)
+        }
+        paint.color = neuralColor; paint.alpha = (220 * brightness).toInt().coerceIn(0,255)
+        val amplitude = if (reduced) 0f else smoothedLevel * responsiveness
+        for (i in -16..16) {
+            val u = i / 16f; val h = r * (.005f + amplitude*.25f*exp(-u*u*3f)*(.35f+.65f*abs(cos(u*10))))
+            canvas.drawRect(x+u*r*.48f-r*.004f,y-h,x+u*r*.48f+r*.004f,y+h,paint)
+        }
+        paint.style = Paint.Style.STROKE; paint.strokeWidth=r*.005f; paint.alpha=(75*glow).toInt().coerceIn(0,255)
+        rect.set(x-r*.95f,y+r*1.2f,x+r*.95f,y+r*1.4f);canvas.drawOval(rect,paint)
+        paint.style = Paint.Style.FILL
     }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()

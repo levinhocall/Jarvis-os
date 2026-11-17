@@ -1,0 +1,36 @@
+{
+  "baseline": "36e1dba503877ffa8b032ded3220730fbee4aa53",
+  "branch": "phaseA/neural-wave-orb",
+  "jvm": {
+    "tests": 615,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "final_gradle": "PASS 2m42s; test task UP-TO-DATE from preceding615-test execution",
+  "lint": "PASS no new issues; unchanged baseline1380 errors/2 hints filtered",
+  "javascript": "PASS14 motion checks, retained plasma/legacy suite, Neural Wave shader/compact/full/state/interruption/lifecycle/failure/disposal suite",
+  "apk_sha256": "286f24eab89546e2880b3a7cb00ec9652d1fae166534632e2bfd3ab3f1581124",
+  "apk_bytes": 294511554,
+  "packaged_renderer_source_match": "PASS",
+  "device_tests": "NOT RUN; adb devices empty",
+  "performance": "NOT MEASURED on Android",
+  "main_push_merge": "NOT PERFORMED",
+  "files": [
+    "Part 7/app/src/main/assets/neural-wave.js",
+    "Part 7/app/src/main/assets/orb.html",
+    "Part 7/app/src/main/assets/plasma-orb.js",
+    "Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/PremiumOrbView.kt",
+    "Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/VoiceModeActivity.kt",
+    "Part 7/app/src/main/java/com/jarvis/assistant/ui/directives/VortexOrbView.kt",
+    "Part 7/app/src/main/java/com/jarvis/assistant/ui/orb/OrbAppearance.kt",
+    "Part 7/app/src/main/java/com/jarvis/assistant/ui/orb/OrbWebHost.kt",
+    "Part 7/app/src/main/java/com/jarvis/assistant/ui/settings/AuraControlActivity.kt",
+    "Part 7/app/src/main/res/layout/activity_voice_mode.xml",
+    "Part 7/app/src/main/res/values/plasma_orb.xml",
+    "Part 7/docs/orb/NEURAL_WAVE.md",
+    "Part 7/docs/orb/neural-wave-desktop.png",
+    "Part 7/docs/orb/neural-wave-verification.json",
+    "Part 7/scripts/test-neural-wave.cjs"
+  ]
+}

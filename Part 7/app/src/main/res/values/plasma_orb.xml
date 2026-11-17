@@ -14,7 +14,7 @@
     <color name="plasma_muted_text">#ACBDD2</color>
     <color name="plasma_warning">#FFC48B</color>
     <string name="plasma_title">JARVIS</string>
-    <string name="plasma_subtitle">LIVE VOICE</string>
+    <string name="plasma_subtitle">NEURAL VOICE INTERFACE</string>
     <string name="plasma_back">Back</string>
     <string name="plasma_settings">Voice settings</string>
     <string name="plasma_permissions_settings">Open app permissions</string>
@@ -48,4 +48,9 @@
     <string name="plasma_home_active_hint">Tap Voice for full-screen controls</string>
     <string name="plasma_home_idle_hint">Tap mic or orb to start</string>
     <string name="plasma_you">You</string>
+    <string name="neural_renderer">Neural Wave</string>
+    <string name="neural_palette">Neural Wave color theme</string>
+    <string name="neural_executing">Executing mission</string>
+    <string name="neural_keyboard">Type a message</string>
+    <string name="neural_send">Send</string>
 </resources>

@@ -31,6 +31,7 @@
                 android:gravity="center" android:paddingHorizontal="24dp" android:text="@string/plasma_idle"
                 android:textColor="@color/plasma_white" android:textSize="24sp" android:fontFamily="sans-serif-light"
                 android:accessibilityLiveRegion="polite" />
+            <TextView android:id="@+id/missionStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="@string/neural_executing" android:textColor="@color/plasma_warning" android:visibility="gone" android:accessibilityLiveRegion="polite" />
             <TextView android:id="@+id/voiceReason" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:gravity="center" android:paddingHorizontal="24dp" android:paddingVertical="12dp"
                 android:textColor="@color/plasma_muted_text" android:textSize="14sp" />
@@ -75,6 +76,7 @@
                 android:minHeight="56dp" android:text="@string/plasma_end" android:textAllCaps="false"
                 android:textColor="@color/plasma_warning" android:backgroundTint="@color/plasma_surface" />
         </LinearLayout>
+        <Button android:id="@+id/keyboardVoice" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp" android:text="@string/neural_keyboard" android:textColor="@color/plasma_ice" android:backgroundTint="@color/plasma_surface" android:textAllCaps="false" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/plasma_background_hint"
             android:textColor="@color/plasma_muted_text" android:gravity="center" android:textSize="12sp" android:paddingTop="8dp" />
     </LinearLayout>
