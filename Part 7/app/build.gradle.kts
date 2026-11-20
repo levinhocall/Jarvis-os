@@ -100,6 +100,9 @@ android {
     lint {
         baseline = file("lint-baseline.xml")
         warningsAsErrors = true
+        // Report upgrade recommendations without making the build depend on today's Maven metadata.
+        // Gradle still validates compatibility when compiling the pinned dependencies.
+        informational += setOf("AndroidGradlePluginVersion", "GradleDependency")
         disable += "NullSafeMutableLiveData"
     }
 }
