@@ -118,9 +118,17 @@ class JarvisAccessibilityService : AccessibilityService() {
 
 
 
+        // takeScreenshot() is rate limited by the system (~1s between requests); a faster request fails
+        // with ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_TOO_SHORT, which used to surface as a null bitmap.
+        @Volatile private var lastScreenshotAt = 0L
+        private const val MIN_SCREENSHOT_INTERVAL_MS = 1_100L
+
         suspend fun captureScreenBitmap(): Bitmap? {
             val s = instance ?: return null
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+            val sinceLast = android.os.SystemClock.elapsedRealtime() - lastScreenshotAt
+            if (sinceLast in 0 until MIN_SCREENSHOT_INTERVAL_MS) delay(MIN_SCREENSHOT_INTERVAL_MS - sinceLast)
+            lastScreenshotAt = android.os.SystemClock.elapsedRealtime()
             return try {
                 withTimeoutOrNull(2000L) {
                     suspendCancellableCoroutine { cont ->
@@ -331,7 +339,6 @@ class JarvisAccessibilityService : AccessibilityService() {
         } catch (t: Throwable) {
             AccessibilityHealthModel.recordIssue(AccessibilityIssue.INTERNAL, connectionToken, fatal = true)
             Log.e(TAG, "Fatal-safe guard caught error in onServiceConnected: ${t.javaClass.simpleName}")
-            AccessibilityHealthModel.recordIssue(AccessibilityIssue.INTERNAL, connectionToken, fatal = true)
         }
     }
 
@@ -613,7 +620,6 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         try {
-            // A service may later rebind; onRebind schedules only the work it still needs.
             handler.removeCallbacksAndMessages(null)
             clearPendingAutomation()
             com.jarvis.assistant.ui.aura.TapIndicator.clear(this)
@@ -621,7 +627,13 @@ class JarvisAccessibilityService : AccessibilityService() {
         } catch (t: Throwable) {
             Log.w(TAG, "onUnbind suppressed error: ${t.javaClass.simpleName}")
         }
-        return true // Allows onRebind to be invoked when system reconnects without destroying service
+        // Must NOT return true: disconnectLifetime() above clears the registered instance, and only
+        // onServiceConnected() re-registers it. With `true` the system calls onRebind() on the same
+        // object instead of onBind(), nothing re-registers the service, and every later action sees
+        // "accessibility not running" until the user toggles the service manually. The default (false)
+        // makes the system destroy this object and bind a fresh one, which goes through
+        // onServiceConnected() normally.
+        return super.onUnbind(intent)
     }
 
     override fun onRebind(intent: Intent?) {
@@ -1411,7 +1423,11 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
         val timeout = Runnable {
             if (owner == connectionToken && instance === this && gestureGate.isActive(ticket)) {
-                // Keep admission blocked: a missing callback is not proof that replay is safe.
+                // No callback arrived. Release admission: previously the gate stayed blocked until a
+                // manual recovery, so ONE lost callback made every later tap/scroll fail with
+                // QUEUE_OVERLOAD. Releasing is safe because the ticket is now stale (a late callback
+                // cannot finish a newer gesture) and callers never auto-replay a timed-out gesture.
+                gestureGate.finish(ticket)
                 AccessibilityHealthModel.recordIssue(AccessibilityIssue.ACTION_TIMEOUT, owner)
             }
         }
