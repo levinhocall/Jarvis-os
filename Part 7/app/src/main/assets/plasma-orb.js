@@ -92,7 +92,7 @@
     const THREE = root.THREE;
     const motion = new PlasmaMotion();
     let renderer, disposed = false, failed = false, visible = true, reduced = false;
-    let frame = 0, last = 0, budget = 1000/60, slow = 0, frames = 0, degraded = false;
+    let frame = 0, last = 0, budget = 1000/60, slow = 0, frames = 0, degraded = false, adaptive = false, saver = false;
     let speed = 1, responsiveness=1, density=1, compact=false, executionTarget=0;
     const fail = () => {
       if (disposed || failed) return;
@@ -145,7 +145,8 @@
     }
     function schedule(){if(!frame && !disposed && !failed && visible && !document.hidden)frame=requestAnimationFrame(n=>{frame=0;draw(n);});}
     function dirty(){schedule();}
-    function lowerQuality(){degraded=true;particleBudget();uniforms.quality.value=0;budget=1000/30;renderer.setPixelRatio(Math.min(devicePixelRatio||1,1));}
+    function applyQuality(){degraded=adaptive||saver;particleBudget();uniforms.quality.value=degraded?0:1;budget=1000/(degraded?30:60);renderer.setPixelRatio(Math.min(devicePixelRatio||1,degraded?1:1.5));}
+    function lowerQuality(){adaptive=true;applyQuality();}
     function setVisible(value){visible=!!value;cancelAnimationFrame(frame);frame=0;last=0;if(visible)dirty();}
     function visibility(){setVisible(visible);}
     function lost(event){event.preventDefault();fail();}
@@ -170,7 +171,7 @@
       configure(o){compact=o.presentation==='compact';if(Number.isFinite(o.density))density=clamp(o.density);if(Number.isFinite(o.responsiveness))responsiveness=clamp(o.responsiveness);
         const palettes={cyan:['#00E5FF','#008CFF'],violet:['#A580FF','#5937FF'],amber:['#FFC15A','#FF7800'],red:['#FF6A83','#CE244B']};
         const palette=palettes[o.palette]||palettes.cyan;uniforms.cyan.value.copy(linear(palette[0]));uniforms.blue.value.copy(linear(palette[1]));particleBudget();
-        for(const [key,name,min,max] of [['intensity','intensity',.3,1.5],['glow','glow',0,1.5],['size','orbSize',.7,1.15]])if(Number.isFinite(o[key]))uniforms[name].value=Math.max(min,Math.min(max,o[key]));if(Number.isFinite(o.speed))speed=Math.max(.4,Math.min(1.6,o.speed));if(o.quality==='saver')lowerQuality();resize();},
+        for(const [key,name,min,max] of [['intensity','intensity',.3,1.5],['glow','glow',0,1.5],['size','orbSize',.7,1.15]])if(Number.isFinite(o[key]))uniforms[name].value=Math.max(min,Math.min(max,o[key]));if(Number.isFinite(o.speed))speed=Math.max(.4,Math.min(1.6,o.speed));if(typeof o.quality==='string'){saver=o.quality==='saver';applyQuality();}resize();},
       // Legacy host calls cannot replace the authoritative presentation in this mode.
       setExecuting(value){const next=value?1:0;if(next===executionTarget)return;executionTarget=next;dirty();},setState(){},setExternalAudio(){},setTheme(){},setBackground(){},
       inspect:()=>({mode:neural?'neural_wave':'fluid_plasma',particles:particleGeometry?particleGeometry.drawRange.count:0,audio:uniforms.audio.value,executing:executionTarget,state:motion.state,mic:motion.mic,output:motion.output,frames,visible,reduced,failed,disposed,degraded,programs:renderer.info.programs.length,geometries:renderer.info.memory.geometries,targetHz:Math.round(1000/budget)}),

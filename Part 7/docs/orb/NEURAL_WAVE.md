@@ -1,6 +1,6 @@
 # Neural Wave implementation
 
-Baseline main: 36e1dba503877ffa8b032ded3220730fbee4aa53. Work is confined to Part 7, on phaseA/neural-wave-orb; no push or main merge authorized for this task.
+Baseline main: 36e1dba503877ffa8b032ded3220730fbee4aa53. Work is confined to Part 7, on phaseA/neural-wave-orb; initial implementation was local; main merge and CI APK delivery subsequently authorized on2026-11-20.
 
 ## Verified existing architecture
 
@@ -45,3 +45,26 @@ Renderer checks passed in desktop Chromium/SwiftShader. [Preview](neural-wave-de
 Choose **Aura Control → Orb renderer → Neural Wave** if an explicit old renderer was saved. New/missing renderer preference uses Neural Wave; old settings and modes remain selectable. Colors: Aura Control → Neural Wave color theme. Existing motion/lighting dialog controls density, glow, intensity, speed, size and responsiveness.
 
 Full changed-file list and artifact hash: [neural-wave-verification.json](neural-wave-verification.json). No CI, remote push or main merge performed for this change.
+
+## Integration follow-up (2026-11-20)
+
+Remote main advanced to ac18291 with Accessibility reconnect/gesture/screenshot fixes. Merged into the orb branch without conflicts; preserved those changes. Added Neural Wave to the top quick-switch menu, copied current execution state into native fallback immediately, and restored configured quality when Android battery saver ends (sustained-load degradation still remains conservative). Added a WebGL saver→balanced regression check. Final combined verification and CI results are reported separately; historical counts above describe the earlier build.
+
+### Phase acceptance status
+
+| Phase | Implementation / verification boundary |
+| --- | --- |
+| 1 Audit | Actual host, renderers, service snapshots, XML and lifecycle traced above. |
+| 2 Visual | Original GPU shell/mesh/trails/envelope core/platform; desktop render verified, Android fidelity pending. |
+| 3 States | Existing authoritative voice mapper, generation rejection and real MissionEngine execution signal; renderer tests passed. |
+| 4 Full-screen | Existing XML controls/transcripts retained; typed input added; Android orientation/TalkBack testing pending. |
+| 5 Home | Shared compact renderer; existing explicit style preferences retained. |
+| 6 Audio | Existing envelopes only; no additional microphone or session; device timing pending. |
+| 7 Performance | Adaptive particle/shader budget, visibility cleanup, saver/reduced-motion and fallback implemented; real hardware FPS/thermal measurements pending. |
+| 8 Settings | Existing preference store; four palettes and density/glow/intensity/speed/size/responsiveness; top quick-switch now includes Neural Wave. |
+| 9 Validation | Host tests/build gates available; connected Android instrumentation and physical-device checks not available. |
+| 10 Delivery | Authorized main integration and CI APK publishing follow successful combined verification. |
+
+This phase table does not assert that the entire historical JARVIS/MAYA roadmap is complete. Pending native/model/biometrics parity items remain tracked in `docs/parity/MAYA_TECHNOLOGY_INTEGRATION.md`.
+
+Combined local gate2026-11-20: BUILD SUCCESSFUL in7m7s,105 tasks (30 executed,75 up-to-date). Fresh JVM615 tests,0 failures/errors,1 skipped. Lint no new issues against unchanged baseline. Neural Wave (including saver restoration), retained WebGL and14 motion checks passed. Signature/package/model/ABI/ZIP checks passed for local APK. Main integration and CI release are now authorized; final published APK gets its own checksum/signature evidence.

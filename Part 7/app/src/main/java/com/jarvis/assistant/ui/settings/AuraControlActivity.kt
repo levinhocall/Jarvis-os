@@ -158,12 +158,12 @@ class AuraControlActivity : AppCompatActivity() {
         selected.setPadding(dp(16),dp(18),dp(16),dp(18))
         selected.contentDescription = "Active orb style. Tap to switch."
         selected.setOnClickListener {
-            val values = arrayOf("fluid_plasma", "classic", "aura", "midnight", "crimson")
-            val labels = arrayOf(getString(R.string.plasma_renderer_fluid), "Classic", "Aura", "Midnight", "Crimson")
+            val values = arrayOf("neural_wave", "fluid_plasma", "classic", "aura", "midnight", "crimson")
+            val labels = arrayOf(getString(R.string.neural_renderer), getString(R.string.plasma_renderer_fluid), "Classic", "Aura", "Midnight", "Crimson")
             MaterialAlertDialogBuilder(this).setTitle(R.string.plasma_renderer_title).setItems(labels) { _, index ->
                 val options = runCatching { org.json.JSONObject(preferences.orbEyeOptions) }.getOrDefault(org.json.JSONObject())
-                preferences.orbEyeOptions = options.put("renderer", if (index == 0) "fluid_plasma" else "legacy").toString()
-                if (index > 0) preferences.orbPreset = values[index]
+                preferences.orbEyeOptions = options.put("renderer", if (index < 2) values[index] else "legacy").toString()
+                if (index > 1) preferences.orbPreset = values[index]
                 renderSelection()
             }.show()
         }

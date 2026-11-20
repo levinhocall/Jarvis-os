@@ -14,6 +14,8 @@ await page.evaluate(()=>{JarvisOrb.configure({presentation:'full',density:1});Ja
 assert.equal(await page.evaluate(()=>JarvisOrb.inspect().particles),2800);
 assert.equal(await page.evaluate(()=>JarvisOrb.inspect().executing),1);
 await page.evaluate(()=>JarvisOrb.setExecuting(false));
+await page.evaluate(()=>JarvisOrb.configure({quality:'saver'}));assert.equal(await page.evaluate(()=>JarvisOrb.inspect().targetHz),30);
+await page.evaluate(()=>JarvisOrb.configure({quality:'balanced'}));assert.equal(await page.evaluate(()=>JarvisOrb.inspect().targetHz),60);
 const sibling=await browser.newPage();await sibling.goto(base+'/orb.html?mode=neural_wave');await sibling.waitForFunction(()=>window.JarvisOrb?.inspect().frames>3);
 await page.evaluate(()=>JarvisOrb.setVisible(false));const siblingBefore=await sibling.evaluate(()=>JarvisOrb.inspect().frames);await sibling.waitForFunction(n=>JarvisOrb.inspect().frames>n,siblingBefore);await page.evaluate(()=>JarvisOrb.setVisible(true));await sibling.close();await page.bringToFront();await page.waitForFunction(()=>!document.hidden);
 for(const state of ['IDLE','LISTENING','USER_SPEAKING','PROCESSING','AI_SPEAKING','INTERRUPTED','ERROR','DISCONNECTED']){await page.evaluate(state=>JarvisOrb.setPresentation({state,sessionId:1,generation:1,mic:.6,output:.7}),state);assert.equal(await page.evaluate(()=>JarvisOrb.inspect().state),state);}

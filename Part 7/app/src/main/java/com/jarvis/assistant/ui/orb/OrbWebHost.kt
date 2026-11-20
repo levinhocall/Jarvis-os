@@ -187,7 +187,7 @@ class OrbWebHost(private val container: FrameLayout, private val web: WebView, p
         web.visibility = View.INVISIBLE
         // Initialization/context failure affects visuals only. Controls and voice owner survive.
         fallback = PremiumOrbView(container.context).also {
-            it.neuralMode = loadedMode == "neural_wave"; it.plasmaMode = isPlasma; it.renderingActive = visible; it.configure(OrbAppearance.configuration(container.context)); it.submit(snapshot)
+            it.executing = executing; it.neuralMode = loadedMode == "neural_wave"; it.plasmaMode = isPlasma; it.renderingActive = visible; it.configure(OrbAppearance.configuration(container.context)); it.submit(snapshot)
             it.visibility = if (visible) View.VISIBLE else View.INVISIBLE
             it.setOnClickListener { container.performClick() }
             it.setOnLongClickListener { container.performLongClick() }

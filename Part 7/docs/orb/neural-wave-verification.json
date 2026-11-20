@@ -7,15 +7,15 @@
     "errors": 0,
     "skipped": 1
   },
-  "final_gradle": "PASS 2m42s; test task UP-TO-DATE from preceding615-test execution",
+  "final_gradle": "PASS7m7s, fresh615-test execution",
   "lint": "PASS no new issues; unchanged baseline1380 errors/2 hints filtered",
   "javascript": "PASS14 motion checks, retained plasma/legacy suite, Neural Wave shader/compact/full/state/interruption/lifecycle/failure/disposal suite",
-  "apk_sha256": "286f24eab89546e2880b3a7cb00ec9652d1fae166534632e2bfd3ab3f1581124",
-  "apk_bytes": 294511554,
+  "apk_sha256": "38cf4afb82b7155df6287da7e4f27a12207b9c3e3783abc2c6d059b0d8036eda",
+  "apk_bytes": 294528006,
   "packaged_renderer_source_match": "PASS",
   "device_tests": "NOT RUN; adb devices empty",
   "performance": "NOT MEASURED on Android",
-  "main_push_merge": "NOT PERFORMED",
+  "main_push_merge": "Authorized2026-11-20, proceeding after successful combined local checks",
   "files": [
     "Part 7/app/src/main/assets/neural-wave.js",
     "Part 7/app/src/main/assets/orb.html",
@@ -32,5 +32,6 @@
     "Part 7/docs/orb/neural-wave-desktop.png",
     "Part 7/docs/orb/neural-wave-verification.json",
     "Part 7/scripts/test-neural-wave.cjs"
-  ]
+  ],
+  "integrated_remote_main": "ac182913310e2189783e08a91f49a1357f1996c0"
 }
