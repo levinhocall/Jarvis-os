@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="workflow_new">New JSON workflow</string>
+    <string name="workflow_editor">Local JSON workflow</string>
+    <string name="workflow_input_hint">Workflow JSON with a name, optional variables and tool steps.</string>
+    <string name="workflow_review">Review workflow</string>
+    <string name="workflow_review_steps">Review the steps below. Each run uses the current permission and approval checks.\n\n%1$s</string>
+    <string name="workflow_start">Start workflow</string>
+    <string name="workflow_save">Save workflow</string>
+    <string name="workflow_saved">Workflow saved on this device.</string>
+    <string name="workflow_invalid">Invalid workflow. Check the tool names, arguments, variables and 24-step limit.</string>
+    <string name="workflow_library">Saved workflows</string>
+    <string name="workflow_library_empty">No saved workflows yet. Review a new workflow and choose Save workflow.</string>
+    <string name="workflow_library_unavailable">Saved workflows could not be accessed. Reopen Mission Mode and try again.</string>
+    <string name="workflow_edit">Edit JSON</string>
+    <string name="workflow_delete">Delete saved workflow</string>
+    <string name="workflow_deleted">Saved workflow deleted.</string>
+</resources>

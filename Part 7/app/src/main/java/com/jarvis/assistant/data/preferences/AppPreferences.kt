@@ -33,6 +33,15 @@ class AppPreferences internal constructor(
     }
     private val gson = Gson()
 
+    internal val savedWorkflows = com.jarvis.assistant.automation.macro.SavedWorkflowLibrary(
+        read = { checkNotNull(secureApiPrefs) { "Encrypted storage unavailable." }.getString("saved_workflows_v1", null) },
+        write = { json ->
+            val secure = checkNotNull(secureApiPrefs) { "Encrypted storage unavailable." }
+            check(secure.edit().putString("saved_workflows_v1", json).commit()) { "Saved workflow write failed." }
+        }
+    )
+
+
     init {
         migrateApiKeyToEncryptedStorage()
         migrateOwnerVoiceToEncryptedStorage()
@@ -723,7 +732,7 @@ class AppPreferences internal constructor(
         val currentList = getApiKeyPool(providerId).toMutableList()
         currentList.removeAll { it.key == cleanKey }
         val storage = secureApiPrefs ?: return
-        storage.edit().putString("key_pool_$providerId", gson.toJson(currentList)).apply()
+        storage.edit { putString("key_pool_$providerId", gson.toJson(currentList)) }
     }
 
     @Synchronized

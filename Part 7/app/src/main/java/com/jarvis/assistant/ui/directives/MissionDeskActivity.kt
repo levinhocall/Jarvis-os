@@ -8,6 +8,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.jarvis.assistant.JarvisApp
+import com.jarvis.assistant.R
+import com.jarvis.assistant.automation.macro.CompiledMacro
+import com.jarvis.assistant.automation.macro.MacroCompiler
+import com.jarvis.assistant.automation.macro.SavedWorkflow
 import com.jarvis.assistant.automation.mission.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -15,33 +19,81 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MissionDeskActivity : DirectiveActivity() {
-    private fun showWorkflowEditor() {
+    private val workflows get() = (application as JarvisApp).preferences.savedWorkflows
+
+    private fun showWorkflowEditor(saved: SavedWorkflow? = null) {
         val editor = EditText(this).apply {
             minLines = 6; maxLines = 12; isSaveEnabled = false
-            hint = "Workflow JSON: name, variables and steps (tool + arguments). Nothing runs before review."
-            contentDescription = "JSON workflow editor"
-            setText(com.jarvis.assistant.R.string.macro_example_json)
+            hint = getString(R.string.workflow_input_hint)
+            contentDescription = getString(R.string.workflow_editor)
+            filters = arrayOf(android.text.InputFilter.LengthFilter(32_768))
+            setText(saved?.json ?: getString(R.string.macro_example_json))
         }
-        MaterialAlertDialogBuilder(this).setTitle("Local JSON workflow")
-            .setView(editor).setNegativeButton("Cancel", null)
-            .setPositiveButton("Review") { _, _ ->
-                val json = editor.text.toString()
+        MaterialAlertDialogBuilder(this).setTitle(R.string.workflow_editor)
+            .setView(editor).setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.workflow_review) { _, _ -> reviewWorkflow(editor.text.toString(), saved) }
+            .show()
+    }
+
+    private fun reviewWorkflow(json: String, saved: SavedWorkflow?) = lifecycleScope.launch(failures) {
+        val plan = withContext(Dispatchers.Default) { runCatching { MacroCompiler.compile(json) }.getOrNull() }
+        if (plan == null) {
+            notice(getString(R.string.workflow_invalid))
+            return@launch
+        }
+        val preview = plan.steps.joinToString("\n\n") { step ->
+            step.title + "\n" + step.parameters.entries.joinToString { "${it.key}: ${it.value.toString().take(180)}" }
+        }
+        val review = MaterialAlertDialogBuilder(this@MissionDeskActivity).setTitle(plan.name)
+            .setMessage(getString(R.string.workflow_review_steps, preview))
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.workflow_start) { _, _ -> startWorkflow(plan) }
+        if (saved?.json != json) review.setNeutralButton(R.string.workflow_save) { _, _ -> saveWorkflow(json, saved) }
+        review.show()
+    }
+
+    private fun startWorkflow(plan: CompiledMacro) = lifecycleScope.launch(failures) {
+        MissionEngine.startPreparedMission(applicationContext, plan.name, steps = plan.steps,
+            userConstraints = listOf("Execute the reviewed JSON steps only; never invent missing steps."))
+    }
+
+    private fun saveWorkflow(json: String, saved: SavedWorkflow?) = lifecycleScope.launch(failures) {
+        val result = withContext(Dispatchers.IO) { runCatching { workflows.save(json, saved) } }
+        val message = when (val error = result.exceptionOrNull()) {
+            null -> getString(R.string.workflow_saved)
+            is IllegalArgumentException -> error.message ?: getString(R.string.workflow_library_unavailable)
+            else -> getString(R.string.workflow_library_unavailable)
+        }
+        notice(message)
+    }
+
+    private fun showSavedWorkflows() = lifecycleScope.launch(failures) {
+        val items = withContext(Dispatchers.IO) { runCatching { workflows.list() }.getOrNull() }
+        if (items.isNullOrEmpty()) {
+            notice(getString(if (items == null) R.string.workflow_library_unavailable else R.string.workflow_library_empty))
+            return@launch
+        }
+        MaterialAlertDialogBuilder(this@MissionDeskActivity).setTitle(R.string.workflow_library)
+            .setItems(items.map { it.name }.toTypedArray()) { _, index ->
+                val saved = items[index]
+                MaterialAlertDialogBuilder(this@MissionDeskActivity).setTitle(saved.name)
+                    .setItems(arrayOf(getString(R.string.workflow_review), getString(R.string.workflow_edit), getString(R.string.workflow_delete))) { _, action ->
+                        when (action) {
+                            0 -> reviewWorkflow(saved.json, saved)
+                            1 -> showWorkflowEditor(saved)
+                            2 -> confirmDeleteWorkflow(saved)
+                        }
+                    }.setNegativeButton(android.R.string.cancel, null).show()
+            }.setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    private fun confirmDeleteWorkflow(saved: SavedWorkflow) {
+        MaterialAlertDialogBuilder(this).setTitle(R.string.workflow_delete).setMessage(saved.name)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.workflow_delete) { _, _ ->
                 lifecycleScope.launch(failures) {
-                    val plan = try {
-                        withContext(Dispatchers.Default) { com.jarvis.assistant.automation.macro.MacroCompiler.compile(json) }
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                    catch (_: Exception) { notice("Invalid workflow. Check its tool names, fields, variables and 24-step limit."); return@launch }
-                    val preview = plan.steps.joinToString("\n\n") {
-                        it.title + "\n" + it.parameters.entries.joinToString { entry -> "${entry.key}: ${entry.value.toString().take(180)}" }
-                    }
-                    MaterialAlertDialogBuilder(this@MissionDeskActivity).setTitle(plan.name)
-                        .setMessage("Review every step. Existing permission, approval and verification checks still apply.\n\n$preview")
-                        .setNegativeButton("Cancel", null).setPositiveButton("Start workflow") { _, _ ->
-                            lifecycleScope.launch(failures) {
-                                MissionEngine.startPreparedMission(applicationContext, plan.name, steps = plan.steps,
-                                    userConstraints = listOf("Execute the reviewed JSON steps only; never invent missing steps."))
-                            }
-                        }.show()
+                    val removed = withContext(Dispatchers.IO) { runCatching { workflows.delete(saved) }.isSuccess }
+                    notice(getString(if (removed) R.string.workflow_deleted else R.string.workflow_library_unavailable))
                 }
             }.show()
     }
@@ -82,7 +134,8 @@ class MissionDeskActivity : DirectiveActivity() {
                 finally { button.isEnabled = true }
             }
         }
-        action("Review a JSON workflow") { showWorkflowEditor() }
+        action(getString(R.string.workflow_new)) { showWorkflowEditor() }
+        action(getString(R.string.workflow_library)) { showSavedWorkflows() }
         state = label("No active mission.")
         action("Approve pending action") {
             val mission = MissionEngine.activeMission.value
