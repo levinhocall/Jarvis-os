@@ -345,7 +345,8 @@ class GeminiLiveWebSocket(
                         listOf(
                             Triple("background_search", "Search the web without opening a browser. Requires the user's Aura Background Web Search toggle. Return retrieved sources.", "query"),
                             Triple("generate_image", "Generate an image with Gemini and save it to the phone gallery. Requires Gemini Images enabled. Never claim saved until tool succeeds.", "prompt"),
-                            Triple("delegate_ui_task", "Delegate a long user-requested UI task to a separate bounded mission while continuing conversation. Requires Background Agent enabled. Accepted is not completed.", "goal")
+                            Triple("delegate_ui_task", "Delegate a long user-requested UI task to a separate bounded mission while continuing conversation. Requires Background Agent enabled. Accepted is not completed.", "goal"),
+                            Triple("review_saved_workflow", "When the user explicitly asks to open or run a saved workflow or routine by its exact name, open the local review screen. The user starts the workflow there.", "workflow_name")
                         ).forEach { (toolName, description, parameter) ->
                             put(JSONObject().put("name", toolName).put("description", description).put("parameters", JSONObject()
                                 .put("type", "OBJECT").put("properties", JSONObject().put(parameter, JSONObject().put("type", "STRING")))

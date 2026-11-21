@@ -10,6 +10,8 @@ data class CompiledMacro(val name: String, val steps: List<MissionStep>)
 object MacroCompiler {
     private val allowed = setOf("open_app", "inspect_screen", "click_ui_element", "type_text",
         "scroll_screen", "wait_for_screen_text")
+    internal fun builderTools(): List<ToolDefinition> = allowed.mapNotNull(ToolRegistry::getTool)
+
     private val variable = Regex("\\$\\{([a-zA-Z][a-zA-Z0-9_]{0,39})}")
     fun compile(json: String): CompiledMacro {
         require(json.length in 2..32_768) { "Workflow must be at most 32 KB." }

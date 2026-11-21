@@ -66,6 +66,7 @@
         <activity android:name=".ui.aura.AvatarStudioActivity" android:exported="false" />
         <activity android:name=".ui.directives.VoiceModeActivity" android:exported="false" />
         <activity android:name=".ui.directives.MissionDeskActivity" android:exported="false" />
+        <activity android:name=".ui.documents.DocumentStudioActivity" android:exported="false" />
         <activity android:name=".ui.directives.IdeasActivity" android:exported="false" />
         <activity android:name=".ui.directives.EnglishTeacherActivity" android:exported="false" />
         <activity android:name=".ui.extras.BrainDumpActivity" android:exported="false" />

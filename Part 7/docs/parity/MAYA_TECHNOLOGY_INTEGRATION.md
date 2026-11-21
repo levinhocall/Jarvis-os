@@ -130,3 +130,15 @@ Earlier repository phases are tracked in [Phase A verification](../architecture/
 | Build/security/release | JVM, lint and Android test source compilation via CI. Signed debug releases published with digest. R8 production build, signed upgrade compatibility and Android instrumentation remain distinct checks. |
 
 Saved-workflow follow-up passed local Kotlin compilation, 618 JVM tests (0 failures, 1 skip), lint and debug assembly (`BUILD SUCCESSFUL` in 6m36s). The three new JVM tests cover reload/edit/delete, duplicate and stale edits, and preserving corrupt storage. The APK signature/package and bundled renderer and saved-workflow code were checked. The standalone backend also passed all 9 storage/protocol tests; these do not exercise neural inference or hosting. Phone instrumentation and actual UI testing were unavailable.
+
+## JARVIS Workspace, 2026-11-21
+
+The existing Tools button now opens JARVIS Workspace. It groups access around voice and saved workflows, with search over the existing feature names and descriptions. JARVIS retains its own theme, Neural Wave visuals, and native controls.
+
+- **Visual workflows.** Mission Mode exposes a form for creating ordered steps from the same bounded tool list used by `MacroCompiler`. Text is preserved literally, including text that looks like a variable. The form and JSON editor share the reviewed plan, local encrypted library, existing permissions, and `MissionEngine` execution checks. Review shows full argument text.
+- **Voice routine review.** In a foreground Gemini Live session, say “Open my Morning commute workflow” using the exact saved name. The Live tool looks up the local record and opens its review. The workflow steps and arguments stay in the local review UI. Tapping Start uses the existing prepared mission path.
+- **Document Studio.** The Workspace includes a native editor with typed input, private on-device dictation on supported Android installations, and paginated PDF export through Android's document picker. The app uses `PdfDocument` and keeps the draft in memory for the activity session. The picker controls the output destination.
+
+Hunter-specific models, the hosted MAYA service, proprietary visual assets, PC/Home Box integration, and full Office authoring remain separate gaps. JARVIS and MAYA runtime parity has not been established. The earlier primary-source evidence and model licensing boundaries still apply.
+
+Local verification passed Kotlin compilation, 622 JVM tests with zero failures and one skip, lint, Android instrumentation test compilation and debug assembly. Signature verification and APK class presence checks passed. The PDF instrumentation test and live voice/UI workflows still need Android execution.

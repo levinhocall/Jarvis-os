@@ -1,5 +1,7 @@
 package com.jarvis.assistant.ui.directives
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.widget.EditText
 import android.widget.TextView
@@ -20,6 +22,35 @@ import kotlinx.coroutines.withContext
 
 class MissionDeskActivity : DirectiveActivity() {
     private val workflows get() = (application as JarvisApp).preferences.savedWorkflows
+
+    private fun handleWorkflowShortcut(intent: Intent) {
+        val id = intent.getStringExtra(EXTRA_REVIEW_WORKFLOW)
+        val libraryRequested = intent.getBooleanExtra(EXTRA_SHOW_LIBRARY, false)
+        intent.removeExtra(EXTRA_REVIEW_WORKFLOW)
+        intent.removeExtra(EXTRA_SHOW_LIBRARY)
+        if (id != null) lifecycleScope.launch(failures) {
+            val saved = withContext(Dispatchers.IO) { workflows.list().singleOrNull { it.id == id } }
+            if (saved != null) reviewWorkflow(saved.json, saved)
+            else notice(getString(R.string.workflow_missing))
+        } else if (libraryRequested) showSavedWorkflows()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleWorkflowShortcut(intent)
+    }
+
+    companion object {
+        private const val EXTRA_REVIEW_WORKFLOW = "review_workflow"
+        private const val EXTRA_SHOW_LIBRARY = "show_workflow_library"
+
+        internal fun reviewIntent(context: Context, id: String) = Intent(context, MissionDeskActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra(EXTRA_REVIEW_WORKFLOW, id)
+
+        internal fun libraryIntent(context: Context) = Intent(context, MissionDeskActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra(EXTRA_SHOW_LIBRARY, true)
+    }
 
     private fun showWorkflowEditor(saved: SavedWorkflow? = null) {
         val editor = EditText(this).apply {
@@ -42,7 +73,7 @@ class MissionDeskActivity : DirectiveActivity() {
             return@launch
         }
         val preview = plan.steps.joinToString("\n\n") { step ->
-            step.title + "\n" + step.parameters.entries.joinToString { "${it.key}: ${it.value.toString().take(180)}" }
+            step.title + "\n" + step.parameters.entries.joinToString("\n") { "${it.key}: ${it.value}" }
         }
         val review = MaterialAlertDialogBuilder(this@MissionDeskActivity).setTitle(plan.name)
             .setMessage(getString(R.string.workflow_review_steps, preview))
@@ -53,8 +84,11 @@ class MissionDeskActivity : DirectiveActivity() {
     }
 
     private fun startWorkflow(plan: CompiledMacro) = lifecycleScope.launch(failures) {
-        MissionEngine.startPreparedMission(applicationContext, plan.name, steps = plan.steps,
+        val mission = MissionEngine.startPreparedMission(applicationContext, plan.name, steps = plan.steps,
             userConstraints = listOf("Execute the reviewed JSON steps only; never invent missing steps."))
+        if (mission.status == MissionOverallStatus.FAILED) {
+            notice(mission.outcomeSummary ?: getString(R.string.mission_start_failed))
+        }
     }
 
     private fun saveWorkflow(json: String, saved: SavedWorkflow?) = lifecycleScope.launch(failures) {
@@ -134,6 +168,7 @@ class MissionDeskActivity : DirectiveActivity() {
                 finally { button.isEnabled = true }
             }
         }
+        action(getString(R.string.workflow_build)) { showWorkflowBuilder { reviewWorkflow(it, null) } }
         action(getString(R.string.workflow_new)) { showWorkflowEditor() }
         action(getString(R.string.workflow_library)) { showSavedWorkflows() }
         state = label("No active mission.")
@@ -177,6 +212,7 @@ class MissionDeskActivity : DirectiveActivity() {
         history = label("Loading encrypted history…")
         action("Refresh history") { refreshHistory() }
         refreshHistory()
+        handleWorkflowShortcut(intent)
         lifecycleScope.launch(failures) { repeatOnLifecycle(Lifecycle.State.STARTED) {
             MissionEngine.activeMission.collect { m ->
                 state.text = m?.let {

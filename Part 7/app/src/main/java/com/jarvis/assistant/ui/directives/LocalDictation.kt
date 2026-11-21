@@ -6,13 +6,13 @@ import android.os.Build
 import android.os.Bundle
 import android.speech.*
 
-/** No silent cloud fallback for the private idea vault. Called only after microphone consent. */
+/** Private dictation shared by local editors. Called only after microphone consent. */
 class LocalDictation(private val context: Context, private val result: (String) -> Unit, private val status: (String) -> Unit) {
     private var recognizer: SpeechRecognizer? = null
     private var microphoneLease: com.jarvis.assistant.audio.MicrophoneOwnership.Lease? = null
     fun start() {
         if (Build.VERSION.SDK_INT < 31 || !SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-            status("On-device dictation is unavailable. Type your idea; no audio was sent to a cloud recognizer.")
+            status("On-device dictation is unavailable. You can still type your draft.")
             return
         }
         close()
@@ -44,7 +44,7 @@ class LocalDictation(private val context: Context, private val result: (String) 
                     if (recognizer !== speech) return
                     val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                     close()
-                    if (text.isNotBlank()) { result(text); status("Dictation ready. Review and save your idea.") }
+                    if (text.isNotBlank()) { result(text); status("Dictation ready. Review your draft before saving.") }
                     else status("No speech was recognized.")
                 }
             })

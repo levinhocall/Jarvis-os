@@ -24,6 +24,8 @@ internal class SavedWorkflowLibrary(
         }.also { entries -> require(entries.distinctBy { it.id }.size == entries.size) }
     }
 
+    fun findByName(name: String): SavedWorkflow? = list().singleOrNull { it.name.equals(name.trim(), ignoreCase = true) }
+
     @Synchronized
     fun save(json: String, previous: SavedWorkflow? = null) {
         val plan = MacroCompiler.compile(json)

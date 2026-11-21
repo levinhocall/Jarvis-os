@@ -15,4 +15,30 @@
     <string name="workflow_edit">Edit JSON</string>
     <string name="workflow_delete">Delete saved workflow</string>
     <string name="workflow_deleted">Saved workflow deleted.</string>
+    <string name="workflow_missing">This saved workflow is no longer in the library.</string>
+    <string name="workflow_build">Build a workflow</string>
+    <string name="workflow_name">Workflow name</string>
+    <string name="workflow_add_step">Add step</string>
+    <string name="workflow_remove_step">Remove step</string>
+    <string name="workflow_choose_step">Choose a step</string>
+    <string name="workflow_numbered_step">%1$d. %2$s</string>
+    <string name="workflow_tool_open_app">Open an app</string>
+    <string name="workflow_tool_inspect">Inspect the current screen</string>
+    <string name="workflow_tool_click">Tap a visible label</string>
+    <string name="workflow_tool_type">Enter text</string>
+    <string name="workflow_tool_scroll">Scroll</string>
+    <string name="workflow_tool_wait">Wait for screen text</string>
+    <string name="workflow_default_value">Use default</string>
+    <string name="workflow_required_field">Required</string>
+    <string name="workflow_optional_field">Optional</string>
+    <string name="workflow_invalid_step">Enter the required values and check their format.</string>
+    <string name="workflow_name_and_steps">Enter a name and add at least one step.</string>
+    <string name="workflow_size_limit">This workflow is too large. Shorten its inputs or remove a step.</string>
+    <string name="workspace_title">JARVIS Workspace</string>
+    <string name="workspace_subtitle">Voice, routines, and phone tools</string>
+    <string name="workspace_search">Search tools</string>
+    <string name="workspace_voice_detail">Open the Neural Wave interface and talk to JARVIS</string>
+    <string name="workspace_workflows_detail">Review, edit, or run your local routines</string>
+    <string name="workspace_no_results">No tools match your search.</string>
+    <item name="workspaceSearch" type="id" />
 </resources>

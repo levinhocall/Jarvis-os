@@ -2,7 +2,13 @@ package com.jarvis.assistant.ui.home
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
+import androidx.core.widget.doAfterTextChanged
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -10,12 +16,17 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.card.MaterialCardView
 import com.jarvis.assistant.R
 import com.jarvis.assistant.ui.permission.PermissionActivity
+import com.jarvis.assistant.ui.directives.DirectiveGrid
+import com.jarvis.assistant.ui.directives.DirectiveId
+import com.jarvis.assistant.ui.directives.MissionDeskActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Feature launcher backed only by capabilities already present in this build. */
 class FeatureHubActivity : AppCompatActivity() {
+    private val searchableCards = mutableListOf<Pair<String, View>>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         com.jarvis.assistant.util.ThemeManager.applyTheme(this)
         super.onCreate(savedInstanceState)
@@ -29,31 +40,42 @@ class FeatureHubActivity : AppCompatActivity() {
             ))
         }
         root.addView(TextView(this).apply {
-            text = "JARVIS FEATURE HUB"
+            setText(R.string.workspace_title)
             textSize = 22f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             setTextColor(themeColor(R.attr.themeTextPrimary))
         })
         root.addView(TextView(this).apply {
-            text = "Assistant tools and system controls"
+            setText(R.string.workspace_subtitle)
             textSize = 13f
             setTextColor(themeColor(R.attr.themeTextMuted))
             setPadding(0, dp(6), 0, dp(18))
         })
 
-        root.addView(com.jarvis.assistant.ui.directives.DirectiveGrid.create(this))
-
-        entry(root, "Voice Mode", "Start or interrupt the live voice assistant", true) {
-            com.jarvis.assistant.ui.directives.DirectiveGrid.open(this, com.jarvis.assistant.ui.directives.DirectiveId.VOICE)
+        val search = EditText(this).apply {
+            id = R.id.workspaceSearch
+            hint = getString(R.string.workspace_search)
+            setSingleLine(true)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setTextColor(themeColor(R.attr.themeTextPrimary))
+            setHintTextColor(themeColor(R.attr.themeTextMuted))
         }
-        entry(root, "Neural Lens", "Capture or select a real image, run AI analysis, or scan visible screen text", true) {
-            startActivity(Intent(this, com.jarvis.assistant.ui.vision.NeuralLensActivity::class.java))
+        root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+
+        entry(root, DirectiveId.VOICE.title, getString(R.string.workspace_voice_detail), true) {
+            DirectiveGrid.open(this, DirectiveId.VOICE)
+        }
+        entry(root, getString(R.string.workflow_library), getString(R.string.workspace_workflows_detail), true) {
+            startActivity(MissionDeskActivity.libraryIntent(this))
+        }
+        DirectiveId.entries.filterNot { it == DirectiveId.VOICE }.forEach { directive ->
+            entry(root, directive.title, directive.description, true) {
+                if (directive == DirectiveId.THEME) com.jarvis.assistant.util.ThemeManager.cycleHomeTheme(this)
+                else DirectiveGrid.open(this, directive)
+            }
         }
         entry(root, "Security & Permissions", "Review app permissions and access status", true) {
             startActivity(Intent(this, PermissionActivity::class.java))
-        }
-        entry(root, "Aura Control", "Choose Classic, Aura, Crimson or Midnight Orb and customize appearance", true) {
-            startActivity(Intent(this, com.jarvis.assistant.ui.settings.AuraControlActivity::class.java))
         }
         entry(root, "Accessibility Task Controls", "Inspect and control active accessibility tasks and durable missions", true) {
             val agentEngine = com.jarvis.assistant.automation.agent.AgentTaskEngine
@@ -164,11 +186,8 @@ class FeatureHubActivity : AppCompatActivity() {
             startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
         }
 
-        entry(root, "Notification History", "Encrypted, opt-in history with unread filtering and clear controls", true) {
-            startActivity(Intent(this, com.jarvis.assistant.ui.notification.NotificationHistoryActivity::class.java))
-        }
-        entry(root, "AMOLED Map", "Native OpenStreetMap view, current location, destination search and route", true) {
-            startActivity(Intent(this, com.jarvis.assistant.ui.map.AmoledMapActivity::class.java))
+        entry(root, getString(R.string.studio_title), getString(R.string.studio_tool_detail), true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.documents.DocumentStudioActivity::class.java))
         }
         entry(root, "JARVIS Browser", "Browse HTTPS pages and read selected page text with an offline voice", true) {
             startActivity(Intent(this, com.jarvis.assistant.ui.browser.JarvisBrowserActivity::class.java))
@@ -203,7 +222,35 @@ class FeatureHubActivity : AppCompatActivity() {
             startActivity(Intent(this, com.jarvis.assistant.ui.settings.ApiConnectionActivity::class.java))
         }
 
-        setContentView(android.widget.ScrollView(this).apply { addView(root) })
+        val empty = TextView(this).apply {
+            setText(R.string.workspace_no_results)
+            setTextColor(themeColor(R.attr.themeTextMuted))
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            visibility = View.GONE
+        }
+        root.addView(empty)
+        search.doAfterTextChanged { text ->
+            val terms = text.toString().trim().split(Regex("\\s+")).filter(String::isNotBlank)
+            var hasMatches = false
+            searchableCards.forEach { (label, card) ->
+                val visible = terms.all { label.contains(it, ignoreCase = true) }
+                card.visibility = if (visible) View.VISIBLE else View.GONE
+                hasMatches = hasMatches || visible
+            }
+            empty.visibility = if (hasMatches) View.GONE else View.VISIBLE
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            isFocusableInTouchMode = true
+            addView(root)
+        }
+        setContentView(scroll)
+        scroll.requestFocus()
+        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
     }
 
     private fun entry(parent: LinearLayout, title: String, detail: String, enabled: Boolean, action: () -> Unit) {
@@ -233,6 +280,7 @@ class FeatureHubActivity : AppCompatActivity() {
             setPadding(0, dp(5), 0, 0)
         })
         card.addView(content)
+        searchableCards.add("$title $detail" to card)
         parent.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
     }
 

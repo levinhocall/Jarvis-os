@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="studio_title">Document Studio</string>
+    <string name="studio_tool_detail">Write or dictate a document and save it as a PDF</string>
+    <string name="studio_document_title">Title</string>
+    <string name="studio_document_body">Write your document</string>
+    <string name="studio_dictate">Dictate privately</string>
+    <string name="studio_export">Save as PDF</string>
+    <string name="studio_microphone_denied">Microphone permission is needed for dictation. You can still type.</string>
+    <string name="studio_empty">Enter a title and some document text.</string>
+    <string name="studio_export_failed">PDF could not be saved. Your draft is still available while this screen is open.</string>
+    <string name="studio_export_saved">PDF saved to the selected location.</string>
+</resources>

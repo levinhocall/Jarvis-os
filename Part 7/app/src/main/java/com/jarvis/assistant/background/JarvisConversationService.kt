@@ -2520,6 +2520,24 @@ class JarvisConversationService : Service() {
                         result.put("success", opened); result.put("delivered", false)
                         result.put("message", if (opened) "WhatsApp contact picker opened. User must select contact and confirm Send." else "Bring Jarvis to the foreground and open Gemini Image Studio to share the saved image.")
                     }
+                    "review_saved_workflow" -> {
+                        val workflowName = args.optString("workflow_name").trim()
+                        require(workflowName.length in 1..160) { "Enter the exact saved workflow name." }
+                        val workflow = preferences.savedWorkflows.findByName(workflowName)
+                        val opened = workflow != null && withContext(Dispatchers.Main) {
+                            val foreground = app.currentResumedActivity ?: return@withContext false
+                            if (foreground.isFinishing || foreground.isDestroyed) return@withContext false
+                            foreground.startActivity(com.jarvis.assistant.ui.directives.MissionDeskActivity.reviewIntent(foreground, workflow.id))
+                            true
+                        }
+                        result.put("success", opened)
+                        result.put("executed", false)
+                        result.put("message", when {
+                            workflow == null -> "No saved workflow has that exact name. Check Saved workflows in Mission Mode."
+                            opened -> "Workflow review opened. Tap Start workflow to run it."
+                            else -> "Bring Jarvis to the foreground to review the saved workflow."
+                        })
+                    }
                     "delegate_ui_task" -> {
                         check(com.jarvis.assistant.ui.aura.AuraOptions.enabled("backgroundAgent")) { "Enable Background Agent in Aura first" }
                         check(com.jarvis.assistant.automation.accessibility.JarvisAccessibilityService.isRunning()) { "Enable Accessibility first" }

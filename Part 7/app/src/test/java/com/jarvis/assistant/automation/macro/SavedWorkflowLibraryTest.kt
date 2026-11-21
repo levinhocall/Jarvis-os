@@ -39,6 +39,14 @@ class SavedWorkflowLibraryTest {
         assertEquals(latest, stored)
     }
 
+    @Test fun nameLookupResolvesOnlyAnExactSavedName() {
+        val library = library()
+        library.save(workflow("Morning commute"))
+        library.save(workflow("Morning notes"))
+        assertEquals("Morning commute", library.findByName("  morning commute  ")?.name)
+        assertNull(library.findByName("Morning"))
+    }
+
     @Test fun corruptedStorageIsNeverSilentlyReplaced() {
         stored = "{"
         assertTrue(runCatching { library().save(workflow("Morning")) }.isFailure)
