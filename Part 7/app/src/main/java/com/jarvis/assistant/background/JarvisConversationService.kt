@@ -322,6 +322,8 @@ class JarvisConversationService : Service() {
     private var isPendingBackgroundTransition = false
     @Volatile
     private var suppressAudioUntilTurnComplete = false
+    @Volatile
+    private var suppressAudioUntilMs = 0L
     private val activePlaybackGeneration = java.util.concurrent.atomic.AtomicLong(0L)
     @Volatile
     private var rollingAcousticLeakageFloor = 0.05f
@@ -571,9 +573,11 @@ class JarvisConversationService : Service() {
                 // 1. Advance generation counter and suppress late streaming audio chunks
                 presentationStore.interrupt(presentationSessionId)
                 activePlaybackGeneration.set(newEpoch)
-                suppressAudioUntilTurnComplete = true
+                suppressAudioUntilTurnComplete = (source != "server_vad")
+                suppressAudioUntilMs = if (source == "server_vad") 0L else SystemClock.elapsedRealtime() + 650L
 
-                // 2. Instantly pause and flush AudioPlayer with new epoch so speaker audio stops with <10ms latency
+                // 2. Instantly cancel TTS & flush AudioPlayer with new epoch so speaker audio stops with <10ms latency
+                com.jarvis.assistant.audio.AndroidTtsPcmBridge.cancelAll()
                 audioPlayer?.pause()
                 audioPlayer?.flush(newEpoch)
                 lastPlaybackEndTime = 0L
@@ -1175,7 +1179,7 @@ class JarvisConversationService : Service() {
                     pcmData = pcm24kMono,
                     sampleRateHz = AudioPlayer.SAMPLE_RATE,
                     channels = 1,
-                    epoch = activePlaybackGeneration.get(),
+                    epoch = sessionPlayer.activeEpoch.get(),
                     source = source,
                     onDrained = onDrained
                 )
@@ -1310,8 +1314,11 @@ class JarvisConversationService : Service() {
                                 VoiceFlightRecorder.recordFirstTokenReceived()
                             }
                             if (suppressAudioUntilTurnComplete) {
-                                Log.w("JarvisService", "onAudioDataReceived: Audio suppressed (suppressAudioUntilTurnComplete=true)")
-                                return
+                                if (SystemClock.elapsedRealtime() < suppressAudioUntilMs) {
+                                    Log.w("JarvisService", "onAudioDataReceived: Audio suppressed (suppressAudioUntilTurnComplete=true)")
+                                    return
+                                }
+                                suppressAudioUntilTurnComplete = false
                             }
                             // Silent execution applies to task narration, while leaving ordinary
                             // conversation audible. Read the preference dynamically so toggling
@@ -1838,7 +1845,7 @@ class JarvisConversationService : Service() {
         }
 
         val microphoneEnvelope = com.jarvis.assistant.audio.PcmEnvelopeFollower()
-        var softwareSpeechFrames=0
+        val bargeInController = com.jarvis.assistant.audio.FullDuplexBargeInController()
         var guardedTtsUntil=0L
         val onsetAudio=java.util.ArrayDeque<ByteArray>()
         val recorder = AudioRecorder(
@@ -1868,14 +1875,14 @@ class JarvisConversationService : Service() {
                         }
                         sessionEcho.resetSpeechDetector()
                     }
-                    softwareSpeechFrames=0;onsetAudio.clear();return@AudioRecorder
+                    bargeInController.reset();onsetAudio.clear();return@AudioRecorder
                 }
                 val facts=voicePresentation.value
                 sessionEcho.isPlaybackActiveForVad = facts.playing
                 if(sessionEcho.enabled && facts.playing && !facts.hasPcmReference && facts.playbackSource in setOf(PlaybackSource.ANDROID_TTS,PlaybackSource.EXTERNAL_TTS)) {
                     // Opaque fallback TTS exposes no PCM reference. Keep guarded listening until unified PCM takes over.
                     turnAnalysis?.discard()
-                    guardedTtsUntil=now+450;softwareSpeechFrames=0;return@AudioRecorder
+                    guardedTtsUntil=now+450;bargeInController.reset();return@AudioRecorder
                 }
                 if(now < guardedTtsUntil) return@AudioRecorder
                 if(sessionEcho.enabled) {
@@ -1883,39 +1890,55 @@ class JarvisConversationService : Service() {
                     onsetAudio.addLast(chunk.copyOf())
                 }
 
-                // Acoustic Echo Decay Protection (AEDP):
-                // For 150ms after speaker audio stops, discard mic chunks so room reverberation
-                // does not bounce into Gemini Live and cause false self-interruption.
-                if (now - lastPlaybackEndTime < 150L) {
-                    consecutiveVoicedFrames = 0
-                    return@AudioRecorder
-                }
-
                 // Assistant is speaking / AudioTrack or TTS is actively playing:
                 val isSpeakerActive = (audioPlayer?.isPlaying() == true) || (tts?.isSpeaking == true) ||
                         com.jarvis.assistant.audio.VoiceSynthesisRouter.isSpeaking() ||
                         (_conversationState.value == ConversationState.SPEAKING)
 
+                val frameBargeInput = com.jarvis.assistant.audio.FullDuplexBargeInController.FrameInput(
+                    nowMs = now,
+                    lastPlaybackEndTimeMs = lastPlaybackEndTime,
+                    isPlaybackActive = facts.playing || isSpeakerActive,
+                    hasPcmReference = facts.hasPcmReference,
+                    playbackSource = facts.playbackSource,
+                    isAecActive = sessionEcho.isAecActive,
+                    isDtlnActive = sessionEcho.isDtlnActive,
+                    hasSpeechDetector = sessionEcho.hasSpeechDetector,
+                    speechProbability = sessionEcho.speechProbability,
+                    isSpeechConfirmed = sessionEcho.isSpeechConfirmed,
+                    aecMetrics = sessionEcho.echoMetrics()
+                )
+
+                // Hardware/saturated AEDP decay guard (0 ms when clean AEC3 + Silero v4 active)
+                if (!isSpeakerActive && bargeInController.shouldDropPostPlaybackDecay(frameBargeInput)) {
+                    consecutiveVoicedFrames = 0
+                    return@AudioRecorder
+                }
+
                 if (isSpeakerActive) {
                     turnAnalysis?.discard()
-                    if(sessionEcho.enabled && facts.playing && (facts.hasPcmReference || facts.playbackSource == PlaybackSource.GEMINI_PCM)) {
-                        val strongVadSpeech = sessionEcho.isSpeechConfirmed || sessionEcho.speechProbability >= 0.65f
-                        softwareSpeechFrames = if (strongVadSpeech) softwareSpeechFrames + 1 else 0
-                        if(softwareSpeechFrames >= 3) {
-                            triggerHardBargeIn("aec3_silero_speech")
-                            softwareSpeechFrames=0
-                            val accepted=onsetAudio.toList();onsetAudio.clear()
-                            synchronized(currentUtteranceAudioStream) {
-                                currentUtteranceAudioStream.reset();accepted.forEach { currentUtteranceAudioStream.write(it) }
-                            }
-                            hasSpeechInCurrentUtterance=true
-                            lastUserSpeechDetectedTime=now
-                            isCurrentTurnOwnerVoiceVerified=!preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
-                            liveWebSocket?.resumeInputAudio()
-                            accepted.forEach { liveWebSocket?.sendAudioChunk(it) }
-                            return@AudioRecorder
+                    val neuralDecision = bargeInController.evaluateDuringPlayback(frameBargeInput)
+                    if (neuralDecision.kind == com.jarvis.assistant.audio.FullDuplexBargeInController.DecisionKind.TRIGGER_NEURAL_BARGE_IN) {
+                        triggerHardBargeIn(neuralDecision.reason)
+                        val accepted = onsetAudio.toList()
+                        onsetAudio.clear()
+                        synchronized(currentUtteranceAudioStream) {
+                            currentUtteranceAudioStream.reset()
+                            accepted.forEach { currentUtteranceAudioStream.write(it) }
                         }
-                    } else softwareSpeechFrames=0
+                        synchronized(preSpeechRingBuffer) {
+                            preSpeechRingBuffer.clear()
+                            accepted.forEach { preSpeechRingBuffer.addLast(it) }
+                            turnAnalysis?.beginUtterance(preSpeechRingBuffer)
+                        }
+                        hasSpeechInCurrentUtterance = true
+                        hasSignalledUtteranceEnd = false
+                        lastUserSpeechDetectedTime = now
+                        isCurrentTurnOwnerVoiceVerified = !preferences.isOwnerVoiceEnabled || !preferences.hasOwnerVoiceProfile()
+                        liveWebSocket?.resumeInputAudio()
+                        accepted.forEach { liveWebSocket?.sendAudioChunk(it) }
+                        return@AudioRecorder
+                    }
                     val hasHeadset = headsetAudioRouter?.isHeadsetConnected() == true
 
                     // 1. Vosk Speech & Hotword Recognition Gate:
