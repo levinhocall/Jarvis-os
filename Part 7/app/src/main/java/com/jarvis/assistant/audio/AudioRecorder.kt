@@ -3,10 +3,12 @@ package com.jarvis.assistant.audio
 import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
+import android.media.AudioTimestamp
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +24,7 @@ class AudioRecorder(
     private val microphoneOwner: MicrophoneOwner = MicrophoneOwner.VOICE_SESSION,
     private val softwareEcho: Boolean = false,
     private val captureProcessor: ((ByteArray) -> ByteArray)? = null,
+    private val delayEstimator: AcousticDelayEstimator? = null,
     private val onAudioChunk: (chunk: ByteArray, amplitude: Float, frequencyData: AudioFrequencyData) -> Unit
 ) {
     companion object {
@@ -157,6 +160,9 @@ class AudioRecorder(
                     android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
                 } catch (_: Exception) {}
                 val buffer = ByteArray(CHUNK_SIZE_BYTES)
+                val captureTimestamp = AudioTimestamp()
+                var totalReadFrames = 0L
+                var captureTsPollCount = 0
                 var currentRecord: AudioRecord? = record
                 val recoveryBudget = AudioRecoveryBudget()
                 capture@ while (isActive && isRecording.get() && lifecycleGeneration.get() == generation) {
@@ -165,6 +171,20 @@ class AudioRecorder(
                         try {
                             val readBytes = currentRecord.read(buffer, 0, buffer.size)
                             if (readBytes > 0) {
+                                totalReadFrames += (readBytes / 2)
+                                if (delayEstimator != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+                                    (captureTsPollCount++ % 5 == 0)
+                                ) {
+                                    if (currentRecord.getTimestamp(captureTimestamp, AudioTimestamp.TIMEBASE_MONOTONIC) == AudioRecord.SUCCESS) {
+                                        delayEstimator.recordCaptureTimestamp(
+                                            captureTimestamp.framePosition,
+                                            captureTimestamp.nanoTime,
+                                            System.nanoTime(),
+                                            totalReadFrames,
+                                            SAMPLE_RATE
+                                        )
+                                    }
+                                }
                                 recoveryBudget.successfulFrame()
                                 consecutiveErrors = 0
                                 // Consumer code may throw (for example, during voice-engine
@@ -280,6 +300,9 @@ class AudioRecorder(
 
                             candidate.startRecording()
                             check(candidate.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Replacement microphone did not start" }
+                            totalReadFrames = 0L
+                            captureTsPollCount = 0
+                            delayEstimator?.resetCapture()
                             val published = synchronized(this@AudioRecorder) {
                                 if (isRecording.get() && lifecycleGeneration.get() == generation) {
                                     currentRecord = candidate

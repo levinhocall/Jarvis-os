@@ -27,6 +27,11 @@ class HeadsetAudioRouter(private val context: Context) {
     private var isScoStarted = false
     @Volatile
     private var cachedIsHeadsetConnected = false
+    @Volatile
+    var currentRoute: AudioOutputRoute = AudioOutputRoute.BUILTIN_SPEAKER
+        private set
+    @Volatile
+    var onRouteChanged: ((AudioOutputRoute) -> Unit)? = null
 
     private val headsetReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -135,6 +140,9 @@ class HeadsetAudioRouter(private val context: Context) {
 
             val targetHeadset = findConnectedHeadset()
             cachedIsHeadsetConnected = (targetHeadset != null)
+            val resolvedRoute = targetHeadset?.let { AudioOutputRoute.fromDeviceType(it.type) } ?: AudioOutputRoute.BUILTIN_SPEAKER
+            val routeChanged = (resolvedRoute != currentRoute)
+            currentRoute = resolvedRoute
 
             if (targetHeadset != null) {
                 // External Headset Connected: Route to headset
@@ -174,6 +182,9 @@ class HeadsetAudioRouter(private val context: Context) {
                 audioManager.mode = AudioManager.MODE_NORMAL
                 audioManager.isSpeakerphoneOn = false
                 VoiceFlightRecorder.recordAudioRoute(route = "BUILTIN_LOUDSPEAKER", mode = "MODE_NORMAL")
+            }
+            if (routeChanged) {
+                onRouteChanged?.invoke(resolvedRoute)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed in routeToOptimalAudio: ${e.message}")

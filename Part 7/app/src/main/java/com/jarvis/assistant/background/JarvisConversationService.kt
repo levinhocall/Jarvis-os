@@ -1095,6 +1095,16 @@ class JarvisConversationService : Service() {
         } else null
         currentTurnAnalysis=turnAnalysis
         val echoReady=kotlinx.coroutines.CompletableDeferred<Unit>()
+        val initialRoute = headsetAudioRouter?.currentRoute ?: com.jarvis.assistant.audio.AudioOutputRoute.BUILTIN_SPEAKER
+        val sessionDelayEstimator = com.jarvis.assistant.audio.AcousticDelayEstimator(initialRoute)
+        headsetAudioRouter?.onRouteChanged = { route ->
+            if (sessionDelayEstimator.onRouteChanged(route)) {
+                com.jarvis.assistant.audio.VoiceFlightRecorder.record(
+                    stage = "DELAY_ROUTE_SWITCH",
+                    details = "route=${route.label} offset=${route.defaultRouteOffsetMs}ms"
+                )
+            }
+        }
         lateinit var sessionPlayer: AudioPlayer
         sessionPlayer = AudioPlayer(
             onPlaybackStateChanged = playbackState@{ isPlaying ->
@@ -1132,6 +1142,7 @@ class JarvisConversationService : Service() {
             },
             onAcceptedRender = { bytes,offset,count,delayMs,epoch -> sessionEcho.render(bytes,offset,count,delayMs,epoch) },
             onRenderReset = { epoch -> sessionEcho.reset(epoch) },
+            delayEstimator = sessionDelayEstimator,
             onPlaybackFailure = { category ->
                 presentationStore.update(presentationToken) { it.copy(playing = false, hasPcmReference = false, output = VoiceEnvelope(), errorReason = "Playback stopped: $category") }
                 serviceScope.launch {
@@ -1825,7 +1836,11 @@ class JarvisConversationService : Service() {
         var softwareSpeechFrames=0
         var guardedTtsUntil=0L
         val onsetAudio=java.util.ArrayDeque<ByteArray>()
-        val recorder = AudioRecorder(softwareEcho=sessionEcho.enabled,captureProcessor=sessionEcho::capture) { chunk, amplitude, frequencyData ->
+        val recorder = AudioRecorder(
+            softwareEcho = sessionEcho.enabled,
+            captureProcessor = sessionEcho::capture,
+            delayEstimator = sessionDelayEstimator
+        ) { chunk, amplitude, frequencyData ->
             if (presentationToken != presentationSessionId) return@AudioRecorder
             val displayTime = SystemClock.elapsedRealtime()
             val envelope = microphoneEnvelope.accept(chunk, displayTime, chunk.isNotEmpty())
@@ -3919,6 +3934,7 @@ class JarvisConversationService : Service() {
         audioPipelineManager = null
         audioRecorder = null
 
+        headsetAudioRouter?.onRouteChanged = null
         playbackPcmSink?.let { com.jarvis.assistant.audio.AndroidTtsPcmBridge.unregisterSink(it) }
         playbackPcmSink = null
         com.jarvis.assistant.audio.AndroidTtsPcmBridge.cancelAll()

@@ -17,7 +17,8 @@ class AudioPlayer(
     private val onPlaybackFailure: (category: String) -> Unit = {},
     private val onPlaybackObservation: (PlaybackObservation) -> Unit = {},
     private val onAcceptedRender: (ByteArray, Int, Int, Int, Long) -> Unit = { _,_,_,_,_ -> },
-    private val onRenderReset: (Long) -> Unit = {}
+    private val onRenderReset: (Long) -> Unit = {},
+    private val delayEstimator: AcousticDelayEstimator = AcousticDelayEstimator()
 ) {
     companion object {
         private const val TAG = "AudioPlayer"
@@ -47,7 +48,10 @@ class AudioPlayer(
     private var routeSettlesAt = 0L
     private var lastHead = -1L
     private var lastHeadChangedAt = 0L
+    private var renderTimestampPollCount = 0
     private val routeListener = android.media.AudioRouting.OnRoutingChangedListener {
+        val routedType = runCatching { audioTrack?.routedDevice?.type }.getOrNull()
+        delayEstimator.onRouteChanged(AudioOutputRoute.fromDeviceType(routedType))
         synchronized(meterLock) {
             meterRevision.incrementAndGet(); timeline.discardEnvelopes()
             routeSettlesAt = android.os.SystemClock.elapsedRealtime() + 300
@@ -76,6 +80,8 @@ class AudioPlayer(
     private fun resetMeter() = synchronized(meterLock) {
         meterRevision.incrementAndGet(); timeline.reset(activeEpoch.get()); playbackClock.reset(); lastHead = -1
         activePlaybackSource = PlaybackSource.NONE
+        renderTimestampPollCount = 0
+        delayEstimator.resetPlayback()
         onRenderReset(activeEpoch.get())
     }
     private fun observePlayback() {
@@ -460,8 +466,22 @@ class AudioPlayer(
                     if (count > 0) synchronized(meterLock) {
                         if (audioTrack === t && audioQueue.isCurrent(frame)) {
                             timeline.accepted(chunk, offset, count, frame.epoch)
-                            referenceDelayMs=((timeline.writtenFrames-playbackClock.head(t.playbackHeadPosition))
-                                .coerceIn(0,12000)*1000/SAMPLE_RATE).toInt()
+                            val nowNs = System.nanoTime()
+                            if ((renderTimestampPollCount++ and 3) == 0 && t.getTimestamp(timestamp)) {
+                                delayEstimator.recordRenderTimestamp(
+                                    timestamp.framePosition,
+                                    timestamp.nanoTime,
+                                    nowNs,
+                                    timeline.writtenFrames,
+                                    SAMPLE_RATE
+                                )
+                            }
+                            referenceDelayMs = delayEstimator.computeRenderDelayMs(
+                                nowNs,
+                                timeline.writtenFrames,
+                                playbackClock.head(t.playbackHeadPosition),
+                                SAMPLE_RATE
+                            )
                             referenceAccepted=true
                         }
                     }
