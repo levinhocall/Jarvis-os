@@ -1,5 +1,6 @@
 package com.jarvis.assistant.automation.research
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.work.BackoffPolicy
@@ -118,6 +119,8 @@ internal class ResearchJobs(private val preferences: SharedPreferences?) {
         }
     }
 
+    // KTX edit returns Unit, so it cannot distinguish a failed disk write from a committed job.
+    @SuppressLint("UseKtx")
     private inline fun persist(
         storage: SharedPreferences,
         errorMessage: String,
