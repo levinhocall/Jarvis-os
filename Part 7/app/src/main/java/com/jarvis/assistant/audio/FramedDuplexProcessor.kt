@@ -1,9 +1,20 @@
 package com.jarvis.assistant.audio
 
+data class AecMetrics(
+    val echoReturnLossDb: Double = 0.0,
+    val echoReturnLossEnhancementDb: Double = 0.0,
+    val delayMs: Int = 0,
+    val activeProcessing: Boolean = false,
+    val renderFrames: Long = 0L,
+    val captureFrames: Long = 0L,
+    val saturatedCaptureFrames: Long = 0L
+)
+
 interface EchoBackend : AutoCloseable {
     fun render24k(samples: ShortArray, delayMs: Int)
     fun capture16k(input: ShortArray, output: ShortArray)
     fun reset()
+    fun metrics(): AecMetrics? = null
 }
 
 /** PCM16 framing only. Preserves split samples and feeds accepted speaker writes, never queued packets. */
@@ -53,6 +64,7 @@ class FramedDuplexProcessor(private val backend: EchoBackend) : AutoCloseable {
         check(written == output.size)
         return output
     }
+    @Synchronized fun metrics(): AecMetrics? = if (closed) null else backend.metrics()
     /** Invalidate immediately, rebuild native state on the next audio worker call, not the UI thread. */
     fun requestReset() { resetPending.set(true) }
     @Synchronized override fun close() { if(!closed) { closed=true;backend.close() } }

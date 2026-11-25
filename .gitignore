@@ -19,10 +19,11 @@ local.properties
 # Kotlin compiler cache
 .kotlin/
 
-# Compiled binary packages
+# Compiled binary packages and on-device PRoot prebuilt JNI artifacts
 *.apk
 *.aab
 *.ap_
+**/prebuiltJniLibs/
 
 # OS garbage
 .DS_Store

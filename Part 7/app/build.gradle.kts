@@ -23,12 +23,17 @@ val memorySyncEndpoint = ""
 val elevenLabsVoiceId = configuredValue("JARVIS_ELEVENLABS_VOICE_ID")?.ifBlank { null } ?: "21m00Tcm4TlvDq8ikWAM"
 val releaseSigningReady = listOf(releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { !it.isNullOrBlank() }
 
+val usePrebuiltNativeLibs = configuredValue("usePrebuiltNativeLibs")
+    ?.equals("true", ignoreCase = true) == true
+
 android {
     namespace = "com.jarvis.assistant"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
-    externalNativeBuild {
-        cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
+    if (!usePrebuiltNativeLibs) {
+        externalNativeBuild {
+            cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
+        }
     }
 
     defaultConfig {
@@ -37,10 +42,16 @@ android {
         targetSdk = 36
         versionCode = 149
         versionName = "1.11.0"
-        externalNativeBuild {
-            cmake {
-                arguments += "-DANDROID_STL=c++_static"
-                abiFilters += listOf("arm64-v8a","armeabi-v7a","x86","x86_64")
+        if (!usePrebuiltNativeLibs) {
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DANDROID_STL=c++_static"
+                    abiFilters += listOf("arm64-v8a","armeabi-v7a","x86","x86_64")
+                }
+            }
+        } else {
+            ndk {
+                abiFilters += "arm64-v8a"
             }
         }
 
@@ -91,6 +102,9 @@ android {
         buildConfig = true
     }
 
+    if (usePrebuiltNativeLibs) {
+        sourceSets.getByName("main").jniLibs.srcDir("prebuiltJniLibs")
+    }
     sourceSets.getByName("androidTest").assets.srcDir("schemas")
 
     testOptions {

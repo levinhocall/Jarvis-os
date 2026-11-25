@@ -1088,7 +1088,11 @@ class JarvisConversationService : Service() {
 
         val speechFactory: (() -> com.jarvis.assistant.audio.PcmSpeechDetector)? =
             if(preferences.softwareAecEnabled || preferences.neuralSpeechEnabled || preferences.neuralTurnEnabled) ({ com.jarvis.assistant.audio.wake.SileroSpeechGate(assets) }) else null
-        val sessionEcho = com.jarvis.assistant.audio.DuplexEchoSession(preferences.softwareAecEnabled,speechFactory=speechFactory)
+        val sessionEcho = com.jarvis.assistant.audio.DuplexEchoSession(
+            enabled = preferences.softwareAecEnabled,
+            speechFactory = speechFactory,
+            allowAecFallback = true
+        )
         currentEchoSession=sessionEcho
         val turnAnalysis=if(preferences.neuralTurnEnabled) com.jarvis.assistant.audio.turn.NeuralTurnSession(serviceScope) {
             com.jarvis.assistant.audio.turn.SmartTurnDetector(assets)
@@ -1175,17 +1179,9 @@ class JarvisConversationService : Service() {
         sessionBootstrapJob = serviceScope.launch(Dispatchers.IO) {
             try { echoReady.await() }
             catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (_: Throwable) {
-                withContext(Dispatchers.Main.immediate) {
-                    if(presentationToken == presentationSessionId && currentEchoSession === sessionEcho) {
-                        stopActiveConversation()
-                        _liveError.value=JarvisLiveError("AUDIO PROCESSOR UNAVAILABLE",
-                            "Selected AEC3/Silero processing could not initialize. Disable the optional processor in Wake Word settings and retry.",
-                            "AUDIO_PROCESSOR_INIT_FAILED","OPEN SETTINGS")
-                        setConversationState(ConversationState.ERROR)
-                    }
-                }
-                return@launch
+            catch (error: Throwable) {
+                com.jarvis.assistant.audio.VoiceFlightRecorder.recordError("AEC3_INIT_DEGRADED", error.message ?: error.javaClass.simpleName)
+                audioRecorder?.enableHardwareEffectsFallback()
             }
             if (apiKey.isBlank()) {
                 withContext(Dispatchers.Main.immediate) {
@@ -2224,6 +2220,18 @@ class JarvisConversationService : Service() {
             if (!_isSessionOn.value) return@launch
             try {
                 if(!sessionEcho.initialize()) { echoReady.cancel();return@launch }
+                if (sessionEcho.fallbackReason != null) {
+                    com.jarvis.assistant.audio.VoiceFlightRecorder.record(
+                        stage = "AEC3_HW_FALLBACK",
+                        details = "reason=${sessionEcho.fallbackReason}"
+                    )
+                    recorder.enableHardwareEffectsFallback()
+                } else if (sessionEcho.isAecActive) {
+                    com.jarvis.assistant.audio.VoiceFlightRecorder.record(
+                        stage = "AEC3_NATIVE_ACTIVE",
+                        details = "hal_isolated=true route=${initialRoute.label}"
+                    )
+                }
                 turnAnalysis?.initialize()
                 if(presentationToken != presentationSessionId || currentEchoSession !== sessionEcho) {
                     sessionEcho.close();turnAnalysis?.close();echoReady.cancel();return@launch

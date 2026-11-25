@@ -107,7 +107,7 @@ class AppPreferences internal constructor(
 
     /** Extra cloud review calls are opt-in; no stored memories enter their prompts. */
     var softwareAecEnabled: Boolean
-        get() = prefs.getBoolean("software_aec3_enabled",false)
+        get() = prefs.getBoolean("software_aec3_enabled",true)
         set(value) { prefs.edit().putBoolean("software_aec3_enabled",value).apply() }
     var neuralTurnEnabled: Boolean
         get() = prefs.getBoolean("smart_turn_enabled",false)

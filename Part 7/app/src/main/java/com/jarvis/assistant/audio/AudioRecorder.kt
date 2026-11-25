@@ -44,8 +44,80 @@ class AudioRecorder(
     private var recordingJob: Job? = null
     private var microphoneLease: MicrophoneOwnership.Lease? = null
     private val isRecording = AtomicBoolean(false)
+    private val hardwareFallbackActive = AtomicBoolean(false)
     private val lifecycleGeneration = AtomicLong(0L)
     val isMuted = AtomicBoolean(false)
+
+    private fun useSoftwareEchoPath(): Boolean = softwareEcho && !hardwareFallbackActive.get()
+
+    @SuppressLint("MissingPermission")
+    private fun createConfiguredAudioRecord(bufferSize: Int): AudioRecord? {
+        val sources = if (useSoftwareEchoPath()) {
+            intArrayOf(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                MediaRecorder.AudioSource.MIC
+            )
+        } else {
+            intArrayOf(
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                MediaRecorder.AudioSource.MIC
+            )
+        }
+        for (source in sources) {
+            val candidate = runCatching {
+                AudioRecord(source, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
+            }.getOrNull()
+            if (candidate != null && candidate.state == AudioRecord.STATE_INITIALIZED) {
+                Log.i(TAG, "AudioRecord initialized with source=$source (softwareEcho=${useSoftwareEchoPath()})")
+                return candidate
+            }
+            runCatching { candidate?.release() }
+        }
+        return null
+    }
+
+    private fun configureCaptureEffects(sessionId: Int) {
+        releaseAudioEffects("Reconfiguring capture effects")
+        val linearForSoftwareEcho = useSoftwareEchoPath()
+        if (linearForSoftwareEcho) {
+            // Do not stack OEM/HAL AcousticEchoCanceler, NoiseSuppressor, or AGC ahead of WebRTC AEC3:
+            // non-linear gain pumping and HAL echo filters corrupt the linear echo reference path.
+            Log.i(TAG, "Software AEC3 active on session $sessionId; bypassing platform AEC/NS/AGC.")
+            return
+        }
+        val nsAllowed = !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")
+        if (AcousticEchoCanceler.isAvailable() && nsAllowed) {
+            runCatching {
+                echoCanceler = AcousticEchoCanceler.create(sessionId)?.apply { enabled = true }
+                Log.i(TAG, "Hardware AcousticEchoCanceler enabled on session $sessionId")
+            }.onFailure { Log.w(TAG, "Failed to enable AcousticEchoCanceler: ${it.message}") }
+        }
+        if (NoiseSuppressor.isAvailable() && nsAllowed) {
+            runCatching {
+                noiseSuppressor = NoiseSuppressor.create(sessionId)?.apply { enabled = true }
+                Log.i(TAG, "Hardware NoiseSuppressor enabled on session $sessionId")
+            }.onFailure { Log.w(TAG, "Failed to enable NoiseSuppressor: ${it.message}") }
+        }
+        if (AutomaticGainControl.isAvailable()) {
+            runCatching {
+                automaticGainControl = AutomaticGainControl.create(sessionId)?.apply { enabled = true }
+                Log.i(TAG, "Hardware AutomaticGainControl enabled on session $sessionId")
+            }.onFailure { Log.w(TAG, "Failed to enable AutomaticGainControl: ${it.message}") }
+        }
+    }
+
+    /**
+     * Dynamically activates hardware AEC/NS/AGC if software AEC3 falls back at runtime.
+     */
+    @Synchronized
+    fun enableHardwareEffectsFallback() {
+        if (!hardwareFallbackActive.compareAndSet(false, true)) return
+        val active = audioRecord
+        if (active != null && active.state == AudioRecord.STATE_INITIALIZED) {
+            configureCaptureEffects(active.audioSessionId)
+        }
+    }
 
     /** True while this recorder owns the microphone capture session. */
     val isActive: Boolean
@@ -84,18 +156,11 @@ class AudioRecorder(
             var initAttempts = 0
             while (initAttempts < 5) {
                 initAttempts++
-                val candidate = AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    SAMPLE_RATE,
-                    CHANNEL_CONFIG,
-                    AUDIO_FORMAT,
-                    bufferSize
-                )
-                if (candidate.state == AudioRecord.STATE_INITIALIZED) {
+                val candidate = createConfiguredAudioRecord(bufferSize)
+                if (candidate != null) {
                     record = candidate
                     break
                 }
-                candidate.release()
                 // Initialization is guarded above to run only off the main thread.
                 // Back off briefly between hardware initialization attempts.
                 Log.w(TAG, "AudioRecord initialization attempt $initAttempts failed; retrying in 150ms")
@@ -116,39 +181,7 @@ class AudioRecorder(
 
             // Publish before any effect API can throw so the common failure path owns cleanup.
             audioRecord = record
-            val sessionId = record.audioSessionId
-            if (!softwareEcho && AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
-                try {
-                    echoCanceler = AcousticEchoCanceler.create(sessionId)?.apply {
-                        enabled = true
-                    }
-                    Log.i(TAG, "Hardware AcousticEchoCanceler enabled on session $sessionId")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to enable AcousticEchoCanceler: ${e.message}")
-                }
-            }
-
-            if (NoiseSuppressor.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
-                try {
-                    noiseSuppressor = NoiseSuppressor.create(sessionId)?.apply {
-                        enabled = true
-                    }
-                    Log.i(TAG, "Hardware NoiseSuppressor enabled on session $sessionId")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to enable NoiseSuppressor: ${e.message}")
-                }
-            }
-
-            if (AutomaticGainControl.isAvailable()) {
-                try {
-                    automaticGainControl = AutomaticGainControl.create(sessionId)?.apply {
-                        enabled = true
-                    }
-                    Log.i(TAG, "Hardware AutomaticGainControl enabled on session $sessionId")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to enable AutomaticGainControl: ${e.message}")
-                }
-            }
+            configureCaptureEffects(record.audioSessionId)
 
             record.startRecording()
             check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start" }
@@ -263,40 +296,12 @@ class AudioRecorder(
 
                         var replacementRecord: AudioRecord? = null
                         try {
-                            val candidate = AudioRecord(
-                                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                                SAMPLE_RATE,
-                                CHANNEL_CONFIG,
-                                AUDIO_FORMAT,
-                                bufferSize
-                            )
+                            val candidate = createConfiguredAudioRecord(bufferSize)
+                                ?: throw IllegalStateException("Replacement AudioRecord failed to initialize")
                             replacementRecord = candidate
-                            if (candidate.state != AudioRecord.STATE_INITIALIZED) {
-                                throw IllegalStateException("Replacement AudioRecord failed to initialize")
-                            }
 
                             val newSessionId = candidate.audioSessionId
-                            if (!softwareEcho && AcousticEchoCanceler.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
-                                try {
-                                    echoCanceler = AcousticEchoCanceler.create(newSessionId)?.apply { enabled = true }
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "AEC rebind failed: ${e.message}")
-                                }
-                            }
-                            if (NoiseSuppressor.isAvailable() && !com.jarvis.assistant.ui.aura.AuraOptions.enabled("disableNoiseSuppression")) {
-                                try {
-                                    noiseSuppressor = NoiseSuppressor.create(newSessionId)?.apply { enabled = true }
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "NoiseSuppressor rebind failed: ${e.message}")
-                                }
-                            }
-                            if (AutomaticGainControl.isAvailable()) {
-                                try {
-                                    automaticGainControl = AutomaticGainControl.create(newSessionId)?.apply { enabled = true }
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "AGC rebind failed: ${e.message}")
-                                }
-                            }
+                            configureCaptureEffects(newSessionId)
 
                             candidate.startRecording()
                             check(candidate.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Replacement microphone did not start" }

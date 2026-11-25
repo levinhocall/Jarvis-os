@@ -146,10 +146,10 @@ class WakeWordActivity : DirectiveActivity() {
                 notice("Engine saved. Stop and restart wake listening to apply.")
             }
             val voicePrefs=(application as com.jarvis.assistant.JarvisApp).preferences
-            toggle("WebRTC AEC3 · experimental speaker echo control",voicePrefs.softwareAecEnabled) { voicePrefs.softwareAecEnabled=it }
+            toggle("WebRTC AEC3 · hardware-isolated speaker echo control",voicePrefs.softwareAecEnabled) { voicePrefs.softwareAecEnabled=it }
             toggle("Smart Turn neural end-of-turn · experimental",voicePrefs.neuralTurnEnabled) { voicePrefs.neuralTurnEnabled=it }
             toggle("Silero neural speech detection in Voice Mode",voicePrefs.neuralSpeechEnabled) { voicePrefs.neuralSpeechEnabled=it }
-            label("Restart Voice Mode to apply. AEC3 uses the actual accepted Gemini PCM reference plus Silero speech confirmation. Device/Bluetooth quality is unmeasured. TTS routes without PCM use guarded listening. Both options are off by default.")
+            label("Restart Voice Mode to apply. WebRTC AEC3 uses synchronized Gemini + Android TTS PCM references with hardware timestamp delay calibration and automatic fallback if unsupported.")
             label("Neural mode recognizes the trained phrase ‘Hey Jarvis’. Custom names and owner-voice mode use Vosk. Models run on the phone; included weights are licensed for noncommercial use.")
             toggle("Allow wake while in pocket",settings.allowPocket) {settings.allowPocket=it}
             toggle("Silent wake transitions · no app chime",settings.silentWake) {settings.silentWake=it}

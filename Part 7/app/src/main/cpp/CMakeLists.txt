@@ -11,7 +11,13 @@ FetchContent_Declare(webrtc_aec3
 FetchContent_MakeAvailable(webrtc_aec3)
 set(WEBRTC_SRC ${webrtc_aec3_SOURCE_DIR}/src)
 file(GLOB_RECURSE WEBRTC_FILES CONFIGURE_DEPENDS ${WEBRTC_SRC}/*.cc ${WEBRTC_SRC}/*.c ${WEBRTC_SRC}/*.cpp)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64|armv7|arm")
+set(JARVIS_IS_ARM OFF)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64|armv7|arm"
+   OR CMAKE_ANDROID_ARCH_ABI MATCHES "arm64-v8a|armeabi-v7a"
+   OR ANDROID_ABI MATCHES "arm64-v8a|armeabi-v7a")
+    set(JARVIS_IS_ARM ON)
+endif()
+if(JARVIS_IS_ARM)
     list(FILTER WEBRTC_FILES EXCLUDE REGEX ".*_(avx2|sse2|sse)\\.cc$")
 else()
     list(FILTER WEBRTC_FILES EXCLUDE REGEX ".*_neon\\.cc$")
@@ -28,7 +34,7 @@ if(ANDROID)
     target_sources(jarvis_webrtc PRIVATE ${ANDROID_NDK}/sources/android/cpufeatures/cpu-features.c)
     target_include_directories(jarvis_webrtc PRIVATE ${ANDROID_NDK}/sources/android/cpufeatures)
 endif()
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64|armv7|arm")
+if(JARVIS_IS_ARM)
     target_compile_definitions(jarvis_webrtc PUBLIC WEBRTC_HAS_NEON)
 endif()
 target_include_directories(jarvis_webrtc PUBLIC ${WEBRTC_SRC} ${WEBRTC_SRC}/api
