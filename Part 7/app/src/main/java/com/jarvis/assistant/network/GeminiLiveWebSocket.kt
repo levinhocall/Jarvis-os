@@ -343,10 +343,11 @@ class GeminiLiveWebSocket(
                 put("tools", JSONArray().put(JSONObject().apply {
                     put("functionDeclarations", JSONArray().apply {
                         listOf(
+                            Triple("start_research_job", "Start a separate web research report only when the user asks for background research or a research report. Requires Background Web Search enabled. Return its status and let the user continue speaking.", "query"),
                             Triple("background_search", "Search the web without opening a browser. Requires the user's Aura Background Web Search toggle. Return retrieved sources.", "query"),
                             Triple("generate_image", "Generate an image with Gemini and save it to the phone gallery. Requires Gemini Images enabled. Never claim saved until tool succeeds.", "prompt"),
                             Triple("delegate_ui_task", "Delegate a long user-requested UI task to a separate bounded mission while continuing conversation. Requires Background Agent enabled. Accepted is not completed.", "goal"),
-                            Triple("review_saved_workflow", "When the user explicitly asks to open or run a saved workflow or routine by its exact name, open the local review screen. The user starts the workflow there.", "workflow_name")
+                            Triple("review_saved_workflow", "When the user explicitly asks to open or run a saved workflow by its exact name, open the local review screen. The user starts the workflow there.", "workflow_name")
                         ).forEach { (toolName, description, parameter) ->
                             put(JSONObject().put("name", toolName).put("description", description).put("parameters", JSONObject()
                                 .put("type", "OBJECT").put("properties", JSONObject().put(parameter, JSONObject().put("type", "STRING")))
@@ -354,6 +355,23 @@ class GeminiLiveWebSocket(
                         }
                         put(JSONObject().put("name", "share_generated_image").put("description", "Only when the user asks, open WhatsApp's contact picker for the last generated image. User confirms Send; opening is not delivery.")
                             .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))
+
+                        put(JSONObject().put("name", "schedule_recurring_reminder")
+                            .put("description", "Set a private weekly, monthly, or repeating interval notification only on the user's explicit request. Ask for missing schedule details. Never use for automated phone actions.")
+                            .put("parameters", JSONObject().put("type", "OBJECT")
+                                .put("properties", JSONObject()
+                                    .put("message", JSONObject().put("type", "STRING").put("description", "Reminder text"))
+                                    .put("hour", JSONObject().put("type", "INTEGER").put("description", "Local clock hour, 0–23. Start hour for intervals."))
+                                    .put("minute", JSONObject().put("type", "INTEGER").put("description", "Local clock minute, 0–59. Start minute for intervals."))
+                                    .put("weekdays", JSONObject().put("type", "ARRAY")
+                                        .put("items", JSONObject().put("type", "INTEGER"))
+                                        .put("description", "Weekly schedule, list of ISO day numbers, Monday=1 through Sunday=7. Omit for monthly."))
+                                    .put("month_day", JSONObject().put("type", "INTEGER")
+                                        .put("description", "Monthly day 1–31. A shorter month uses its last day. Omit for weekly or interval."))
+                                    .put("interval_minutes", JSONObject().put("type", "INTEGER").put("description", "Minutes between reminders, 15–1439. Supply end_hour and end_minute and omit weekdays and month_day."))
+                                    .put("end_hour", JSONObject().put("type", "INTEGER").put("description", "Exclusive end hour for interval schedules, 0–23."))
+                                    .put("end_minute", JSONObject().put("type", "INTEGER").put("description", "Exclusive end minute for interval schedules, 0–59.")))
+                                .put("required", JSONArray().put("message").put("hour").put("minute"))))
 
                         // 1. open_app
                         put(JSONObject().apply {

@@ -58,5 +58,36 @@
     <string name="category_notes">Notes</string>
     <string name="notification_service_label">JARVIS Notification Engine</string>
     <string name="notification_service_desc">Enables JARVIS to read incoming notifications for hands-free WhatsApp replies, expense tracking, and intelligent headset whispers.</string>
+    <string name="routines_title">Reminder routines</string>
+    <string name="routines_empty">No recurring reminders scheduled.</string>
+    <string name="routine_add">Add recurring reminder</string>
+    <string name="routine_text_hint">What should JARVIS remind you about?</string>
+    <string name="routine_next">Next</string>
+    <string name="routine_repeat">Repeat reminder</string>
+    <string name="routine_weekly">Weekly</string>
+    <string name="routine_monthly">Monthly · shorter months use the last day</string>
+    <string name="routine_next_run">%1$s\nNext: %2$s (%3$s)</string>
+    <string name="routine_interval">Repeat within a daily time window</string>
+    <string name="routine_interval_hint">Minutes between reminders (15–1439)</string>
+    <string name="routine_start_time">Start of reminder window</string>
+    <string name="routine_end_time">End of reminder window</string>
+    <string name="routine_delete">Remove this recurring reminder?</string>
+    <string name="routine_remove">Remove</string>
+    <string name="routine_saved">Recurring reminder scheduled.</string>
+    <string name="routine_failed">Could not update recurring reminder.</string>
+    <string name="research_jobs_title">Research tasks</string>
+    <string name="research_jobs_refresh">Refresh</string>
+    <string name="research_jobs_new">New research task</string>
+    <string name="research_jobs_empty">No research tasks yet.</string>
+    <string name="research_job_row">%1$s\n%2$s</string>
+    <string name="research_job_ready">Report ready</string>
+    <string name="research_job_running">Researching</string>
+    <string name="research_job_queued">Waiting to run</string>
+    <string name="research_job_unavailable">Research report unavailable.</string>
+    <string name="research_job_remove">Remove task</string>
+    <string name="research_job_remove_confirmation">Remove this task and its report?</string>
+    <string name="research_job_topic">What should JARVIS research?</string>
+    <string name="research_job_start">Start research</string>
+    <string name="research_jobs_enable_search">Enable Background Web Search in Aura first.</string>
 </resources>
 

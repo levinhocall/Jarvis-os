@@ -33,6 +33,8 @@ class AppPreferences internal constructor(
     }
     private val gson = Gson()
 
+    internal val researchJobs = com.jarvis.assistant.automation.research.ResearchJobs(secureApiPrefs)
+
     internal val savedWorkflows = com.jarvis.assistant.automation.macro.SavedWorkflowLibrary(
         read = { checkNotNull(secureApiPrefs) { "Encrypted storage unavailable." }.getString("saved_workflows_v1", null) },
         write = { json ->

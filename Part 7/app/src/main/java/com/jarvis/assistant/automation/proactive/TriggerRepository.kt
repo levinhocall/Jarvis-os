@@ -19,7 +19,8 @@ import java.util.concurrent.TimeUnit
 enum class TriggerType {
     ONE_TIME_DELAYED,
     RECURRING_DAILY,
-    NOTIFICATION_KEYWORD
+    NOTIFICATION_KEYWORD,
+    CALENDAR_REMINDER
 }
 
 data class ScheduledTrigger(
@@ -32,7 +33,8 @@ data class ScheduledTrigger(
     val keywordFilter: String? = null,
     val isUnattended: Boolean = false,
     val isEnabled: Boolean = true,
-    val delayMs: Long? = null
+    val delayMs: Long? = null,
+    val calendarSchedule: CalendarReminderSchedule? = null
 )
 
 /**
@@ -170,7 +172,11 @@ class TriggerRepository(
         if (trigger.triggerType == TriggerType.NOTIFICATION_KEYWORD && trigger.keywordFilter.isNullOrBlank()) {
             return false
         }
-        val secure = encryptedPrefs ?: return false
+        if (trigger.triggerType == TriggerType.CALENDAR_REMINDER) {
+            if (trigger.isUnattended || trigger.calendarSchedule?.isValid() != true) return false
+            triggers[trigger.triggerId]?.let { return it == trigger }
+        }
+        if (encryptedPrefs == null) return false
         val previous = triggers.put(trigger.triggerId, trigger)
         if (!saveTriggers()) {
             if (previous == null) triggers.remove(trigger.triggerId) else triggers[trigger.triggerId] = previous
@@ -204,6 +210,7 @@ class TriggerRepository(
                         .build()
                     wm.enqueueUniquePeriodicWork(trigger.triggerId, ExistingPeriodicWorkPolicy.UPDATE, request)
                 }
+                TriggerType.CALENDAR_REMINDER -> enqueueCalendarOccurrence(trigger, System.currentTimeMillis())
                 TriggerType.NOTIFICATION_KEYWORD -> {
                     // Keyword triggers are event-driven, so they are active only when Android
                     // has actually granted notification-listener access to this service.
@@ -219,6 +226,21 @@ class TriggerRepository(
             saveTriggers()
             false
         }
+    }
+
+    @Synchronized
+    internal fun enqueueCalendarOccurrence(trigger: ScheduledTrigger, afterMs: Long) {
+        if (triggers[trigger.triggerId] != trigger) return
+        val schedule = requireNotNull(trigger.calendarSchedule)
+        val dueMs = schedule.nextAfter(afterMs)
+        val wm = checkNotNull(getWorkManager()) { "WorkManager is unavailable." }
+        val request = OneTimeWorkRequestBuilder<CalendarReminderWorker>()
+            .setInitialDelay((dueMs - System.currentTimeMillis()).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+            .setInputData(workDataOf("triggerId" to trigger.triggerId, "dueMs" to dueMs))
+            .addTag(trigger.triggerId)
+            .build()
+        wm.enqueueUniqueWork("calendar_${trigger.triggerId}_$dueMs", ExistingWorkPolicy.KEEP, request)
+            .result.get(8, TimeUnit.SECONDS)
     }
 
     internal fun triggerInputData(trigger: ScheduledTrigger): Data = workDataOf(
@@ -267,6 +289,9 @@ class TriggerRepository(
         }
         runCatching { getWorkManager()?.cancelUniqueWork(triggerId) }
         runCatching { getWorkManager()?.cancelUniqueWork("notification_$triggerId") }
+        if (existing.triggerType == TriggerType.CALENDAR_REMINDER) {
+            runCatching { getWorkManager()?.cancelAllWorkByTag(triggerId) }
+        }
         return true
     }
 }

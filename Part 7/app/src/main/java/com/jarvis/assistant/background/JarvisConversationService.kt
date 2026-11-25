@@ -2505,6 +2505,29 @@ class JarvisConversationService : Service() {
                 val result = JSONObject()
 
                 when (name) {
+                    "schedule_recurring_reminder" -> {
+                        val saved = withContext(Dispatchers.IO) {
+                            com.jarvis.assistant.automation.proactive.RecurringReminderTool.schedule(app.triggerRepository, args)
+                        }
+                        result.put("success", saved)
+                        result.put("message", if (saved) {
+                            "Recurring reminder scheduled. Android will deliver a private notification when background work runs. Manage it in Mission Mode under Reminder routines."
+                        } else {
+                            "The recurring reminder could not be scheduled."
+                        })
+                    }
+                    "start_research_job" -> {
+                        val id = withContext(Dispatchers.IO) {
+                            app.preferences.researchJobs.enqueue(
+                                applicationContext,
+                                args.getString("query").trim(),
+                                java.util.UUID.nameUUIDFromBytes(callId.toByteArray(Charsets.UTF_8))
+                            )
+                        }
+                        result.put("success", true)
+                        result.put("task_id", id.toString())
+                        result.put("message", "Research queued. Open Mission Mode → Research tasks to check progress or read the report.")
+                    }
                     "background_search" -> {
                         val answer = com.jarvis.assistant.ui.aura.AuraCloudClient.search(args.optString("query"))
                         result.put("success", true); result.put("answer", answer)
