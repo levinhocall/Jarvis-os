@@ -11,6 +11,7 @@ data class VoicePresentationSnapshot(
     val pendingResponse: Boolean = false,
     val playing: Boolean = false,
     val playbackSource: PlaybackSource = PlaybackSource.NONE,
+    val hasPcmReference: Boolean = false,
     val timing: AudioTimingConfidence = AudioTimingConfidence.UNAVAILABLE,
     val microphone: VoiceEnvelope = VoiceEnvelope(),
     val output: VoiceEnvelope = VoiceEnvelope(),

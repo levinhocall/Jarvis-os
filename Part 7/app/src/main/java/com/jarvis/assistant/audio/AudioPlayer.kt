@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.AudioTimestamp
 import com.jarvis.assistant.data.model.AudioTimingConfidence
+import com.jarvis.assistant.data.model.PlaybackSource
 import android.os.Build
 import android.util.Log
 import java.util.concurrent.TimeUnit
@@ -25,13 +26,22 @@ class AudioPlayer(
         const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }
 
-    data class PlaybackObservation(val epoch: Long, val revision: Long, val playing: Boolean,
-        val level: Float, val timing: AudioTimingConfidence)
+    data class PlaybackObservation(
+        val epoch: Long,
+        val revision: Long,
+        val playing: Boolean,
+        val level: Float,
+        val timing: AudioTimingConfidence,
+        val source: PlaybackSource = PlaybackSource.GEMINI_PCM
+    )
     private val meterLock = Any()
     private val timeline = PcmEnvelopeTimeline()
     private val playbackClock = PlaybackFrameClock()
     private val timestamp = AudioTimestamp()
     private val meterRevision = java.util.concurrent.atomic.AtomicLong(0)
+    @Volatile private var activePlaybackSource: PlaybackSource = PlaybackSource.NONE
+    private val completionLock = Any()
+    private val turnCompletionCallbacks = mutableMapOf<Long, MutableList<() -> Unit>>()
     private var meterExecutor: java.util.concurrent.ScheduledExecutorService? = null
     private var meterTask: java.util.concurrent.ScheduledFuture<*>? = null
     private var routeSettlesAt = 0L
@@ -56,13 +66,16 @@ class AudioPlayer(
         meterTask = executor.scheduleWithFixedDelay({ observePlayback() }, 0, 20, TimeUnit.MILLISECONDS)
     }
     @Synchronized private fun stopMeter() { meterTask?.cancel(false); meterTask = null; publishQuiet() }
-    private fun publishQuiet() = publishObservation(PlaybackObservation(activeEpoch.get(), meterRevision.get(), false, 0f, AudioTimingConfidence.UNAVAILABLE))
+    private fun publishQuiet() = publishObservation(
+        PlaybackObservation(activeEpoch.get(), meterRevision.get(), false, 0f, AudioTimingConfidence.UNAVAILABLE, PlaybackSource.NONE)
+    )
     private fun publishObservation(observation: PlaybackObservation) {
         if (!isObservationCurrent(observation)) return
         runCatching { onPlaybackObservation(observation); notifyAmplitude(observation.level) }
     }
     private fun resetMeter() = synchronized(meterLock) {
         meterRevision.incrementAndGet(); timeline.reset(activeEpoch.get()); playbackClock.reset(); lastHead = -1
+        activePlaybackSource = PlaybackSource.NONE
         onRenderReset(activeEpoch.get())
     }
     private fun observePlayback() {
@@ -81,8 +94,9 @@ class AudioPlayer(
                     if (head != lastHead) { lastHeadChangedAt = now; lastHead = head }
                     val level = if (track.playState == AudioTrack.PLAYSTATE_PLAYING && now >= routeSettlesAt && now - lastHeadChangedAt < 150)
                         timeline.levelAt(head, activeEpoch.get()) else null
+                    val observedSource = if (level != null) activePlaybackSource else PlaybackSource.NONE
                     PlaybackObservation(activeEpoch.get(), meterRevision.get(), level != null, level ?: 0f,
-                        if (level == null) AudioTimingConfidence.UNAVAILABLE else timing)
+                        if (level == null) AudioTimingConfidence.UNAVAILABLE else timing, observedSource)
                 }
             }
         }.getOrNull() ?: run { publishQuiet(); return }
@@ -218,10 +232,12 @@ class AudioPlayer(
 
                         if (shouldFinish && isPlayingState.get()) {
                             isPlayingState.set(false)
+                            synchronized(meterLock) { activePlaybackSource = PlaybackSource.NONE }
                             VoiceFlightRecorder.recordPlaybackComplete()
                             // The presentation clock drains remaining hardware frames independently.
                             notifyPlaybackState(false)
                             notifyAmplitude(0f)
+                            dispatchTurnCompletionCallbacks(activeEpoch.get())
                         }
                     }
                 } catch (e: InterruptedException) {
@@ -241,16 +257,77 @@ class AudioPlayer(
 
     @Synchronized
     fun enqueueAudio(pcmData: ByteArray, epoch: Long? = null) {
-        if (released.get() || droppingTurn.get() || pcmData.size < 16) return
-        when (audioQueue.offer(pcmData, epoch ?: activeEpoch.get())) {
-            PcmPlaybackQueue.Offer.OVERFLOW -> {
-                // Stop the whole turn visibly instead of silently dropping arbitrary speech chunks.
-                flush()
-                droppingTurn.set(true)
-                runCatching { onPlaybackFailure("PLAYBACK_BUFFER_OVERFLOW") }
-                    .onFailure { Log.w(TAG, "Playback failure callback failed (${it.javaClass.simpleName})") }
+        enqueuePcm(pcmData, SAMPLE_RATE, 1, epoch, PlaybackSource.GEMINI_PCM, null)
+    }
+
+    /**
+     * Unified PCM playback ingestion path for Gemini Live, Android TTS WAV decode, and local
+     * neural TTS engines. Resamples non-24 kHz or multi-channel input to 24 kHz mono PCM16,
+     * chunks long utterances for <10 ms barge-in latency, and feeds the synchronized AEC/DTLN tap.
+     */
+    @Synchronized
+    fun enqueuePcm(
+        pcmData: ByteArray,
+        sampleRateHz: Int = SAMPLE_RATE,
+        channels: Int = 1,
+        epoch: Long? = null,
+        source: PlaybackSource = PlaybackSource.GEMINI_PCM,
+        onDrained: (() -> Unit)? = null,
+        markTurnCompleteAfterEnqueue: Boolean = (source != PlaybackSource.GEMINI_PCM)
+    ): Boolean {
+        if (released.get() || droppingTurn.get() || pcmData.size < 16) return false
+        val normalized = if (sampleRateHz == SAMPLE_RATE && channels == 1) {
+            pcmData
+        } else {
+            PcmAudioConverter.to24kMonoPcm16(pcmData, sampleRateHz, channels)
+        }
+        if (normalized.size < 16) return false
+
+        val targetEpoch = epoch ?: activeEpoch.get()
+        val maxSliceBytes = 9600 // 200ms slices at 24 kHz mono PCM16
+        val neededFrames = (normalized.size + maxSliceBytes - 1) / maxSliceBytes
+        // Avoid partial queueing when an oversized non-Gemini utterance exceeds queue headroom.
+        if (source != PlaybackSource.GEMINI_PCM &&
+            (normalized.size > (2 * 1024 * 1024 - audioQueue.queuedBytes) || neededFrames + audioQueue.size > 512)
+        ) {
+            return false
+        }
+        var offset = 0
+        var acceptedAny = false
+        while (offset < normalized.size) {
+            val end = minOf(offset + maxSliceBytes, normalized.size)
+            val slice = if (offset == 0 && end == normalized.size) normalized else normalized.copyOfRange(offset, end)
+            when (audioQueue.offer(slice, targetEpoch, source)) {
+                PcmPlaybackQueue.Offer.ACCEPTED -> acceptedAny = true
+                PcmPlaybackQueue.Offer.OVERFLOW -> {
+                    // Stop the whole turn visibly instead of silently dropping arbitrary speech chunks.
+                    flush()
+                    droppingTurn.set(true)
+                    runCatching { onPlaybackFailure("PLAYBACK_BUFFER_OVERFLOW") }
+                        .onFailure { Log.w(TAG, "Playback failure callback failed (${it.javaClass.simpleName})") }
+                    return false
+                }
+                else -> return false
             }
-            else -> Unit // Old-epoch/released audio is intentionally rejected.
+            offset = end
+        }
+        if (acceptedAny) {
+            if (markTurnCompleteAfterEnqueue) isTurnComplete.set(true)
+            if (onDrained != null) {
+                synchronized(completionLock) {
+                    turnCompletionCallbacks.getOrPut(targetEpoch) { mutableListOf() }.add(onDrained)
+                }
+            }
+        }
+        return acceptedAny
+    }
+
+    private fun dispatchTurnCompletionCallbacks(epoch: Long) {
+        val callbacks = synchronized(completionLock) {
+            turnCompletionCallbacks.remove(epoch)?.toList().orEmpty()
+        }
+        callbacks.forEach { cb ->
+            runCatching { cb() }.onFailure { Log.w(TAG, "Turn drained callback failed: ${it.message}") }
         }
     }
 
@@ -261,6 +338,7 @@ class AudioPlayer(
     fun flush(newEpoch: Long = activeEpoch.incrementAndGet()) {
         val nextEpoch = activeEpoch.updateAndGet { maxOf(it, newEpoch) }
         droppingTurn.set(false)
+        synchronized(completionLock) { turnCompletionCallbacks.clear() }
         audioQueue.advance(nextEpoch)
         resetMeter()
         stopMeter()
@@ -288,8 +366,9 @@ class AudioPlayer(
 
     @Synchronized
     fun release() {
-        if (!released.compareAndSet(false, true)) return
+        released.compareAndSet(false, true).also { if (!it) return }
         isRunning.set(false)
+        synchronized(completionLock) { turnCompletionCallbacks.clear() }
         playbackThread?.interrupt()
         playbackThread = null
         audioQueue.close()
@@ -339,12 +418,14 @@ class AudioPlayer(
         if (released.get() || !isRunning.get() || !audioQueue.isCurrent(frame)) return false
         isTurnComplete.set(false)
         isPlayingState.set(true)
+        synchronized(meterLock) { activePlaybackSource = frame.source }
         notifyPlaybackState(true)
         return true
     }
 
     private fun writeToTrack(frame: PcmPlaybackQueue.Frame) {
         if (!audioQueue.isCurrent(frame)) return
+        synchronized(meterLock) { activePlaybackSource = frame.source }
         val chunk = frame.bytes
         var track: AudioTrack?
         synchronized(trackLock) {
@@ -378,7 +459,7 @@ class AudioPlayer(
                     var referenceAccepted=false
                     if (count > 0) synchronized(meterLock) {
                         if (audioTrack === t && audioQueue.isCurrent(frame)) {
-                            timeline.accepted(chunk, offset, count, activeEpoch.get())
+                            timeline.accepted(chunk, offset, count, frame.epoch)
                             referenceDelayMs=((timeline.writtenFrames-playbackClock.head(t.playbackHeadPosition))
                                 .coerceIn(0,12000)*1000/SAMPLE_RATE).toInt()
                             referenceAccepted=true

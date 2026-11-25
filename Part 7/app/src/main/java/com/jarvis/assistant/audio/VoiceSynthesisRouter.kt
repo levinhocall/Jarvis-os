@@ -17,7 +17,6 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
 import kotlinx.coroutines.Dispatchers
@@ -95,6 +94,7 @@ object VoiceSynthesisRouter {
             setAudioAttributes(attributes)
             setPitch(CINEMATIC_PITCH)
             setSpeechRate(CINEMATIC_RATE)
+            setOnUtteranceProgressListener(AndroidTtsPcmBridge.createProgressListener())
             language = Locale("hi", "IN").takeIf { isLanguageAvailable(it) >= TextToSpeech.LANG_AVAILABLE } ?: Locale.US
         }
     }
@@ -176,19 +176,22 @@ object VoiceSynthesisRouter {
         val normalized = normalizeForSpeech(text)
         val generation = nextPlayback()
         val expectedId = "utterance_$generation"
-        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) { if (utteranceId == expectedId) publishPlayback(generation, true) }
-            override fun onStop(utteranceId: String?, interrupted: Boolean) { if (utteranceId == expectedId) publishPlayback(generation, false) }
-            override fun onDone(utteranceId: String?) {
-                if (utteranceId != expectedId || playback.value.generation != generation) return
-                publishPlayback(generation, false); onDone?.invoke()
+        AndroidTtsPcmBridge.speak(
+            tts = tts,
+            cacheDir = appContext?.cacheDir,
+            text = normalized,
+            utteranceId = expectedId,
+            isCurrent = { playback.value.generation == generation },
+            onUnifiedStart = { publishPlayback(generation, playing = false, external = false) },
+            onDirectStart = { publishPlayback(generation, playing = true, external = false) },
+            onDirectStop = { _ -> publishPlayback(generation, playing = false, external = false) },
+            onDone = {
+                if (playback.value.generation == generation) {
+                    publishPlayback(generation, playing = false, external = false)
+                    onDone?.invoke()
+                }
             }
-            override fun onError(utteranceId: String?) {
-                if (utteranceId == expectedId) publishPlayback(generation, false)
-                Log.w(TAG, "Local TTS utterance failed; completion callback suppressed.")
-            }
-        })
-        tts.speak(normalized, TextToSpeech.QUEUE_FLUSH, null, expectedId)
+        )
     }
 
     private fun speakWithElevenLabs(text: String, apiKey: String, onDone: (() -> Unit)?) {

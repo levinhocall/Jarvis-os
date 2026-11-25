@@ -296,6 +296,7 @@ class JarvisConversationService : Service() {
     @Volatile private var voiceSessionManager: VoiceSessionManager? = null
     @Volatile private var microphoneForegroundReady = false
     private var audioPlayer: AudioPlayer? = null
+    @Volatile private var playbackPcmSink: com.jarvis.assistant.audio.AndroidTtsPcmBridge.PcmSink? = null
     private var currentTurnAnalysis: com.jarvis.assistant.audio.turn.NeuralTurnSession? = null
     private var currentEchoSession: com.jarvis.assistant.audio.DuplexEchoSession? = null
     @Volatile private var liveWebSocket: GeminiLiveWebSocket? = null
@@ -766,28 +767,7 @@ class JarvisConversationService : Service() {
                     } else {
                         tts?.language = Locale.US
                     }
-                    tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                        override fun onStart(utteranceId: String?) {
-                            presentServiceTts(utteranceId, true)
-                        }
-
-                        override fun onStop(utteranceId: String?, interrupted: Boolean) { presentServiceTts(utteranceId, false) }
-                        override fun onDone(utteranceId: String?) {
-                            Log.d("JarvisService", "TTS onDone: $utteranceId")
-                            handleTtsDone(utteranceId)
-                        }
-
-                        @Deprecated("Deprecated in Java")
-                        override fun onError(utteranceId: String?) {
-                            Log.e("JarvisService", "TTS onError: $utteranceId")
-                            handleTtsDone(utteranceId)
-                        }
-
-                        override fun onError(utteranceId: String?, errorCode: Int) {
-                            Log.e("JarvisService", "TTS onError: $utteranceId code: $errorCode")
-                            handleTtsDone(utteranceId)
-                        }
-                    })
+                    tts?.setOnUtteranceProgressListener(com.jarvis.assistant.audio.AndroidTtsPcmBridge.createProgressListener())
                 }
             }, com.jarvis.assistant.audio.SystemTtsEngineSelection.requested())
         } catch (e: Exception) {
@@ -797,8 +777,23 @@ class JarvisConversationService : Service() {
 
     private fun speakServiceSummary(text: String?) {
         if (text.isNullOrBlank()) return
+        val localTts = tts ?: return
         val facts = voicePresentation.value
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "${facts.sessionId}:${facts.interruptionGeneration}:task_done")
+        val utteranceId = "${facts.sessionId}:${facts.interruptionGeneration}:task_done"
+        com.jarvis.assistant.audio.AndroidTtsPcmBridge.speak(
+            tts = localTts,
+            cacheDir = cacheDir,
+            text = text,
+            utteranceId = utteranceId,
+            isCurrent = {
+                val cur = voicePresentation.value
+                cur.sessionId == facts.sessionId && cur.interruptionGeneration == facts.interruptionGeneration
+            },
+            onUnifiedStart = { setConversationState(ConversationState.SPEAKING) },
+            onDirectStart = { presentServiceTts(utteranceId, true) },
+            onDirectStop = { _ -> presentServiceTts(utteranceId, false) },
+            onDone = { handleTtsDone(utteranceId) }
+        )
     }
 
     private fun presentServiceTts(utteranceId: String?, playing: Boolean) {
@@ -807,7 +802,9 @@ class JarvisConversationService : Service() {
         val generation = parts.getOrNull(1)?.toLongOrNull() ?: return
         presentationStore.update(session) {
             if (!it.active || it.interruptionGeneration != generation) it else it.copy(
-                playing = playing, playbackSource = if (playing) PlaybackSource.ANDROID_TTS else PlaybackSource.NONE,
+                playing = playing,
+                playbackSource = if (playing) PlaybackSource.ANDROID_TTS else PlaybackSource.NONE,
+                hasPcmReference = false,
                 timing = AudioTimingConfidence.STATE_ONLY, pendingResponse = false,
                 output = VoiceEnvelope(0f, SystemClock.elapsedRealtime(), generation))
         }
@@ -1051,8 +1048,9 @@ class JarvisConversationService : Service() {
                 presentationStore.update(presentationToken) {
                     val source = if (signal.external) PlaybackSource.EXTERNAL_TTS else PlaybackSource.ANDROID_TTS
                     if (signal.generation <= routerPresentationFloor ||
-                        (!signal.playing && it.playbackSource != source)) it else it.copy(
+                        (!signal.playing && (it.hasPcmReference || it.playbackSource != source))) it else it.copy(
                         playing = signal.playing, playbackSource = if (signal.playing) source else PlaybackSource.NONE,
+                        hasPcmReference = false,
                         timing = AudioTimingConfidence.STATE_ONLY, pendingResponse = false,
                         output = VoiceEnvelope(0f, SystemClock.elapsedRealtime(), it.interruptionGeneration))
                 }
@@ -1122,9 +1120,10 @@ class JarvisConversationService : Service() {
             onPlaybackObservation = { observation ->
                 if (audioPlayer === sessionPlayer) presentationStore.update(presentationToken) {
                     if (!sessionPlayer.isObservationCurrent(observation) ||
-                        (!observation.playing && it.playbackSource !in setOf(PlaybackSource.GEMINI_PCM, PlaybackSource.NONE))) it else it.copy(
+                        (!observation.playing && it.playing && !it.hasPcmReference)) it else it.copy(
                         playing = observation.playing,
-                        playbackSource = if (observation.playing) PlaybackSource.GEMINI_PCM else PlaybackSource.NONE,
+                        playbackSource = if (observation.playing) observation.source else PlaybackSource.NONE,
+                        hasPcmReference = observation.playing,
                         timing = observation.timing,
                         pendingResponse = if (observation.playing || it.playing) false else it.pendingResponse,
                         output = VoiceEnvelope(observation.level, SystemClock.elapsedRealtime(), it.interruptionGeneration)
@@ -1134,7 +1133,7 @@ class JarvisConversationService : Service() {
             onAcceptedRender = { bytes,offset,count,delayMs,epoch -> sessionEcho.render(bytes,offset,count,delayMs,epoch) },
             onRenderReset = { epoch -> sessionEcho.reset(epoch) },
             onPlaybackFailure = { category ->
-                presentationStore.update(presentationToken) { it.copy(playing = false, output = VoiceEnvelope(), errorReason = "Playback stopped: $category") }
+                presentationStore.update(presentationToken) { it.copy(playing = false, hasPcmReference = false, output = VoiceEnvelope(), errorReason = "Playback stopped: $category") }
                 serviceScope.launch {
                     if (audioPlayer === sessionPlayer) _events.emit("Voice playback stopped ($category). Stop and reopen Voice Mode if audio remains unavailable.")
                 }
@@ -1143,6 +1142,23 @@ class JarvisConversationService : Service() {
         audioPlayer = sessionPlayer
         sessionPlayer.flush(activePlaybackGeneration.get())
         sessionPlayer.start()
+        val unifiedPcmSink = object : com.jarvis.assistant.audio.AndroidTtsPcmBridge.PcmSink {
+            override fun isActive(): Boolean = audioPlayer === sessionPlayer && _isSessionOn.value
+            override fun enqueueTtsPcm(pcm24kMono: ByteArray, source: PlaybackSource, onDrained: (() -> Unit)?): Boolean {
+                if (audioPlayer !== sessionPlayer) return false
+                setConversationState(ConversationState.SPEAKING)
+                return sessionPlayer.enqueuePcm(
+                    pcmData = pcm24kMono,
+                    sampleRateHz = AudioPlayer.SAMPLE_RATE,
+                    channels = 1,
+                    epoch = activePlaybackGeneration.get(),
+                    source = source,
+                    onDrained = onDrained
+                )
+            }
+        }
+        com.jarvis.assistant.audio.AndroidTtsPcmBridge.registerSink(unifiedPcmSink)
+        playbackPcmSink = unifiedPcmSink
 
         sessionBootstrapJob?.cancel()
         sessionBootstrapJob = serviceScope.launch(Dispatchers.IO) {
@@ -1834,8 +1850,8 @@ class JarvisConversationService : Service() {
                     softwareSpeechFrames=0;onsetAudio.clear();return@AudioRecorder
                 }
                 val facts=voicePresentation.value
-                if(sessionEcho.enabled && facts.playing && facts.playbackSource in setOf(PlaybackSource.ANDROID_TTS,PlaybackSource.EXTERNAL_TTS)) {
-                    // These routes expose no PCM reference. Keep guarded listening, not fake full duplex.
+                if(sessionEcho.enabled && facts.playing && !facts.hasPcmReference && facts.playbackSource in setOf(PlaybackSource.ANDROID_TTS,PlaybackSource.EXTERNAL_TTS)) {
+                    // Opaque fallback TTS exposes no PCM reference. Keep guarded listening until unified PCM takes over.
                     turnAnalysis?.discard()
                     guardedTtsUntil=now+450;softwareSpeechFrames=0;return@AudioRecorder
                 }
@@ -1860,7 +1876,7 @@ class JarvisConversationService : Service() {
 
                 if (isSpeakerActive) {
                     turnAnalysis?.discard()
-                    if(sessionEcho.enabled && facts.playing && facts.playbackSource == PlaybackSource.GEMINI_PCM) {
+                    if(sessionEcho.enabled && facts.playing && (facts.hasPcmReference || facts.playbackSource == PlaybackSource.GEMINI_PCM)) {
                         softwareSpeechFrames=if(sessionEcho.speechProbability >= .7f) softwareSpeechFrames+1 else 0
                         if(softwareSpeechFrames >= 3) {
                             triggerHardBargeIn("aec3_silero_speech")
@@ -3903,6 +3919,9 @@ class JarvisConversationService : Service() {
         audioPipelineManager = null
         audioRecorder = null
 
+        playbackPcmSink?.let { com.jarvis.assistant.audio.AndroidTtsPcmBridge.unregisterSink(it) }
+        playbackPcmSink = null
+        com.jarvis.assistant.audio.AndroidTtsPcmBridge.cancelAll()
         audioPlayer?.flush()
         audioPlayer?.release()
         audioPlayer = null

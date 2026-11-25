@@ -23,7 +23,7 @@ class VoicePresentationStore {
 
     @Synchronized fun interrupt(sessionId: Long) = update(sessionId) {
         it.copy(interruptionGeneration = it.interruptionGeneration + 1, interrupted = true,
-            playing = false, output = VoiceEnvelope(), confirmedSpeech = false, pendingResponse = false)
+            playing = false, hasPcmReference = false, output = VoiceEnvelope(), confirmedSpeech = false, pendingResponse = false)
     }
 
     @Synchronized fun stop(sessionId: Long) = update(sessionId) {

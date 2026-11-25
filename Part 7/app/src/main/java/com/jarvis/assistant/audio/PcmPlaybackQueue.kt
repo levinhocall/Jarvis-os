@@ -1,5 +1,6 @@
 package com.jarvis.assistant.audio
 
+import com.jarvis.assistant.data.model.PlaybackSource
 import java.util.ArrayDeque
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
@@ -7,7 +8,12 @@ import kotlin.concurrent.withLock
 
 /** Byte and frame bounded; generation travels with the frame all the way to the hardware write. */
 internal class PcmPlaybackQueue(private val maxBytes: Int = 2 * 1024 * 1024, private val maxFrames: Int = 512) {
-    data class Frame(val bytes: ByteArray, val epoch: Long, val generation: Long)
+    data class Frame(
+        val bytes: ByteArray,
+        val epoch: Long,
+        val generation: Long,
+        val source: PlaybackSource = PlaybackSource.GEMINI_PCM
+    )
     enum class Offer { ACCEPTED, STALE, CLOSED, OVERFLOW }
     private val lock = ReentrantLock()
     private val changed = lock.newCondition()
@@ -20,12 +26,16 @@ internal class PcmPlaybackQueue(private val maxBytes: Int = 2 * 1024 * 1024, pri
     val queuedBytes: Int get() = lock.withLock { bytes }
     val size: Int get() = lock.withLock { frames.size }
     fun isEmpty(): Boolean = lock.withLock { frames.isEmpty() }
-    fun offer(data: ByteArray, frameEpoch: Long): Offer = lock.withLock {
+    fun offer(
+        data: ByteArray,
+        frameEpoch: Long,
+        source: PlaybackSource = PlaybackSource.GEMINI_PCM
+    ): Offer = lock.withLock {
         if (closed) return Offer.CLOSED
         if (epoch != frameEpoch) return Offer.STALE
         val length = data.size and 1.inv()
         if (length > maxBytes - bytes || frames.size >= maxFrames) return Offer.OVERFLOW
-        frames.addLast(Frame(data.copyOf(length), frameEpoch, generation))
+        frames.addLast(Frame(data.copyOf(length), frameEpoch, generation, source))
         bytes += length; changed.signal()
         Offer.ACCEPTED
     }
