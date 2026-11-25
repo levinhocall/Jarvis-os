@@ -52,9 +52,9 @@ internal class ResearchJobs(private val preferences: SharedPreferences?) {
             check(id.toString() in knownIds || knownIds.size < MAX_JOBS) {
                 "Remove an old research task before adding another."
             }
-            check(storage.edit().putString(queryKey, query)
-                .putStringSet(JOB_IDS, knownIds + id.toString()).commit()) {
-                "Could not store the research query."
+            persist(storage, "Could not store the research query.") {
+                putString(queryKey, query)
+                putStringSet(JOB_IDS, knownIds + id.toString())
             }
             val request = OneTimeWorkRequestBuilder<BackgroundResearchWorker>()
                 .setId(id)
@@ -66,7 +66,14 @@ internal class ResearchJobs(private val preferences: SharedPreferences?) {
             try {
                 manager.enqueueUniqueWork(queryKey, ExistingWorkPolicy.KEEP, request).result.get(8, TimeUnit.SECONDS)
             } catch (error: Exception) {
-                storage.edit().remove(queryKey).putStringSet(JOB_IDS, knownIds - id.toString()).commit()
+                try {
+                    persist(storage, "Could not roll back the unscheduled research query.") {
+                        remove(queryKey)
+                        putStringSet(JOB_IDS, knownIds - id.toString())
+                    }
+                } catch (rollbackError: Exception) {
+                    error.addSuppressed(rollbackError)
+                }
                 throw error
             }
         }
@@ -89,9 +96,11 @@ internal class ResearchJobs(private val preferences: SharedPreferences?) {
         synchronized(this) {
             val manager = WorkManager.getInstance(context)
             manager.cancelWorkById(id).result.get(8, TimeUnit.SECONDS)
-            check(storage.edit().remove(QUERY_PREFIX + id).remove(REPORT_PREFIX + id)
-                .putStringSet(JOB_IDS, jobIds(storage) - id.toString()).commit()) {
-                "Could not remove the research task."
+            val remainingIds = jobIds(storage) - id.toString()
+            persist(storage, "Could not remove the research task.") {
+                remove(QUERY_PREFIX + id)
+                remove(REPORT_PREFIX + id)
+                putStringSet(JOB_IDS, remainingIds)
             }
         }
     }
@@ -104,9 +113,20 @@ internal class ResearchJobs(private val preferences: SharedPreferences?) {
     fun saveReport(id: UUID, report: String) {
         val storage = storage()
         if (!storage.contains(QUERY_PREFIX + id)) return
-        check(storage.edit().putString(REPORT_PREFIX + id, report).commit()) {
-            "Could not save the research report."
+        persist(storage, "Could not save the research report.") {
+            putString(REPORT_PREFIX + id, report)
         }
+    }
+
+    private inline fun persist(
+        storage: SharedPreferences,
+        errorMessage: String,
+        change: SharedPreferences.Editor.() -> Unit
+    ) {
+        val editor = storage.edit()
+        editor.change()
+        // Do not report success before the data is committed on the background dispatcher.
+        check(editor.commit()) { errorMessage }
     }
 
     private fun storage(): SharedPreferences = checkNotNull(preferences) { "Encrypted storage unavailable." }
