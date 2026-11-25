@@ -147,6 +147,7 @@ class WakeWordActivity : DirectiveActivity() {
             }
             val voicePrefs=(application as com.jarvis.assistant.JarvisApp).preferences
             toggle("WebRTC AEC3 · hardware-isolated speaker echo control",voicePrefs.softwareAecEnabled) { voicePrefs.softwareAecEnabled=it }
+            toggle("Dual DTLN LSTM · neural residual echo suppression",voicePrefs.dtlnEchoEnabled) { voicePrefs.dtlnEchoEnabled=it }
             toggle("Smart Turn neural end-of-turn · experimental",voicePrefs.neuralTurnEnabled) { voicePrefs.neuralTurnEnabled=it }
             toggle("Silero neural speech detection in Voice Mode",voicePrefs.neuralSpeechEnabled) { voicePrefs.neuralSpeechEnabled=it }
             label("Restart Voice Mode to apply. WebRTC AEC3 uses synchronized Gemini + Android TTS PCM references with hardware timestamp delay calibration and automatic fallback if unsupported.")

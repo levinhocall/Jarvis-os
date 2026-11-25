@@ -109,6 +109,9 @@ class AppPreferences internal constructor(
     var softwareAecEnabled: Boolean
         get() = prefs.getBoolean("software_aec3_enabled",true)
         set(value) { prefs.edit().putBoolean("software_aec3_enabled",value).apply() }
+    var dtlnEchoEnabled: Boolean
+        get() = prefs.getBoolean("dtln_echo_enabled",true)
+        set(value) { prefs.edit().putBoolean("dtln_echo_enabled",value).apply() }
     var neuralTurnEnabled: Boolean
         get() = prefs.getBoolean("smart_turn_enabled",false)
         set(value) { prefs.edit { putBoolean("smart_turn_enabled",value) } }

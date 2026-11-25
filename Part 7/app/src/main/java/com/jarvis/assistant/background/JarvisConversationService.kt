@@ -1088,10 +1088,19 @@ class JarvisConversationService : Service() {
 
         val speechFactory: (() -> com.jarvis.assistant.audio.PcmSpeechDetector)? =
             if(preferences.softwareAecEnabled || preferences.neuralSpeechEnabled || preferences.neuralTurnEnabled) ({ com.jarvis.assistant.audio.wake.SileroSpeechGate(assets) }) else null
+        val dtlnFactory: (() -> com.jarvis.assistant.audio.dtln.DtlnEchoSuppressor)? =
+            if (preferences.softwareAecEnabled && preferences.dtlnEchoEnabled) {
+                {
+                    com.jarvis.assistant.audio.dtln.DtlnEchoSuppressor(
+                        backend = com.jarvis.assistant.audio.dtln.LiteRtDtlnBackend(assets, threads = 1)
+                    )
+                }
+            } else null
         val sessionEcho = com.jarvis.assistant.audio.DuplexEchoSession(
             enabled = preferences.softwareAecEnabled,
             speechFactory = speechFactory,
-            allowAecFallback = true
+            allowAecFallback = true,
+            dtlnFactory = dtlnFactory
         )
         currentEchoSession=sessionEcho
         val turnAnalysis=if(preferences.neuralTurnEnabled) com.jarvis.assistant.audio.turn.NeuralTurnSession(serviceScope) {
@@ -2229,7 +2238,7 @@ class JarvisConversationService : Service() {
                 } else if (sessionEcho.isAecActive) {
                     com.jarvis.assistant.audio.VoiceFlightRecorder.record(
                         stage = "AEC3_NATIVE_ACTIVE",
-                        details = "hal_isolated=true route=${initialRoute.label}"
+                        details = "hal_isolated=true route=${initialRoute.label} dtln=${sessionEcho.isDtlnActive}"
                     )
                 }
                 turnAnalysis?.initialize()
