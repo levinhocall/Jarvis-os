@@ -5,7 +5,12 @@ import com.jarvis.assistant.audio.dtln.DtlnDiagnostics
 import com.jarvis.assistant.audio.dtln.DtlnEchoSuppressor
 
 /** Session-scoped DSP ownership, never a microphone/player owner. */
-interface PcmSpeechDetector : AutoCloseable { fun accept(pcm: ByteArray): Float }
+interface PcmSpeechDetector : AutoCloseable {
+    fun accept(pcm: ByteArray): Float
+    fun accept(pcm: ByteArray, playbackActive: Boolean): Float = accept(pcm)
+    fun isSpeechActive(): Boolean = false
+    fun reset() {}
+}
 
 class DuplexEchoSession(
     val enabled: Boolean,
@@ -26,6 +31,10 @@ class DuplexEchoSession(
 
     @Volatile var speechProbability = 0f
         private set
+    @Volatile var isSpeechConfirmed = false
+        private set
+    @Volatile var isPlaybackActiveForVad = false
+    @Volatile private var lastRenderWallMs = 0L
     @Volatile var isAecActive = false
         private set
     @Volatile var isDtlnActive = false
@@ -102,14 +111,29 @@ class DuplexEchoSession(
             !enabled || fallbackReason != null -> pcm
             else -> byteArrayOf()
         }
-        if (cleaned.isNotEmpty()) {
-            speechProbability = speech?.accept(cleaned)?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+        val activeSpeech = speech
+        if (cleaned.isNotEmpty() && activeSpeech != null) {
+            val playbackWindowActive = isPlaybackActiveForVad || (System.currentTimeMillis() - lastRenderWallMs in 0..220L)
+            speechProbability = activeSpeech.accept(cleaned, playbackWindowActive).takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+            isSpeechConfirmed = activeSpeech.isSpeechActive()
+        } else if (cleaned.isNotEmpty()) {
+            speechProbability = 0f
+            isSpeechConfirmed = false
         }
         return cleaned
     }
 
     @Synchronized fun render(pcm: ByteArray, offset: Int, count: Int, delayMs: Int, epoch: Long) {
-        if (epoch == playbackEpoch.get()) processor?.renderAccepted(pcm, offset, count, delayMs)
+        if (epoch == playbackEpoch.get()) {
+            lastRenderWallMs = System.currentTimeMillis()
+            processor?.renderAccepted(pcm, offset, count, delayMs)
+        }
+    }
+
+    @Synchronized fun resetSpeechDetector() {
+        speech?.reset()
+        speechProbability = 0f
+        isSpeechConfirmed = false
     }
 
     fun echoMetrics(): AecMetrics? = processor?.metrics()
@@ -136,6 +160,8 @@ class DuplexEchoSession(
             speech?.close()
             speech = null
             speechProbability = 0f
+            isSpeechConfirmed = false
+            isPlaybackActiveForVad = false
         }
     }
 }

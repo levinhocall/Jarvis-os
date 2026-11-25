@@ -1866,10 +1866,12 @@ class JarvisConversationService : Service() {
                             synchronized(preSpeechRingBuffer) { preSpeechRingBuffer.clear() }
                             preConnectAudioQueue.clear()
                         }
+                        sessionEcho.resetSpeechDetector()
                     }
                     softwareSpeechFrames=0;onsetAudio.clear();return@AudioRecorder
                 }
                 val facts=voicePresentation.value
+                sessionEcho.isPlaybackActiveForVad = facts.playing
                 if(sessionEcho.enabled && facts.playing && !facts.hasPcmReference && facts.playbackSource in setOf(PlaybackSource.ANDROID_TTS,PlaybackSource.EXTERNAL_TTS)) {
                     // Opaque fallback TTS exposes no PCM reference. Keep guarded listening until unified PCM takes over.
                     turnAnalysis?.discard()
@@ -1897,7 +1899,8 @@ class JarvisConversationService : Service() {
                 if (isSpeakerActive) {
                     turnAnalysis?.discard()
                     if(sessionEcho.enabled && facts.playing && (facts.hasPcmReference || facts.playbackSource == PlaybackSource.GEMINI_PCM)) {
-                        softwareSpeechFrames=if(sessionEcho.speechProbability >= .7f) softwareSpeechFrames+1 else 0
+                        val strongVadSpeech = sessionEcho.isSpeechConfirmed || sessionEcho.speechProbability >= 0.65f
+                        softwareSpeechFrames = if (strongVadSpeech) softwareSpeechFrames + 1 else 0
                         if(softwareSpeechFrames >= 3) {
                             triggerHardBargeIn("aec3_silero_speech")
                             softwareSpeechFrames=0
@@ -2008,7 +2011,11 @@ class JarvisConversationService : Service() {
                 // Dynamic voice threshold: responsive to normal conversational volume (0.035f)
                 val voiceThreshold = maxOf(VAD_MIN_THRESHOLD, ambientNoiseFloor * VAD_NOISE_MULTIPLIER)
 
-                val speechAccepted=if(sessionEcho.hasSpeechDetector) sessionEcho.speechProbability >= .5f else amplitude > voiceThreshold
+                val speechAccepted = if (sessionEcho.hasSpeechDetector) {
+                    sessionEcho.isSpeechConfirmed || sessionEcho.speechProbability >= 0.45f
+                } else {
+                    amplitude > voiceThreshold
+                }
                 if (speechAccepted) {
                     turnAnalysis?.speech()
                     consecutiveVoicedFrames++

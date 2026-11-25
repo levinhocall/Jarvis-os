@@ -116,7 +116,7 @@ class AppPreferences internal constructor(
         get() = prefs.getBoolean("smart_turn_enabled",false)
         set(value) { prefs.edit { putBoolean("smart_turn_enabled",value) } }
     var neuralSpeechEnabled: Boolean
-        get() = prefs.getBoolean("silero_speech_enabled",false)
+        get() = prefs.getBoolean("silero_speech_enabled",true)
         set(value) { prefs.edit().putBoolean("silero_speech_enabled",value).apply() }
     var localTtsEngine: String
         get() = prefs.getString("local_tts_engine", "").orEmpty()
