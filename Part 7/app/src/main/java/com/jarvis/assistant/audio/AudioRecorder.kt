@@ -205,7 +205,7 @@ class AudioRecorder(
                             val readBytes = currentRecord.read(buffer, 0, buffer.size)
                             if (readBytes > 0) {
                                 totalReadFrames += (readBytes / 2)
-                                if (delayEstimator != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+                                if (delayEstimator != null &&
                                     (captureTsPollCount++ % 5 == 0)
                                 ) {
                                     if (currentRecord.getTimestamp(captureTimestamp, AudioTimestamp.TIMEBASE_MONOTONIC) == AudioRecord.SUCCESS) {

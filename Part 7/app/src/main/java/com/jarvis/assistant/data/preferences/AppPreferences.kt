@@ -726,7 +726,7 @@ class AppPreferences internal constructor(
         if (currentList.none { it.key == cleanKey }) {
             currentList.add(ApiKeyRecord(key = cleanKey, providerId = providerId))
             val storage = secureApiPrefs ?: return
-            storage.edit().putString("key_pool_$providerId", gson.toJson(currentList)).apply()
+            storage.edit { putString("key_pool_$providerId", gson.toJson(currentList)) }
         }
     }
 

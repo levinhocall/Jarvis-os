@@ -104,6 +104,11 @@ android {
 
     if (usePrebuiltNativeLibs) {
         sourceSets.getByName("main").jniLibs.srcDir("prebuiltJniLibs")
+        packaging {
+            jniLibs {
+                keepDebugSymbols.add("**/*.so")
+            }
+        }
     }
     sourceSets.getByName("androidTest").assets.srcDir("schemas")
 
@@ -117,6 +122,9 @@ android {
         // Report upgrade recommendations without making the build depend on today's Maven metadata.
         // Gradle still validates compatibility when compiling the pinned dependencies.
         informational += setOf("AndroidGradlePluginVersion", "GradleDependency")
+        if (usePrebuiltNativeLibs) {
+            informational += "ChromeOsAbiSupport"
+        }
         disable += "NullSafeMutableLiveData"
     }
 }
