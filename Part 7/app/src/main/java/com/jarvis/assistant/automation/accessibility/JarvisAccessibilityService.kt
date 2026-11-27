@@ -2004,20 +2004,28 @@ class JarvisAccessibilityService : AccessibilityService() {
         // accessibility action; use a coordinate gesture only when no actionable node
         // resolves or ACTION_CLICK explicitly returns false.
         val root = getActiveRootNode()
-        // Chrome's WebView targets often expose a clickable accessibility wrapper that
-        // acknowledges ACTION_CLICK without forwarding the tap to the page control.
-        // Prefer a real screen gesture there, then retain the node action as fallback.
-        if (root?.packageName?.toString() == "com.android.chrome" && clickAt(cx, cy)) return true
-        var node = root?.let { findNodeCoveringRect(it, rect) }
-        var ancestors = 0
-        while (node != null && ancestors++ < 12) {
-            val bounds = Rect()
-            node.getBoundsInScreen(bounds)
-            if (node.isVisibleToUser && node.isClickable && bounds.contains(cx.toInt(), cy.toInt())) {
-                if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
-                break
+        var currentNode: AccessibilityNodeInfo? = null
+        try {
+            // Chrome's WebView targets often expose a clickable accessibility wrapper that
+            // acknowledges ACTION_CLICK without forwarding the tap to the page control.
+            // Prefer a real screen gesture there, then retain the node action as fallback.
+            if (root?.packageName?.toString() == "com.android.chrome" && clickAt(cx, cy)) return true
+            currentNode = root?.let { findNodeCoveringRect(it, rect) }
+            var ancestors = 0
+            while (currentNode != null && ancestors++ < 12) {
+                val bounds = Rect()
+                currentNode.getBoundsInScreen(bounds)
+                if (currentNode.isVisibleToUser && currentNode.isClickable && bounds.contains(cx.toInt(), cy.toInt())) {
+                    if (currentNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                    break
+                }
+                val nextParent = currentNode.parent
+                if (currentNode !== root) recycleOwnedNode(currentNode)
+                currentNode = nextParent
             }
-            node = node.parent
+        } finally {
+            if (currentNode !== root) recycleOwnedNode(currentNode)
+            recycleOwnedNode(root)
         }
         Log.i(TAG, "Using coordinate fallback at ($cx, $cy) [bounds: $rect]")
         return clickAt(cx, cy)

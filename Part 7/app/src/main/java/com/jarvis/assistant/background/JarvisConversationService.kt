@@ -875,12 +875,15 @@ class JarvisConversationService : Service() {
     fun elevateToMediaProjection(): Boolean {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val notification = buildNotification()
-            val types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            val hasMic = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+            var types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            if (hasMic) {
+                types = types or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
             try {
                 startForeground(NOTIFICATION_ID, notification, types)
-                microphoneForegroundReady = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+                microphoneForegroundReady = hasMic
                 Log.i("JarvisService", "Foreground service elevated to include MEDIA_PROJECTION; microphoneReady=$microphoneForegroundReady")
                 return true
             } catch (e: Exception) {
@@ -894,11 +897,14 @@ class JarvisConversationService : Service() {
     fun demoteFromMediaProjection() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val notification = buildNotification()
-            val types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            val hasMic = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+            var types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            if (hasMic) {
+                types = types or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
             try {
                 startForeground(NOTIFICATION_ID, notification, types)
-                microphoneForegroundReady = com.jarvis.assistant.util.PermissionHelper.hasRecordAudioPermission(this)
+                microphoneForegroundReady = hasMic
                 Log.i("JarvisService", "Foreground service demoted from MEDIA_PROJECTION; microphoneReady=$microphoneForegroundReady")
             } catch (e: Exception) {
                 Log.w("JarvisService", "Failed to demote from MEDIA_PROJECTION: ${e.message}")
@@ -3264,6 +3270,24 @@ class JarvisConversationService : Service() {
                         result.put("success", true)
                         result.put("screen_summary", summary)
                         result.put("message", "Screen inspected successfully.")
+                    }
+
+                    "find_tool" -> {
+                        val query = args.optString("query", "")
+                        val limit = args.optInt("limit", 8)
+                        val matches = com.jarvis.assistant.automation.mission.ToolRegistry.findTools(query, limit)
+                        val arr = org.json.JSONArray()
+                        for (m in matches) {
+                            arr.put(JSONObject().apply {
+                                put("name", m.definition.name)
+                                put("description", m.definition.description)
+                                put("risk_level", m.definition.riskLevel.name)
+                                put("requires_accessibility", m.definition.requiresAccessibility)
+                            })
+                        }
+                        result.put("success", true)
+                        result.put("tools", arr)
+                        result.put("message", "Found ${matches.size} matching registered tool(s).")
                     }
 
 

@@ -767,6 +767,26 @@ class GeminiLiveWebSocket(
                             })
                         })
 
+                        // 22. find_tool
+                        put(JSONObject().apply {
+                            put("name", "find_tool")
+                            put("description", "Discovers registered JARVIS capability schemas matching a keyword or goal for bounded planning without loading unused tools.")
+                            put("parameters", JSONObject().apply {
+                                put("type", "OBJECT")
+                                put("properties", JSONObject().apply {
+                                    put("query", JSONObject().apply {
+                                        put("type", "STRING")
+                                        put("description", "Goal or capability keyword to search")
+                                    })
+                                    put("limit", JSONObject().apply {
+                                        put("type", "INTEGER")
+                                        put("description", "Maximum matches to return (1-20)")
+                                    })
+                                })
+                                put("required", JSONArray().put("query"))
+                            })
+                        })
+
 
                     })
                 }))

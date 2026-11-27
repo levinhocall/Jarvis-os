@@ -353,7 +353,25 @@ object ToolRegistry {
                 isIdempotent = false
             )
         )
+
+        register(
+            ToolDefinition(
+                name = "find_tool",
+                description = "Discovers relevant registered capabilities by keyword or goal without loading every tool schema into context",
+                parameters = listOf(
+                    ToolParameter("query", "String", "Intent, domain, or capability keyword", required = true),
+                    ToolParameter("limit", "Int", "Maximum number of matching tools to return (1-20)", required = false)
+                ),
+                riskLevel = MissionRisk.LOW,
+                isIdempotent = true
+            )
+        )
     }
+
+    data class ToolDiscoveryMatch(
+        val definition: ToolDefinition,
+        val score: Float
+    )
 
     fun register(tool: ToolDefinition) {
         tools[tool.name] = tool
@@ -362,6 +380,44 @@ object ToolRegistry {
     fun getTool(name: String): ToolDefinition? = tools[resolveToolName(name)]
 
     fun getAllTools(): List<ToolDefinition> = tools.values.distinctBy { it.name }
+
+    /** Semantic/keyword discovery returning bounded capability subsets for token-efficient planning. */
+    fun findTools(query: String, limit: Int = 8): List<ToolDiscoveryMatch> {
+        val clean = query.trim().lowercase(java.util.Locale.ROOT)
+        val clampedLimit = limit.coerceIn(1, 20)
+        val all = getAllTools()
+        if (clean.isEmpty()) {
+            return all.sortedBy { it.name }.take(clampedLimit).map { ToolDiscoveryMatch(it, 0.5f) }
+        }
+        val queryTokens = clean.split(Regex("[^a-z0-9_]+")).filter { it.isNotBlank() }
+        return all.mapNotNull { def ->
+            val nameLower = def.name.lowercase(java.util.Locale.ROOT)
+            val descLower = def.description.lowercase(java.util.Locale.ROOT)
+            val paramsLower = def.parameters.joinToString(" ") { "${it.name} ${it.description}".lowercase(java.util.Locale.ROOT) }
+            var score = 0f
+            if (nameLower == clean) score += 2.0f
+            if (nameLower.contains(clean)) score += 1.0f
+            if (descLower.contains(clean)) score += 0.7f
+            for (token in queryTokens) {
+                if (nameLower.contains(token)) score += 0.65f
+                if (descLower.contains(token)) score += 0.35f
+                if (paramsLower.contains(token)) score += 0.2f
+            }
+            if (score > 0f) ToolDiscoveryMatch(def, score) else null
+        }.sortedWith(compareByDescending<ToolDiscoveryMatch> { it.score }.thenBy { it.definition.name })
+            .take(clampedLimit)
+    }
+
+    fun selectSubsetForGoal(goal: String, maxTools: Int = 10): List<ToolDefinition> {
+        val clamped = maxTools.coerceIn(2, 24)
+        val coreAlways = listOfNotNull(
+            getTool("find_tool"),
+            getTool("task_completed"),
+            getTool("inspect_screen")
+        )
+        val matched = findTools(goal, clamped).map { it.definition }
+        return (coreAlways + matched).distinctBy { it.name }.take(clamped)
+    }
 
     fun getAllToolNamesWithAliases(): Set<String> {
         val set = tools.keys.toMutableSet()

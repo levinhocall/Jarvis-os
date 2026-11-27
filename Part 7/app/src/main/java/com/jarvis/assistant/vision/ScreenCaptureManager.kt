@@ -64,6 +64,9 @@ class ScreenCaptureManager private constructor() {
     @Volatile
     private var latestBitmap: Bitmap? = null
     private val bitmapLock = Any()
+    private var scratchRowBuffer: ByteArray? = null
+    private var scratchPixelBuffer: ByteBuffer? = null
+    private val scratchJpegStream = ByteArrayOutputStream(64 * 1024)
 
     fun isScreenShareActive(): Boolean = _isSharing.value
 
@@ -197,8 +200,13 @@ class ScreenCaptureManager private constructor() {
                 buffer.position(0)
                 cleanBitmap.copyPixelsFromBuffer(buffer)
             } else {
-                val rowBuffer = ByteArray(rowBytes)
-                val destBuffer = ByteBuffer.allocate(width * height * 4)
+                val rowBytes = width * pixelStride
+                val rowBuffer = scratchRowBuffer?.takeIf { it.size >= rowBytes }
+                    ?: ByteArray(rowBytes).also { scratchRowBuffer = it }
+                val requiredPixels = width * height * 4
+                val destBuffer = scratchPixelBuffer?.takeIf { it.capacity() >= requiredPixels }
+                    ?.also { it.clear() }
+                    ?: ByteBuffer.allocate(requiredPixels).also { scratchPixelBuffer = it }
                 val totalRows = minOf(height, image.height)
                 for (row in 0 until totalRows) {
                     val srcPos = row * rowStride
@@ -212,29 +220,32 @@ class ScreenCaptureManager private constructor() {
                 cleanBitmap.copyPixelsFromBuffer(destBuffer)
             }
 
-            synchronized(bitmapLock) {
+            val streamBytes: ByteArray? = synchronized(bitmapLock) {
                 val old = latestBitmap
                 latestBitmap = cleanBitmap
                 old?.recycle()
                 lastBitmapTime = now
+                if (_isSharing.value && now - lastFrameTime >= minFrameIntervalMs) {
+                    lastFrameTime = now
+                    compressBitmapToJpegLocked(cleanBitmap, 70)
+                } else {
+                    null
+                }
             }
             _hasReceivedFrame.value = true
 
-            // Check if we should stream this frame out to Gemini Live
-            if (now - lastFrameTime >= minFrameIntervalMs) {
-                lastFrameTime = now
-                val jpegBytes = compressBitmapToJpeg(cleanBitmap, 70)
+            if (streamBytes != null) {
                 framesSent++
                 if (framesSent % 10 == 1) {
-                    Log.i(TAG, "Streamed frame #$framesSent to Gemini (${jpegBytes.size / 1024} KB, ${cleanBitmap.width}x${cleanBitmap.height})")
+                    Log.i(TAG, "Streamed frame #$framesSent to Gemini (${streamBytes.size / 1024} KB, ${cleanBitmap.width}x${cleanBitmap.height})")
                 }
                 if (_isSharing.value && !com.jarvis.assistant.automation.accessibility.FinancialScreenPolicy.projectionBlocked) {
-                try {
-                    onFrameCallback?.invoke(jpegBytes)
-                } catch (callbackError: Exception) {
-                    Log.w(TAG, "Screen frame consumer rejected a frame: ${callbackError.message}")
+                    try {
+                        onFrameCallback?.invoke(streamBytes)
+                    } catch (callbackError: Exception) {
+                        Log.w(TAG, "Screen frame consumer rejected a frame: ${callbackError.message}")
+                    }
                 }
-            }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error acquiring image frame: ${e.message}", e)
@@ -253,14 +264,14 @@ class ScreenCaptureManager private constructor() {
             val bmp = latestBitmap ?: return null
             if (bmp.isRecycled) return null
             lastFrameTime = System.currentTimeMillis()
-            return compressBitmapToJpeg(bmp, quality)
+            return compressBitmapToJpegLocked(bmp, quality)
         }
     }
 
-    private fun compressBitmapToJpeg(bitmap: Bitmap, quality: Int): ByteArray {
-        val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
-        return stream.toByteArray()
+    private fun compressBitmapToJpegLocked(bitmap: Bitmap, quality: Int): ByteArray {
+        scratchJpegStream.reset()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, scratchJpegStream)
+        return scratchJpegStream.toByteArray()
     }
 
     fun setStreamingInterval(intervalMs: Long) {
@@ -309,6 +320,9 @@ class ScreenCaptureManager private constructor() {
         synchronized(bitmapLock) {
             latestBitmap?.recycle()
             latestBitmap = null
+            scratchRowBuffer = null
+            scratchPixelBuffer = null
+            scratchJpegStream.reset()
         }
         Log.i(TAG, "Screen capture stopped cleanly")
     }

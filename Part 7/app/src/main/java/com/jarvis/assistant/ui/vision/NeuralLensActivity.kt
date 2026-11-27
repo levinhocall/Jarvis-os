@@ -15,8 +15,11 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageAnalysis
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.objects.ObjectDetection
 import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -37,13 +40,25 @@ import kotlinx.coroutines.withContext
 
 /** Camera/gallery image capture and real-image analysis entry point for Neural Lens. */
 class NeuralLensActivity : AppCompatActivity() {
+    private enum class LiveScanMode(val label: String) {
+        OBJECTS("Objects"),
+        BARCODE_QR("Barcode / QR"),
+        OCR_MULTILINGUAL("OCR (EN / HI)")
+    }
+
     @Volatile private var liveScan = false
+    @Volatile private var liveScanMode = LiveScanMode.OBJECTS
     private var lastScanAt = 0L
     private var imageAnalysis: ImageAnalysis? = null
     private val scanExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val detector by lazy { ObjectDetection.getClient(ObjectDetectorOptions.Builder().setDetectorMode(ObjectDetectorOptions.STREAM_MODE).enableClassification().build()) }
+    private val barcodeScanner by lazy { BarcodeScanning.getClient() }
+    private val devanagariOcr by lazy { TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build()) }
     @Volatile private var detectorUsed = false
+    @Volatile private var barcodeUsed = false
+    @Volatile private var ocrUsed = false
     private lateinit var liveScanButton: Button
+    private lateinit var scanModeButton: Button
     private var selectedBitmap: Bitmap? = null
     private lateinit var preview: ImageView
     private lateinit var livePreview: PreviewView
@@ -123,12 +138,20 @@ class NeuralLensActivity : AppCompatActivity() {
         }
         root.addView(previewFrame, LinearLayout.LayoutParams(-1, dp(280)))
         root.addView(action("Start live camera") { requestCameraAndStart() })
-        liveScanButton = action("Start on-device object scan") {
+        liveScanButton = action("Start on-device scan (${liveScanMode.label})") {
             liveScan = !liveScan
-            liveScanButton.text = if (liveScan) "Stop on-device object scan" else "Start on-device object scan"
+            liveScanButton.text = if (liveScan) "Stop scan (${liveScanMode.label})" else "Start on-device scan (${liveScanMode.label})"
             requestCameraAndStart()
         }
         root.addView(liveScanButton)
+        scanModeButton = action("Switch scan mode: ${liveScanMode.label}") {
+            val entries = LiveScanMode.entries
+            liveScanMode = entries[(liveScanMode.ordinal + 1) % entries.size]
+            scanModeButton.text = "Switch scan mode: ${liveScanMode.label}"
+            liveScanButton.text = if (liveScan) "Stop scan (${liveScanMode.label})" else "Start on-device scan (${liveScanMode.label})"
+            status.text = "Live scan mode set to ${liveScanMode.label}."
+        }
+        root.addView(scanModeButton)
         root.addView(action("Capture photo") {
             if (liveScan) { liveScan = false; liveScanButton.text = "Start on-device object scan"; startCamera(); status.text = "Scan paused. Tap capture again for a still image." }
             else capturePhoto()
@@ -218,20 +241,52 @@ class NeuralLensActivity : AppCompatActivity() {
         if (!liveScan || now - lastScanAt < com.jarvis.assistant.util.DirectivePowerPolicy.scanIntervalMs(prefs.powerProfile, saver)) { proxy.close(); return }
         lastScanAt = now
         val image = proxy.image ?: run { proxy.close(); return }
-        detectorUsed = true
+        val inputImage = InputImage.fromMediaImage(image, proxy.imageInfo.rotationDegrees)
         try {
-            detector.process(InputImage.fromMediaImage(image, proxy.imageInfo.rotationDegrees))
-                .addOnSuccessListener { objects ->
-                    if (liveScan && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
-                        result.text = objects.joinToString("\n") { obj ->
-                            val labels = obj.labels.joinToString { "${it.text} ${"%.0f".format(it.confidence * 100)}%" }.ifBlank { "Category unknown" }
-                            "Track ${obj.trackingId ?: "—"}: $labels · bounds ${obj.boundingBox.toShortString()}"
-                        }.ifBlank { "No object detected in this frame." }
-                        status.text = "Live on-device metadata · detailed scene analysis remains available for captured photos."
-                    }
-                }.addOnFailureListener {
-                    if (liveScan && !isDestroyed) status.text = "Object detector unavailable. The first scan needs its model; retry after the download. Camera capture remains available."
-                }.addOnCompleteListener { proxy.close() }
+            when (liveScanMode) {
+                LiveScanMode.OBJECTS -> {
+                    detectorUsed = true
+                    detector.process(inputImage)
+                        .addOnSuccessListener { objects ->
+                            if (liveScan && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                                result.text = objects.joinToString("\n") { obj ->
+                                    val labels = obj.labels.joinToString { "${it.text} ${"%.0f".format(it.confidence * 100)}%" }.ifBlank { "Category unknown" }
+                                    "Track ${obj.trackingId ?: "—"}: $labels · bounds ${obj.boundingBox.toShortString()}"
+                                }.ifBlank { "No object detected in this frame." }
+                                status.text = "Live on-device object scan active."
+                            }
+                        }.addOnFailureListener {
+                            if (liveScan && !isDestroyed) status.text = "Object detector unavailable on this frame."
+                        }.addOnCompleteListener { proxy.close() }
+                }
+                LiveScanMode.BARCODE_QR -> {
+                    barcodeUsed = true
+                    barcodeScanner.process(inputImage)
+                        .addOnSuccessListener { codes ->
+                            if (liveScan && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                                result.text = codes.joinToString("\n") { code ->
+                                    val raw = code.displayValue ?: code.rawValue.orEmpty()
+                                    "Code (${code.format}): $raw"
+                                }.ifBlank { "No barcode or QR detected in frame." }
+                                status.text = "Live on-device barcode/QR scan active."
+                            }
+                        }.addOnFailureListener {
+                            if (liveScan && !isDestroyed) status.text = "Barcode scanner unavailable on this frame."
+                        }.addOnCompleteListener { proxy.close() }
+                }
+                LiveScanMode.OCR_MULTILINGUAL -> {
+                    ocrUsed = true
+                    devanagariOcr.process(inputImage)
+                        .addOnSuccessListener { textResult ->
+                            if (liveScan && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                                result.text = textResult.text.ifBlank { "No visible EN/HI text detected in frame." }
+                                status.text = "Live on-device Devanagari + Latin OCR active."
+                            }
+                        }.addOnFailureListener {
+                            if (liveScan && !isDestroyed) status.text = "Text recognizer unavailable on this frame."
+                        }.addOnCompleteListener { proxy.close() }
+                }
+            }
         } catch (_: Exception) { proxy.close() }
     }
 
@@ -422,6 +477,8 @@ class NeuralLensActivity : AppCompatActivity() {
         cameraProvider = null
         imageAnalysis?.clearAnalyzer()
         if (detectorUsed) detector.close()
+        if (barcodeUsed) barcodeScanner.close()
+        if (ocrUsed) devanagariOcr.close()
         scanExecutor.shutdown()
         resumeCameraOnForeground = false
         pendingCaptureFile?.delete()
