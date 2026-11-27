@@ -826,6 +826,12 @@ class GeminiLiveWebSocket(
                 resumption.update(update.optBoolean("resumable", false), update.optString("newHandle").takeIf { it.isNotBlank() })
             }
 
+            if (json.has("goAway")) {
+                Log.i(TAG, "Server sent goAway notice; performing seamless resumption reconnect.")
+                webSocket?.close(1000, "Server goAway resumption")
+                return
+            }
+
             // 0. Server setupComplete handshake acknowledgment
             if (json.has("setupComplete")) {
                 Log.i(TAG, "Server acknowledged setup: setupComplete received. Session is now LIVE!")
@@ -1083,14 +1089,10 @@ class GeminiLiveWebSocket(
     }
 
     private fun startSessionRenewal() {
+        // Provider sessions stay alive continuously via OkHttp keepalive, server goAway notices,
+        // and sessionResumptionUpdate handles — never impose an arbitrary local session cutoff.
         sessionRenewalJob?.cancel()
-        sessionRenewalJob = coroutineScope?.launch(Dispatchers.IO) {
-            delay(GeminiConstants.SESSION_RENEWAL_MS)
-            if (isActive && !isManuallyStopped.get()) {
-                Log.d(TAG, "9-minute session threshold reached. Seamlessly renewing session...")
-                webSocket?.close(1000, "Session renewal")
-            }
-        }
+        sessionRenewalJob = null
     }
 
     /** Routes all transport retries through exactly one lifecycle owner. */

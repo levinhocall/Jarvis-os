@@ -13,6 +13,7 @@ class NeuralTurnSession(private val scope: CoroutineScope, private val factory: 
     private var generation=0L
     private var requested=-1L
     private var result: Pair<Long,Float>?=null
+    @Volatile private var latestPartialTranscript: String = ""
     private var closed=false
     private val ring=ByteArray(256000)
     private var writeAt=0
@@ -65,14 +66,21 @@ class NeuralTurnSession(private val scope: CoroutineScope, private val factory: 
             catch(error: Exception) { lastError=error.javaClass.simpleName }
         }
     }
-    /** Unknown/late results retain existing VAD. Strong incomplete evidence only adds bounded patience. */
+    fun updateTranscript(text: String) {
+        latestPartialTranscript = text
+    }
+
+    /** Combines acoustic Smart Turn score with [SemanticTurnDetector] hesitation & clause hints. */
     fun silenceTimeout(base: Long): Long = synchronized(lock) {
-        val probability=result?.takeIf { it.first == generation }?.second ?: return@synchronized base
-        when {
+        val probability=result?.takeIf { it.first == generation }?.second
+        val semantic = SemanticTurnDetector.scoreTranscript(latestPartialTranscript)
+        val baseWithAcoustic = when {
+            probability == null -> base
             probability >= .9f -> minOf(base,180L)
             probability <= .1f -> maxOf(base,700L)
             else -> base
         }
+        return (baseWithAcoustic + semantic.suggestedHoldExtensionMs).coerceIn(180L, 950L)
     }
     override fun close() {
         val retiring=synchronized(lock) {

@@ -57,6 +57,15 @@ object AndroidTtsPcmBridge {
 
     fun hasActiveSink(): Boolean = activeSink?.isActive() == true
 
+    fun submitPcm24kMono(
+        pcm24kMono: ByteArray,
+        source: PlaybackSource,
+        onDrained: (() -> Unit)? = null
+    ): Boolean {
+        val sink = activeSink?.takeIf { it.isActive() } ?: return false
+        return sink.enqueueTtsPcm(pcm24kMono, source, onDrained)
+    }
+
     fun cancelAll() {
         val entries = pending.values.toList()
         pending.clear()

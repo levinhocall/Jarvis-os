@@ -201,6 +201,7 @@ dependencies {
     // Optional, on-device OpenWakeWord inference; existing Vosk mode stays the default.
     implementation(project(":neural-runtime"))
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.23.2")
+    implementation(files("libs/sherpa-onnx-arm64-2.0.3.aar"))
 
     // Room Database
     implementation("androidx.room:room-runtime:2.8.4")

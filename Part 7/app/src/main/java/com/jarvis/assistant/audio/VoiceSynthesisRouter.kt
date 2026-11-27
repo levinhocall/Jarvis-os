@@ -16,6 +16,16 @@ import okhttp3.Call
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import com.jarvis.assistant.audio.model.DynamicModelCatalog
+import com.jarvis.assistant.audio.tts.PocketTtsEngine
+import com.jarvis.assistant.audio.tts.PocketTtsModelConfig
+import com.jarvis.assistant.audio.tts.TtsBackendChoice
+import com.jarvis.assistant.audio.tts.TtsLanguageRouter
+import com.jarvis.assistant.core.runtime.JarvisEvent
+import com.jarvis.assistant.core.runtime.JarvisEventBus
+import com.jarvis.assistant.data.model.PlaybackSource
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
@@ -52,6 +62,9 @@ object VoiceSynthesisRouter {
     @Volatile private var appContext: Context? = null
     private val externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var externalTtsJob: Job? = null
+    private var pocketTtsJob: Job? = null
+    private val pocketTtsEngine = PocketTtsEngine()
+    @Volatile private var standalonePocketTrack: AudioTrack? = null
     private var externalPlayer: MediaPlayer? = null
     private val externalCalls = java.util.concurrent.ConcurrentHashMap.newKeySet<Call>()
     private var externalAudioFile: File? = null
@@ -63,6 +76,9 @@ object VoiceSynthesisRouter {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        externalScope.launch(Dispatchers.IO) {
+            initPocketTtsIfInstalled(context.applicationContext)
+        }
         if (localTts != null) return
         val epoch=localEngineEpoch.incrementAndGet()
         localTts = TextToSpeech(context.applicationContext, { status ->
@@ -154,6 +170,12 @@ object VoiceSynthesisRouter {
     /** Local memory/reflex results must never reach an external TTS provider or network voice. */
     fun speakPrivate(text: String, onDone: (() -> Unit)? = null): Boolean {
         stopExternalPlayback()
+        if (pocketTtsEngine.isReady() &&
+            TtsLanguageRouter.selectBackend(text, true) == TtsBackendChoice.POCKET_TTS_24K_PCM
+        ) {
+            speakLocal(text, onDone)
+            return true
+        }
         val tts = localTts
         if (tts == null || !isInitialized) {
             pendingSpeechIsPrivate = true
@@ -172,9 +194,19 @@ object VoiceSynthesisRouter {
     }
 
     private fun speakLocal(text: String, onDone: (() -> Unit)?) {
-        val tts = localTts ?: return
         val normalized = normalizeForSpeech(text)
         val generation = nextPlayback()
+        if (TtsLanguageRouter.selectBackend(normalized, pocketTtsEngine.isReady()) ==
+            TtsBackendChoice.POCKET_TTS_24K_PCM
+        ) {
+            speakWithPocketTts(normalized, generation, onDone)
+            return
+        }
+        speakWithAndroidTts(normalized, generation, onDone)
+    }
+
+    private fun speakWithAndroidTts(normalized: String, generation: Long, onDone: (() -> Unit)?) {
+        val tts = localTts ?: return
         val expectedId = "utterance_$generation"
         AndroidTtsPcmBridge.speak(
             tts = tts,
@@ -192,6 +224,103 @@ object VoiceSynthesisRouter {
                 }
             }
         )
+    }
+
+    private fun speakWithPocketTts(normalized: String, generation: Long, onDone: (() -> Unit)?) {
+        pocketTtsJob?.cancel()
+        pocketTtsEngine.reset()
+        pocketTtsJob = externalScope.launch(Dispatchers.IO) {
+            val useUnifiedSink = AndroidTtsPcmBridge.hasActiveSink()
+            val standaloneTrack = if (!useUnifiedSink) createStandaloneTrack24k() else null
+            standalonePocketTrack = standaloneTrack
+            standaloneTrack?.play()
+            var streamedAnyChunk = false
+            val ok = try {
+                if (!useUnifiedSink) publishPlayback(generation, playing = true, external = false)
+                else publishPlayback(generation, playing = false, external = false)
+                JarvisEventBus.tryPublish(
+                    JarvisEvent.AssistantResponseStarted(
+                        generation = generation,
+                        backend = "PocketTTS",
+                        eventId = JarvisEventBus.nextId(),
+                        timestampMs = System.currentTimeMillis(),
+                        sessionId = 0L
+                    )
+                )
+                pocketTtsEngine.synthesizeStreaming(normalized) { pcm24k ->
+                    if (playback.value.generation != generation) {
+                        pocketTtsEngine.cancelSynthesis()
+                        return@synthesizeStreaming
+                    }
+                    if (useUnifiedSink) {
+                        if (AndroidTtsPcmBridge.submitPcm24kMono(pcm24k, PlaybackSource.POCKET_TTS)) {
+                            streamedAnyChunk = true
+                        }
+                    } else if (standaloneTrack != null) {
+                        val written = standaloneTrack.write(pcm24k, 0, pcm24k.size, AudioTrack.WRITE_BLOCKING)
+                        if (written > 0) streamedAnyChunk = true
+                    }
+                }
+            } finally {
+                if (standalonePocketTrack === standaloneTrack) standalonePocketTrack = null
+                runCatching { standaloneTrack?.pause() }
+                runCatching { standaloneTrack?.flush() }
+                runCatching { standaloneTrack?.release() }
+            }
+            if (playback.value.generation != generation) return@launch
+            publishPlayback(generation, playing = false, external = false)
+            if (!ok || !streamedAnyChunk) {
+                speakWithAndroidTts(normalized, generation, onDone)
+                return@launch
+            }
+            JarvisEventBus.tryPublish(
+                JarvisEvent.AssistantResponseCompleted(
+                    generation = generation,
+                    backend = "PocketTTS",
+                    eventId = JarvisEventBus.nextId(),
+                    timestampMs = System.currentTimeMillis(),
+                    sessionId = 0L
+                )
+            )
+            withContext(Dispatchers.Main.immediate) { onDone?.invoke() }
+        }
+    }
+
+    private fun createStandaloneTrack24k(): AudioTrack? {
+        return runCatching {
+            val minBytes = AudioTrack.getMinBufferSize(
+                24_000,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            ).coerceAtLeast(3_840)
+            AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(24_000)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(minBytes * 2)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+        }.getOrNull()
+    }
+
+    fun isPocketTtsReady(): Boolean = pocketTtsEngine.isReady()
+
+    fun reloadPocketTts(context: Context): Boolean = initPocketTtsIfInstalled(context.applicationContext)
+
+    private fun initPocketTtsIfInstalled(context: Context): Boolean {
+        val dir = File(context.filesDir, DynamicModelCatalog.POCKET_TTS_EN_DIR)
+        if (!dir.isDirectory) return false
+        return pocketTtsEngine.loadModel(PocketTtsModelConfig(dir.absolutePath))
     }
 
     private fun speakWithElevenLabs(text: String, apiKey: String, onDone: (() -> Unit)?) {
@@ -301,7 +430,7 @@ object VoiceSynthesisRouter {
 
     fun isSpeaking(): Boolean {
         return try {
-            externalPlayer != null || localTts?.isSpeaking == true
+            externalPlayer != null || pocketTtsJob?.isActive == true || localTts?.isSpeaking == true
         } catch (_: Exception) {
             false
         }
@@ -311,6 +440,7 @@ object VoiceSynthesisRouter {
         pendingSpeech = null
         pendingSpeechIsPrivate = false
         stopExternalPlayback()
+        stopPocketTtsPlayback()
         try {
             localTts?.stop()
         } catch (_: Exception) {}
@@ -319,6 +449,8 @@ object VoiceSynthesisRouter {
     fun release() {
         localEngineEpoch.incrementAndGet()
         stopExternalPlayback()
+        stopPocketTtsPlayback()
+        pocketTtsEngine.unloadModel()
         try {
             localTts?.stop()
             localTts?.shutdown()
@@ -326,5 +458,14 @@ object VoiceSynthesisRouter {
         localTts = null
         isInitialized = false
         pendingSpeech = null
+    }
+
+    private fun stopPocketTtsPlayback() {
+        nextPlayback()
+        pocketTtsEngine.cancelSynthesis()
+        pocketTtsJob?.cancel()
+        pocketTtsJob = null
+        runCatching { standalonePocketTrack?.pause() }
+        runCatching { standalonePocketTrack?.flush() }
     }
 }

@@ -164,6 +164,7 @@ class JarvisApp : Application() {
         // Cloud memory sync is intentionally not scheduled. Memory remains on this device.
         // Load Vosk on explicit voice/wake activation, not on every application launch.
         com.jarvis.assistant.audio.HeadsetWhisperManager.init(this, appScope)
+        registerMemoryAndThermalGovernance()
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             private var startedActivities = 0
@@ -220,6 +221,34 @@ class JarvisApp : Application() {
         } else {
             @Suppress("DEPRECATION")
             registerReceiver(receiver, filter)
+        }
+    }
+
+    private fun registerMemoryAndThermalGovernance() {
+        registerComponentCallbacks(object : android.content.ComponentCallbacks2 {
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
+
+            @Deprecated("Deprecated in API 34")
+            override fun onLowMemory() {
+                com.jarvis.assistant.core.runtime.ResourceGovernor.onTrimMemory(
+                    android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE
+                )
+            }
+
+            override fun onTrimMemory(level: Int) {
+                com.jarvis.assistant.core.runtime.ResourceGovernor.onTrimMemory(level)
+            }
+        })
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val power = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            runCatching {
+                com.jarvis.assistant.core.runtime.ResourceGovernor.setBatterySaverEnabled(
+                    power?.isPowerSaveMode == true
+                )
+                power?.addThermalStatusListener { status ->
+                    com.jarvis.assistant.core.runtime.ResourceGovernor.onThermalStatusChanged(status)
+                }
+            }
         }
     }
 

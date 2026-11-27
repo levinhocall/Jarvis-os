@@ -78,7 +78,9 @@ class FullDuplexBargeInController {
         if (!input.isPlaybackActive ||
             !input.isAecActive ||
             !input.hasSpeechDetector ||
-            (!input.hasPcmReference && input.playbackSource != PlaybackSource.GEMINI_PCM)
+            (!input.hasPcmReference &&
+                input.playbackSource != PlaybackSource.GEMINI_PCM &&
+                input.playbackSource != PlaybackSource.POCKET_TTS)
         ) {
             consecutiveNeuralSpeechFrames = 0
             return Decision(DecisionKind.ALLOW_NORMAL_FLOW, saturationActive = saturating)

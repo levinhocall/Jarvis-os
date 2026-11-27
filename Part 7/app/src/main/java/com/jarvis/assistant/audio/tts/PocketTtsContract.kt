@@ -59,7 +59,10 @@ object TtsLanguageRouter {
         "subah", "shaam", "raat", "mujhe", "mera", "meri", "tera", "aap", "tum",
         "bhai", "yaar", "haan", "nahi", "nhi", "theek", "thik", "acha", "accha",
         "kaisa", "kaise", "kahan", "kyun", "kyu", "abhi", "jaldi", "bolo", "laga",
-        "dena", "lena", "dost", "ghar", "paani", "khana", "samay", "baje"
+        "dena", "lena", "dost", "ghar", "paani", "khana", "samay", "baje",
+        "jalao", "bujhao", "band", "chalu", "kholo", "khol", "bhejo", "bhej",
+        "likho", "padho", "dekho", "yaad", "dilana", "raho", "wale", "wala",
+        "wali", "mat", "chalo", "lagao", "nikalo", "kitne", "hua", "hui", "pe", "me"
     )
 
     fun classifyText(text: String): SpeechLanguageRoute {

@@ -23,7 +23,7 @@ data class VoicePresentationSnapshot(
 )
 
 enum class VoiceConnection { CLOSED, CONNECTING, LIVE, RECONNECTING, OFFLINE }
-enum class PlaybackSource { NONE, GEMINI_PCM, ANDROID_TTS, EXTERNAL_TTS }
+enum class PlaybackSource { NONE, GEMINI_PCM, POCKET_TTS, ANDROID_TTS, EXTERNAL_TTS }
 enum class AudioTimingConfidence { UNAVAILABLE, STATE_ONLY, PLAYBACK_HEAD, HARDWARE_TIMESTAMP }
 enum class VoiceAudioFocus { UNKNOWN, GRANTED, DUCKED, LOST }
 

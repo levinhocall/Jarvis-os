@@ -1422,7 +1422,9 @@ class JarvisConversationService : Service() {
                                     currentTurnUserText.append(" ")
                                 }
                                 currentTurnUserText.append(trimmed)
-                                _liveUserTranscript.value = currentTurnUserText.toString().trim()
+                                val partialTranscript = currentTurnUserText.toString().trim()
+                                _liveUserTranscript.value = partialTranscript
+                                currentTurnAnalysis?.updateTranscript(partialTranscript)
                                 if (_conversationState.value == ConversationState.SPEAKING) {
                                     triggerVoiceBargeIn("user_text_received")
                                 } else if (_conversationState.value == ConversationState.IDLE) {
@@ -1480,6 +1482,7 @@ class JarvisConversationService : Service() {
                             if (!userTurnInProgress) {
                                 currentTurnUserText.clear()
                                 _liveUserTranscript.value = ""
+                                currentTurnAnalysis?.updateTranscript("")
                             }
                             if (_conversationState.value != ConversationState.SPEAKING) {
                                 setConversationState(if (userTurnInProgress) ConversationState.LISTENING else ConversationState.IDLE)
@@ -2053,6 +2056,7 @@ class JarvisConversationService : Service() {
                             currentTurnUserText.clear()
                             currentTurnAssistantText.clear()
                             _liveUserTranscript.value = ""
+                            currentTurnAnalysis?.updateTranscript("")
                             _liveAssistantResponse.value = ""
                             hasExecutedCommandInCurrentTurn = false
                             totalVoicedFramesInCurrentUtterance = 0
@@ -4321,7 +4325,8 @@ class JarvisConversationService : Service() {
                 val word = results.getJSONObject(index)
                 com.jarvis.assistant.audio.wake.WakeMatcher.Word(word.optString("word"),word.optDouble("conf",0.0),word.optDouble("start",0.0),word.optDouble("end",0.0))
             }
-            val decision = com.jarvis.assistant.audio.wake.WakeMatcher.evaluate(words,listOf(settings.name,settings.alias),settings.sensitivity)
+            val wakeCandidates = (com.jarvis.assistant.audio.wake.WakeWordDecisionManager.PRIMARY_PHRASES + listOf(settings.name, settings.alias)).distinct()
+            val decision = com.jarvis.assistant.audio.wake.WakeMatcher.evaluate(words, wakeCandidates, settings.sensitivity)
             if (wakeTestMode) com.jarvis.assistant.audio.wake.WakeDiagnostics.update("Heard: ${words.joinToString(" ") { it.text }.take(120)} · ${decision.reason} · confidence ${(decision.confidence*100).toInt()}%")
             if (!decision.accepted) return
             if (preferences.isOwnerVoiceEnabled) {
