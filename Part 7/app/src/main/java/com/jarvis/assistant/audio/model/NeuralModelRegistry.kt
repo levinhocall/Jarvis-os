@@ -193,6 +193,24 @@ object NeuralModelRegistry {
             hasRecurrentState = false,
             estimatedMemoryMb = 32,
             bundledInApk = true
+        ),
+        NeuralModelManifest(
+            modelId = "yamnet_env_audio",
+            version = "tflite-1",
+            runtime = NeuralRuntimeKind.LITERT,
+            assetPath = "yamnet/yamnet.tflite",
+            expectedSizeBytes = 4_126_810L,
+            expectedSha256 = "10c95ea3eb9a7bb4cb8bddf6feb023250381008177ac162ce169694d05c317de",
+            upstreamSource = "https://github.com/tensorflow/models/tree/master/research/audioset/yamnet",
+            license = "Apache-2.0",
+            inputShapes = listOf(intArrayOf(15600)),
+            outputShapes = listOf(intArrayOf(1, 521)),
+            dataType = "FLOAT32",
+            quantization = "FP32",
+            sampleRateHz = 16_000,
+            hasRecurrentState = false,
+            estimatedMemoryMb = 16,
+            bundledInApk = true
         )
     )
 
@@ -231,24 +249,6 @@ object NeuralModelRegistry {
             sampleRateHz = 16_000,
             hasRecurrentState = true,
             estimatedMemoryMb = 68,
-            bundledInApk = false
-        ),
-        NeuralModelManifest(
-            modelId = "yamnet_env_audio",
-            version = "tflite-1",
-            runtime = NeuralRuntimeKind.LITERT,
-            assetPath = "hasi/yamnet.tflite",
-            expectedSizeBytes = 5_075_024L,
-            expectedSha256 = "405ec48187abd311738e970ed981e205e7e4221dcdacec6ef0f0f2c57c6e6900",
-            upstreamSource = "https://github.com/tensorflow/models/tree/master/research/audioset/yamnet",
-            license = "Apache-2.0",
-            inputShapes = listOf(intArrayOf(15600)),
-            outputShapes = listOf(intArrayOf(1, 521), intArrayOf(1, 1024)),
-            dataType = "FLOAT32",
-            quantization = "FP32",
-            sampleRateHz = 16_000,
-            hasRecurrentState = false,
-            estimatedMemoryMb = 16,
             bundledInApk = false
         )
     )

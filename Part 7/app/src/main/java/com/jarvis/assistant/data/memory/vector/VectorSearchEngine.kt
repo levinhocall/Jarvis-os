@@ -116,6 +116,69 @@ class VectorSearchEngine {
         return scoredList.sortedByDescending { it.score }.take(limit)
     }
 
+    /**
+     * Two-stage retrieval: USearch HNSW O(log N) cosine candidate shortlist over active embeddings,
+     * fused cleanly with keyword/importance/recency reranking in Kotlin.
+     */
+    suspend fun searchWithHnsw(
+        query: String,
+        memories: List<MemoryEntity>,
+        embeddingProvider: EmbeddingProvider,
+        hnswIndex: HnswVectorIndex,
+        limit: Int = 10,
+        minScoreThreshold: Double = 0.20
+    ): List<ScoredMemory> {
+        val activeMemories = memories.filter { it.status == MemoryEntity.STATUS_ACTIVE && !it.isExpired }
+        if (activeMemories.isEmpty()) return emptyList()
+
+        val queryEmbedding = embeddingProvider.generateEmbedding(query)
+        if (queryEmbedding == null || queryEmbedding.size != hnswIndex.dimensions || hnswIndex.size() == 0) {
+            return search(query, activeMemories, embeddingProvider, limit, minScoreThreshold)
+        }
+
+        val candidateLimit = (limit * 4).coerceIn(12, 64)
+        val annHits = hnswIndex.search(queryEmbedding, candidateLimit)
+        if (annHits.isEmpty()) {
+            return search(query, activeMemories, embeddingProvider, limit, minScoreThreshold)
+        }
+
+        val byId = activeMemories.associateBy { it.id }
+        val queryTokens = extractTokens(query)
+        val now = System.currentTimeMillis()
+        val scoredList = ArrayList<ScoredMemory>(annHits.size)
+        for (hit in annHits) {
+            val memory = byId[hit.key] ?: continue
+            val keywordScore = computeKeywordScore(
+                queryTokens,
+                extractTokens("${memory.key} ${memory.value} ${memory.rawText}")
+            )
+            val cosineSim = hit.cosineSimilarity.toDouble()
+            val recencyScore = computeRecencyScore(memory.timestamp, now)
+            val combined = (0.55 * max(0.0, cosineSim)) +
+                (0.20 * keywordScore) +
+                (0.15 * memory.importance) +
+                (0.10 * recencyScore)
+            if (combined >= minScoreThreshold) {
+                val matchType = when {
+                    cosineSim > 0.60 && keywordScore > 0.3 -> MatchType.HYBRID
+                    cosineSim >= 0.30 -> MatchType.SEMANTIC_VECTOR
+                    keywordScore > 0.0 -> MatchType.KEYWORD_EXACT
+                    else -> MatchType.SEMANTIC_VECTOR
+                }
+                scoredList.add(
+                    ScoredMemory(
+                        memory = memory,
+                        score = combined,
+                        matchType = matchType,
+                        cosineSimilarity = cosineSim,
+                        keywordScore = keywordScore
+                    )
+                )
+            }
+        }
+        return scoredList.sortedByDescending { it.score }.take(limit)
+    }
+
     fun parseEmbedding(json: String?): FloatArray? {
         if (json.isNullOrBlank()) return null
         return try {

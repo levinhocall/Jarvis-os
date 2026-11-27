@@ -3,6 +3,8 @@ package com.jarvis.assistant.automation.proactive
 import android.content.Context
 import android.util.Log
 import com.jarvis.assistant.JarvisApp
+import com.jarvis.assistant.audio.env.EnvironmentalSceneCategory
+import com.jarvis.assistant.audio.env.EnvironmentalSnapshot
 import com.jarvis.assistant.automation.mission.MissionEngine
 import com.jarvis.assistant.automation.mission.MissionOverallStatus
 import com.jarvis.assistant.automation.skills.SkillForgeManager
@@ -105,6 +107,20 @@ object ProactiveAssistantCoordinator {
         }
         return matched?.let {
             "I found a saved workflow '${it.name}'. Would you like me to run it?"
+        }
+    }
+
+    /** Ambient context advisory hook backed by YAMNet environmental awareness (opt-in surface only). */
+    fun evaluateAmbientContext(snapshot: EnvironmentalSnapshot): String? {
+        if (snapshot.confidence < 0.35f) return null
+        return when (snapshot.category) {
+            EnvironmentalSceneCategory.ALARM_SIREN ->
+                "High-priority environmental alert sound detected (${snapshot.topLabel}); holding unattended voice prompts."
+            EnvironmentalSceneCategory.TRAFFIC ->
+                "High ambient traffic noise detected (${snapshot.topLabel}); raised VAD noise floor tolerance."
+            EnvironmentalSceneCategory.MUSIC ->
+                "Music playback detected nearby; speaker verification and barge-in protection tightened."
+            else -> null
         }
     }
 
