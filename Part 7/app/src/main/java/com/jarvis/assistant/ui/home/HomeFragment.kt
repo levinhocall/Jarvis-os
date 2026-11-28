@@ -431,7 +431,51 @@ class HomeFragment : Fragment() {
             .show()
     }
 
+    private fun setupComposeHome() {
+        val mainAct = activity as? MainActivity ?: return
+        binding.composeHomeOverlay.setViewCompositionStrategy(
+            androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
+        )
+        binding.composeHomeOverlay.setContent {
+            com.jarvis.assistant.ui.compose.CompanionHomeScreen(
+                viewModel = viewModel,
+                preferences = preferences,
+                onOpenChat = { mainAct.selectTab(MainActivity.TAB_CHAT) },
+                onOpenVoiceMode = {
+                    startActivity(Intent(requireContext(), com.jarvis.assistant.ui.directives.VoiceModeActivity::class.java))
+                },
+                onToggleScreenShare = { mainAct.toggleScreenShare() },
+                onOpenTools = {
+                    startActivity(Intent(requireContext(), FeatureHubActivity::class.java))
+                },
+                onOpenSettings = { mainAct.selectTab(MainActivity.TAB_SETTINGS) },
+                onOpenOrbStudio = {
+                    startActivity(Intent(requireContext(), com.jarvis.assistant.ui.settings.AuraControlActivity::class.java))
+                },
+                onOpenDiagnostics = {
+                    startActivity(Intent(requireContext(), com.jarvis.assistant.ui.compose.EngineDiagnosticsActivity::class.java))
+                },
+                onMicOrOrbTap = { mainAct.handleMicOrOrbClick() },
+                onMicOrOrbHold = { mainAct.handleHoldMicOrOrb() },
+                onFixLiveError = { error ->
+                    when (error.errorCode) {
+                        "API_KEY_INVALID", "API_KEY_MISSING" ->
+                            startActivity(Intent(requireContext(), com.jarvis.assistant.ui.settings.ApiConnectionActivity::class.java))
+                        "ACCESSIBILITY_DISABLED" ->
+                            activity?.let { PermissionHelper.requestAccessibilityWithRestrictedGuidance(it) }
+                                ?: PermissionHelper.openAccessibilitySettings(requireContext())
+                        "PERMISSIONS_MISSING" ->
+                            startActivity(Intent(requireContext(), com.jarvis.assistant.ui.permission.PermissionActivity::class.java))
+                        else -> mainAct.handleMicOrOrbClick()
+                    }
+                },
+                onDismissLiveError = { viewModel.clearLiveError() }
+            )
+        }
+    }
+
     private fun observeViewModel() {
+        setupComposeHome()
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {

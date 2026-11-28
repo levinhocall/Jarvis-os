@@ -503,12 +503,25 @@ class AppPreferences internal constructor(
 
     var orbPreset: String
         get() {
-            val value = prefs.getString(KEY_ORB_PRESET, "classic") ?: "classic"
-            return value.takeIf { it in setOf("classic", "aura", "crimson", "midnight") } ?: "classic"
+            val value = prefs.getString(KEY_ORB_PRESET, "jarvis_2047") ?: "jarvis_2047"
+            return value.takeIf {
+                it in com.jarvis.assistant.ui.orb.JarvisOrbPreset.ALL_ALLOWED_KEYS
+            } ?: "jarvis_2047"
         }
         set(value) = prefs.edit().putString(KEY_ORB_PRESET, value.takeIf {
-            it in setOf("classic", "aura", "crimson", "midnight")
-        } ?: "classic").apply()
+            it in com.jarvis.assistant.ui.orb.JarvisOrbPreset.ALL_ALLOWED_KEYS
+        } ?: "jarvis_2047").apply()
+
+    var orbColorTheme: String
+        get() {
+            val value = prefs.getString("orb_color_theme", "cyber_cyan") ?: "cyber_cyan"
+            return value.takeIf {
+                it in com.jarvis.assistant.ui.orb.JarvisOrbColorTheme.ALL_IDS
+            } ?: "cyber_cyan"
+        }
+        set(value) = prefs.edit().putString("orb_color_theme", value.takeIf {
+            it in com.jarvis.assistant.ui.orb.JarvisOrbColorTheme.ALL_IDS
+        } ?: "cyber_cyan").apply()
 
     /**
      * Primary Home visual: "orb" (classic voice orb, default) or "ghost" (legacy minimal entity).
@@ -697,6 +710,7 @@ class AppPreferences internal constructor(
         clearChatHistory()
     }
 
+    @android.annotation.SuppressLint("UseKtx")
     fun clearChatHistory() {
         val secure = secureApiPrefs ?: error("Encrypted preferences unavailable; legacy chat retained.")
         // Remove any old plaintext copy first: an interrupted clear must not resurrect it.

@@ -21,7 +21,7 @@ data class ResourceGovernancePolicy(
     val allowPocketTtsKeepWarm: Boolean = true,
     val allowDenseEmbedder: Boolean = true,
     val activeModelBudgetMb: Int = 384,
-    val thermalStatus: Int = PowerManager.THERMAL_STATUS_NONE,
+    val thermalStatus: Int = 0,
     val lastTrimLevel: Int = 0,
     val batterySaverEnabled: Boolean = false
 )
@@ -31,12 +31,14 @@ data class ResourceGovernancePolicy(
  * Ensures real-time audio (AEC3 + Silero VAD + Barge-In) never starves under memory or thermal load.
  */
 object ResourceGovernor {
+    private const val THERMAL_NONE_COMPAT = 0
+    private const val THERMAL_MODERATE_COMPAT = 2
     private const val DEVICE_6GB_SAFE_BUDGET_MB = 384
     private const val REDUCED_BUDGET_MB = 192
     private const val CRITICAL_BUDGET_MB = 112
 
     @Volatile private var baseMode = JarvisOperatingMode.STANDBY
-    @Volatile private var thermalStatus = PowerManager.THERMAL_STATUS_NONE
+    @Volatile private var thermalStatus = THERMAL_NONE_COMPAT
     @Volatile private var lastTrimLevel = 0
     @Volatile private var batterySaver = false
 
@@ -115,7 +117,7 @@ object ResourceGovernor {
     }
 
     private fun computePolicy(): ResourceGovernancePolicy {
-        val thermalPressure = thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
+        val thermalPressure = thermalStatus >= THERMAL_MODERATE_COMPAT
         val memPressure = lastTrimLevel >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW
         val effectiveMode = if (thermalPressure || memPressure) {
             JarvisOperatingMode.THERMAL_OR_MEMORY_PRESSURE

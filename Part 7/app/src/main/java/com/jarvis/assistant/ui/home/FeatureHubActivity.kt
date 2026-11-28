@@ -62,6 +62,12 @@ class FeatureHubActivity : AppCompatActivity() {
         }
         root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
 
+        entry(root, "Aura & Orb Studio", "Customize 12 GPU procedural orb presets, 8 palettes and motion", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.settings.AuraControlActivity::class.java))
+        }
+        entry(root, "Engine & Neural Diagnostics", "Monitor AEC3, Silero v4 VAD, 6 GB RAM Governor, YAMNet & HNSW", true) {
+            startActivity(Intent(this, com.jarvis.assistant.ui.compose.EngineDiagnosticsActivity::class.java))
+        }
         entry(root, DirectiveId.VOICE.title, getString(R.string.workspace_voice_detail), true) {
             DirectiveGrid.open(this, DirectiveId.VOICE)
         }

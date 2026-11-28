@@ -376,7 +376,7 @@ class NeuralLensActivity : AppCompatActivity() {
     private fun analyzeSelectedImage() {
         val bitmap = selectedBitmap
         if (bitmap == null || bitmap.isRecycled) {
-            status.text = "Capture or select an image before analysis."
+            status.text = getString(R.string.lens_capture_before_analysis)
             return
         }
         // Analyze an owned snapshot. The activity may be destroyed and recycle its preview
@@ -384,11 +384,11 @@ class NeuralLensActivity : AppCompatActivity() {
         val analysisBitmap = try {
             bitmap.copy(Bitmap.Config.ARGB_8888, false)
                 ?: run {
-                    status.text = "Could not prepare the selected image for analysis."
+                    status.text = getString(R.string.lens_prepare_image_failed)
                     return
                 }
         } catch (error: Exception) {
-            status.text = "Could not prepare the selected image for analysis."
+            status.text = getString(R.string.lens_prepare_image_failed)
             return
         }
         setBusy(true, "Analyzing the selected image…")
@@ -403,7 +403,10 @@ class NeuralLensActivity : AppCompatActivity() {
                 throw cancelled
             } catch (error: Exception) {
                 if (!isFinishing && !isDestroyed) {
-                    status.text = "Image analysis failed: ${error.localizedMessage ?: "unknown error"}"
+                    status.text = getString(
+                        R.string.lens_image_analysis_failed,
+                        error.localizedMessage ?: getString(R.string.lens_unknown_error)
+                    )
                 }
             } finally {
                 if (!analysisBitmap.isRecycled) analysisBitmap.recycle()
@@ -423,7 +426,10 @@ class NeuralLensActivity : AppCompatActivity() {
                 throw cancelled
             } catch (error: Exception) {
                 if (!isFinishing && !isDestroyed) {
-                    status.text = "Screen OCR failed: ${error.localizedMessage ?: "unknown error"}"
+                    status.text = getString(
+                        R.string.lens_ocr_failed,
+                        error.localizedMessage ?: getString(R.string.lens_unknown_error)
+                    )
                 }
             } finally {
                 if (!isFinishing && !isDestroyed) setBusy(false)
@@ -466,7 +472,7 @@ class NeuralLensActivity : AppCompatActivity() {
         resumeCameraOnForeground = imageCapture != null || liveScan
         liveScan = false
         imageAnalysis?.clearAnalyzer()
-        if (::liveScanButton.isInitialized) liveScanButton.text = "Start on-device object scan"
+        if (::liveScanButton.isInitialized) liveScanButton.text = getString(R.string.lens_start_object_scan)
         cameraProvider?.unbindAll()
         imageCapture = null
         super.onStop()

@@ -88,6 +88,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.compose.EngineDiagnosticsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.home.FeatureHubActivity"
             android:exported="false" />
 

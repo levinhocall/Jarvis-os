@@ -58,5 +58,11 @@
     <string name="category_notes">Notes</string>
     <string name="notification_service_label">JARVIS Notification Engine</string>
     <string name="notification_service_desc">Enables JARVIS to read incoming notifications for hands-free WhatsApp replies, expense tracking, and intelligent headset whispers.</string>
+    <string name="lens_capture_before_analysis">Capture or select an image before analysis.</string>
+    <string name="lens_prepare_image_failed">Could not prepare the selected image for analysis.</string>
+    <string name="lens_unknown_error">unknown error</string>
+    <string name="lens_image_analysis_failed">Image analysis failed: %1$s</string>
+    <string name="lens_ocr_failed">Screen OCR failed: %1$s</string>
+    <string name="lens_start_object_scan">Start on-device object scan</string>
 </resources>
 

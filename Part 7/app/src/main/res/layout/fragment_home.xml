@@ -632,4 +632,15 @@
             android:textColor="#FFFFFF" />
     </LinearLayout>
 
+    <!-- Phase 6 Jetpack Compose + OpenGL ES 3.0 Companion Home Surface -->
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/composeHomeOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:elevation="24dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
